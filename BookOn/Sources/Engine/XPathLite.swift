@@ -37,7 +37,7 @@ enum XPathLite {
     /// 伪节点：属性值（借用 TextNode 承载）
     final class AttrNode: TextNode {
         var value: String { getWholeText() }
-        init(_ v: String) { super.init(v, "") }
+        convenience init(_ v: String) { self.init(v, "") }
     }
 
     // MARK: - impl
