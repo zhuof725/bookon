@@ -45,6 +45,7 @@ enum WebBook {
 
     static func search(_ source: BookSource, key: String, page: Int = 1) async throws -> [SearchBook] {
         guard !source.searchUrl.isEmpty else { throw WebBookError.noSearchUrl }
+        DiagLog.shared.info("搜索", "[\(source.bookSourceName)] key=\(key) page=\(page)")
         let js = JSEngine()
         let analyzer = AnalyzeRule(source: source, js: js)
         let a = AnalyzeUrl(source.searchUrl, key: key, page: page, baseUrl: source.bookSourceUrl, source: source, js: js)
@@ -102,6 +103,7 @@ enum WebBook {
             out.append(b)
         }
         if reverse { out.reverse() }
+        DiagLog.shared.log(out.isEmpty ? .warn : .ok, "搜索", "[\(source.bookSourceName)] 解析到 \(out.count) 本" + (out.first.map { "，首条: \($0.name) / \($0.author) / \($0.bookUrl)" } ?? ""))
         return out
     }
 
@@ -121,6 +123,7 @@ enum WebBook {
     // MARK: 详情
 
     static func bookInfo(_ source: BookSource, _ book: SearchBook) async throws -> SearchBook {
+        DiagLog.shared.info("详情", "[\(source.bookSourceName)] \(book.name) \(book.bookUrl)")
         var b = book
         let js = JSEngine()
         let analyzer = AnalyzeRule(source: source, js: js)
@@ -147,6 +150,7 @@ enum WebBook {
         let toc = analyzer.getString(r.tocUrl, isUrl: true)
         b.tocUrl = toc.isEmpty ? book.bookUrl : toc
         if b.tocUrl == book.bookUrl { b.infoHtml = body } else { b.infoHtml = nil }
+        DiagLog.shared.ok("详情", "name=\(b.name) author=\(b.author) tocUrl=\(b.tocUrl) cover=\(DiagLog.preview(b.coverUrl, 80))")
         return b
     }
 
@@ -202,7 +206,8 @@ enum WebBook {
             }
             for (_, c) in results.sorted(by: { $0.0 < $1.0 }) { chapters += c }
         }
-        guard !chapters.isEmpty else { throw WebBookError.noChapters }
+        guard !chapters.isEmpty else { DiagLog.shared.error("目录", "[\(source.bookSourceName)] 目录为空 tocUrl=\(tocUrl)"); throw WebBookError.noChapters }
+        DiagLog.shared.ok("目录", "[\(source.bookSourceName)] \(chapters.count) 章，首章: \(chapters[0].title) \(chapters[0].url)")
         if reverse { chapters.reverse() }
         // 去重（按 url+title）
         var seen = Set<String>(); var list: [WebChapter] = []
@@ -253,6 +258,7 @@ enum WebBook {
         js.set("chapter", ["title": chapter.title, "url": chapter.url, "index": chapter.index])
         js.set("book", ["name": book.name, "author": book.author, "bookUrl": book.bookUrl, "tocUrl": book.tocUrl])
         let rule = source.content
+        DiagLog.shared.info("正文", "[\(source.bookSourceName)] \(chapter.title) \(chapter.url)")
         let a = AnalyzeUrl(chapter.url, baseUrl: source.bookSourceUrl, source: source, js: js)
         let resp = try await HttpClient.shared.fetch(a, source: source, js: js)
         var body = resp.text
@@ -294,7 +300,8 @@ enum WebBook {
             content = analyzer.getString(rule.replaceRegex, content: content)
         }
         content = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { throw WebBookError.noContent }
+        guard !content.isEmpty else { DiagLog.shared.error("正文", "正文为空，规则: \(DiagLog.preview(rule.content, 120))"); throw WebBookError.noContent }
+        DiagLog.shared.ok("正文", "\(content.count) 字，共 \(texts.count) 页")
         return content
     }
 

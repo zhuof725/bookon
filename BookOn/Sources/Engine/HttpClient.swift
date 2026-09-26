@@ -43,6 +43,13 @@ struct AnalyzeUrl {
     init(_ ruleUrl: String, key: String? = nil, page: Int? = nil, baseUrl: String, source: BookSource?, js: JSEngine?, extra: [String: Any] = [:]) {
         self.baseUrl = baseUrl
         var rule = ruleUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 旧版书源占位符
+        if let k = key { rule = rule.replacingOccurrences(of: "searchKey", with: "{{key}}") }
+        if page != nil {
+            rule = rule.replacingOccurrences(of: "<searchPage([-+]1)>", with: "{{page$1}}", options: .regularExpression)
+                       .replacingOccurrences(of: "searchPage([-+]1)", with: "{{page$1}}", options: .regularExpression)
+                       .replacingOccurrences(of: "searchPage", with: "{{page}}")
+        }
         if let k = key { js?.set("key", k) }
         if let p = page { js?.set("page", p) }
         js?.set("baseUrl", baseUrl)
@@ -56,6 +63,8 @@ struct AnalyzeUrl {
                 let t = inner.trimmingCharacters(in: .whitespaces)
                 if t == "key" { return key ?? "" }
                 if t == "page" { return page.map(String.init) ?? "" }
+                if t == "page+1" { return page.map { String($0 + 1) } ?? "" }
+                if t == "page-1" { return page.map { String($0 - 1) } ?? "" }
                 return js?.evalString(inner) ?? ""
             }
         }
@@ -192,7 +201,11 @@ final class HttpClient {
     }
 
     func fetch(_ a: AnalyzeUrl, source: BookSource?, js: JSEngine?) async throws -> HttpResponse {
-        guard let u = URL(string: a.url) else { throw NSError(domain: "BookOn", code: 1, userInfo: [NSLocalizedDescriptionKey: "无效地址: \(a.url)"]) }
+        guard let u = URL(string: a.url) else {
+            DiagLog.shared.error("网络", "无效地址: \(a.url)")
+            throw NSError(domain: "BookOn", code: 1, userInfo: [NSLocalizedDescriptionKey: "无效地址: \(a.url)"])
+        }
+        DiagLog.shared.net("请求", "\(a.method) \(a.url)" + (a.body.map { " body=\(DiagLog.preview($0, 200))" } ?? ""))
         var req = URLRequest(url: u)
         req.httpMethod = a.method
         var h = source?.headerMap(js: js) ?? [:]
@@ -212,9 +225,11 @@ final class HttpClient {
                 let http = resp as? HTTPURLResponse
                 var headers: [String: String] = [:]
                 http?.allHeaderFields.forEach { headers["\($0.key)"] = "\($0.value)" }
-                return HttpResponse(data: data, status: http?.statusCode ?? 0, headers: headers,
-                                    finalUrl: http?.url?.absoluteString ?? a.url, charsetHint: a.charset)
-            } catch { lastErr = error }
+                let out = HttpResponse(data: data, status: http?.statusCode ?? 0, headers: headers,
+                                        finalUrl: http?.url?.absoluteString ?? a.url, charsetHint: a.charset)
+                DiagLog.shared.net("响应", "\(out.status) \(data.count)B \(out.finalUrl) ⇢ \(DiagLog.preview(out.text, 150))")
+                return out
+            } catch { lastErr = error; DiagLog.shared.error("网络", "\(a.url): \(error.localizedDescription)") }
         }
         throw lastErr ?? URLError(.unknown)
     }

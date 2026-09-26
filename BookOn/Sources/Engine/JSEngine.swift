@@ -12,7 +12,9 @@ final class JSEngine {
     init() {
         ctx = JSContext()!
         ctx.exceptionHandler = { _, ex in
-            Logger.log("JS 错误: \(ex?.toString() ?? "?")")
+            var msg = ex?.toString() ?? "?"
+            if let line = ex?.forProperty("line")?.toInt32(), line > 0 { msg += " (line \(line))" }
+            DiagLog.shared.error("JS", msg)
         }
         installJava()
         // 兼容 Rhino 常见写法
@@ -281,17 +283,4 @@ protocol RuleAnalyzerContext: AnyObject {
     func jsGetStringList(_ rule: String, content: Any?) -> [String]
     func getElementsHtml(_ rule: String) -> [String]
     func jsSetContent(_ content: Any?, baseUrl: String?)
-}
-
-enum Logger {
-    static var lines: [String] = []
-    static func log(_ s: String) {
-        #if DEBUG
-        print(s)
-        #endif
-        DispatchQueue.main.async {
-            lines.append("[\(Date().formatted(date: .omitted, time: .standard))] \(s)")
-            if lines.count > 500 { lines.removeFirst(lines.count - 500) }
-        }
-    }
 }

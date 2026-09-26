@@ -15,6 +15,7 @@ struct ReaderView: View {
     @State private var scrollProgress: Double = 0
     @State private var restoreProgress: Double? = nil
     @State private var loading = false
+    @State private var showLog = false
     @State private var loadError: String?
     @State private var loadTask: Task<Void, Never>?
     private var source: BookSource? { book.type == .web ? SourceStore.shared.source(for: book.sourceUrl) : nil }
@@ -34,7 +35,10 @@ struct ReaderView: View {
                         } else if let e = loadError {
                             VStack(spacing: 12) {
                                 Text(e).font(.footnote).multilineTextAlignment(.center)
-                                Button("重试") { refreshContent(force: true) }
+                                HStack(spacing: 20) {
+                                    Button("重试") { refreshContent(force: true) }
+                                    Button("查看日志") { showLog = true }
+                                }
                             }.frame(maxWidth: .infinity).padding(.top, 60)
                         } else {
                             Text(content)
@@ -70,6 +74,7 @@ struct ReaderView: View {
         .statusBar(hidden: !showMenu)
         .onAppear(perform: load)
         .onDisappear(perform: saveProgress)
+        .sheet(isPresented: $showLog) { NavigationView { DiagLogView() } }
         .sheet(isPresented: $showToc) {
             TocView(chapters: chapters, current: chapterIndex) { idx in
                 showToc = false

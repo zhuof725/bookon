@@ -95,6 +95,7 @@ struct SearchView: View {
                     if !model.errors.isEmpty {
                         Text("\(model.errors.count) 个书源出错").font(.footnote).foregroundColor(.secondary)
                     }
+                    NavigationLink("查看诊断日志") { DiagLogView() }.font(.footnote)
                 }.frame(maxHeight: .infinity)
             } else {
                 List {

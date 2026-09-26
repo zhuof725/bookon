@@ -22,6 +22,10 @@ struct AboutView: View {
                     }
                     .padding(.vertical, 8)
                 }
+                Section(header: Text("工具")) {
+                    NavigationLink { DiagLogView() } label: { Label("诊断日志", systemImage: "doc.text.magnifyingglass") }
+                    NavigationLink { SourceListView() } label: { Label("书源管理", systemImage: "globe") }
+                }
                 Section(header: Text("信息")) {
                     HStack {
                         Text("版本")

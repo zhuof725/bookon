@@ -12,6 +12,8 @@ final class AnalyzeRule: RuleAnalyzerContext {
     private var variables: [String: String] = [:]
     var bookVariables: (get: (String) -> String?, put: (String, String) -> Void)?
 
+    /// 开启后每一步规则求值都会写入诊断日志
+    var verbose = false
     private var jsoupCache: HtmlAnalyzer?
     private var jsoupSrc: AnyObject?
     private var jsonCache: Any?
@@ -23,7 +25,20 @@ final class AnalyzeRule: RuleAnalyzerContext {
         self.redirectUrl = self.baseUrl
         self.content = content
         self.js.analyzer = self
-        self.js.set("source", source.map { ["bookSourceUrl": $0.bookSourceUrl, "bookSourceName": $0.bookSourceName] } ?? [:])
+        self.js.set("source", source.map { ["bookSourceUrl": $0.bookSourceUrl, "bookSourceName": $0.bookSourceName, "key": $0.bookSourceUrl] } ?? [:])
+        self.js.ctx.evaluateScript("""
+        if (source) {
+          source.getKey = function(){ return this.bookSourceUrl };
+          source.getTag = function(){ return this.bookSourceName };
+          source.getLoginHeader = function(){ return java.get('__loginHeader') || null };
+          source.putLoginHeader = function(h){ java.put('__loginHeader', h) };
+          source.getLoginHeaderMap = function(){ var h = this.getLoginHeader(); return h ? JSON.parse(h) : null };
+          source.getVariable = function(){ return java.get('__sourceVariable') };
+          source.setVariable = function(v){ java.put('__sourceVariable', v) };
+          source.getLoginInfo = function(){ return java.get('__loginInfo') };
+          source.getLoginInfoMap = function(){ var h = this.getLoginInfo(); return h ? JSON.parse(h) : null };
+        }
+        """)
         self.js.set("baseUrl", self.baseUrl)
         if let lib = source?.jsLib, !lib.isEmpty { self.js.loadJsLib(lib) }
     }
@@ -223,6 +238,7 @@ final class AnalyzeRule: RuleAnalyzerContext {
                         }
                     }
                     if let r2 = result, !sr.replaceRegex.isEmpty { result = replaceRegex(anyToString(r2), sr) }
+                    if verbose { DiagLog.shared.info("规则", "\(sr.mode) 「\(DiagLog.preview(rule, 80))」→ \(DiagLog.preview(result.map(anyToString) ?? "null", 120))") }
                 }
             }
         }
@@ -299,10 +315,13 @@ final class AnalyzeRule: RuleAnalyzerContext {
             }
             if !sr.replaceRegex.isEmpty, let list = result as? [String] { result = list.map { replaceRegex($0, sr) } }
         }
-        if let l = result as? [Any] { return l }
-        if let l = result as? [Element] { return l }
-        if let s = result as? String, !s.isEmpty { return s.components(separatedBy: "\n") }
-        return []
+        var out: [Any] = []
+        if let l = result as? [Any] { out = l }
+        else if let l = result as? [Element] { out = l }
+        else if let s = result as? String, !s.isEmpty { out = s.components(separatedBy: "\n") }
+        DiagLog.shared.info("列表", "「\(DiagLog.preview(ruleStr, 80))」→ \(out.count) 项")
+        if out.isEmpty { DiagLog.shared.warn("列表", "内容预览: \(DiagLog.preview(content.map(anyToString) ?? "nil", 200))") }
+        return out
     }
 
     func getElementsHtml(_ rule: String) -> [String] {

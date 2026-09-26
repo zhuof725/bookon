@@ -19,11 +19,11 @@ struct SourceListView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "globe").font(.system(size: 48)).foregroundColor(.secondary)
                     Text("还没有书源").font(.headline)
-                    Text("支持 Legado（阅读）格式的书源 JSON\n可从网址导入、粘贴 JSON，或从文件导入").font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.center)
+                    Text("支持 Legado（阅读）格式的书源 JSON\n可从网址导入、粘贴 JSON，或从文件导入\n点击书源可进入调试").font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }.frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden)
             }
             ForEach(filtered) { s in
-                HStack {
+                NavigationLink { SourceDebugView(source: s) } label: { HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(s.bookSourceName).font(.body)
                         Text(s.bookSourceUrl).font(.caption).foregroundColor(.secondary).lineLimit(1)
@@ -31,7 +31,7 @@ struct SourceListView: View {
                     }
                     Spacer()
                     Toggle("", isOn: Binding(get: { s.enabled }, set: { _ in store.toggle(s) })).labelsHidden()
-                }
+                } }
             }
             .onDelete { idx in idx.map { filtered[$0] }.forEach(store.delete) }
         }
