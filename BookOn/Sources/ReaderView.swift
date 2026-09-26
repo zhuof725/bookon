@@ -14,6 +14,10 @@ struct ReaderView: View {
     @State private var showToc = false
     @State private var scrollProgress: Double = 0
     @State private var restoreProgress: Double? = nil
+    @State private var loading = false
+    @State private var loadError: String?
+    @State private var loadTask: Task<Void, Never>?
+    private var source: BookSource? { book.type == .web ? SourceStore.shared.source(for: book.sourceUrl) : nil }
 
     var body: some View {
         ZStack {
@@ -25,9 +29,18 @@ struct ReaderView: View {
                         Text(chapters.indices.contains(chapterIndex) ? chapters[chapterIndex].title : book.title)
                             .font(.system(size: settings.fontSize + 6, weight: .bold))
                             .padding(.top, 24)
-                        Text(content)
-                            .font(.system(size: settings.fontSize))
-                            .lineSpacing(settings.lineSpacing)
+                        if loading {
+                            HStack { Spacer(); ProgressView("加载中…"); Spacer() }.padding(.top, 60)
+                        } else if let e = loadError {
+                            VStack(spacing: 12) {
+                                Text(e).font(.footnote).multilineTextAlignment(.center)
+                                Button("重试") { refreshContent(force: true) }
+                            }.frame(maxWidth: .infinity).padding(.top, 60)
+                        } else {
+                            Text(content)
+                                .font(.system(size: settings.fontSize))
+                                .lineSpacing(settings.lineSpacing)
+                        }
                         chapterNav
                     }
                     .foregroundColor(settings.theme.foreground)
@@ -82,8 +95,14 @@ struct ReaderView: View {
         VStack(spacing: 0) {
             HStack {
                 Button { dismiss() } label: { Image(systemName: "chevron.left").font(.title3) }
-                Text(book.title).lineLimit(1).font(.headline)
+                VStack(alignment: .leading) {
+                    Text(book.title).lineLimit(1).font(.headline)
+                    if book.type == .web { Text(book.sourceName).font(.caption2).foregroundColor(.secondary) }
+                }
                 Spacer()
+                if book.type == .web {
+                    Button { refreshContent(force: true) } label: { Image(systemName: "arrow.clockwise") }
+                }
             }
             .padding()
             .background(.regularMaterial)
@@ -127,9 +146,49 @@ struct ReaderView: View {
         refreshContent()
     }
 
-    private func refreshContent() {
-        guard chapters.indices.contains(chapterIndex) else { content = fullText as String; return }
-        content = TxtParser.content(of: chapters[chapterIndex], in: fullText)
+    private func refreshContent(force: Bool = false) {
+        loadTask?.cancel()
+        loadError = nil
+        guard chapters.indices.contains(chapterIndex) else {
+            content = book.type == .web ? "" : fullText as String
+            if book.type == .web && chapters.isEmpty { loadError = "目录为空，请返回详情页重新加载" }
+            return
+        }
+        let ch = chapters[chapterIndex]
+        if book.type == .local {
+            content = TxtParser.content(of: ch, in: fullText); return
+        }
+        if !force, let cached = library.cachedContent(book, ch.index) { content = cached; loading = false; preloadNext(); return }
+        guard let src = source else { loadError = "书源不存在：\(book.sourceName)"; return }
+        loading = true; content = ""
+        let idx = chapterIndex
+        let next = chapters.indices.contains(idx + 1) ? chapters[idx + 1].url : nil
+        loadTask = Task {
+            do {
+                let wc = WebChapter(index: ch.index, title: ch.title, url: ch.url)
+                let text = try await WebBook.content(src, book: book.asSearchBook, chapter: wc, nextChapterUrl: next)
+                guard !Task.isCancelled, idx == chapterIndex else { return }
+                library.cacheContent(text, book, ch.index)
+                await MainActor.run { content = text; loading = false; preloadNext() }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run { loadError = error.localizedDescription; loading = false }
+            }
+        }
+    }
+
+    private func preloadNext() {
+        guard book.type == .web, let src = source else { return }
+        let nextIdx = chapterIndex + 1
+        guard chapters.indices.contains(nextIdx), library.cachedContent(book, nextIdx) == nil else { return }
+        let ch = chapters[nextIdx]
+        let after = chapters.indices.contains(nextIdx + 1) ? chapters[nextIdx + 1].url : nil
+        Task.detached(priority: .background) {
+            let wc = WebChapter(index: ch.index, title: ch.title, url: ch.url)
+            if let t = try? await WebBook.content(src, book: book.asSearchBook, chapter: wc, nextChapterUrl: after) {
+                library.cacheContent(t, book, ch.index)
+            }
+        }
     }
 
     private func go(to idx: Int) {
@@ -164,7 +223,8 @@ struct TocView: View {
                     Button { onSelect(ch.index) } label: {
                         HStack {
                             Text(ch.title).lineLimit(1)
-                                .foregroundColor(ch.index == current ? .accentColor : .primary)
+                                .font(ch.isVolume ? .headline : .body)
+                                .foregroundColor(ch.index == current ? .accentColor : (ch.isVolume ? .secondary : .primary))
                             Spacer()
                             if ch.index == current { Image(systemName: "book.fill").foregroundColor(.accentColor) }
                         }
@@ -172,7 +232,7 @@ struct TocView: View {
                     .id(ch.index)
                 }
                 .listStyle(.plain)
-                .onAppear { proxy.scrollTo(current, anchor: .center) }
+                .onAppear { if current >= 0 { proxy.scrollTo(current, anchor: .center) } }
             }
             .navigationTitle("目录（\(chapters.count) 章）")
             .navigationBarTitleDisplayMode(.inline)

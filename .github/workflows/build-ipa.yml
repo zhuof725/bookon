@@ -34,7 +34,7 @@ jobs:
           set -o pipefail
           xcodebuild \
             -project BookOn.xcodeproj \
-            -scheme BookOn \
+            -scheme BookOn -skipPackagePluginValidation \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \

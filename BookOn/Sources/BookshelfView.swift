@@ -33,7 +33,11 @@ struct BookshelfView: View {
                     .ignoresSafeArea()
             }
             .fullScreenCover(item: $openBook) { book in
-                ReaderView(book: book)
+                if book.type == .web && book.chapterCount == 0 {
+                    NavigationView { BookDetailView(book: book.asSearchBook) }
+                } else {
+                    ReaderView(book: book)
+                }
             }
             .alert("导入结果", isPresented: Binding(get: { importMessage != nil },
                                                  set: { if !$0 { importMessage = nil } })) {
@@ -73,19 +77,13 @@ struct BookRow: View {
     let book: Book
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(LinearGradient(colors: [Color(red: 0.1, green: 0.6, blue: 0.65), Color(red: 0.1, green: 0.3, blue: 0.6)],
-                                         startPoint: .top, endPoint: .bottom))
-                Text(String(book.title.prefix(2)))
-                    .font(.headline).foregroundColor(.white)
-            }
-            .frame(width: 48, height: 64)
+            CoverView(url: book.coverUrl, title: book.title).frame(width: 48, height: 64)
             VStack(alignment: .leading, spacing: 4) {
                 Text(book.title).font(.body).lineLimit(1)
-                Text(book.author.isEmpty ? "TXT · 共 \(book.chapterCount) 章" : "\(book.author) · 共 \(book.chapterCount) 章")
+                Text((book.author.isEmpty ? (book.type == .web ? book.sourceName : "TXT") : book.author) + (book.type == .web && !book.author.isEmpty ? " · \(book.sourceName)" : ""))
                     .font(.caption).foregroundColor(.secondary)
-                Text(book.progressText).font(.caption).foregroundColor(.secondary)
+                Text(book.type == .web && !book.lastChapter.isEmpty ? "最新：\(book.lastChapter)" : book.progressText).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                if book.type == .web && !book.lastChapter.isEmpty { Text(book.progressText).font(.caption2).foregroundColor(.secondary) }
             }
             Spacer()
             Image(systemName: "chevron.right").foregroundColor(Color(.tertiaryLabel))
