@@ -186,7 +186,7 @@ struct ReaderView: View {
         Task.detached(priority: .background) {
             let wc = WebChapter(index: ch.index, title: ch.title, url: ch.url)
             if let t = try? await WebBook.content(src, book: book.asSearchBook, chapter: wc, nextChapterUrl: after) {
-                library.cacheContent(t, book, ch.index)
+                await MainActor.run { Library.shared.cacheContent(t, book, ch.index) }
             }
         }
     }

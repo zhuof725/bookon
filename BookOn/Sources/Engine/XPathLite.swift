@@ -18,8 +18,8 @@ enum XPathLite {
     static func getStringList(_ xpath: String, in root: Element) -> [String] {
         var out: [String] = []
         for n in query(xpath, in: root) {
-            if let t = n as? TextNode { let s = t.text().trimmingCharacters(in: .whitespacesAndNewlines); if !s.isEmpty { out.append(s) } }
-            else if let a = n as? AttrNode { if !a.value.isEmpty { out.append(a.value) } }
+            if let a = n as? AttrNode { if !a.value.isEmpty { out.append(a.value) } }
+            else if let t = n as? TextNode { let s = t.text().trimmingCharacters(in: .whitespacesAndNewlines); if !s.isEmpty { out.append(s) } }
             else if let e = n as? Element { if let t = try? e.text(), !t.isEmpty { out.append(t) } }
         }
         return out
@@ -34,11 +34,10 @@ enum XPathLite {
         query(xpath, in: root).compactMap { $0 as? Element }
     }
 
-    /// 伪节点：属性值
-    final class AttrNode: Node {
-        let value: String
-        init(_ v: String) { value = v; super.init("") }
-        override func nodeName() -> String { "#attr" }
+    /// 伪节点：属性值（借用 TextNode 承载）
+    final class AttrNode: TextNode {
+        var value: String { getWholeText() }
+        init(_ v: String) { super.init(v, "") }
     }
 
     // MARK: - impl
@@ -186,8 +185,8 @@ enum XPathLite {
         // nested path like a/@href or span/text()
         let nodes = evalSingle("./" + x, e)
         for n in nodes {
-            if let t = n as? TextNode { return t.text() }
             if let a = n as? AttrNode { return a.value }
+            if let t = n as? TextNode { return t.text() }
             if let el = n as? Element { return try? el.text() }
         }
         return nil

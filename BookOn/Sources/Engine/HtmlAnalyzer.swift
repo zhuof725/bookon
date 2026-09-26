@@ -28,7 +28,7 @@ final class HtmlAnalyzer {
     func getStringList(_ ruleStr: String) -> [String] {
         if ruleStr.isEmpty { return [] }
         let src = SourceRule(ruleStr)
-        if src.elementsRule.isEmpty { return [(try? root.data()) ?? ""] }
+        if src.elementsRule.isEmpty { return [root.data()] }
         var ra = RuleAnalyzer(src.elementsRule)
         let parts = ra.splitRule(["&&", "||", "%%"])
         var results: [[String]] = []
@@ -86,7 +86,8 @@ final class HtmlAnalyzer {
                         el = next
                     }
                 } else {
-                    el = ElementsSingle().get(temp, trimmed)
+                    var single = ElementsSingle()
+                    el = single.get(temp, trimmed)
                 }
             }
             lists.append(el)
@@ -102,7 +103,7 @@ final class HtmlAnalyzer {
         let rules = ra.splitRule(["@"])
         for i in 0..<(rules.count - 1) {
             var next: [Element] = []
-            for e in els { next += ElementsSingle().get(e, rules[i]) }
+            for e in els { var single = ElementsSingle(); next += single.get(e, rules[i]) }
             els = next
         }
         return els.isEmpty ? nil : resultLast(els, rules[rules.count - 1])
@@ -122,8 +123,8 @@ final class HtmlAnalyzer {
             for e in els { let t = e.ownText(); if !t.isEmpty { out.append(t) } }
         case "html":
             for e in els {
-                try? e.select("script").remove()
-                try? e.select("style").remove()
+                _ = try? e.select("script").remove()
+                _ = try? e.select("style").remove()
             }
             let h = els.compactMap { try? $0.outerHtml() }.joined(separator: "\n")
             if !h.isEmpty { out.append(h) }

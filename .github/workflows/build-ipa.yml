@@ -42,11 +42,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build | tee build.log | grep -E "error:|warning: |BUILD" || true
+            build 2>&1 | tee build.log | grep -E "error:|warning: |BUILD|\*\*" || true
+          grep -q "BUILD SUCCEEDED" build.log
           test -d build/Build/Products/Release-iphoneos/BookOn.app
 
       - name: Package IPA
         run: |
+          rm -rf Payload BookOn.ipa
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/BookOn.app Payload/
           zip -qry BookOn.ipa Payload
