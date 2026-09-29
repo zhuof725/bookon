@@ -117,7 +117,7 @@ enum Defaults {
 
 /// 宽松解码的 Int，带默认值。JSON 缺字段或类型不符时回退到默认值，绝不抛错。
 @propertyWrapper
-struct LenientInt<D: DefaultValueProvider>: Codable where D.Value == Int {
+struct LenientInt<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int {
     var wrappedValue: Int
 
     init(wrappedValue: Int) { self.wrappedValue = wrappedValue }
@@ -131,11 +131,15 @@ struct LenientInt<D: DefaultValueProvider>: Codable where D.Value == Int {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
+
+    // phantom 泛型 D 不参与判等，仅比较 wrappedValue。
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 Int64，带默认值。
 @propertyWrapper
-struct LenientInt64<D: DefaultValueProvider>: Codable where D.Value == Int64 {
+struct LenientInt64<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int64 {
     var wrappedValue: Int64
 
     init(wrappedValue: Int64) { self.wrappedValue = wrappedValue }
@@ -149,11 +153,14 @@ struct LenientInt64<D: DefaultValueProvider>: Codable where D.Value == Int64 {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 Bool，带默认值。
 @propertyWrapper
-struct LenientBool<D: DefaultValueProvider>: Codable where D.Value == Bool {
+struct LenientBool<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Bool {
     var wrappedValue: Bool
 
     init(wrappedValue: Bool) { self.wrappedValue = wrappedValue }
@@ -167,11 +174,14 @@ struct LenientBool<D: DefaultValueProvider>: Codable where D.Value == Bool {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 String，带默认值。
 @propertyWrapper
-struct LenientString<D: DefaultValueProvider>: Codable where D.Value == String {
+struct LenientString<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == String {
     var wrappedValue: String
 
     init(wrappedValue: String) { self.wrappedValue = wrappedValue }
@@ -185,13 +195,16 @@ struct LenientString<D: DefaultValueProvider>: Codable where D.Value == String {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 // MARK: - Property Wrapper：可空的宽松标量
 
 /// 宽松解码的可空 Int?。字段缺失或 null 时为 nil；类型不符时尽力转换，无法转换则 nil。
 @propertyWrapper
-struct LenientOptionalInt: Codable {
+struct LenientOptionalInt: Codable, Equatable, Hashable {
     var wrappedValue: Int?
 
     init(wrappedValue: Int?) { self.wrappedValue = wrappedValue }
@@ -210,7 +223,7 @@ struct LenientOptionalInt: Codable {
 
 /// 宽松解码的可空 Bool?。
 @propertyWrapper
-struct LenientOptionalBool: Codable {
+struct LenientOptionalBool: Codable, Equatable, Hashable {
     var wrappedValue: Bool?
 
     init(wrappedValue: Bool?) { self.wrappedValue = wrappedValue }
@@ -229,7 +242,7 @@ struct LenientOptionalBool: Codable {
 
 /// 宽松解码的可空 String?。对应 Kotlin 里大量 `var x: String? = null` 字段。
 @propertyWrapper
-struct LenientOptionalString: Codable {
+struct LenientOptionalString: Codable, Equatable, Hashable {
     var wrappedValue: String?
 
     init(wrappedValue: String?) { self.wrappedValue = wrappedValue }
@@ -248,7 +261,7 @@ struct LenientOptionalString: Codable {
 
 /// 宽松解码的可空 Int64?。
 @propertyWrapper
-struct LenientOptionalInt64: Codable {
+struct LenientOptionalInt64: Codable, Equatable, Hashable {
     var wrappedValue: Int64?
 
     init(wrappedValue: Int64?) { self.wrappedValue = wrappedValue }

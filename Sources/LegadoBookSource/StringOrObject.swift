@@ -75,6 +75,13 @@ struct StringOrObject<T: Codable>: Codable {
     }
 }
 
+// 当内层类型可判等时，StringOrObject 亦可判等（比较解出的值）。
+extension StringOrObject: Equatable where T: Equatable {
+    static func == (lhs: StringOrObject<T>, rhs: StringOrObject<T>) -> Bool {
+        lhs.wrappedValue == rhs.wrappedValue
+    }
+}
+
 // 字段缺失时的重载：视为 nil，而不是抛 keyNotFound。
 extension KeyedDecodingContainer {
     func decode<T>(_ type: StringOrObject<T>.Type, forKey key: Key) throws -> StringOrObject<T> {
