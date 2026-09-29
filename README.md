@@ -43,8 +43,9 @@ macOS / Linux（带 Swift 工具链）均可。仓库配置了 GitHub Actions（
 
 1. **字段名 100% 对齐** Kotlin，不转 snake_case，可直接导入现有书源 JSON。
 2. **宽松解码**：数字↔字符串↔布尔(0/1) 互转由 property wrapper 处理，缺字段用同样默认值，绝不因类型不符或缺字段报错。
-3. **规则字段两用**：`ruleSearch` 等既能吃「对象」也能吃「JSON 字符串」（内层再嵌一层 JSON），编码统一输出对象。对应 Kotlin `BookSource.Converters` + 各 Rule 的 `jsonDeserializer`。
-4. **逐条容错导入**：一条坏书源不影响其他，返回成功/失败两个列表。
+3. **规则字段两用**：`ruleSearch` / `ruleReview` 等既能吃「对象」也能吃「JSON 字符串」（内层再嵌一层 JSON），编码统一输出对象。对应 Kotlin `BookSource.Converters` + 各 Rule 的 `jsonDeserializer`。内层 JSON 解析失败时**不抛错**，字段置 nil，并把警告写入 `BookSourceImportResult.warnings`。
+4. **逐条容错导入**：一条坏书源不影响其他，返回成功列表 / 失败列表 / 警告列表三部分。
+5. **对外 API 均为 `public`**：所有模型类型、property wrapper、导入器、`LegadoJSON` 等可作为独立 SwiftPM 库被外部模块使用。
 
 ## 字段覆盖
 

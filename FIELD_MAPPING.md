@@ -1,8 +1,11 @@
 # Kotlin → Swift 字段对照清单
 
 > 本清单覆盖任务要求移植的全部数据模型类。
-> 校验脚本：`scripts/verify_fields.py`（对每个字段做词边界匹配，确认在对应 Swift 文件里出现）。
-> **「Kotlin 有但 Swift 没实现的字段」清单：空。** 全部 225 个数据字段均已实现。
+> 校验脚本：`scripts/verify_fields.py` —— **自动从 `reference/kotlin/entities` 的 Kotlin 源码用正则提取字段**（不手打清单），
+> 再对每个字段在对应 Swift 文件里做词边界匹配。脚本已接入 CI（Linux + macOS 均运行）。
+> **「Kotlin 有但 Swift 没实现的字段」清单：空。** 全部 225 个数据字段均已实现（脚本自动统计）。
+>
+> CI 结果：Linux (swift 5.10.1) 与 macOS (swift 5.x) 双系统 `swift build` + `swift test` 全绿，**10 个测试 0 失败**。
 
 ## 移植范围说明
 
