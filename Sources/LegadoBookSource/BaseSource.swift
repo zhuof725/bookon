@@ -23,7 +23,7 @@ import Foundation
 
 /// 书源基类协议，声明可持久化的公共字段。
 /// 对应 Kotlin `interface BaseSource : JsExtensions` 中的属性部分。
-protocol BaseSource {
+public protocol BaseSource {
     /// 并发率
     var concurrentRate: String? { get set }
     /// 登录地址

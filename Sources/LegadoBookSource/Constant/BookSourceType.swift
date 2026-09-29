@@ -7,10 +7,10 @@
 
 import Foundation
 
-enum BookSourceType {
-    static let `default` = 0   // 0 文本
-    static let audio = 1       // 1 音频
-    static let image = 2       // 2 图片
-    static let file = 3        // 3 只提供下载服务的网站
-    static let video = 4       // 4 视频
+public enum BookSourceType {
+    public static let `default` = 0   // 0 文本
+    public static let audio = 1       // 1 音频
+    public static let image = 2       // 2 图片
+    public static let file = 3        // 3 只提供下载服务的网站
+    public static let video = 4       // 4 视频
 }

@@ -33,7 +33,7 @@ final class BookSourceImporterTests: XCTestCase {
         let result1 = try BookSourceImporter.importSources(fromData: data)
         XCTAssertTrue(result1.failures.isEmpty,
                       "第一次导入不应有失败：\(result1.failures.map { $0.reason })")
-        XCTAssertEqual(result1.successes.count, 4, "应成功导入 4 个书源")
+        XCTAssertEqual(result1.successes.count, 6, "应成功导入 6 个书源")
 
         // encode
         let encoded = try LegadoJSON.encoder.encode(result1.successes)
@@ -42,10 +42,10 @@ final class BookSourceImporterTests: XCTestCase {
         let result2 = try BookSourceImporter.importSources(fromData: encoded)
         XCTAssertTrue(result2.failures.isEmpty,
                       "第二次导入不应有失败：\(result2.failures.map { $0.reason })")
-        XCTAssertEqual(result2.successes.count, 4)
+        XCTAssertEqual(result2.successes.count, 6)
 
         // 逐个书源比对 decode → encode → decode 的一致性
-        for i in 0..<4 {
+        for i in 0..<6 {
             let a = result1.successes[i]
             let b = result2.successes[i]
             assertBookSourceEqual(a, b, index: i)
@@ -63,6 +63,8 @@ final class BookSourceImporterTests: XCTestCase {
         XCTAssertTrue(raw[1]["ruleSearch"] is String, "书源1 ruleSearch 应为 JSON 字符串形式")
         XCTAssertTrue(raw[2]["ruleSearch"] is String, "书源2 ruleSearch 应为 JSON 字符串形式")
         XCTAssertTrue(raw[3]["ruleSearch"] is [String: Any], "书源3 ruleSearch 应为对象形式")
+        XCTAssertTrue(raw[4]["ruleReview"] is [String: Any], "书源4 ruleReview 应为对象形式")
+        XCTAssertTrue(raw[5]["ruleReview"] is String, "书源5 ruleReview 应为 JSON 字符串形式")
 
         let result = try BookSourceImporter.importSources(fromData: data)
         let sources = result.successes
@@ -116,6 +118,82 @@ final class BookSourceImporterTests: XCTestCase {
                               "编码后书源\(i) 的 ruleSearch 应为对象，而非字符串")
             }
         }
+    }
+
+    // MARK: 验收 3：ruleReview 对象形式与字符串形式，各字段 decode/encode 一致
+
+    func testReviewRuleBothForms() throws {
+        let data = try loadTestJSONData()
+        let result = try BookSourceImporter.importSources(fromData: data)
+        XCTAssertTrue(result.failures.isEmpty)
+        let sources = result.successes
+
+        // 书源4：对象形式；书源5：字符串形式。两者内容一致，应解出相等的 ReviewRule。
+        let objForm = sources[4]
+        let strForm = sources[5]
+        XCTAssertEqual(objForm.bookSourceName, "段评测试-对象")
+        XCTAssertEqual(strForm.bookSourceName, "段评测试-字符串")
+
+        let ro = try XCTUnwrap(objForm.ruleReview, "对象形式应解出 ruleReview")
+        let rs = try XCTUnwrap(strForm.ruleReview, "字符串形式应解出 ruleReview")
+
+        // 逐字段断言（对象形式）
+        XCTAssertEqual(ro.reviewUrl, "/review?bookUrl={{bookUrl}}&chapterIndex={{chapterIndex}}")
+        XCTAssertEqual(ro.avatarRule, "$.data.list[*].avatar")
+        XCTAssertEqual(ro.contentRule, "$.data.list[*].content")
+        XCTAssertEqual(ro.postTimeRule, "$.data.list[*].createTime")
+        XCTAssertEqual(ro.reviewQuoteUrl, "/reviewQuote?id={$.id}")
+        XCTAssertEqual(ro.voteUpUrl, "/voteUp?id={$.id}")
+        XCTAssertEqual(ro.voteDownUrl, "/voteDown?id={$.id}")
+        XCTAssertEqual(ro.postReviewUrl, "/postReview,{\"method\":\"POST\",\"body\":\"content={{content}}\"}")
+        XCTAssertEqual(ro.postQuoteUrl, "/postQuote,{\"method\":\"POST\",\"body\":\"content={{content}}\"}")
+        XCTAssertEqual(ro.deleteUrl, "/deleteReview?id={$.id}")
+
+        // 两种形式解出的 ReviewRule 应完全相等
+        XCTAssertEqual(ro, rs, "对象形式与字符串形式解出的 ReviewRule 应一致")
+
+        // decode → encode → decode 后 ReviewRule 仍一致
+        let encoded = try LegadoJSON.encoder.encode(sources)
+        let result2 = try BookSourceImporter.importSources(fromData: encoded)
+        XCTAssertEqual(result2.successes[4].ruleReview, ro)
+        XCTAssertEqual(result2.successes[5].ruleReview, rs)
+
+        // 编码后两者的 ruleReview 都应为对象形式（统一输出对象）
+        let reparsed = try JSONSerialization.jsonObject(with: encoded) as! [[String: Any]]
+        XCTAssertTrue(reparsed[4]["ruleReview"] is [String: Any], "编码后书源4 ruleReview 应为对象")
+        XCTAssertTrue(reparsed[5]["ruleReview"] is [String: Any], "编码后书源5 ruleReview 应为对象")
+    }
+
+    // MARK: 内层 JSON 字符串解析失败 -> 置 nil 且记录 warning
+
+    func testMalformedRuleStringProducesWarningNotError() throws {
+        // ruleSearch 是一个语法错误的 JSON 字符串（缺右括号）。
+        let json = #"""
+        {
+          "bookSourceUrl": "https://warn.example.com",
+          "bookSourceName": "警告测试",
+          "ruleSearch": "{ \"name\": \"$.name\" "
+        }
+        """#
+        let result = try BookSourceImporter.importSources(fromJSONString: json)
+        // 书源整体应导入成功（容错），只是 ruleSearch 被置空。
+        XCTAssertEqual(result.successes.count, 1, "坏规则不应导致整条书源失败")
+        XCTAssertTrue(result.failures.isEmpty)
+        XCTAssertNil(result.successes.first?.ruleSearch, "解析失败的规则字段应被置空")
+        // 应记录一条警告
+        XCTAssertFalse(result.warnings.isEmpty, "应记录内层解析失败的警告")
+        let w = try XCTUnwrap(result.warnings.first)
+        XCTAssertEqual(w.field, "ruleSearch", "警告应指明是 ruleSearch 字段")
+        XCTAssertTrue(w.message.contains("内层解析失败") || w.message.contains("置空"),
+                      "警告信息应说明字段被置空：\(w.message)")
+    }
+
+    // MARK: 正常导入不产生警告
+
+    func testCleanImportHasNoWarnings() throws {
+        let data = try loadTestJSONData()
+        let result = try BookSourceImporter.importSources(fromData: data)
+        XCTAssertTrue(result.warnings.isEmpty, "合法书源导入不应产生警告：\(result.warnings)")
     }
 
     // MARK: 宽松解码：Int / Int64 / Bool / String 类型不统一时的容错

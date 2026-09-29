@@ -19,82 +19,82 @@
 
 import Foundation
 
-struct BookSource: Codable, BaseSource {
+public struct BookSource: Codable, BaseSource {
 
     // MARK: 持久化字段（顺序、名称与 Kotlin 保持一致）
 
     /// 地址，包括 http/https
-    @LenientString<Defaults.EmptyString> var bookSourceUrl: String
+    @LenientString<Defaults.EmptyString> public var bookSourceUrl: String
     /// 名称
-    @LenientString<Defaults.EmptyString> var bookSourceName: String
+    @LenientString<Defaults.EmptyString> public var bookSourceName: String
     /// 分组
-    @LenientOptionalString var bookSourceGroup: String?
+    @LenientOptionalString public var bookSourceGroup: String?
     /// 类型，0 文本，1 音频, 2 图片, 3 文件（指的是类似知轩藏书只提供下载的网站）, 4 视频
-    @LenientInt<Defaults.ZeroInt> var bookSourceType: Int
+    @LenientInt<Defaults.ZeroInt> public var bookSourceType: Int
     /// 详情页url正则
-    @LenientOptionalString var bookUrlPattern: String?
+    @LenientOptionalString public var bookUrlPattern: String?
     /// 手动排序编号
-    @LenientInt<Defaults.ZeroInt> var customOrder: Int
+    @LenientInt<Defaults.ZeroInt> public var customOrder: Int
     /// 是否启用
-    @LenientBool<Defaults.TrueBool> var enabled: Bool
+    @LenientBool<Defaults.TrueBool> public var enabled: Bool
     /// 启用发现
-    @LenientBool<Defaults.TrueBool> var enabledExplore: Bool
+    @LenientBool<Defaults.TrueBool> public var enabledExplore: Bool
     /// js库
-    @LenientOptionalString var jsLib: String?
+    @LenientOptionalString public var jsLib: String?
     /// 启用okhttp CookieJAr 自动保存每次请求的cookie
     /// 注意：Kotlin 声明为 Boolean? 且默认 true（列默认值为 "0"，构造默认值为 true）。
-    @LenientOptionalBool var enabledCookieJar: Bool?
+    @LenientOptionalBool public var enabledCookieJar: Bool?
     /// 并发率
-    @LenientOptionalString var concurrentRate: String?
+    @LenientOptionalString public var concurrentRate: String?
     /// 请求头
-    @LenientOptionalString var header: String?
+    @LenientOptionalString public var header: String?
     /// 登录地址
-    @LenientOptionalString var loginUrl: String?
+    @LenientOptionalString public var loginUrl: String?
     /// 登录UI
-    @LenientOptionalString var loginUi: String?
+    @LenientOptionalString public var loginUi: String?
     /// 登录检测js
-    @LenientOptionalString var loginCheckJs: String?
+    @LenientOptionalString public var loginCheckJs: String?
     /// 封面解密js
-    @LenientOptionalString var coverDecodeJs: String?
+    @LenientOptionalString public var coverDecodeJs: String?
     /// 注释
-    @LenientOptionalString var bookSourceComment: String?
+    @LenientOptionalString public var bookSourceComment: String?
     /// 自定义变量说明
-    @LenientOptionalString var variableComment: String?
+    @LenientOptionalString public var variableComment: String?
     /// 最后更新时间，用于排序
-    @LenientInt64<Defaults.ZeroInt64> var lastUpdateTime: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var lastUpdateTime: Int64
     /// 响应时间，用于排序
-    @LenientInt64<RespondTimeDefault> var respondTime: Int64
+    @LenientInt64<RespondTimeDefault> public var respondTime: Int64
     /// 智能排序的权重
-    @LenientInt<Defaults.ZeroInt> var weight: Int
+    @LenientInt<Defaults.ZeroInt> public var weight: Int
     /// 发现url
-    @LenientOptionalString var exploreUrl: String?
+    @LenientOptionalString public var exploreUrl: String?
     /// 发现筛选规则
-    @LenientOptionalString var exploreScreen: String?
+    @LenientOptionalString public var exploreScreen: String?
     /// 发现规则
-    @StringOrObject<ExploreRule> var ruleExplore: ExploreRule?
+    @StringOrObject<ExploreRule> public var ruleExplore: ExploreRule?
     /// 搜索url
-    @LenientOptionalString var searchUrl: String?
+    @LenientOptionalString public var searchUrl: String?
     /// 搜索规则
-    @StringOrObject<SearchRule> var ruleSearch: SearchRule?
+    @StringOrObject<SearchRule> public var ruleSearch: SearchRule?
     /// 书籍信息页规则
-    @StringOrObject<BookInfoRule> var ruleBookInfo: BookInfoRule?
+    @StringOrObject<BookInfoRule> public var ruleBookInfo: BookInfoRule?
     /// 目录页规则
-    @StringOrObject<TocRule> var ruleToc: TocRule?
+    @StringOrObject<TocRule> public var ruleToc: TocRule?
     /// 正文页规则
-    @StringOrObject<ContentRule> var ruleContent: ContentRule?
+    @StringOrObject<ContentRule> public var ruleContent: ContentRule?
     /// 段评规则
-    @StringOrObject<ReviewRule> var ruleReview: ReviewRule?
+    @StringOrObject<ReviewRule> public var ruleReview: ReviewRule?
     /// 是否监听事件来执行回调规则
-    @LenientBool<Defaults.FalseBool> var eventListener: Bool
+    @LenientBool<Defaults.FalseBool> public var eventListener: Bool
     /// 由书源控制的自定义按钮
-    @LenientBool<Defaults.FalseBool> var customButton: Bool
+    @LenientBool<Defaults.FalseBool> public var customButton: Bool
 
     /// respondTime 的默认值：180000L
-    enum RespondTimeDefault: DefaultValueProvider { static let defaultValue = Int64(180000) }
+    public enum RespondTimeDefault: DefaultValueProvider { public static let defaultValue = Int64(180000) }
 
     // MARK: 构造器（默认值与 Kotlin 完全一致）
 
-    init(
+    public init(
         bookSourceUrl: String = "",
         bookSourceName: String = "",
         bookSourceGroup: String? = nil,
@@ -164,7 +164,7 @@ struct BookSource: Codable, BaseSource {
 
     // MARK: CodingKeys（字段名与 JSON key 完全一致，不转 snake_case）
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case bookSourceUrl
         case bookSourceName
         case bookSourceGroup
@@ -202,14 +202,14 @@ struct BookSource: Codable, BaseSource {
     // MARK: 业务方法（数据模型层可自足实现的部分）
 
     /// 对应 Kotlin getTag()
-    func getTag() -> String { bookSourceName }
+    public func getTag() -> String { bookSourceName }
 
     /// 对应 Kotlin getKey()
-    func getKey() -> String { bookSourceUrl }
+    public func getKey() -> String { bookSourceUrl }
 
     /// 对应 Kotlin getSearchRule(): 空时创建并返回一个新的 SearchRule。
     /// Swift struct 是值类型，这里返回现有值或一个新建实例。
-    mutating func getSearchRule() -> SearchRule {
+    public mutating func getSearchRule() -> SearchRule {
         if let r = ruleSearch { return r }
         let rule = SearchRule()
         ruleSearch = rule
@@ -217,7 +217,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getExploreRule()
-    mutating func getExploreRule() -> ExploreRule {
+    public mutating func getExploreRule() -> ExploreRule {
         if let r = ruleExplore { return r }
         let rule = ExploreRule()
         ruleExplore = rule
@@ -225,7 +225,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getBookInfoRule()
-    mutating func getBookInfoRule() -> BookInfoRule {
+    public mutating func getBookInfoRule() -> BookInfoRule {
         if let r = ruleBookInfo { return r }
         let rule = BookInfoRule()
         ruleBookInfo = rule
@@ -233,7 +233,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getTocRule()
-    mutating func getTocRule() -> TocRule {
+    public mutating func getTocRule() -> TocRule {
         if let r = ruleToc { return r }
         let rule = TocRule()
         ruleToc = rule
@@ -241,7 +241,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getContentRule()
-    mutating func getContentRule() -> ContentRule {
+    public mutating func getContentRule() -> ContentRule {
         if let r = ruleContent { return r }
         let rule = ContentRule()
         ruleContent = rule
@@ -251,7 +251,7 @@ struct BookSource: Codable, BaseSource {
     // 注意：Kotlin 中 getReviewRule() 被注释掉了，这里也不实现。
 
     /// 对应 Kotlin getDisPlayNameGroup()
-    func getDisPlayNameGroup() -> String {
+    public func getDisPlayNameGroup() -> String {
         if bookSourceGroup?.isEmpty ?? true || (bookSourceGroup?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             return bookSourceName
         } else {
@@ -260,7 +260,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getCheckKeyword(default:)
-    func getCheckKeyword(_ defaultValue: String) -> String {
+    public func getCheckKeyword(_ defaultValue: String) -> String {
         if let it = ruleSearch?.checkKeyWord,
            !it.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            !it.contains("http"),
@@ -273,7 +273,7 @@ struct BookSource: Codable, BaseSource {
     }
 
     /// 对应 Kotlin getDisplayVariableComment(otherComment:)
-    func getDisplayVariableComment(_ otherComment: String) -> String {
+    public func getDisplayVariableComment(_ otherComment: String) -> String {
         if variableComment?.isEmpty ?? true || (variableComment?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             return otherComment
         } else {
@@ -291,10 +291,10 @@ struct BookSource: Codable, BaseSource {
 
 // 对应 Kotlin 自定义 equals / hashCode：仅以 bookSourceUrl 判等。
 extension BookSource: Equatable, Hashable {
-    static func == (lhs: BookSource, rhs: BookSource) -> Bool {
+    public static func == (lhs: BookSource, rhs: BookSource) -> Bool {
         lhs.bookSourceUrl == rhs.bookSourceUrl
     }
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(bookSourceUrl)
     }
 }

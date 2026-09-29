@@ -24,96 +24,96 @@
 
 import Foundation
 
-struct Book: Codable, BaseBook {
+public struct Book: Codable, BaseBook {
 
     // MARK: 持久化字段
 
     /// 详情页Url(本地书源存储完整文件路径)
-    @LenientString<Defaults.EmptyString> var bookUrl: String
+    @LenientString<Defaults.EmptyString> public var bookUrl: String
     /// 目录页Url (toc=table of Contents)
-    @LenientString<Defaults.EmptyString> var tocUrl: String
+    @LenientString<Defaults.EmptyString> public var tocUrl: String
     /// 书源URL(默认BookType.localTag)
-    @LenientString<LocalTagDefault> var origin: String
+    @LenientString<LocalTagDefault> public var origin: String
     /// 书源名称 or 本地书籍文件名
-    @LenientString<Defaults.EmptyString> var originName: String
+    @LenientString<Defaults.EmptyString> public var originName: String
     /// 书籍名称(书源获取)
-    @LenientString<Defaults.EmptyString> var name: String
+    @LenientString<Defaults.EmptyString> public var name: String
     /// 作者名称(书源获取)
-    @LenientString<Defaults.EmptyString> var author: String
+    @LenientString<Defaults.EmptyString> public var author: String
     /// 分类信息(书源获取)
-    @LenientOptionalString var kind: String?
+    @LenientOptionalString public var kind: String?
     /// 分类信息(用户修改)
-    @LenientOptionalString var customTag: String?
+    @LenientOptionalString public var customTag: String?
     /// 封面Url(书源获取)
-    @LenientOptionalString var coverUrl: String?
+    @LenientOptionalString public var coverUrl: String?
     /// 封面Url(用户修改)
-    @LenientOptionalString var customCoverUrl: String?
+    @LenientOptionalString public var customCoverUrl: String?
     /// 简介内容(书源获取)
-    @LenientOptionalString var intro: String?
+    @LenientOptionalString public var intro: String?
     /// 简介内容(用户修改)
-    @LenientOptionalString var customIntro: String?
+    @LenientOptionalString public var customIntro: String?
     /// 自定义字符集名称(仅适用于本地书籍)
-    @LenientOptionalString var charset: String?
+    @LenientOptionalString public var charset: String?
     /// 类型,详见BookType
-    @LenientInt<TextTypeDefault> var type: Int
+    @LenientInt<TextTypeDefault> public var type: Int
     /// 自定义分组索引号
-    @LenientInt64<Defaults.ZeroInt64> var group: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var group: Int64
     /// 最新章节标题
-    @LenientOptionalString var latestChapterTitle: String?
+    @LenientOptionalString public var latestChapterTitle: String?
     /// 最新章节标题更新时间（构造默认 currentTimeMillis；列默认 "0"，缺字段用 0）
-    @LenientInt64<Defaults.ZeroInt64> var latestChapterTime: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var latestChapterTime: Int64
     /// 最近一次更新书籍信息的时间（同上）
-    @LenientInt64<Defaults.ZeroInt64> var lastCheckTime: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var lastCheckTime: Int64
     /// 最近一次发现新章节的数量
-    @LenientInt<Defaults.ZeroInt> var lastCheckCount: Int
+    @LenientInt<Defaults.ZeroInt> public var lastCheckCount: Int
     /// 书籍目录总数
-    @LenientInt<Defaults.ZeroInt> var totalChapterNum: Int
+    @LenientInt<Defaults.ZeroInt> public var totalChapterNum: Int
     /// 当前章节名称
-    @LenientOptionalString var durChapterTitle: String?
+    @LenientOptionalString public var durChapterTitle: String?
     /// 当前章节索引
-    @LenientInt<Defaults.ZeroInt> var durChapterIndex: Int
+    @LenientInt<Defaults.ZeroInt> public var durChapterIndex: Int
     /// 当前卷索引
-    @LenientInt<Defaults.ZeroInt> var durVolumeIndex: Int
+    @LenientInt<Defaults.ZeroInt> public var durVolumeIndex: Int
     /// 相对于卷的索引
-    @LenientInt<Defaults.ZeroInt> var chapterInVolumeIndex: Int
+    @LenientInt<Defaults.ZeroInt> public var chapterInVolumeIndex: Int
     /// 当前阅读的进度(首行字符的索引位置)
-    @LenientInt<Defaults.ZeroInt> var durChapterPos: Int
+    @LenientInt<Defaults.ZeroInt> public var durChapterPos: Int
     /// 最近一次阅读书籍的时间(打开正文的时间)（构造默认 currentTimeMillis；列默认 "0"）
-    @LenientInt64<Defaults.ZeroInt64> var durChapterTime: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var durChapterTime: Int64
     /// 字数
-    @LenientOptionalString var wordCount: String?
+    @LenientOptionalString public var wordCount: String?
     /// 刷新书架时更新书籍信息
-    @LenientBool<Defaults.TrueBool> var canUpdate: Bool
+    @LenientBool<Defaults.TrueBool> public var canUpdate: Bool
     /// 手动排序
-    @LenientInt<Defaults.ZeroInt> var order: Int
+    @LenientInt<Defaults.ZeroInt> public var order: Int
     /// 书源排序
-    @LenientInt<Defaults.ZeroInt> var originOrder: Int
+    @LenientInt<Defaults.ZeroInt> public var originOrder: Int
     /// 自定义书籍变量信息(用于书源规则检索书籍信息)
-    @LenientOptionalString var variable: String?
+    @LenientOptionalString public var variable: String?
     /// 阅读设置
-    var readConfig: ReadConfig?
+    public var readConfig: ReadConfig?
     /// 同步时间
-    @LenientInt64<Defaults.ZeroInt64> var syncTime: Int64
+    @LenientInt64<Defaults.ZeroInt64> public var syncTime: Int64
 
     // MARK: 运行时字段（对应 Kotlin @Ignore / @IgnoredOnParcel，不参与 Codable）
 
     /// 对应 Kotlin @Ignore infoHtml
-    var infoHtml: String? = nil
+    public var infoHtml: String? = nil
     /// 对应 Kotlin @Ignore tocHtml
-    var tocHtml: String? = nil
+    public var tocHtml: String? = nil
     /// 对应 Kotlin @Ignore downloadUrls
-    var downloadUrls: [String]? = nil
+    public var downloadUrls: [String]? = nil
 
     // MARK: 默认值定义
 
     /// origin 默认值 BookType.localTag = "loc_book"
-    enum LocalTagDefault: DefaultValueProvider { static let defaultValue = BookType.localTag }
+    public enum LocalTagDefault: DefaultValueProvider { public static let defaultValue = BookType.localTag }
     /// type 默认值 BookType.text
-    enum TextTypeDefault: DefaultValueProvider { static let defaultValue = BookType.text }
+    public enum TextTypeDefault: DefaultValueProvider { public static let defaultValue = BookType.text }
 
     // MARK: 构造器（默认值与 Kotlin 一致；时间字段默认用当前毫秒时间戳）
 
-    init(
+    public init(
         bookUrl: String = "",
         tocUrl: String = "",
         origin: String = BookType.localTag,
@@ -183,13 +183,13 @@ struct Book: Codable, BaseBook {
         self._syncTime = LenientInt64(wrappedValue: syncTime)
     }
 
-    static func currentTimeMillis() -> Int64 {
+    public static func currentTimeMillis() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
 
     // MARK: CodingKeys（仅持久化字段；运行时字段不编码）
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case bookUrl
         case tocUrl
         case origin
@@ -228,35 +228,35 @@ struct Book: Codable, BaseBook {
     // MARK: 内嵌 ReadConfig（对应 Kotlin Book.ReadConfig）
 
     /// 阅读设置。对应 Kotlin data class Book.ReadConfig。
-    struct ReadConfig: Codable, Equatable {
-        var reverseToc: Bool                // 默认 false
-        var pageAnim: Int?                  // 默认 null
-        var reSegment: Bool                 // 默认 false
-        var imageStyle: String?             // 默认 null
+    public struct ReadConfig: Codable, Equatable {
+        public var reverseToc: Bool                // 默认 false
+        public var pageAnim: Int?                  // 默认 null
+        public var reSegment: Bool                 // 默认 false
+        public var imageStyle: String?             // 默认 null
         /// 正文使用净化替换规则
-        var useReplaceRule: Bool?           // 默认 null
+        public var useReplaceRule: Bool?           // 默认 null
         /// 去除标签
-        var delTag: Int64                   // 默认 0L
-        var ttsEngine: String?              // 默认 null
-        var splitLongChapter: Bool          // 默认 true
-        var readSimulating: Bool            // 默认 false
+        public var delTag: Int64                   // 默认 0L
+        public var ttsEngine: String?              // 默认 null
+        public var splitLongChapter: Bool          // 默认 true
+        public var readSimulating: Bool            // 默认 false
         /// TODO: Kotlin 为 java.time.LocalDate?，JSON 序列化格式依赖 Gson 的 LocalDate 适配器；
         ///   本移植暂以 String? 承载其原始 JSON 表示，避免猜测日期格式。待确认存储格式后再改为强类型。
-        var startDate: String?              // 默认 null
+        public var startDate: String?              // 默认 null
         /// 用户设置的起始章节
-        var startChapter: Int?              // 默认 null
+        public var startChapter: Int?              // 默认 null
         /// 用户设置的每日更新章节数
-        var dailyChapters: Int              // 默认 3
+        public var dailyChapters: Int              // 默认 3
         /// 音频片头
-        var openCredits: Int                // 默认 0
+        public var openCredits: Int                // 默认 0
         /// 音频片尾
-        var closeCredits: Int               // 默认 0
+        public var closeCredits: Int               // 默认 0
         /// 音频播放模式
-        var playMode: Int                   // 默认 0
+        public var playMode: Int                   // 默认 0
         /// 音频播放速度
-        var playSpeed: Float                // 默认 1.0f
+        public var playSpeed: Float                // 默认 1.0f
 
-        init(
+        public init(
             reverseToc: Bool = false,
             pageAnim: Int? = nil,
             reSegment: Bool = false,
@@ -312,7 +312,7 @@ struct Book: Codable, BaseBook {
         }
 
         // 缺字段用同样默认值。
-        init(from decoder: Decoder) throws {
+        public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             self.reverseToc = try c.decodeIfPresent(Bool.self, forKey: .reverseToc) ?? false
             self.pageAnim = try c.decodeIfPresent(Int.self, forKey: .pageAnim)
@@ -334,13 +334,13 @@ struct Book: Codable, BaseBook {
     }
 
     // MARK: companion object 常量（对应 Kotlin Book.companion）
-    enum Const {
-        static let hTag: Int64 = 2
-        static let rubyTag: Int64 = 4
-        static let imgStyleDefault = "DEFAULT"
-        static let imgStyleFull = "FULL"
-        static let imgStyleText = "TEXT"
-        static let imgStyleSingle = "SINGLE"
+    public enum Const {
+        public static let hTag: Int64 = 2
+        public static let rubyTag: Int64 = 4
+        public static let imgStyleDefault = "DEFAULT"
+        public static let imgStyleFull = "FULL"
+        public static let imgStyleText = "TEXT"
+        public static let imgStyleSingle = "SINGLE"
     }
 
     // TODO(后续步骤): 移植 Book 的业务方法（依赖运行时 / 其他实体 / DB）：
@@ -352,6 +352,6 @@ struct Book: Codable, BaseBook {
 
 // 对应 Kotlin 自定义 equals / hashCode：仅以 bookUrl 判等。
 extension Book: Equatable, Hashable {
-    static func == (lhs: Book, rhs: Book) -> Bool { lhs.bookUrl == rhs.bookUrl }
-    func hash(into hasher: inout Hasher) { hasher.combine(bookUrl) }
+    public static func == (lhs: Book, rhs: Book) -> Bool { lhs.bookUrl == rhs.bookUrl }
+    public func hash(into hasher: inout Hasher) { hasher.combine(bookUrl) }
 }

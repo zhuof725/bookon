@@ -14,16 +14,16 @@
 
 import Foundation
 
-struct FlexChildStyle: Codable, Equatable {
-    var layout_flexGrow: Float          // 默认 0F
-    var layout_flexShrink: Float        // 默认 1F
-    var layout_alignSelf: String        // 默认 "auto"
-    var layout_flexBasisPercent: Float  // 默认 -1F
-    var layout_wrapBefore: Bool         // 默认 false
+public struct FlexChildStyle: Codable, Equatable {
+    public var layout_flexGrow: Float          // 默认 0F
+    public var layout_flexShrink: Float        // 默认 1F
+    public var layout_alignSelf: String        // 默认 "auto"
+    public var layout_flexBasisPercent: Float  // 默认 -1F
+    public var layout_wrapBefore: Bool         // 默认 false
     /// 自定义的内部水平对齐属性
-    var layout_justifySelf: String      // 默认 "auto"
+    public var layout_justifySelf: String      // 默认 "auto"
 
-    init(
+    public init(
         layout_flexGrow: Float = 0,
         layout_flexShrink: Float = 1,
         layout_alignSelf: String = "auto",
@@ -39,7 +39,7 @@ struct FlexChildStyle: Codable, Equatable {
         self.layout_justifySelf = layout_justifySelf
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case layout_flexGrow
         case layout_flexShrink
         case layout_alignSelf
@@ -49,7 +49,7 @@ struct FlexChildStyle: Codable, Equatable {
     }
 
     // 缺字段用同样的默认值，JSON 缺字段不报错。
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.layout_flexGrow = try c.decodeIfPresent(Float.self, forKey: .layout_flexGrow) ?? 0
         self.layout_flexShrink = try c.decodeIfPresent(Float.self, forKey: .layout_flexShrink) ?? 1
@@ -60,5 +60,5 @@ struct FlexChildStyle: Codable, Equatable {
     }
 
     /// 对应 Kotlin companion object 里的 defaultStyle。
-    static let defaultStyle = FlexChildStyle()
+    public static let defaultStyle = FlexChildStyle()
 }

@@ -12,17 +12,17 @@
 import Foundation
 
 /// 发现分类
-struct ExploreKind: Codable, Equatable {
-    let title: String           // 默认 ""
-    let url: String?            // 默认 null
-    let type: String            // 默认 "url"
-    let action: String?         // 默认 null
-    let chars: [String?]?       // 默认 null，元素可空
-    let `default`: String?      // 默认 null
-    var viewName: String?       // 默认 null
-    let style: FlexChildStyle?  // 默认 null
+public struct ExploreKind: Codable, Equatable {
+    public let title: String           // 默认 ""
+    public let url: String?            // 默认 null
+    public let type: String            // 默认 "url"
+    public let action: String?         // 默认 null
+    public let chars: [String?]?       // 默认 null，元素可空
+    public let `default`: String?      // 默认 null
+    public var viewName: String?       // 默认 null
+    public let style: FlexChildStyle?  // 默认 null
 
-    init(
+    public init(
         title: String = "",
         url: String? = nil,
         type: String = "url",
@@ -42,7 +42,7 @@ struct ExploreKind: Codable, Equatable {
         self.style = style
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case title
         case url
         case type
@@ -54,7 +54,7 @@ struct ExploreKind: Codable, Equatable {
     }
 
     // 缺字段用同样的默认值。
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         self.url = try c.decodeIfPresent(String.self, forKey: .url)
@@ -67,21 +67,21 @@ struct ExploreKind: Codable, Equatable {
     }
 
     /// 对应 Kotlin 的 fun style(): 空时返回 defaultStyle。
-    func styleOrDefault() -> FlexChildStyle {
+    public func styleOrDefault() -> FlexChildStyle {
         return style ?? FlexChildStyle.defaultStyle
     }
 
     /// 对应 Kotlin 内嵌的 object Type。
-    enum `Type` {
-        static let url = "url"
-        static let text = "text"
-        static let button = "button"
-        static let toggle = "toggle"
-        static let select = "select"
+    public enum `Type` {
+        public static let url = "url"
+        public static let text = "text"
+        public static let button = "button"
+        public static let toggle = "toggle"
+        public static let select = "select"
     }
 
     // 对应 Kotlin 自定义 equals：仅比较 title/type/url/action/default。
-    static func == (lhs: ExploreKind, rhs: ExploreKind) -> Bool {
+    public static func == (lhs: ExploreKind, rhs: ExploreKind) -> Bool {
         return lhs.title == rhs.title
             && lhs.type == rhs.type
             && lhs.url == rhs.url

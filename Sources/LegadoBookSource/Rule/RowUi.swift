@@ -10,16 +10,16 @@
 
 import Foundation
 
-struct RowUi: Codable, Equatable {
-    let name: String            // 默认 ""
-    let type: String            // 默认 "text"
-    let action: String?         // 默认 null
-    let chars: [String?]?       // 默认 null，元素可空
-    let `default`: String?      // 默认 null
-    var viewName: String?       // 默认 null
-    let style: FlexChildStyle?  // 默认 null
+public struct RowUi: Codable, Equatable {
+    public let name: String            // 默认 ""
+    public let type: String            // 默认 "text"
+    public let action: String?         // 默认 null
+    public let chars: [String?]?       // 默认 null，元素可空
+    public let `default`: String?      // 默认 null
+    public var viewName: String?       // 默认 null
+    public let style: FlexChildStyle?  // 默认 null
 
-    init(
+    public init(
         name: String = "",
         type: String = "text",
         action: String? = nil,
@@ -37,7 +37,7 @@ struct RowUi: Codable, Equatable {
         self.style = style
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case name
         case type
         case action
@@ -48,7 +48,7 @@ struct RowUi: Codable, Equatable {
     }
 
     // 缺字段用同样的默认值。
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
         self.type = try c.decodeIfPresent(String.self, forKey: .type) ?? "text"
@@ -60,21 +60,21 @@ struct RowUi: Codable, Equatable {
     }
 
     /// 对应 Kotlin 的 fun style(): 空时返回 defaultStyle。
-    func styleOrDefault() -> FlexChildStyle {
+    public func styleOrDefault() -> FlexChildStyle {
         return style ?? FlexChildStyle.defaultStyle
     }
 
     /// 对应 Kotlin 内嵌的 object Type。
-    enum `Type` {
-        static let text = "text"
-        static let password = "password"
-        static let button = "button"
-        static let toggle = "toggle"
-        static let select = "select"
+    public enum `Type` {
+        public static let text = "text"
+        public static let password = "password"
+        public static let button = "button"
+        public static let toggle = "toggle"
+        public static let select = "select"
     }
 
     // 对应 Kotlin 自定义 equals：仅比较 name/type/action/default。
-    static func == (lhs: RowUi, rhs: RowUi) -> Bool {
+    public static func == (lhs: RowUi, rhs: RowUi) -> Bool {
         return lhs.name == rhs.name
             && lhs.type == rhs.type
             && lhs.action == rhs.action

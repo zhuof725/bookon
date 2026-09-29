@@ -12,51 +12,51 @@
 
 import Foundation
 
-struct BookChapter: Codable {
+public struct BookChapter: Codable {
 
     // MARK: 持久化字段
 
     /// 章节地址
-    @LenientString<Defaults.EmptyString> var url: String
+    @LenientString<Defaults.EmptyString> public var url: String
     /// 章节标题
-    @LenientString<Defaults.EmptyString> var title: String
+    @LenientString<Defaults.EmptyString> public var title: String
     /// 是否是卷名
-    @LenientBool<Defaults.FalseBool> var isVolume: Bool
+    @LenientBool<Defaults.FalseBool> public var isVolume: Bool
     /// 用来拼接相对url
-    @LenientString<Defaults.EmptyString> var baseUrl: String
+    @LenientString<Defaults.EmptyString> public var baseUrl: String
     /// 书籍地址
-    @LenientString<Defaults.EmptyString> var bookUrl: String
+    @LenientString<Defaults.EmptyString> public var bookUrl: String
     /// 章节序号
-    @LenientInt<Defaults.ZeroInt> var index: Int
+    @LenientInt<Defaults.ZeroInt> public var index: Int
     /// 是否VIP
-    @LenientBool<Defaults.FalseBool> var isVip: Bool
+    @LenientBool<Defaults.FalseBool> public var isVip: Bool
     /// 是否已购买
-    @LenientBool<Defaults.FalseBool> var isPay: Bool
+    @LenientBool<Defaults.FalseBool> public var isPay: Bool
     /// 音频真实URL
-    @LenientOptionalString var resourceUrl: String?
+    @LenientOptionalString public var resourceUrl: String?
     /// 更新时间或其他章节附加信息
-    @LenientOptionalString var tag: String?
+    @LenientOptionalString public var tag: String?
     /// 本章节字数
-    @LenientOptionalString var wordCount: String?
+    @LenientOptionalString public var wordCount: String?
     /// 章节起始位置
-    @LenientOptionalInt64 var start: Int64?
+    @LenientOptionalInt64 public var start: Int64?
     /// 章节终止位置
-    @LenientOptionalInt64 var end: Int64?
+    @LenientOptionalInt64 public var end: Int64?
     /// EPUB书籍当前章节的fragmentId
-    @LenientOptionalString var startFragmentId: String?
+    @LenientOptionalString public var startFragmentId: String?
     /// EPUB书籍下一章节的fragmentId
-    @LenientOptionalString var endFragmentId: String?
+    @LenientOptionalString public var endFragmentId: String?
     /// 变量
-    @LenientOptionalString var variable: String?
+    @LenientOptionalString public var variable: String?
     /// 标题段评图或者视频封面
-    @LenientOptionalString var imgUrl: String?
+    @LenientOptionalString public var imgUrl: String?
 
     // MARK: 运行时字段（对应 Kotlin @Ignore titleMD5，不参与 Codable）
-    var titleMD5: String? = nil
+    public var titleMD5: String? = nil
 
     // MARK: 构造器（默认值与 Kotlin 一致）
 
-    init(
+    public init(
         url: String = "",
         title: String = "",
         isVolume: Bool = false,
@@ -96,7 +96,7 @@ struct BookChapter: Codable {
 
     // MARK: CodingKeys（仅持久化字段）
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case url
         case title
         case isVolume
@@ -117,7 +117,7 @@ struct BookChapter: Codable {
     }
 
     /// 对应 Kotlin primaryStr()
-    func primaryStr() -> String { bookUrl + url }
+    public func primaryStr() -> String { bookUrl + url }
 
     // TODO(后续步骤): 移植 BookChapter 的业务方法（依赖运行时 / DB / 正则）：
     //   putImgUrl() / putLyric() / putDanmaku() / update()
@@ -127,6 +127,6 @@ struct BookChapter: Codable {
 
 // 对应 Kotlin 自定义 equals / hashCode：仅以 url 判等。
 extension BookChapter: Equatable, Hashable {
-    static func == (lhs: BookChapter, rhs: BookChapter) -> Bool { lhs.url == rhs.url }
-    func hash(into hasher: inout Hasher) { hasher.combine(url) }
+    public static func == (lhs: BookChapter, rhs: BookChapter) -> Bool { lhs.url == rhs.url }
+    public func hash(into hasher: inout Hasher) { hasher.combine(url) }
 }

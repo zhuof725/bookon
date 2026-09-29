@@ -8,28 +8,28 @@
 import Foundation
 
 /// 正文处理规则
-struct ContentRule: Codable, Equatable {
-    @LenientOptionalString var content: String?
+public struct ContentRule: Codable, Equatable {
+    @LenientOptionalString public var content: String?
     /// 副文规则，拼接在正文后面或者获取歌词等
-    @LenientOptionalString var subContent: String?
+    @LenientOptionalString public var subContent: String?
     /// 有些网站只能在正文中获取标题
-    @LenientOptionalString var title: String?
-    @LenientOptionalString var nextContentUrl: String?
-    @LenientOptionalString var webJs: String?
-    @LenientOptionalString var sourceRegex: String?
+    @LenientOptionalString public var title: String?
+    @LenientOptionalString public var nextContentUrl: String?
+    @LenientOptionalString public var webJs: String?
+    @LenientOptionalString public var sourceRegex: String?
     /// 替换规则
-    @LenientOptionalString var replaceRegex: String?
+    @LenientOptionalString public var replaceRegex: String?
     /// 默认大小居中,FULL最大宽度
-    @LenientOptionalString var imageStyle: String?
+    @LenientOptionalString public var imageStyle: String?
     /// 图片bytes二次解密js, 返回解密后的bytes
-    @LenientOptionalString var imageDecode: String?
+    @LenientOptionalString public var imageDecode: String?
     /// 购买操作,js或者包含{{js}}的url
-    @LenientOptionalString var payAction: String?
+    @LenientOptionalString public var payAction: String?
     /// 监听到事件后执行的回调js代码
-    @LenientOptionalString var callBackJs: String?
+    @LenientOptionalString public var callBackJs: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         content: String? = nil,
         subContent: String? = nil,
         title: String? = nil,
@@ -55,7 +55,7 @@ struct ContentRule: Codable, Equatable {
         self._callBackJs = LenientOptionalString(wrappedValue: callBackJs)
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case content
         case subContent
         case title

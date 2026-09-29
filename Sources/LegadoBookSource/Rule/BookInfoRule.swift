@@ -8,22 +8,22 @@
 import Foundation
 
 /// 书籍详情页规则
-struct BookInfoRule: Codable, Equatable {
-    @LenientOptionalString var `init`: String?
-    @LenientOptionalString var name: String?
-    @LenientOptionalString var author: String?
-    @LenientOptionalString var intro: String?
-    @LenientOptionalString var kind: String?
-    @LenientOptionalString var lastChapter: String?
-    @LenientOptionalString var updateTime: String?
-    @LenientOptionalString var coverUrl: String?
-    @LenientOptionalString var tocUrl: String?
-    @LenientOptionalString var wordCount: String?
-    @LenientOptionalString var canReName: String?
-    @LenientOptionalString var downloadUrls: String?
+public struct BookInfoRule: Codable, Equatable {
+    @LenientOptionalString public var `init`: String?
+    @LenientOptionalString public var name: String?
+    @LenientOptionalString public var author: String?
+    @LenientOptionalString public var intro: String?
+    @LenientOptionalString public var kind: String?
+    @LenientOptionalString public var lastChapter: String?
+    @LenientOptionalString public var updateTime: String?
+    @LenientOptionalString public var coverUrl: String?
+    @LenientOptionalString public var tocUrl: String?
+    @LenientOptionalString public var wordCount: String?
+    @LenientOptionalString public var canReName: String?
+    @LenientOptionalString public var downloadUrls: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         init initValue: String? = nil,
         name: String? = nil,
         author: String? = nil,
@@ -51,7 +51,7 @@ struct BookInfoRule: Codable, Equatable {
         self._downloadUrls = LenientOptionalString(wrappedValue: downloadUrls)
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case `init`
         case name
         case author

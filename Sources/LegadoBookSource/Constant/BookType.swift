@@ -11,26 +11,26 @@
 
 import Foundation
 
-enum BookType {
+public enum BookType {
     /// 4 视频
-    static let video = 0b100
+    public static let video = 0b100
     /// 8 文本
-    static let text = 0b1000
+    public static let text = 0b1000
     /// 16 更新失败
-    static let updateError = 0b10000
+    public static let updateError = 0b10000
     /// 32 音频
-    static let audio = 0b100000
+    public static let audio = 0b100000
     /// 64 图片
-    static let image = 0b1000000
+    public static let image = 0b1000000
     /// 128 只提供下载服务的网站
-    static let webFile = 0b10000000
+    public static let webFile = 0b10000000
     /// 256 本地
-    static let local = 0b100000000
+    public static let local = 0b100000000
     /// 512 压缩包 表明书籍文件是从压缩包内解压来的
-    static let archive = 0b1000000000
+    public static let archive = 0b1000000000
     /// 1024 未正式加入到书架的临时阅读书籍
-    static let notShelf = 0b100_0000_0000
+    public static let notShelf = 0b100_0000_0000
 
     /// 本地书源标记
-    static let localTag = "loc_book"
+    public static let localTag = "loc_book"
 }

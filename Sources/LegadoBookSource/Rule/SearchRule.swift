@@ -8,22 +8,22 @@
 import Foundation
 
 /// 搜索结果处理规则
-struct SearchRule: Codable, Equatable, BookListRule {
+public struct SearchRule: Codable, Equatable, BookListRule {
     /// 校验关键字
-    @LenientOptionalString var checkKeyWord: String?
-    @LenientOptionalString var bookList: String?
-    @LenientOptionalString var name: String?
-    @LenientOptionalString var author: String?
-    @LenientOptionalString var intro: String?
-    @LenientOptionalString var kind: String?
-    @LenientOptionalString var lastChapter: String?
-    @LenientOptionalString var updateTime: String?
-    @LenientOptionalString var bookUrl: String?
-    @LenientOptionalString var coverUrl: String?
-    @LenientOptionalString var wordCount: String?
+    @LenientOptionalString public var checkKeyWord: String?
+    @LenientOptionalString public var bookList: String?
+    @LenientOptionalString public var name: String?
+    @LenientOptionalString public var author: String?
+    @LenientOptionalString public var intro: String?
+    @LenientOptionalString public var kind: String?
+    @LenientOptionalString public var lastChapter: String?
+    @LenientOptionalString public var updateTime: String?
+    @LenientOptionalString public var bookUrl: String?
+    @LenientOptionalString public var coverUrl: String?
+    @LenientOptionalString public var wordCount: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         checkKeyWord: String? = nil,
         bookList: String? = nil,
         name: String? = nil,
@@ -50,7 +50,7 @@ struct SearchRule: Codable, Equatable, BookListRule {
     }
 
     // 字段名与 JSON key 完全一致，不转 snake_case。
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case checkKeyWord
         case bookList
         case name

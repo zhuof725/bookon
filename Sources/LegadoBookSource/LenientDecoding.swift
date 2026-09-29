@@ -20,10 +20,10 @@ import Foundation
 
 /// 一组静态方法，把任意 JSON 标量（字符串 / 数字 / 布尔）宽松地转换为目标类型。
 /// 解析失败时返回 nil，交由上层决定是否使用默认值。
-enum LenientScalar {
+public enum LenientScalar {
 
     /// 宽松解码 Int：接受 Int、Double(取整)、Bool(true=1/false=0)、可解析的字符串。
-    static func int(from container: SingleValueDecodingContainer) -> Int? {
+    public static func int(from container: SingleValueDecodingContainer) -> Int? {
         if let v = try? container.decode(Int.self) { return v }
         if let v = try? container.decode(Int64.self) { return Int(exactly: v) ?? Int(truncatingIfNeeded: v) }
         if let v = try? container.decode(Double.self) { return Int(v) }
@@ -33,7 +33,7 @@ enum LenientScalar {
     }
 
     /// 宽松解码 Int64。
-    static func int64(from container: SingleValueDecodingContainer) -> Int64? {
+    public static func int64(from container: SingleValueDecodingContainer) -> Int64? {
         if let v = try? container.decode(Int64.self) { return v }
         if let v = try? container.decode(Int.self) { return Int64(v) }
         if let v = try? container.decode(Double.self) { return Int64(v) }
@@ -43,7 +43,7 @@ enum LenientScalar {
     }
 
     /// 宽松解码 Bool：接受 Bool、数字(0=false 非0=true)、"true"/"false"/"1"/"0"/"yes"/"no" 等字符串。
-    static func bool(from container: SingleValueDecodingContainer) -> Bool? {
+    public static func bool(from container: SingleValueDecodingContainer) -> Bool? {
         if let v = try? container.decode(Bool.self) { return v }
         if let v = try? container.decode(Int.self) { return v != 0 }
         if let v = try? container.decode(Int64.self) { return v != 0 }
@@ -54,7 +54,7 @@ enum LenientScalar {
 
     /// 宽松解码 String：接受 String、数字(转字符串)、布尔(转字符串)。
     /// 对应 Kotlin StringJsonDeserializer：primitive 直接 asString，其余 toString。
-    static func string(from container: SingleValueDecodingContainer) -> String? {
+    public static func string(from container: SingleValueDecodingContainer) -> String? {
         if let v = try? container.decode(String.self) { return v }
         if let v = try? container.decode(Bool.self) { return v ? "true" : "false" }
         if let v = try? container.decode(Int64.self) { return String(v) }
@@ -72,21 +72,21 @@ enum LenientScalar {
 
     // MARK: 字符串解析辅助
 
-    static func parseInt(from s: String) -> Int? {
+    public static func parseInt(from s: String) -> Int? {
         let t = s.trimmingCharacters(in: .whitespaces)
         if let v = Int(t) { return v }
         if let d = Double(t) { return Int(d) }
         return nil
     }
 
-    static func parseInt64(from s: String) -> Int64? {
+    public static func parseInt64(from s: String) -> Int64? {
         let t = s.trimmingCharacters(in: .whitespaces)
         if let v = Int64(t) { return v }
         if let d = Double(t) { return Int64(d) }
         return nil
     }
 
-    static func parseBool(from s: String) -> Bool? {
+    public static func parseBool(from s: String) -> Bool? {
         switch s.trimmingCharacters(in: .whitespaces).lowercased() {
         case "true", "1", "yes", "y", "on": return true
         case "false", "0", "no", "n", "off", "": return false
@@ -101,121 +101,121 @@ enum LenientScalar {
 // MARK: - Property Wrapper：带默认值的宽松标量
 
 /// 提供默认值的类型需实现该协议。
-protocol DefaultValueProvider {
+public protocol DefaultValueProvider {
     associatedtype Value
     static var defaultValue: Value { get }
 }
 
 // 常用默认值定义。字段缺失或类型不可解析时使用。
-enum Defaults {
-    enum FalseBool: DefaultValueProvider { static let defaultValue = false }
-    enum TrueBool: DefaultValueProvider { static let defaultValue = true }
-    enum ZeroInt: DefaultValueProvider { static let defaultValue = 0 }
-    enum ZeroInt64: DefaultValueProvider { static let defaultValue = Int64(0) }
-    enum EmptyString: DefaultValueProvider { static let defaultValue = "" }
+public enum Defaults {
+    public enum FalseBool: DefaultValueProvider { public static let defaultValue = false }
+    public enum TrueBool: DefaultValueProvider { public static let defaultValue = true }
+    public enum ZeroInt: DefaultValueProvider { public static let defaultValue = 0 }
+    public enum ZeroInt64: DefaultValueProvider { public static let defaultValue = Int64(0) }
+    public enum EmptyString: DefaultValueProvider { public static let defaultValue = "" }
 }
 
 /// 宽松解码的 Int，带默认值。JSON 缺字段或类型不符时回退到默认值，绝不抛错。
 @propertyWrapper
-struct LenientInt<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int {
-    var wrappedValue: Int
+public struct LenientInt<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int {
+    public var wrappedValue: Int
 
-    init(wrappedValue: Int) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Int) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.wrappedValue = LenientScalar.int(from: container) ?? D.defaultValue
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
 
     // phantom 泛型 D 不参与判等，仅比较 wrappedValue。
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
-    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    public func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 Int64，带默认值。
 @propertyWrapper
-struct LenientInt64<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int64 {
-    var wrappedValue: Int64
+public struct LenientInt64<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Int64 {
+    public var wrappedValue: Int64
 
-    init(wrappedValue: Int64) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Int64) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.wrappedValue = LenientScalar.int64(from: container) ?? D.defaultValue
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
-    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    public func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 Bool，带默认值。
 @propertyWrapper
-struct LenientBool<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Bool {
-    var wrappedValue: Bool
+public struct LenientBool<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == Bool {
+    public var wrappedValue: Bool
 
-    init(wrappedValue: Bool) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Bool) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.wrappedValue = LenientScalar.bool(from: container) ?? D.defaultValue
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
-    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    public func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 /// 宽松解码的 String，带默认值。
 @propertyWrapper
-struct LenientString<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == String {
-    var wrappedValue: String
+public struct LenientString<D: DefaultValueProvider>: Codable, Equatable, Hashable where D.Value == String {
+    public var wrappedValue: String
 
-    init(wrappedValue: String) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: String) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.wrappedValue = LenientScalar.string(from: container) ?? D.defaultValue
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(wrappedValue)
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
-    func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.wrappedValue == rhs.wrappedValue }
+    public func hash(into hasher: inout Hasher) { hasher.combine(wrappedValue) }
 }
 
 // MARK: - Property Wrapper：可空的宽松标量
 
 /// 宽松解码的可空 Int?。字段缺失或 null 时为 nil；类型不符时尽力转换，无法转换则 nil。
 @propertyWrapper
-struct LenientOptionalInt: Codable, Equatable, Hashable {
-    var wrappedValue: Int?
+public struct LenientOptionalInt: Codable, Equatable, Hashable {
+    public var wrappedValue: Int?
 
-    init(wrappedValue: Int?) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Int?) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self.wrappedValue = nil; return }
         self.wrappedValue = LenientScalar.int(from: container)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let v = wrappedValue { try container.encode(v) } else { try container.encodeNil() }
     }
@@ -223,18 +223,18 @@ struct LenientOptionalInt: Codable, Equatable, Hashable {
 
 /// 宽松解码的可空 Bool?。
 @propertyWrapper
-struct LenientOptionalBool: Codable, Equatable, Hashable {
-    var wrappedValue: Bool?
+public struct LenientOptionalBool: Codable, Equatable, Hashable {
+    public var wrappedValue: Bool?
 
-    init(wrappedValue: Bool?) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Bool?) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self.wrappedValue = nil; return }
         self.wrappedValue = LenientScalar.bool(from: container)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let v = wrappedValue { try container.encode(v) } else { try container.encodeNil() }
     }
@@ -242,18 +242,18 @@ struct LenientOptionalBool: Codable, Equatable, Hashable {
 
 /// 宽松解码的可空 String?。对应 Kotlin 里大量 `var x: String? = null` 字段。
 @propertyWrapper
-struct LenientOptionalString: Codable, Equatable, Hashable {
-    var wrappedValue: String?
+public struct LenientOptionalString: Codable, Equatable, Hashable {
+    public var wrappedValue: String?
 
-    init(wrappedValue: String?) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: String?) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self.wrappedValue = nil; return }
         self.wrappedValue = LenientScalar.string(from: container)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let v = wrappedValue { try container.encode(v) } else { try container.encodeNil() }
     }
@@ -261,18 +261,18 @@ struct LenientOptionalString: Codable, Equatable, Hashable {
 
 /// 宽松解码的可空 Int64?。
 @propertyWrapper
-struct LenientOptionalInt64: Codable, Equatable, Hashable {
-    var wrappedValue: Int64?
+public struct LenientOptionalInt64: Codable, Equatable, Hashable {
+    public var wrappedValue: Int64?
 
-    init(wrappedValue: Int64?) { self.wrappedValue = wrappedValue }
+    public init(wrappedValue: Int64?) { self.wrappedValue = wrappedValue }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self.wrappedValue = nil; return }
         self.wrappedValue = LenientScalar.int64(from: container)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let v = wrappedValue { try container.encode(v) } else { try container.encodeNil() }
     }

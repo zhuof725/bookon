@@ -10,7 +10,7 @@ import Foundation
 /// 书籍列表规则
 /// Kotlin 原为 interface（SearchRule / ExploreRule 实现它）。
 /// Swift 用 protocol 表达同样的字段约束。
-protocol BookListRule {
+public protocol BookListRule {
     var bookList: String? { get set }
     var name: String? { get set }
     var author: String? { get set }

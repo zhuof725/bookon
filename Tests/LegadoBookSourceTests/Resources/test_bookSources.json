@@ -102,5 +102,35 @@
       "chapterUrl": "$.id@js:java.put('chapterId', result);'https://www.shuidi.online/fileMgt/getAudioByChapterId?bookId=' + java.get('bookId') + '&chapterId=' + result + \"&pageNum=1&pageSize=50&keyId={{var header = JSON.parse(source.getLoginHeader());var keyId = '1632746188011002';var ks = java.md5Encode(keyId + java.get('chapterId') + header.Authorization);keyId + '&keySecret=' + ks}\" + '}'"
     },
     "weight": 0
+  },
+  {
+    "bookSourceName": "段评测试-对象",
+    "bookSourceUrl": "https://review-object.example.com",
+    "bookSourceType": 0,
+    "enabled": true,
+    "ruleSearch": {
+      "bookList": "$.list",
+      "name": "$.name"
+    },
+    "ruleReview": {
+      "reviewUrl": "/review?bookUrl={{bookUrl}}&chapterIndex={{chapterIndex}}",
+      "avatarRule": "$.data.list[*].avatar",
+      "contentRule": "$.data.list[*].content",
+      "postTimeRule": "$.data.list[*].createTime",
+      "reviewQuoteUrl": "/reviewQuote?id={$.id}",
+      "voteUpUrl": "/voteUp?id={$.id}",
+      "voteDownUrl": "/voteDown?id={$.id}",
+      "postReviewUrl": "/postReview,{\"method\":\"POST\",\"body\":\"content={{content}}\"}",
+      "postQuoteUrl": "/postQuote,{\"method\":\"POST\",\"body\":\"content={{content}}\"}",
+      "deleteUrl": "/deleteReview?id={$.id}"
+    }
+  },
+  {
+    "bookSourceName": "段评测试-字符串",
+    "bookSourceUrl": "https://review-string.example.com",
+    "bookSourceType": 0,
+    "enabled": true,
+    "ruleSearch": "{\n  \"bookList\": \"$.list\",\n  \"name\": \"$.name\"\n}",
+    "ruleReview": "{\"reviewUrl\": \"/review?bookUrl={{bookUrl}}&chapterIndex={{chapterIndex}}\", \"avatarRule\": \"$.data.list[*].avatar\", \"contentRule\": \"$.data.list[*].content\", \"postTimeRule\": \"$.data.list[*].createTime\", \"reviewQuoteUrl\": \"/reviewQuote?id={$.id}\", \"voteUpUrl\": \"/voteUp?id={$.id}\", \"voteDownUrl\": \"/voteDown?id={$.id}\", \"postReviewUrl\": \"/postReview,{\\\"method\\\":\\\"POST\\\",\\\"body\\\":\\\"content={{content}}\\\"}\", \"postQuoteUrl\": \"/postQuote,{\\\"method\\\":\\\"POST\\\",\\\"body\\\":\\\"content={{content}}\\\"}\", \"deleteUrl\": \"/deleteReview?id={$.id}\"}"
   }
 ]

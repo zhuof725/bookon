@@ -8,32 +8,32 @@
 import Foundation
 
 /// 段评规则
-struct ReviewRule: Codable, Equatable {
+public struct ReviewRule: Codable, Equatable {
     /// 段评URL
-    @LenientOptionalString var reviewUrl: String?
+    @LenientOptionalString public var reviewUrl: String?
     /// 段评发布者头像
-    @LenientOptionalString var avatarRule: String?
+    @LenientOptionalString public var avatarRule: String?
     /// 段评内容
-    @LenientOptionalString var contentRule: String?
+    @LenientOptionalString public var contentRule: String?
     /// 段评发布时间
-    @LenientOptionalString var postTimeRule: String?
+    @LenientOptionalString public var postTimeRule: String?
     /// 获取段评回复URL
-    @LenientOptionalString var reviewQuoteUrl: String?
+    @LenientOptionalString public var reviewQuoteUrl: String?
 
     // 这些功能将在以上功能完成以后实现
     /// 点赞URL
-    @LenientOptionalString var voteUpUrl: String?
+    @LenientOptionalString public var voteUpUrl: String?
     /// 点踩URL
-    @LenientOptionalString var voteDownUrl: String?
+    @LenientOptionalString public var voteDownUrl: String?
     /// 发送回复URL
-    @LenientOptionalString var postReviewUrl: String?
+    @LenientOptionalString public var postReviewUrl: String?
     /// 发送回复段评URL
-    @LenientOptionalString var postQuoteUrl: String?
+    @LenientOptionalString public var postQuoteUrl: String?
     /// 删除段评URL
-    @LenientOptionalString var deleteUrl: String?
+    @LenientOptionalString public var deleteUrl: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         reviewUrl: String? = nil,
         avatarRule: String? = nil,
         contentRule: String? = nil,
@@ -57,7 +57,7 @@ struct ReviewRule: Codable, Equatable {
         self._deleteUrl = LenientOptionalString(wrappedValue: deleteUrl)
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case reviewUrl
         case avatarRule
         case contentRule

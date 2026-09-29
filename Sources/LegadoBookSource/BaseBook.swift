@@ -19,7 +19,7 @@ import Foundation
 
 /// 书籍基类协议，声明公共字段。
 /// 对应 Kotlin `interface BaseBook : RuleDataInterface`。
-protocol BaseBook {
+public protocol BaseBook {
     var name: String { get set }
     var author: String { get set }
     var bookUrl: String { get set }
@@ -32,7 +32,7 @@ protocol BaseBook {
     var tocHtml: String? { get set }
 }
 
-extension BaseBook {
+public extension BaseBook {
     /// 对应 Kotlin getKindList()：把 wordCount 与逗号/换行分隔的 kind 合并成列表。
     func getKindList() -> [String] {
         var kindList: [String] = []

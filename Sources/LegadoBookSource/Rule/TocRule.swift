@@ -8,20 +8,20 @@
 import Foundation
 
 /// 目录页规则
-struct TocRule: Codable, Equatable {
-    @LenientOptionalString var preUpdateJs: String?
-    @LenientOptionalString var chapterList: String?
-    @LenientOptionalString var chapterName: String?
-    @LenientOptionalString var chapterUrl: String?
-    @LenientOptionalString var formatJs: String?
-    @LenientOptionalString var isVolume: String?
-    @LenientOptionalString var isVip: String?
-    @LenientOptionalString var isPay: String?
-    @LenientOptionalString var updateTime: String?
-    @LenientOptionalString var nextTocUrl: String?
+public struct TocRule: Codable, Equatable {
+    @LenientOptionalString public var preUpdateJs: String?
+    @LenientOptionalString public var chapterList: String?
+    @LenientOptionalString public var chapterName: String?
+    @LenientOptionalString public var chapterUrl: String?
+    @LenientOptionalString public var formatJs: String?
+    @LenientOptionalString public var isVolume: String?
+    @LenientOptionalString public var isVip: String?
+    @LenientOptionalString public var isPay: String?
+    @LenientOptionalString public var updateTime: String?
+    @LenientOptionalString public var nextTocUrl: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         preUpdateJs: String? = nil,
         chapterList: String? = nil,
         chapterName: String? = nil,
@@ -45,7 +45,7 @@ struct TocRule: Codable, Equatable {
         self._nextTocUrl = LenientOptionalString(wrappedValue: nextTocUrl)
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case preUpdateJs
         case chapterList
         case chapterName

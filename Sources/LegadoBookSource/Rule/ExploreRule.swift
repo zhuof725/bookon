@@ -8,20 +8,20 @@
 import Foundation
 
 /// 发现结果规则
-struct ExploreRule: Codable, Equatable, BookListRule {
-    @LenientOptionalString var bookList: String?
-    @LenientOptionalString var name: String?
-    @LenientOptionalString var author: String?
-    @LenientOptionalString var intro: String?
-    @LenientOptionalString var kind: String?
-    @LenientOptionalString var lastChapter: String?
-    @LenientOptionalString var updateTime: String?
-    @LenientOptionalString var bookUrl: String?
-    @LenientOptionalString var coverUrl: String?
-    @LenientOptionalString var wordCount: String?
+public struct ExploreRule: Codable, Equatable, BookListRule {
+    @LenientOptionalString public var bookList: String?
+    @LenientOptionalString public var name: String?
+    @LenientOptionalString public var author: String?
+    @LenientOptionalString public var intro: String?
+    @LenientOptionalString public var kind: String?
+    @LenientOptionalString public var lastChapter: String?
+    @LenientOptionalString public var updateTime: String?
+    @LenientOptionalString public var bookUrl: String?
+    @LenientOptionalString public var coverUrl: String?
+    @LenientOptionalString public var wordCount: String?
 
     // Kotlin 全字段默认 null。
-    init(
+    public init(
         bookList: String? = nil,
         name: String? = nil,
         author: String? = nil,
@@ -45,7 +45,7 @@ struct ExploreRule: Codable, Equatable, BookListRule {
         self._wordCount = LenientOptionalString(wrappedValue: wordCount)
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case bookList
         case name
         case author

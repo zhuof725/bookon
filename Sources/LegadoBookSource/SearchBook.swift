@@ -12,46 +12,46 @@
 
 import Foundation
 
-struct SearchBook: Codable, BaseBook, Comparable {
+public struct SearchBook: Codable, BaseBook, Comparable {
 
     // MARK: 持久化字段
 
-    @LenientString<Defaults.EmptyString> var bookUrl: String
+    @LenientString<Defaults.EmptyString> public var bookUrl: String
     /// 书源
-    @LenientString<Defaults.EmptyString> var origin: String
-    @LenientString<Defaults.EmptyString> var originName: String
+    @LenientString<Defaults.EmptyString> public var origin: String
+    @LenientString<Defaults.EmptyString> public var originName: String
     /// BookType
-    @LenientInt<TextTypeDefault> var type: Int
-    @LenientString<Defaults.EmptyString> var name: String
-    @LenientString<Defaults.EmptyString> var author: String
-    @LenientOptionalString var kind: String?
-    @LenientOptionalString var coverUrl: String?
-    @LenientOptionalString var intro: String?
-    @LenientOptionalString var wordCount: String?
-    @LenientOptionalString var latestChapterTitle: String?
+    @LenientInt<TextTypeDefault> public var type: Int
+    @LenientString<Defaults.EmptyString> public var name: String
+    @LenientString<Defaults.EmptyString> public var author: String
+    @LenientOptionalString public var kind: String?
+    @LenientOptionalString public var coverUrl: String?
+    @LenientOptionalString public var intro: String?
+    @LenientOptionalString public var wordCount: String?
+    @LenientOptionalString public var latestChapterTitle: String?
     /// 目录页Url (toc=table of Contents)
-    @LenientString<Defaults.EmptyString> var tocUrl: String
+    @LenientString<Defaults.EmptyString> public var tocUrl: String
     /// 构造默认 currentTimeMillis；缺字段用 0（Room 无显式列默认，此处取 0 保证确定性）
-    @LenientInt64<Defaults.ZeroInt64> var time: Int64
-    @LenientOptionalString var variable: String?
-    @LenientInt<Defaults.ZeroInt> var originOrder: Int
-    @LenientOptionalString var chapterWordCountText: String?
+    @LenientInt64<Defaults.ZeroInt64> public var time: Int64
+    @LenientOptionalString public var variable: String?
+    @LenientInt<Defaults.ZeroInt> public var originOrder: Int
+    @LenientOptionalString public var chapterWordCountText: String?
     /// 列默认值 "-1"
-    @LenientInt<MinusOneInt> var chapterWordCount: Int
+    @LenientInt<MinusOneInt> public var chapterWordCount: Int
     /// 列默认值 "-1"
-    @LenientInt<MinusOneInt> var respondTime: Int
+    @LenientInt<MinusOneInt> public var respondTime: Int
 
     // MARK: 运行时字段（对应 Kotlin @Ignore，不参与 Codable）
-    var infoHtml: String? = nil
-    var tocHtml: String? = nil
+    public var infoHtml: String? = nil
+    public var tocHtml: String? = nil
 
     // MARK: 默认值定义
-    enum TextTypeDefault: DefaultValueProvider { static let defaultValue = BookType.text }
-    enum MinusOneInt: DefaultValueProvider { static let defaultValue = -1 }
+    public enum TextTypeDefault: DefaultValueProvider { public static let defaultValue = BookType.text }
+    public enum MinusOneInt: DefaultValueProvider { public static let defaultValue = -1 }
 
     // MARK: 构造器（默认值与 Kotlin 一致）
 
-    init(
+    public init(
         bookUrl: String = "",
         origin: String = "",
         originName: String = "",
@@ -91,13 +91,13 @@ struct SearchBook: Codable, BaseBook, Comparable {
         self._respondTime = LenientInt(wrappedValue: respondTime)
     }
 
-    static func currentTimeMillis() -> Int64 {
+    public static func currentTimeMillis() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
 
     // MARK: CodingKeys（仅持久化字段）
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case bookUrl
         case origin
         case originName
@@ -119,17 +119,17 @@ struct SearchBook: Codable, BaseBook, Comparable {
     }
 
     /// 对应 Kotlin getDisplayLastChapterTitle()
-    func getDisplayLastChapterTitle() -> String {
+    public func getDisplayLastChapterTitle() -> String {
         if let it = latestChapterTitle, !it.isEmpty { return it }
         return "无最新章节"
     }
 
     /// 对应 Kotlin primaryStr()
-    func primaryStr() -> String { origin + bookUrl }
+    public func primaryStr() -> String { origin + bookUrl }
 
     // 对应 Kotlin Comparable：other.originOrder - this.originOrder。
     // Comparable 语义：compareTo < 0 表示 this 排在前。转成 Swift 的 < 运算符。
-    static func < (lhs: SearchBook, rhs: SearchBook) -> Bool {
+    public static func < (lhs: SearchBook, rhs: SearchBook) -> Bool {
         // Kotlin: this.compareTo(other) = other.originOrder - this.originOrder
         // 即当 other.originOrder > this.originOrder 时 this < other。
         return rhs.originOrder - lhs.originOrder < 0
@@ -142,6 +142,6 @@ struct SearchBook: Codable, BaseBook, Comparable {
 
 // 对应 Kotlin 自定义 equals / hashCode：仅以 bookUrl 判等。
 extension SearchBook: Equatable, Hashable {
-    static func == (lhs: SearchBook, rhs: SearchBook) -> Bool { lhs.bookUrl == rhs.bookUrl }
-    func hash(into hasher: inout Hasher) { hasher.combine(bookUrl) }
+    public static func == (lhs: SearchBook, rhs: SearchBook) -> Bool { lhs.bookUrl == rhs.bookUrl }
+    public func hash(into hasher: inout Hasher) { hasher.combine(bookUrl) }
 }
