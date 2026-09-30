@@ -208,4 +208,29 @@ final class AnalyzeByJSonPathTests: XCTestCase {
         let a = AnalyzeByJSonPath(json)
         XCTAssertEqual(a.getList("$..book_data[*]")?.count, 2)
     }
+
+    // ============ 五、getList 的 && / || / %% 多段分支 ============
+
+    // 26. getList || 短路（第一个非空即返回）
+    func testGetListOr() {
+        let json = #"{ "a": [], "b": [ {"x":1} ] }"#
+        let a = AnalyzeByJSonPath(json)
+        // $.a[*] 空 -> 跳过；$.b[*] -> 1 个
+        XCTAssertEqual(a.getList("$.a[*]||$.b[*]")?.count, 1)
+    }
+    // 27. getList && 拼接（addAll）
+    func testGetListAnd() {
+        let json = #"{ "a": [1,2], "b": [3] }"#
+        let a = AnalyzeByJSonPath(json)
+        let r = a.getList("$.a[*]&&$.b[*]")
+        XCTAssertEqual(r?.map { $0.stringValue }, ["1", "2", "3"])
+    }
+    // 28. getList %% 交错
+    func testGetListPercentInterleave() {
+        let json = #"{ "a": [1,2,3], "b": [7,8] }"#
+        let a = AnalyzeByJSonPath(json)
+        let r = a.getList("$.a[*]%%$.b[*]")
+        // 交错：a0,b0,a1,b1,a2(b无)
+        XCTAssertEqual(r?.map { $0.stringValue }, ["1", "7", "2", "8", "3"])
+    }
 }
