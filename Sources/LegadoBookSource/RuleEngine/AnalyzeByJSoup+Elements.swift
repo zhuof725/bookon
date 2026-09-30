@@ -35,15 +35,18 @@ extension AnalyzeByJSoup {
 
                 let el: Elements
                 if rs.count > 1 {
-                    let acc = Elements()
+                    var acc = Elements()
                     acc.add(temp)
                     for rl in rs {
                         let es = Elements()
                         for et in acc.array() {
                             es.addElements(try getElements(et, rl))
                         }
-                        acc.clearAll()
-                        acc.addElements(es)
+                        // ⚠️ 不可用 acc.clearAll()／acc.empty()："清空集合" 应该用一个全新的
+                        // Elements 实例替换，而不是调用 SwiftSoup 的 Elements.empty()——
+                        // 那个方法语义是"清空每个元素的子节点"，会真的破坏 DOM（真实 bug，
+                        // 已通过测试定位；此处与 getResultList 里的同类问题一并修复）。
+                        acc = es
                     }
                     el = acc
                 } else {
@@ -90,7 +93,11 @@ extension AnalyzeByJSoup {
             for elt in elements.array() {
                 es.addElements(try ElementsSingle().getElementsSingle(elt, rules[i], host: self))
             }
-            elements.clearAll()
+            // ⚠️ 真实 bug 修复：这里之前调用 `elements.clearAll()`（即 SwiftSoup 的
+            // `Elements.empty()`），其语义是"清空每个已匹配元素的子节点"，会真的破坏 DOM
+            // （第一轮循环时 elements=[self.element]，会把整个文档的子节点清空！），
+            // 导致后续不同规则查询在同一个 AnalyzeByJSoup 实例上互相污染。
+            // 正确做法是直接用新集合 es 替换变量，不需要也不能"清空"旧集合。
             elements = es
         }
         if elements.isEmpty() { return nil }
