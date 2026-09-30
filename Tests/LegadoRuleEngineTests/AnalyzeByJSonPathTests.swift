@@ -16,11 +16,21 @@ import XCTest
 final class AnalyzeByJSonPathTests: XCTestCase {
 
     private func loadResource(_ name: String, subdir: String? = nil) throws -> String {
-        let url: URL?
+        // 依次尝试：带子目录 -> 不带子目录 -> 遍历 bundle 资源目录查找同名文件。
+        var url: URL? = nil
         if let subdir = subdir {
             url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: subdir)
-        } else {
+        }
+        if url == nil {
             url = Bundle.module.url(forResource: name, withExtension: "json")
+        }
+        if url == nil, let resourceURL = Bundle.module.resourceURL {
+            // 递归查找（Linux 与 macOS 的资源拷贝目录结构可能不同）。
+            if let en = FileManager.default.enumerator(at: resourceURL, includingPropertiesForKeys: nil) {
+                for case let f as URL in en where f.lastPathComponent == "\(name).json" {
+                    url = f; break
+                }
+            }
         }
         guard let u = url else { XCTFail("找不到资源 \(name)"); throw NSError(domain: "t", code: 1) }
         return try String(contentsOf: u, encoding: .utf8)

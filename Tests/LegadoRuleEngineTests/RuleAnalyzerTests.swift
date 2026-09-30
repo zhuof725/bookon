@@ -114,10 +114,12 @@ final class RuleAnalyzerTests: XCTestCase {
     // MARK: innerRule（{$. ... }）
 
     // 22. 内嵌规则替换：单个 {$.x}
+    //     注意：inner="{$." 时 startStep=1 只跳过 '{'，故回调收到的是完整路径 "$.name"
+    //     （与 AnalyzeByJSonPath 里 innerRule("{$.") { getString(it) } 需要完整 $. 路径一致）。
     func testInnerRuleSingle() {
         let r = RuleAnalyzer("前{$.name}后", code: true)
         let out = r.innerRule("{$.") { inner in
-            XCTAssertEqual(inner, "name")
+            XCTAssertEqual(inner, "$.name")
             return "值"
         }
         XCTAssertEqual(out, "前值后")
@@ -125,7 +127,7 @@ final class RuleAnalyzerTests: XCTestCase {
     // 23. 内嵌规则替换：多个
     func testInnerRuleMultiple() {
         let r = RuleAnalyzer("{$.a}-{$.b}", code: true)
-        let out = r.innerRule("{$.") { inner in inner == "a" ? "A" : "B" }
+        let out = r.innerRule("{$.") { inner in inner == "$.a" ? "A" : "B" }
         XCTAssertEqual(out, "A-B")
     }
     // 24. 内嵌规则：无内嵌返回空串（startX 未推移）
@@ -141,12 +143,12 @@ final class RuleAnalyzerTests: XCTestCase {
         // fr 返回 nil：该 inner 当普通字串跳过；startX 保持 0 -> 返回 ""
         XCTAssertEqual(out, "")
     }
-    // 26. 内嵌规则：内嵌里再含 { } 平衡
+    // 26. 内嵌规则：内嵌里再含 { } 平衡（startStep=1 只跳过 '{'，故含 "$."）
     func testInnerRuleNestedBraces() {
         let r = RuleAnalyzer("A{$.f({x:1})}B", code: true)
         var captured = ""
         let out = r.innerRule("{$.") { inner in captured = inner; return "R" }
-        XCTAssertEqual(captured, "f({x:1})")
+        XCTAssertEqual(captured, "$.f({x:1})")
         XCTAssertEqual(out, "ARB")
     }
     // 27. 内嵌规则（起止字符串重载）
