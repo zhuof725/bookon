@@ -307,7 +307,10 @@ Swift 无等价库，评估两个方案：
 | `Collector.collect(Evaluator.Id(id), el)` | 存在 | 存在，API 形态一致 | 无差异 |
 | 中文 / emoji 解析 | 按 UTF-16 处理属性/选择器字符串（JVM String） | Swift `Character`/`UInt16` 混用；本移植所有下标逻辑改在 UTF-16 code unit 上处理 | 已通过含中文/emoji 的测试验证一致 |
 
-> 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充；**目前测试覆盖范围内未发现其它差异**。
+| `getElementsByClass(_:)` / `getElementsByTag(_:)` 连续调用 | 每次独立、结果始终正确 | **发现实现缺陷**：内部用 `Weak<Element>` 索引缓存（`normalizedClassNameIndex`/`normalizedTagNameIndex`），实测在同一 document 上连续以不同 class/tag 名查询时，第二次起会因缓存的弱引用失效而返回空结果（见 [scinfu/SwiftSoup Element.swift](https://github.com/scinfu/SwiftSoup/blob/2.9.6/Sources/Element.swift) 810-818、764-775 行） | **已规避**：`ElementsSingle.getElementsSingle` 的 `class`/`tag` 分支改用等价的 CSS 选择器 `temp.select(".className")` / `temp.select("tagName")`（`id`/`text` 分支底层用 `Collector.collect`，不受影响，未改动）。回归测试：`testRegressionConsecutiveClassSelectors`、`testRegressionConsecutiveTagSelectors` |
+
+> 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充；除上述一条 SwiftSoup 自身实现缺陷外，
+> **未发现其它差异**。
 
 ## XPath 已支持 / 不支持语法表
 

@@ -141,89 +141,29 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         XCTAssertEqual(r, ["var a=1;"])
     }
 
-    // MARK: 调试用例（临时）：排查 && 组合失效
-    func testDebugAndJoinParts() throws {
+    // MARK: 回归测试：SwiftSoup getElementsByClass/getElementsByTag 弱引用缓存缺陷规避
+    //
+    // 背景：SwiftSoup 2.9.6 的 Element.getElementsByClass(_:) / getElementsByTag(_:) 内部用
+    // 基于 Weak<Element> 的索引缓存；实测在同一 document 上连续以不同 class/tag 名调用时，
+    // 第二次起会因弱引用失效返回空结果（即使目标元素确实存在）。本项目已在
+    // ElementsSingle.getElementsSingle 里改用等价的 CSS 选择器（`.className` / `tagName`）
+    // 规避，这里用真正会触发该缺陷的「连续两次不同 class 查询」场景做回归测试。
+    func testRegressionConsecutiveClassSelectors() throws {
         let html = "<div class='a'>甲</div><div class='b'>乙</div>"
         let j = try AnalyzeByJSoup(html)
+        // 依次查询 class.a 再查询 class.b（顺序很关键：先触发缓存构建，再验证第二次查询不受影响）
         let r1 = try j.getStringList("class.a@text")
         let r2 = try j.getStringList("class.b@text")
-        XCTAssertEqual(r1, ["甲"], "class.a@text 单独结果：\(r1)")
-        XCTAssertEqual(r2, ["乙"], "class.b@text 单独结果：\(r2)")
+        XCTAssertEqual(r1, ["甲"])
+        XCTAssertEqual(r2, ["乙"])
     }
-    func testDebugElementsByClassDirect() throws {
-        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
-        let doc = try SwiftSoup.parse(html)
-        let bs = try doc.getElementsByClass("b")
-        XCTAssertEqual(bs.size(), 1, "getElementsByClass('b') 直接调用应找到1个元素")
-        if bs.size() > 0 {
-            XCTAssertEqual(try bs.get(0).text(), "乙")
-        }
-    }
-    func testDebugGetElementsClassB() throws {
-        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+    func testRegressionConsecutiveTagSelectors() throws {
+        let html = "<p>P甲</p><span>S乙</span>"
         let j = try AnalyzeByJSoup(html)
-        let els = try j.getElements("class.b")
-        XCTAssertEqual(els.size(), 1, "getElements('class.b') 应找到1个元素，实际 \(els.size())")
-    }
-    func testDebugGetResultListClassB() throws {
-        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
-        let j = try AnalyzeByJSoup(html)
-        let r = try j.getResultList("class.b@text")
-        XCTAssertEqual(r, ["乙"], "getResultList('class.b@text') 实际：\(String(describing: r))")
-    }
-    func testDebugSourceRuleIsCss() throws {
-        let sr = AnalyzeByJSoup.SourceRule("class.b@text")
-        XCTAssertFalse(sr.isCss, "isCss 应为 false")
-        XCTAssertEqual(sr.elementsRule, "class.b@text", "elementsRule 应原样保留")
-        XCTAssertFalse(sr.elementsRule.isEmpty)
-    }
-    func testDebugOuterSplitRuleOnSingleRule() throws {
-        let ra = RuleAnalyzer("class.b@text", code: false)
-        let parts = try ra.splitRule("&&", "||", "%%")
-        XCTAssertEqual(parts, ["class.b@text"], "单规则(无分隔符)时 splitRule 应原样返回一个元素，实际 \(parts)")
-    }
-    func testDebugManualReplicateGetStringList() throws {
-        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
-        let j = try AnalyzeByJSoup(html)
-        let ruleStr = "class.b@text"
-
-        // 手动复刻 getStringList 的每一步，逐步断言
-        let sourceRule = AnalyzeByJSoup.SourceRule(ruleStr)
-        XCTAssertFalse(sourceRule.isCss)
-        XCTAssertEqual(sourceRule.elementsRule, "class.b@text")
-        XCTAssertFalse(sourceRule.elementsRule.isEmpty)
-
-        let ruleAnalyzes = RuleAnalyzer(sourceRule.elementsRule)
-        let ruleStrS = try ruleAnalyzes.splitRule("&&", "||", "%%")
-        XCTAssertEqual(ruleStrS, ["class.b@text"], "ruleStrS 实际：\(ruleStrS)")
-        XCTAssertEqual(ruleStrS.count, 1)
-
-        var results: [[String]] = []
-        for ruleStrX in ruleStrS {
-            XCTAssertEqual(ruleStrX, "class.b@text", "ruleStrX 实际：'\(ruleStrX)'")
-            let temp: [String]?
-            if sourceRule.isCss {
-                XCTFail("不应进入 CSS 分支")
-                temp = nil
-            } else {
-                temp = try j.getResultList(ruleStrX)
-            }
-            XCTAssertEqual(temp, ["乙"], "temp 实际：\(String(describing: temp))")
-            if let temp = temp, !temp.isEmpty {
-                results.append(temp)
-            }
-        }
-        XCTAssertEqual(results, [["乙"]], "results 实际：\(results)")
-
-        var textS: [String] = []
-        if !results.isEmpty {
-            for temp in results { textS.append(contentsOf: temp) }
-        }
-        XCTAssertEqual(textS, ["乙"], "手动复刻最终结果：\(textS)")
-
-        // 最后对比真实方法调用
-        let real = try j.getStringList(ruleStr)
-        XCTAssertEqual(real, ["乙"], "真实 getStringList 结果：\(real)")
+        let r1 = try j.getStringList("tag.p@text")
+        let r2 = try j.getStringList("tag.span@text")
+        XCTAssertEqual(r1, ["P甲"])
+        XCTAssertEqual(r2, ["S乙"])
     }
 
     // MARK: - 十三、真实规则（规则真实、数据合成）—— 🔥小说2016

@@ -203,13 +203,6 @@ final class RuleAnalyzerTests: XCTestCase {
         XCTAssertEqual(try split("a(x\\)y)&&b", ["&&"], code: false), ["a(x\\)y)", "b"])
     }
 
-    // MARK: 调试用例（临时）：排查 JSoup &&/||/%% 组合失效问题
-    func testDebugJSoupAndSplit() throws {
-        let r = RuleAnalyzer("class.a@text&&class.b@text", code: false)
-        let parts = try r.splitRule("&&", "||", "%%")
-        XCTAssertEqual(parts, ["class.a@text", "class.b@text"], "实际切分结果：\(parts)，elementsType=\(r.elementsType)")
-    }
-
     // MARK: 抛错点（第 1 点：崩溃收敛为 RuleEngineError）
 
     // 36. 括号不平衡（首段匹配）-> 抛 RuleEngineError.unbalanced

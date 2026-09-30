@@ -60,9 +60,18 @@ extension AnalyzeByJSoup {
                 case "children":
                     elements = temp.children()
                 case "class":
-                    elements = rules.count > 1 ? try temp.getElementsByClass(rules[1]) : Elements()
+                    // ⚠️ 已知差异（非 Kotlin 语义差异，是 SwiftSoup 2.9.6 的实现缺陷规避）：
+                    // SwiftSoup 的 Element.getElementsByClass(_:) 内部用一个基于 Weak<Element>
+                    // 的类名索引缓存（rebuildQueryIndexesForAllClasses），实测在同一 document
+                    // 树上连续以不同类名调用时，后续调用会因缓存的弱引用失效而返回空结果
+                    // （即使目标元素确实存在、且未被其它强引用持有的父子结构保护）。
+                    // 这里改用等价的 CSS class 选择器 `.className` 达到与 Jsoup
+                    // getElementsByClass 相同的选取语义，规避该缓存缺陷，不改变任何对外行为。
+                    elements = rules.count > 1 ? try temp.select(".\(rules[1])") : Elements()
                 case "tag":
-                    elements = rules.count > 1 ? try temp.getElementsByTag(rules[1]) : Elements()
+                    // 同上：getElementsByTag 用同样的 Weak<Element> 缓存模式，有相同的实测缺陷，
+                    // 改用等价的 CSS 标签选择器规避。
+                    elements = rules.count > 1 ? try temp.select(rules[1]) : Elements()
                 case "id":
                     if rules.count > 1 {
                         elements = try Collector.collect(Evaluator.Id(rules[1]), temp)

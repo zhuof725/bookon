@@ -98,7 +98,6 @@ public final class AnalyzeByJSoup {
 
         // 拆分规则
         let sourceRule = SourceRule(ruleStr)
-        FileHandle.standardError.write("DEBUG getStringList ruleStr='\(ruleStr)' isCss=\(sourceRule.isCss) elementsRule='\(sourceRule.elementsRule)'\n".data(using: .utf8)!)
 
         if sourceRule.elementsRule.isEmpty {
             // Kotlin: textS.add(element.data() ?: "")；SwiftSoup data() 非 throwing。
@@ -106,7 +105,6 @@ public final class AnalyzeByJSoup {
         } else {
             let ruleAnalyzes = RuleAnalyzer(sourceRule.elementsRule)
             let ruleStrS = try ruleAnalyzes.splitRule("&&", "||", "%%")
-            FileHandle.standardError.write("DEBUG ruleStrS=\(ruleStrS) elementsType='\(ruleAnalyzes.elementsType)'\n".data(using: .utf8)!)
 
             var results: [[String]] = []
             for ruleStrX in ruleStrS {
@@ -127,14 +125,12 @@ public final class AnalyzeByJSoup {
                 } else {
                     temp = try getResultList(ruleStrX)
                 }
-                FileHandle.standardError.write("DEBUG ruleStrX='\(ruleStrX)' temp=\(String(describing: temp))\n".data(using: .utf8)!)
 
                 if let temp = temp, !temp.isEmpty {
                     results.append(temp)
                     if ruleAnalyzes.elementsType == "||" { break }
                 }
             }
-            FileHandle.standardError.write("DEBUG results=\(results)\n".data(using: .utf8)!)
             if !results.isEmpty {
                 if ruleAnalyzes.elementsType == "%%" {
                     for i in results[0].indices {
@@ -147,7 +143,6 @@ public final class AnalyzeByJSoup {
                 }
             }
         }
-        FileHandle.standardError.write("DEBUG textS=\(textS)\n".data(using: .utf8)!)
         return textS
     }
 
