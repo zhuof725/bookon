@@ -317,22 +317,25 @@ final class AnalyzeByXPathTests: XCTestCase {
         return obj["rules"] as! [String: String]
     }
 
-    // 合成的搜索结果页 HTML（结构参照采墨阁真实页面：#sitebox 下多个 dl）
+    // 合成的搜索结果页 HTML（结构参照采墨阁真实页面：#sitebox 下多个 dl）。
+    // 注意：真实规则 author="//dd[2]/text()"、kind="//dd[2]/span/text()" 都指向"第2个 dd"，
+    // 说明真实页面的第 2 个 <dd> 同时含直接文本（作者）与内嵌 <span>（分类），
+    // 故第 1 个 dd 为占位，第 2 个 dd 混合文本+span 子元素，按此结构构造。
     private let caimogeSearchHTML = """
     <html><body>
     <div id="sitebox">
       <dl>
         <dt><a href="/book/101">链接一</a></dt>
         <h3><a>合成书名一</a></h3>
-        <dd>合成作者一</dd>
-        <dd><span>玄幻</span></dd>
+        <dd>占位</dd>
+        <dd>合成作者一<span>玄幻</span></dd>
         <img src="/c/1.jpg">
       </dl>
       <dl>
         <dt><a href="/book/102">链接二</a></dt>
         <h3><a>合成书名二</a></h3>
-        <dd>合成作者二</dd>
-        <dd><span>都市</span></dd>
+        <dd>占位</dd>
+        <dd>合成作者二<span>都市</span></dd>
         <img src="/c/2.jpg">
       </dl>
     </div>

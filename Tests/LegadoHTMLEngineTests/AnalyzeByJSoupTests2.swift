@@ -194,13 +194,18 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         return obj["rules"] as! [String: String]
     }
 
-    // 合成的搜索结果列表页 HTML（结构参照小说2016真实页面：li.clearfix 列表项）
+    // 合成的搜索结果列表页 HTML（结构参照小说2016真实页面：li.clearfix 列表项）。
+    // 注意：真实规则 ruleSearch.author 是 "@css:p:eq(2)>a@text"（第 3 个 <p> 的直接子 <a>），
+    // 所以合成 HTML 里第 3 个 <p>（下标 2：name 所在 div 不算 p，故第 0 个 p 是占位，
+    // 第 1 个是空白, 第 2 个是作者）必须包含一个 <a> 子元素才能匹配；已按此结构构造。
     private let xiaoshuo2016SearchHTML = """
     <html><body>
     <li class="clearfix">
       <div class="name"><a href="/book/1.html">合成书名一</a></div>
       <img src="/cover/1.jpg">
-      <p>合成作者一</p>
+      <p>占位0</p>
+      <p>占位1</p>
+      <p><a>合成作者一</a></p>
       <p>最新：合成第100章</p>
       <p>玄幻</p>
       <div class="note clearfix"><p>合成简介一</p></div>
@@ -208,7 +213,9 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     <li class="clearfix">
       <div class="name"><a href="/book/2.html">合成书名二</a></div>
       <img src="/cover/2.jpg">
-      <p>合成作者二</p>
+      <p>占位0</p>
+      <p>占位1</p>
+      <p><a>合成作者二</a></p>
       <p>最新：合成第200章</p>
       <p>都市</p>
       <div class="note clearfix"><p>合成简介二</p></div>
