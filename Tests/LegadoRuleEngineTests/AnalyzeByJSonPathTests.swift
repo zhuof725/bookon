@@ -41,15 +41,15 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     }
     func testLieyingBookTitle() throws {
         let json = try loadResource("synthetic_lieying_like")
-        let list = try AnalyzeByJSonPath(json).getList("$..books[*]")!
-        let first = AnalyzeByJSonPath(list[0])
+        let list = try XCTUnwrap(AnalyzeByJSonPath(json).getList("$..books[*]"))
+        let first = AnalyzeByJSonPath(try XCTUnwrap(list.first))
         XCTAssertEqual(try first.getString("$.title"), "书一")
         XCTAssertEqual(try first.getString("$.author"), "作者一")
     }
     func testLieyingBookUrlInnerRule() throws {
         let json = try loadResource("synthetic_lieying_like")
-        let list = try AnalyzeByJSonPath(json).getList("$..books[*]")!
-        let first = AnalyzeByJSonPath(list[0])
+        let list = try XCTUnwrap(AnalyzeByJSonPath(json).getList("$..books[*]"))
+        let first = AnalyzeByJSonPath(try XCTUnwrap(list.first))
         let url = try first.getString("/Book/getChapterListByBookId?bookId={$._id}")
         XCTAssertEqual(url, "/Book/getChapterListByBookId?bookId=b001")
     }
@@ -62,8 +62,8 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     func testLieyingChapterFields() throws {
         let json = try loadResource("synthetic_lieying_like")
         let toc = try AnalyzeByJSonPath(json).getObject("$.toc")
-        let chapters = try AnalyzeByJSonPath(toc).getList("$.chapterInfo.chapters.[*]")!
-        let c0 = AnalyzeByJSonPath(chapters[0])
+        let chapters = try XCTUnwrap(AnalyzeByJSonPath(toc).getList("$.chapterInfo.chapters.[*]"))
+        let c0 = AnalyzeByJSonPath(try XCTUnwrap(chapters.first))
         XCTAssertEqual(try c0.getString("$.title"), "第一章")
         XCTAssertEqual(try c0.getString("$.link"), "/read/1")
     }
@@ -289,20 +289,21 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     }
     // 2. 真实规则 ruleSearch.name = "original_title"
     func testQimoName() throws {
-        let list = try AnalyzeByJSonPath(qimoSearchJSON).getList("data.books")!
-        let first = AnalyzeByJSonPath(list[0])
+        let list = try XCTUnwrap(AnalyzeByJSonPath(qimoSearchJSON).getList("data.books"))
+        let first = AnalyzeByJSonPath(try XCTUnwrap(list.first))
         XCTAssertEqual(try first.getString("original_title"), "书名甲")
     }
     // 3. 真实规则 ruleSearch.author = "original_author"
     func testQimoAuthor() throws {
-        let list = try AnalyzeByJSonPath(qimoSearchJSON).getList("data.books")!
+        let list = try XCTUnwrap(AnalyzeByJSonPath(qimoSearchJSON).getList("data.books"))
+        XCTAssertGreaterThan(list.count, 1)
         let second = AnalyzeByJSonPath(list[1])
         XCTAssertEqual(try second.getString("original_author"), "作者乙")
     }
     // 4. 真实规则 ruleSearch.kind = "ptags" / coverUrl = "image_link" / wordCount = "words_num"
     func testQimoOtherSearchFields() throws {
-        let list = try AnalyzeByJSonPath(qimoSearchJSON).getList("data.books")!
-        let first = AnalyzeByJSonPath(list[0])
+        let list = try XCTUnwrap(AnalyzeByJSonPath(qimoSearchJSON).getList("data.books"))
+        let first = AnalyzeByJSonPath(try XCTUnwrap(list.first))
         XCTAssertEqual(try first.getString("ptags"), "玄幻")
         XCTAssertEqual(try first.getString("image_link"), "http://c/1")
         XCTAssertEqual(try first.getString("words_num"), "12万")
@@ -311,9 +312,9 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     func testQimoTocRules() throws {
         let tocJSON = #"{ "data": { "chapter_lists": [ {"id": 1, "title": "第1章"}, {"id": 2, "title": "第2章"} ] } }"#
         let a = AnalyzeByJSonPath(tocJSON)
-        let chapters = try a.getList("data.chapter_lists")!
+        let chapters = try XCTUnwrap(a.getList("data.chapter_lists"))
         XCTAssertEqual(chapters.count, 2)
-        let c0 = AnalyzeByJSonPath(chapters[0])
+        let c0 = AnalyzeByJSonPath(try XCTUnwrap(chapters.first))
         XCTAssertEqual(try c0.getString("title"), "第1章")
         XCTAssertEqual(try c0.getString("id"), "1")
     }
