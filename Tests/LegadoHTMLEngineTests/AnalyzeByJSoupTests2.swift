@@ -150,6 +150,27 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         XCTAssertEqual(r1, ["甲"], "class.a@text 单独结果：\(r1)")
         XCTAssertEqual(r2, ["乙"], "class.b@text 单独结果：\(r2)")
     }
+    func testDebugElementsByClassDirect() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let doc = try SwiftSoup.parse(html)
+        let bs = try doc.getElementsByClass("b")
+        XCTAssertEqual(bs.size(), 1, "getElementsByClass('b') 直接调用应找到1个元素")
+        if bs.size() > 0 {
+            XCTAssertEqual(try bs.get(0).text(), "乙")
+        }
+    }
+    func testDebugGetElementsClassB() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let j = try AnalyzeByJSoup(html)
+        let els = try j.getElements("class.b")
+        XCTAssertEqual(els.size(), 1, "getElements('class.b') 应找到1个元素，实际 \(els.size())")
+    }
+    func testDebugGetResultListClassB() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let j = try AnalyzeByJSoup(html)
+        let r = try j.getResultList("class.b@text")
+        XCTAssertEqual(r, ["乙"], "getResultList('class.b@text') 实际：\(String(describing: r))")
+    }
 
     // MARK: - 十三、真实规则（规则真实、数据合成）—— 🔥小说2016
 
