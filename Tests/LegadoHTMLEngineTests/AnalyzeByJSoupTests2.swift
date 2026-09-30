@@ -195,16 +195,18 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     }
 
     // 合成的搜索结果列表页 HTML（结构参照小说2016真实页面：li.clearfix 列表项）。
-    // 注意：真实规则 ruleSearch.author 是 "@css:p:eq(2)>a@text"（第 3 个 <p> 的直接子 <a>），
-    // 所以合成 HTML 里第 3 个 <p>（下标 2：name 所在 div 不算 p，故第 0 个 p 是占位，
-    // 第 1 个是空白, 第 2 个是作者）必须包含一个 <a> 子元素才能匹配；已按此结构构造。
+    //
+    // ⚠️ 重要更正：CSS `:eq(n)` 匹配的是元素在其"父元素所有子节点中的兄弟位置序号"
+    // （jsoup/SwiftSoup `Evaluator.IndexEquals`: `element.elementSiblingIndex() == index`），
+    // **不是**"在同标签匹配结果里的第 n 个"。因此 `<li>` 的直接子节点顺序必须是：
+    // 0=div.name, 1=img, 2=<p>作者(含<a>)</p>, 3=<p>最新章节</p>, 4=<p>分类</p>, 5=div.note，
+    // 这样 `p:eq(2)>a`（author）/ `p:eq(3)`（lastChapter）/ `.note_text,p:eq(4)`（kind）才会
+    // 分别命中正确的兄弟位置，与真实规则语义一致。
     private let xiaoshuo2016SearchHTML = """
     <html><body>
     <li class="clearfix">
       <div class="name"><a href="/book/1.html">合成书名一</a></div>
       <img src="/cover/1.jpg">
-      <p>占位0</p>
-      <p>占位1</p>
       <p><a>合成作者一</a></p>
       <p>最新：合成第100章</p>
       <p>玄幻</p>
@@ -213,8 +215,6 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     <li class="clearfix">
       <div class="name"><a href="/book/2.html">合成书名二</a></div>
       <img src="/cover/2.jpg">
-      <p>占位0</p>
-      <p>占位1</p>
       <p><a>合成作者二</a></p>
       <p>最新：合成第200章</p>
       <p>都市</p>
@@ -223,21 +223,6 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     </body></html>
     """
 
-    func testDebugXiaoshuoPOrder() throws {
-        let j = try AnalyzeByJSoup(xiaoshuo2016SearchHTML)
-        let rules = try loadRealRules("xiaoshuo2016_rules")
-        let items = try j.getElements(rules["ruleSearch.bookList"]!)
-        let first = try AnalyzeByJSoup(items.get(0))
-        let allP = try first.getStringList("@css:p@text")
-        let eq0 = try first.getStringList("@css:p:eq(0)@text")
-        let eq1 = try first.getStringList("@css:p:eq(1)@text")
-        let eq2 = try first.getStringList("@css:p:eq(2)@text")
-        let eq2a = try first.getStringList("@css:p:eq(2)>a@text")
-        let eq3 = try first.getStringList("@css:p:eq(3)@text")
-        let eq4 = try first.getStringList("@css:p:eq(4)@text")
-        let eq5 = try first.getStringList("@css:p:eq(5)@text")
-        XCTAssertEqual(allP, ["DEBUG_MARKER"], "所有p: \(allP) | eq0:\(eq0) eq1:\(eq1) eq2:\(eq2) eq2a:\(eq2a) eq3:\(eq3) eq4:\(eq4) eq5:\(eq5)")
-    }
     func testRealRule_Xiaoshuo2016_BookList() throws {
         let rules = try loadRealRules("xiaoshuo2016_rules")
         let j = try AnalyzeByJSoup(xiaoshuo2016SearchHTML)
