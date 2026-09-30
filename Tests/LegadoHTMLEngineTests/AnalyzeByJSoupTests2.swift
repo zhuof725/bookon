@@ -223,6 +223,14 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     </body></html>
     """
 
+    func testDebugXiaoshuoPOrder() throws {
+        let j = try AnalyzeByJSoup(xiaoshuo2016SearchHTML)
+        let rules = try loadRealRules("xiaoshuo2016_rules")
+        let items = try j.getElements(rules["ruleSearch.bookList"]!)
+        let first = try AnalyzeByJSoup(items.get(0))
+        let allP = try first.getStringList("@css:p@text")
+        XCTAssertEqual(allP, ["DEBUG_MARKER"], "所有 p 文本(按顺序): \(allP)")
+    }
     func testRealRule_Xiaoshuo2016_BookList() throws {
         let rules = try loadRealRules("xiaoshuo2016_rules")
         let j = try AnalyzeByJSoup(xiaoshuo2016SearchHTML)
