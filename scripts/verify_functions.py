@@ -18,11 +18,26 @@ REPO = os.path.dirname(HERE)
 DEFAULT_KOTLIN_DIR = os.path.join(REPO, "reference", "kotlin", "analyzeRule")
 kotlin_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_KOTLIN_DIR
 
-# Kotlin 文件 -> 对应 Swift 文件
+# Kotlin 文件 -> 对应 Swift 文件（一个 Kotlin 文件的函数可能分散到多个 Swift 文件里，
+# 例如 AnalyzeByJSoup.kt 的 ElementsSingle/SourceRule 被拆到独立文件）。
 MAPPING = {
-    "RuleAnalyzer.kt":     "Sources/LegadoBookSource/RuleEngine/RuleAnalyzer.swift",
-    "AnalyzeByRegex.kt":   "Sources/LegadoBookSource/RuleEngine/AnalyzeByRegex.swift",
-    "AnalyzeByJSonPath.kt":"Sources/LegadoBookSource/RuleEngine/AnalyzeByJSonPath.swift",
+    "RuleAnalyzer.kt": [
+        "Sources/LegadoBookSource/RuleEngine/RuleAnalyzer.swift",
+    ],
+    "AnalyzeByRegex.kt": [
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByRegex.swift",
+    ],
+    "AnalyzeByJSonPath.kt": [
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByJSonPath.swift",
+    ],
+    "AnalyzeByJSoup.kt": [
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoup.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoup+Elements.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoupRules.swift",
+    ],
+    "AnalyzeByXPath.kt": [
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeByXPath.swift",
+    ],
 }
 
 # 提取 Kotlin 函数名：匹配 `fun name(` / `fun <T> name(` / `tailrec fun name(` 等。
@@ -56,10 +71,12 @@ def swift_has_func(swift_text, name):
 def main():
     missing = {}
     details = {}
-    for kfile, swift_rel in MAPPING.items():
+    for kfile, swift_rels in MAPPING.items():
         kpath = os.path.join(kotlin_dir, kfile)
         knames = kotlin_functions(kpath)
-        swift_text = open(os.path.join(REPO, swift_rel)).read()
+        swift_text = ""
+        for rel in swift_rels:
+            swift_text += "\n" + open(os.path.join(REPO, rel)).read()
         miss = sorted(n for n in knames if not swift_has_func(swift_text, n))
         details[kfile] = sorted(knames)
         if miss:

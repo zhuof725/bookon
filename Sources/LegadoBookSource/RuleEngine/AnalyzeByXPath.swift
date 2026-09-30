@@ -25,15 +25,16 @@ public final class AnalyzeByXPath {
                 evaluatorType: XPathEvaluator.Type = SwiftSoupXPathEvaluator.self,
                 diagnostics: RuleEngineDiagnostics? = nil) throws {
         self.diagnostics = diagnostics
-        let roots = try AnalyzeByXPath.parseRoots(doc)
+        let roots = try AnalyzeByXPath.parse(doc)
         self.evaluator = evaluatorType.init(roots: roots)
     }
 
-    /// 对应 Kotlin: private fun parse(doc) + strToJXDocument
-    private static func parseRoots(_ doc: Any) throws -> [Element] {
+    /// 对应 Kotlin: private fun parse(doc): Any
+    /// （Kotlin 返回单个 JXNode/JXDocument；Swift 用「根元素数组」表达同样的求值上下文。）
+    private static func parse(_ doc: Any) throws -> [Element] {
         if let node = doc as? XPathNode {
             if let el = node.asElement() { return [el] }
-            return try strToRoots(node.stringForParse())
+            return try strToJXDocument(node.stringForParse())
         }
         if let e = doc as? Element {
             return [e]
@@ -41,11 +42,11 @@ public final class AnalyzeByXPath {
         if let es = doc as? Elements {
             return es.array()
         }
-        return try strToRoots(String(describing: doc))
+        return try strToJXDocument(String(describing: doc))
     }
 
-    /// 对应 Kotlin: strToJXDocument（末尾补全 + <?xml 走 XML 解析）。
-    private static func strToRoots(_ html: String) throws -> [Element] {
+    /// 对应 Kotlin: private fun strToJXDocument(html: String)（末尾补全 + <?xml 走 XML 解析）。
+    private static func strToJXDocument(_ html: String) throws -> [Element] {
         var html1 = html
         if html1.hasSuffix("</td>") {
             html1 = "<tr>\(html1)</tr>"
@@ -67,8 +68,8 @@ public final class AnalyzeByXPath {
         }
     }
 
-    /// select 包装：把 XPath 求值错误统一为 RuleEngineError 并记诊断。
-    private func result(_ xPath: String) throws -> [XPathNode] {
+    /// 对应 Kotlin: private fun getResult(xPath): List<JXNode>?
+    private func getResult(_ xPath: String) throws -> [XPathNode] {
         return try evaluator.evaluate(xPath)
     }
 
@@ -83,7 +84,7 @@ public final class AnalyzeByXPath {
         let rules = try ruleAnalyzes.splitRule("&&", "||", "%%")
 
         if rules.count == 1 {
-            return try result(rules[0])
+            return try getResult(rules[0])
         } else {
             var results: [[XPathNode]] = []
             for rl in rules {
@@ -118,7 +119,7 @@ public final class AnalyzeByXPath {
 
         if rules.count == 1 {
             // Kotlin: getResult(xPath)?.map { result.add(it.asString()) }
-            if let nodes = try? self.result(xPath) {
+            if let nodes = try? self.getResult(xPath) {
                 for n in nodes { result.append(n.asString()) }
             } else {
                 // 求值失败被吞：记诊断（对齐 Kotlin 里 selN 内部异常不抛的容错）。
@@ -157,7 +158,7 @@ public final class AnalyzeByXPath {
         let rules = try ruleAnalyzes.splitRule("&&", "||")
         if rules.count == 1 {
             // Kotlin: getResult(rule)?.let { return TextUtils.join("\n", it) }
-            if let nodes = try? self.result(rule) {
+            if let nodes = try? self.getResult(rule) {
                 return nodes.map { $0.toStringValue() }.joined(separator: "\n")
             }
             diagnostics?.record(source: "AnalyzeByXPath.getString", rule: rule, message: "XPath 求值失败")
