@@ -188,6 +188,115 @@ final class BookSourceImporterTests: XCTestCase {
                       "警告信息应说明字段被置空：\(w.message)")
     }
 
+    // MARK: 问题2c-情况1：值是「字符串」但内层二次解析失败 -> 警告(内层解析失败) + 书源仍成功
+
+    func testRuleStringInnerParseFailureWarning() throws {
+        // ruleSearch 是字符串但内层 JSON 语法错误；同一书源其它规则(ruleContent)为合法对象。
+        let json = #"""
+        {
+          "bookSourceUrl": "https://case-string.example.com",
+          "bookSourceName": "字符串内层失败",
+          "ruleSearch": "{ \"name\": \"$.name\" ",
+          "ruleContent": { "content": "$.body" }
+        }
+        """#
+        let result = try BookSourceImporter.importSources(fromJSONString: json)
+        XCTAssertEqual(result.successes.count, 1, "书源本身应成功导入")
+        XCTAssertTrue(result.failures.isEmpty)
+        let src = try XCTUnwrap(result.successes.first)
+        XCTAssertNil(src.ruleSearch, "解析失败的 ruleSearch 应置空")
+        XCTAssertEqual(src.ruleContent?.content, "$.body", "其它规则不受影响")
+
+        let w = try XCTUnwrap(result.warnings.first(where: { $0.field == "ruleSearch" }))
+        XCTAssertTrue(w.message.contains("(JSON 字符串)内层解析失败"),
+                      "字符串分支应报『内层解析失败』：\(w.message)")
+    }
+
+    // MARK: 问题2c-情况2：值是「对象」但解码失败 -> 警告(是对象但解码失败) + 书源仍成功
+    //
+    // 说明：本移植所有规则字段都用宽松 wrapper，正常对象几乎不会解码失败。
+    // 为可靠触发「对象解码失败」，用一个自定义严格类型 + StringOrObject 单独构造场景。
+
+    private struct StrictRule: Codable, Equatable {
+        let requiredInt: Int   // 非宽松，缺失/类型不符会抛错
+    }
+
+    private struct StrictHolder: Codable {
+        @StringOrObject<StrictRule> var rule: StrictRule?
+    }
+
+    func testRuleObjectDecodeFailureWarning() throws {
+        // rule 是对象，但缺少必需字段 requiredInt -> 对象解码应失败。
+        let json = #"{ "rule": { "somethingElse": 1 } }"#
+        let collector = DecodingWarningCollector()
+        let decoder = LegadoJSON.decoder(collectingWarningsInto: collector)
+        let holder = try decoder.decode(StrictHolder.self, from: Data(json.utf8))
+        XCTAssertNil(holder.rule, "对象解码失败后应置空")
+        let w = try XCTUnwrap(collector.warnings.first)
+        XCTAssertTrue(w.message.contains("是对象但解码失败"),
+                      "对象分支应报『是对象但解码失败』：\(w.message)")
+    }
+
+    // MARK: 问题2c-情况3：值既不是对象也不是字符串（数字/数组/布尔）-> 保持原有警告
+
+    func testRuleNeitherObjectNorStringWarning() throws {
+        // ruleSearch 写成数字；ruleToc 写成数组；ruleContent 是合法对象(不受影响)。
+        let json = #"""
+        {
+          "bookSourceUrl": "https://case-neither.example.com",
+          "bookSourceName": "既非对象也非字符串",
+          "ruleSearch": 12345,
+          "ruleToc": [1, 2, 3],
+          "ruleContent": { "content": "$.body" }
+        }
+        """#
+        let result = try BookSourceImporter.importSources(fromJSONString: json)
+        XCTAssertEqual(result.successes.count, 1, "书源本身应成功导入")
+        XCTAssertTrue(result.failures.isEmpty)
+        let src = try XCTUnwrap(result.successes.first)
+        XCTAssertNil(src.ruleSearch)
+        XCTAssertNil(src.ruleToc)
+        XCTAssertEqual(src.ruleContent?.content, "$.body", "其它规则不受影响")
+
+        let wSearch = try XCTUnwrap(result.warnings.first(where: { $0.field == "ruleSearch" }))
+        XCTAssertTrue(wSearch.message.contains("既不是对象也不是字符串"),
+                      "数字应报『既不是对象也不是字符串』：\(wSearch.message)")
+        let wToc = try XCTUnwrap(result.warnings.first(where: { $0.field == "ruleToc" }))
+        XCTAssertTrue(wToc.message.contains("既不是对象也不是字符串"),
+                      "数组应报『既不是对象也不是字符串』：\(wToc.message)")
+    }
+
+    // MARK: 问题2b：字符串二次解析复用同一 collector，内层更深一层的警告不丢失
+    //
+    // 构造：外层 holder 里有一个 StringOrObject<Nested>，值是「JSON 字符串」；
+    // 该字符串内层又有一个 StringOrObject<StrictRule>，其值是「对象但解码失败」。
+    // 期望：内层这条警告能被外层同一个 collector 收集到。
+
+    private struct Nested: Codable {
+        @StringOrObject<StrictRule> var inner: StrictRule?
+    }
+    private struct OuterHolder: Codable {
+        @StringOrObject<Nested> var outer: Nested?
+    }
+
+    func testNestedStringWarningPropagatesToSameCollector() throws {
+        // outer 是字符串；其内容里的 inner 是对象但缺必需字段。
+        let innerJSON = #"{ "inner": { "wrong": 1 } }"#
+        // 把 innerJSON 作为字符串放进 outer
+        let outerObject: [String: Any] = ["outer": innerJSON]
+        let data = try JSONSerialization.data(withJSONObject: outerObject)
+
+        let collector = DecodingWarningCollector()
+        let decoder = LegadoJSON.decoder(collectingWarningsInto: collector)
+        let holder = try decoder.decode(OuterHolder.self, from: data)
+        // inner 解码失败 -> nil；outer 因此得到一个 inner=nil 的 Nested（外层解析本身成功）
+        XCTAssertNotNil(holder.outer)
+        XCTAssertNil(holder.outer?.inner)
+        // 内层「是对象但解码失败」这条警告应出现在同一个 collector 中
+        XCTAssertTrue(collector.warnings.contains(where: { $0.message.contains("是对象但解码失败") }),
+                      "内层警告应传播到外层同一 collector：\(collector.warnings.map { $0.message })")
+    }
+
     // MARK: 正常导入不产生警告
 
     func testCleanImportHasNoWarnings() throws {
