@@ -164,6 +164,14 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         let r2 = try doc.getElementsByClass("b")
         XCTAssertEqual(r2.size(), 1, "getElementsByClass('b') 第二次: \(r2.size())")
     }
+    func testDebugGetResultListTwiceInSequence() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let j = try AnalyzeByJSoup(html)
+        let r1 = try j.getResultList("class.a@text")
+        XCTAssertEqual(r1, ["甲"], "第一次 getResultList('class.a@text'): \(String(describing: r1))")
+        let r2 = try j.getResultList("class.b@text")
+        XCTAssertEqual(r2, ["乙"], "第二次(同一个j实例) getResultList('class.b@text'): \(String(describing: r2))")
+    }
     func testRegressionConsecutiveClassSelectors() throws {
         let html = "<div class='a'>甲</div><div class='b'>乙</div>"
         let j = try AnalyzeByJSoup(html)
