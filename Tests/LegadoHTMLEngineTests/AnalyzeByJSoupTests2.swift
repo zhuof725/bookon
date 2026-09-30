@@ -171,6 +171,17 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         let r = try j.getResultList("class.b@text")
         XCTAssertEqual(r, ["乙"], "getResultList('class.b@text') 实际：\(String(describing: r))")
     }
+    func testDebugSourceRuleIsCss() throws {
+        let sr = AnalyzeByJSoup.SourceRule("class.b@text")
+        XCTAssertFalse(sr.isCss, "isCss 应为 false")
+        XCTAssertEqual(sr.elementsRule, "class.b@text", "elementsRule 应原样保留")
+        XCTAssertFalse(sr.elementsRule.isEmpty)
+    }
+    func testDebugOuterSplitRuleOnSingleRule() throws {
+        let ra = RuleAnalyzer("class.b@text", code: false)
+        let parts = try ra.splitRule("&&", "||", "%%")
+        XCTAssertEqual(parts, ["class.b@text"], "单规则(无分隔符)时 splitRule 应原样返回一个元素，实际 \(parts)")
+    }
 
     // MARK: - 十三、真实规则（规则真实、数据合成）—— 🔥小说2016
 
