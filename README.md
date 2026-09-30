@@ -173,7 +173,8 @@ Kotlin 用的是 **Jayway JsonPath**（JVM 库，无法直接用于 Swift/iOS/Li
 >
 > **对象键顺序**：`$.obj.*` / `$..*` 等通配结果按 JSON 文本顺序返回（对齐 Jayway 有序语义），
 > 有测试 `testObjectWildcardKeyOrder` / `testRecursiveWildcardKeyOrder` / `testGetObjectCompactKeyOrder` 固定。
-> **数字精度**：19 位整数原样输出、`1.0`→`"1.0"`、`1.5`→`"1.5"`、负数/大整数/科学计数法各有测试固定。
+> **数字精度**：整数(`int` Int64) / 小数(`double`) / **超 Int64 大整数(`bigInteger` 原始文本)** 三分；
+> 19 位整数原样、超 Int64 的 20 位整数原样、`1.0`→`"1.0"`、`1.5`→`"1.5"`、负数/科学计数法各有测试固定。
 
 ## 错误处理：无崩溃、抛 Swift Error、非致命走诊断
 
@@ -194,6 +195,18 @@ Kotlin 用的是 **Jayway JsonPath**（JVM 库，无法直接用于 Swift/iOS/Li
   同时记入可选的 `RuleEngineDiagnostics`（默认 `nil`，不收集、不影响返回值）。
   构造时传入即可：`AnalyzeByJSonPath(json, diagnostics: collector)`。
 
+**无效 JSON 输入（第 2 点）：不再静默变 null：**
+- 容错版 `init(_:)`：JSON 解析失败时**记录到 diagnostics**（`source = "AnalyzeByJSonPath.init"`）后，
+  以空根继续，后续读取返回空值。
+- 严格版 `init(validatingJSON:) throws`：JSON 解析失败**抛 `RuleEngineError.invalidJSON`**
+  （对齐 Jayway `JsonPath.parse` 解析失败抛异常）。
+- 测试：`testInvalidJSONRecordsDiagnostics` / `testValidatingInitThrowsOnInvalidJSON` / `testValidatingInitWorksOnValidJSON`。
+
+**innerRule 回调抛错（第 3 点）：立即中断，与 Kotlin 一致：**
+- `innerRule` 的 `fr` 闭包声明为 `throws`；回调抛错会**立即中断 innerRule 并向上传播**
+  （不再用「延后捕获再抛」）。对齐 Kotlin 里 `innerRule("{$.") { getString(it) }` 直接调用的传播语义。
+- 测试：`testInnerRuleCallbackErrorPropagatesImmediately`。
+
 **全仓库审计（命令与结果）：**
 ```
 rg -n "fatalError" Sources     # 仅注释命中，代码 0 处
@@ -213,10 +226,11 @@ rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：�
 | 4 | getElement 捕获组未参与 | `group(i)!!` 抛 NPE | 抛 `RuleEngineError.regexGroupNotParticipated` | 同上；getElements 仍取 `""`（与 Kotlin `?: ""` 一致） |
 | 5 | `innerRule(start,end)` 回调返回 null | `st.append(前缀 + null)` → 拼接字面量 `"null"` | `frv ?? "null"`，同样拼接 `"null"` | **精确对齐**（易被误写成 `?? ""`，已用测试 `testInnerRuleStartEndReturnsNilAppendsNullLiteral` 固定） |
 | 6 | `innerRule("{$.")` 回调返回 null/空 | `!frv.isNullOrEmpty()` 才拼接，否则跳过 | `if let frv, !frv.isEmpty` 才拼接 | 一致 |
-| 7 | 超过 Int64 的纯整数 | json-smart 用 `BigInteger`，精确 | 目前退回失败（解析返回 nil）→ 该值读取按空处理 | ⚠️ **已知限制**：19 位内（≤`Int64.max`）精确；超过 Int64 的超大整数不支持，已在此列出（书源实际未见） |
+| 7 | 超过 Int64 的纯整数 | json-smart 用 `BigInteger`，精确 | `JSONValue.bigInteger(String)` **保留原始数字文本**，getString/紧凑输出原样，精确不丢 | ✅ 已对齐（`testBeyondInt64IntegerExact` 等固定）。仅过滤器 `[?(...)]` 大小比较时会转 Double（可能损失精度），已在代码注释标注 |
 | 8 | 浮点 `toString` | Java `Double.toString`（最短往返） | 整数值浮点输出 `"x.0"`，其余用 Swift `String(Double)` | 常见小数一致；极端边界（非常长的尾数）可能与 Java 最短表示有细微差别，如遇到再对齐 |
+| 9 | 无效 JSON 传入 | Jayway `parse` 抛异常 | 容错版记诊断+空根；严格版 `init(validatingJSON:)` 抛 `RuleEngineError.invalidJSON` | 提供两种，默认容错、可选严格 |
 
-> 除以上 8 条，暂无其它已知不一致。第 7、8 条为如实标注的边界差异，不影响真实书源用例。
+> 除以上 9 条，暂无其它已知不一致。第 8 条为如实标注的浮点边界差异；第 7 条超大整数已保精度对齐（仅过滤器比较用 Double）。
 
 ## 样本诚实标注
 
@@ -235,15 +249,14 @@ rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：�
 
 ## 第 2 步测试规模与 CI
 
-RuleAnalyzer 38 + AnalyzeByRegex 15 + AnalyzeByJSonPath 47 + RuleEnginePublicAPI 5，
-连同第 1 步共 **122 个测试**。
+规则引擎测试连同第 1 步共 **130+ 个测试**（收尾又新增：超 Int64 大整数 3、无效 JSON 3、innerRule 立即传播 1 等）。
 
 CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
 - **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
-- **test-ios-simulator**：`xcodebuild test` 在可用的 iPhone 模拟器上跑全部测试 target（脚本 `scripts/ios_sim_test.sh` 自动挑 scheme + 模拟器 UDID）。
+- **test-ios-simulator**：`xcodebuild test` 在可用的 iPhone 模拟器上跑全部测试 target。
+  脚本 `scripts/ios_sim_test.sh` 用**固定 scheme `LegadoBookSource-Package`**（SwiftPM 自动生成，不取列表第一个）、
+  自动挑可用 iPhone UDID；**统计并打印实际执行的测试总数，为 0 时 job 失败**。
 - 已按要求**去掉 Linux job**。
-
-最近一次绿色运行：macOS `Executed 122 tests, with 0 failures`；iOS 模拟器 `** TEST SUCCEEDED **`（全部 target 0 失败）。
 
 ## 后续步骤（TODO）
 

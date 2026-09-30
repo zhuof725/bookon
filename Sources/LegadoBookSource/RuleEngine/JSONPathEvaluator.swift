@@ -23,6 +23,9 @@ public enum JSONValue: Equatable {
     case array([JSONValue])
     case string(String)
     case int(Int64)
+    /// 超过 Int64 范围的纯整数：保留原始数字文本，getString 原样输出，不丢精度。
+    /// 对齐 Jayway/json-smart 用 BigInteger 保留精度的行为（这里用文本表示更简单可靠）。
+    case bigInteger(String)
     case double(Double)
     case bool(Bool)
     case null
@@ -76,7 +79,15 @@ public enum JSONValue: Equatable {
             } else if t == "f" || t == "d" {
                 self = .double(n.doubleValue)
             } else {
-                self = .int(n.int64Value)
+                // 整数：优先 Int64；若 NSNumber 承载的整数超出 Int64（罕见，JSONSerialization
+                // 会用 NSDecimalNumber），用其字符串表示保留精度。注：主解析路径是 OrderedJSONParser，
+                // 本 fromFoundation 仅为兼容 Foundation 值时使用。
+                let str = n.stringValue
+                if let iv = Int64(str) {
+                    self = .int(iv)
+                } else {
+                    self = .bigInteger(str)
+                }
             }
         case let d as [String: Any]:
             // 普通字典无序；用 OrderedObject 承载（顺序由 orderedInit 负责，见 parse）。
@@ -108,6 +119,9 @@ public enum JSONValue: Equatable {
         case .int(let i):
             // 整数字面量输出整数（19 位大整数原样、负数原样）。
             return String(i)
+        case .bigInteger(let s):
+            // 超 Int64 整数：原样输出保留精度。
+            return s
         case .double(let d):
             return JSONValue.formatDouble(d)
         case .null: return "null"
@@ -136,6 +150,8 @@ public enum JSONValue: Equatable {
             return "\"\(escapeJSONString(s))\""
         case .int(let i):
             return String(i)
+        case .bigInteger(let s):
+            return s
         case .double(let d):
             return formatDouble(d)
         case .bool(let b):

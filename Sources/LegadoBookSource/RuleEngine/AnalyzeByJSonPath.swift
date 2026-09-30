@@ -43,10 +43,33 @@ public final class AnalyzeByJSonPath {
     }
 
     /// 用 JSON 字符串构造（对应 Kotlin AnalyzeByJSonPath(json: String)）。
+    /// 容错版：JSON 解析失败时不再静默变 null，而是**记录到 diagnostics**（若提供）后
+    /// 以空根（.null）继续，后续读取返回空值。若要「解析失败即抛异常」（对齐 Jayway），
+    /// 请改用 `init(validatingJSON:)`。
     public convenience init(_ jsonString: String,
                             evaluatorType: JSONPathEvaluator.Type = DefaultJSONPathEvaluator.self,
                             diagnostics: RuleEngineDiagnostics? = nil) {
-        self.init(JSONValue.parse(jsonString) ?? .null, evaluatorType: evaluatorType, diagnostics: diagnostics)
+        let parsed = JSONValue.parse(jsonString)
+        if parsed == nil {
+            diagnostics?.record(source: "AnalyzeByJSonPath.init",
+                                rule: String(jsonString.prefix(200)),
+                                message: "JSON 解析失败，已按空根处理")
+        }
+        self.init(parsed ?? .null, evaluatorType: evaluatorType, diagnostics: diagnostics)
+    }
+
+    /// 严格版：JSON 解析失败时抛 `RuleEngineError.invalidJSON`（对齐 Jayway 解析失败抛异常）。
+    /// - Throws: RuleEngineError.invalidJSON
+    public convenience init(validatingJSON jsonString: String,
+                            evaluatorType: JSONPathEvaluator.Type = DefaultJSONPathEvaluator.self,
+                            diagnostics: RuleEngineDiagnostics? = nil) throws {
+        guard let parsed = JSONValue.parse(jsonString) else {
+            diagnostics?.record(source: "AnalyzeByJSonPath.init(validatingJSON:)",
+                                rule: String(jsonString.prefix(200)),
+                                message: "JSON 解析失败")
+            throw RuleEngineError.invalidJSON(String(jsonString.prefix(200)))
+        }
+        self.init(parsed, evaluatorType: evaluatorType, diagnostics: diagnostics)
     }
 
     // MARK: - getString
@@ -61,13 +84,8 @@ public final class AnalyzeByJSonPath {
 
         if rules.count == 1 {
             ruleAnalyzes.reSetPos()  // 将 pos 重置为 0，复用解析器
-            // innerRule 的回调里递归 getString 可能抛错；用一个捕获变量把内层错误带出。
-            var innerError: Error?
-            result = try ruleAnalyzes.innerRule("{$.") { inner in
-                do { return try self.getString(inner) }
-                catch { innerError = error; return nil }
-            }
-            if let e = innerError { throw e }
+            // 回调直接 try 递归 getString：抛错会立即中断 innerRule 并向上传播（对齐 Kotlin）。
+            result = try ruleAnalyzes.innerRule("{$.") { try self.getString($0) }
 
             if result.isEmpty {  // st 为空，表明无成功替换的内嵌规则
                 do {
@@ -116,12 +134,8 @@ public final class AnalyzeByJSonPath {
 
         if rules.count == 1 {
             ruleAnalyzes.reSetPos()  // 将 pos 重置为 0，复用解析器
-            var innerError: Error?
-            let st = try ruleAnalyzes.innerRule("{$.") { inner in
-                do { return try self.getString(inner) }
-                catch { innerError = error; return nil }
-            }
-            if let e = innerError { throw e }
+            // 回调直接 try 递归 getString：抛错立即中断并向上传播（对齐 Kotlin）。
+            let st = try ruleAnalyzes.innerRule("{$.") { try self.getString($0) }
             if st.isEmpty {  // st 为空，表明无成功替换的内嵌规则
                 do {
                     let obj = try ctx.read(rule)

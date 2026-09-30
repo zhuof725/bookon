@@ -162,13 +162,17 @@ struct OrderedJSONParser {
             } else { break }
         }
         let numStr = String(s[startIdx..<i])
-        if !isDouble, let intVal = Int64(numStr) {
-            return .int(intVal)   // 整数字面量 -> Int64（19 位以内精确）
+        if !isDouble {
+            if let intVal = Int64(numStr) {
+                return .int(intVal)         // 整数字面量 -> Int64（19 位以内精确）
+            }
+            // 超出 Int64 的纯整数：保留原始数字文本，不丢精度（对齐 json-smart BigInteger）。
+            return .bigInteger(numStr)
         }
         if let d = Double(numStr) {
-            return .double(d)     // 小数 / 科学计数法 -> Double
+            return .double(d)               // 小数 / 科学计数法 -> Double
         }
-        // 超出 Int64 的纯整数：退回 Double（会丢精度，已在 README 标注为已知限制）。
+        // 数字文本无法解析（异常格式）-> 解析失败。
         return nil
     }
 

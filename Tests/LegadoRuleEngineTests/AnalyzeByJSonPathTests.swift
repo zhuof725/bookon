@@ -331,4 +331,63 @@ final class AnalyzeByJSonPathTests: XCTestCase {
         XCTAssertTrue(raw.contains("data.books"))
         XCTAssertTrue(raw.contains("original_author"))
     }
+
+    // ============ 十一、超 Int64 大整数：保留原始文本，不丢精度（第 1 点） ============
+
+    // 超过 Int64.max 的纯整数，getString 原样输出（不退回 Double 丢精度）
+    func testBeyondInt64IntegerExact() throws {
+        // 99999999999999999999（20 位）远超 Int64.max(9223372036854775807)
+        let a = AnalyzeByJSonPath(#"{ "big": 99999999999999999999 }"#)
+        XCTAssertEqual(try a.getString("$.big"), "99999999999999999999")
+    }
+    // 超 Int64 负整数
+    func testBeyondInt64NegativeExact() throws {
+        let a = AnalyzeByJSonPath(#"{ "big": -12345678901234567890 }"#)
+        XCTAssertEqual(try a.getString("$.big"), "-12345678901234567890")
+    }
+    // 超 Int64 大整数在对象紧凑输出里也原样保留
+    func testBeyondInt64InCompactObject() throws {
+        let a = AnalyzeByJSonPath(#"{ "o": { "big": 99999999999999999999 } }"#)
+        let obj = try a.getObject("$.o")
+        XCTAssertEqual(obj.stringValue, #"{"big":99999999999999999999}"#)
+    }
+
+    // ============ 十二、无效 JSON：不静默变 null，记录诊断 + throws 版初始化（第 2 点） ============
+
+    // 容错版 init：无效 JSON -> 记录诊断，读取返回空值
+    func testInvalidJSONRecordsDiagnostics() throws {
+        let diag = RuleEngineDiagnostics()
+        let a = AnalyzeByJSonPath("{ not valid json", diagnostics: diag)
+        XCTAssertFalse(diag.diagnostics.isEmpty, "无效 JSON 应记录诊断而非静默")
+        XCTAssertEqual(diag.diagnostics.first?.source, "AnalyzeByJSonPath.init")
+        // 空根：读取返回空
+        XCTAssertEqual(try a.getString("$.x"), "")
+    }
+    // 严格版 init(validatingJSON:)：无效 JSON -> 抛 RuleEngineError.invalidJSON
+    func testValidatingInitThrowsOnInvalidJSON() {
+        XCTAssertThrowsError(try AnalyzeByJSonPath(validatingJSON: "{ broken")) { error in
+            guard case RuleEngineError.invalidJSON = error else {
+                return XCTFail("应抛 RuleEngineError.invalidJSON，实际：\(error)")
+            }
+        }
+    }
+    // 严格版 init(validatingJSON:)：有效 JSON -> 正常工作
+    func testValidatingInitWorksOnValidJSON() throws {
+        let a = try AnalyzeByJSonPath(validatingJSON: #"{ "s": "ok" }"#)
+        XCTAssertEqual(try a.getString("$.s"), "ok")
+    }
+
+    // ============ 十三、innerRule 回调抛错：立即中断并向上传播（第 3 点） ============
+
+    // 内嵌 {$.x} 的规则本身语法坏（内层递归 getString 抛错），应立即向上传播，不吞、不延后
+    func testInnerRuleCallbackErrorPropagatesImmediately() {
+        let a = AnalyzeByJSonPath(#"{ "a": 1 }"#)
+        // 内嵌 {$.a(b&&c} 的花括号平衡；内层规则 "$.a(b&&c" 有分隔符 && 且圆括号未闭合 ->
+        // 内层 getString 的 splitRule 在平衡筛选器时抛 RuleEngineError.unbalanced -> 立即向上传播
+        XCTAssertThrowsError(try a.getString("pre{$.a(b&&c}post")) { error in
+            guard case RuleEngineError.unbalanced = error else {
+                return XCTFail("应抛 RuleEngineError.unbalanced，实际：\(error)")
+            }
+        }
+    }
 }

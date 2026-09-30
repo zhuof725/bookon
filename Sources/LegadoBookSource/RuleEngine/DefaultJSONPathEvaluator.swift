@@ -178,6 +178,8 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
             switch v {
             case .int(let i): return Double(i)
             case .double(let d): return d
+            // 过滤器比较时把超大整数转 Double（比较可能损失精度，但仅用于 [?(...)] 的大小比较）。
+            case .bigInteger(let s): return Double(s)
             default: return nil
             }
         }

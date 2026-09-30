@@ -24,6 +24,8 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
     case regexCompileFailed(pattern: String)
     /// 正则捕获组未参与匹配（对齐 Kotlin getElement 里 group(i)!! 抛 NPE）。
     case regexGroupNotParticipated(groupIndex: Int, pattern: String)
+    /// 传入的 JSON 字符串无法解析（对齐 Jayway JsonPath.parse 解析失败抛异常）。
+    case invalidJSON(String)
 
     public var errorDescription: String? {
         switch self {
@@ -31,6 +33,7 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
         case .indexOutOfBounds(let s): return "下标越界: \(s)"
         case .regexCompileFailed(let p): return "正则编译失败: \(p)"
         case .regexGroupNotParticipated(let i, let p): return "捕获组 \(i) 未参与匹配: \(p)"
+        case .invalidJSON(let s): return "无法解析的 JSON: \(s)"
         }
     }
 }

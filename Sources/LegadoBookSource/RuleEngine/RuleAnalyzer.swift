@@ -411,13 +411,13 @@ public final class RuleAnalyzer {
     ///   - inner: 起始标志,如 "{$."
     ///   - startStep: 不属于规则部分的前置字符长度，如 "{$." 中 "{" 不属于规则，故 startStep 为 1
     ///   - endStep: 不属于规则部分的后置字符长度
-    ///   - fr: 查找到内嵌规则时，用于解析的函数
-    /// - Throws: RuleEngineError.indexOutOfBounds（substring 越界，对齐 Kotlin）。
+    ///   - fr: 查找到内嵌规则时，用于解析的函数（可抛错；抛出会立即中断，对齐 Kotlin 直接调用的传播语义）
+    /// - Throws: RuleEngineError.indexOutOfBounds（substring 越界，对齐 Kotlin）；或 fr 抛出的错误（立即传播）。
     public func innerRule(
         _ inner: String,
         startStep: Int = 1,
         endStep: Int = 1,
-        fr: (String) -> String?
+        fr: (String) throws -> String?
     ) throws -> String {
         var st = ""
         let innerU = Array(inner.utf16)
@@ -425,7 +425,8 @@ public final class RuleAnalyzer {
         while consumeTo(innerU) {  // 拉取成功返回 true，pos 后移相应位置，否则返回 false
             let posPre = pos  // 记录 consumeTo 匹配位置
             if chompCodeBalanced(chBraceOpen, chBraceClose) {
-                let frv = fr(try substring(posPre + startStep, pos - endStep))
+                // fr 抛错会立即中断整个 innerRule（对齐 Kotlin 里 getString(it) 直接抛出的传播）。
+                let frv = try fr(try substring(posPre + startStep, pos - endStep))
                 if let frv = frv, !frv.isEmpty {
                     st += try substring(startX, posPre) + frv  // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串
                     startX = pos  // 记录下次规则起点
@@ -447,7 +448,7 @@ public final class RuleAnalyzer {
     public func innerRule(
         _ startStr: String,
         _ endStr: String,
-        fr: (String) -> String?
+        fr: (String) throws -> String?
     ) throws -> String {
         var st = ""
         let startU = Array(startStr.utf16)
@@ -457,7 +458,7 @@ public final class RuleAnalyzer {
             pos += startU.count  // 跳过开始字符串
             let posPre = pos     // 记录 consumeTo 匹配位置
             if consumeTo(endU) {
-                let frv = fr(try substring(posPre, pos))
+                let frv = try fr(try substring(posPre, pos))
                 // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串。
                 // Kotlin: st.append(queue.substring(startX, posPre - startStr.length) + frv)
                 // frv 为 null 时 Kotlin 拼接得到字面量 "null"，此处对齐。

@@ -93,6 +93,17 @@ final class RuleEnginePublicAPITests: XCTestCase {
         // parse 静态方法
         _ = AnalyzeByJSonPath.parse(json)
         _ = AnalyzeByJSonPath.parse(v)
+
+        // 严格版初始化（public，throws）
+        let strict = try AnalyzeByJSonPath(validatingJSON: json)
+        XCTAssertEqual(try strict.getString("$.s"), "hi")
+        XCTAssertThrowsError(try AnalyzeByJSonPath(validatingJSON: "{bad")) { error in
+            guard case RuleEngineError.invalidJSON = error else {
+                return XCTFail("应抛 RuleEngineError.invalidJSON")
+            }
+        }
+        // 大整数 public 表示
+        XCTAssertEqual(JSONValue.bigInteger("99999999999999999999").stringValue, "99999999999999999999")
     }
 
     // MARK: JSONPathEvaluator 协议 + DefaultJSONPathEvaluator 直接使用
