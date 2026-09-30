@@ -10,6 +10,7 @@
 
 import XCTest
 @testable import LegadoBookSource
+import SwiftSoup
 
 final class AnalyzeByXPathTests: XCTestCase {
 
