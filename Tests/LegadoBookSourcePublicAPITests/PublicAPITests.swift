@@ -177,13 +177,16 @@ final class PublicAPITests: XCTestCase {
             layout_flexBasisPercent: 0.5, layout_wrapBefore: true, layout_justifySelf: "center"
         )
         _ = FlexChildStyle.defaultStyle
+        // 注意：ExploreKind / RowUi 里嵌套的 `Type` 常量命名空间与 Swift 的
+        // 元类型 `.Type` 语法冲突，无法在模块外用 `ExploreKind.Type.url` 引用；
+        // 这里直接用其对应的字符串字面量（与常量值一致）传入 public init。
         let exploreKind = ExploreKind(
-            title: "分类", url: "/u", type: ExploreKind.`Type`.url, action: nil,
+            title: "分类", url: "/u", type: "url", action: nil,
             chars: ["a", nil], default: "d", viewName: "v", style: flex
         )
         _ = exploreKind.styleOrDefault()
         let rowUi = RowUi(
-            name: "手机号", type: RowUi.`Type`.text, action: nil,
+            name: "手机号", type: "text", action: nil,
             chars: ["x", nil], default: "d", viewName: "v", style: flex
         )
         _ = rowUi.styleOrDefault()
