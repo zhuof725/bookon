@@ -15,7 +15,7 @@ let package = Package(
     ],
     dependencies: [
         // CSS/DOM 解析后端（对应 Kotlin 的 Jsoup）。选型理由见 README。
-        .package(url: "https://github.com/scinfu/SwiftSoup.git", exact: "2.13.9")
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", exact: "2.9.6")
     ],
     targets: [
         .target(
