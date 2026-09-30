@@ -169,10 +169,12 @@ extension AnalyzeByJSoup {
 
             if head {
                 len -= 1  // 跳过尾部 ']'
-                // Kotlin: while (len-- >= 0) —— 先判断 len>=0 再自减
+                // Kotlin: while (len-- >= 0) { rus[len] } —— 比较用旧值，自减后用新值做下标
                 while true {
-                    let cond = (len >= 0); let idx = len; len -= 1
+                    let cond = (len >= 0); len -= 1
                     if !cond { break }
+                    let idx = len
+                    if idx < 0 { break }  // 崩溃防护（对齐 Kotlin 此处越界，但不崩）
                     var rl = rus[idx]
                     if rl == u(" ") { continue }
 
@@ -210,10 +212,12 @@ extension AnalyzeByJSoup {
                     }
                 }
             } else {
-                // 阅读原本写法，逆向遍历
+                // 阅读原本写法，逆向遍历。Kotlin: while (len-- >= 0) { rus[len] }
                 while true {
-                    let cond = (len >= 0); let idx = len; len -= 1
+                    let cond = (len >= 0); len -= 1
                     if !cond { break }
+                    let idx = len
+                    if idx < 0 { break }  // 崩溃防护
                     let rl = rus[idx]
                     if rl == u(" ") { continue }
 
