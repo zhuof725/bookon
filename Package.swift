@@ -62,7 +62,7 @@ let package = Package(
         // 第 3 步：HTML 规则引擎（JSoup/XPath）的 @testable 单元测试。
         .testTarget(
             name: "LegadoHTMLEngineTests",
-            dependencies: ["LegadoBookSource"],
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoHTMLEngineTests",
             resources: [
                 .copy("Resources/real/xiaoshuo2016_rules.json"),
@@ -72,7 +72,7 @@ let package = Package(
         // 第 3 步：HTML 规则引擎的纯 public 接口测试（普通 import，非 @testable）。
         .testTarget(
             name: "LegadoHTMLEnginePublicAPITests",
-            dependencies: ["LegadoBookSource"],
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoHTMLEnginePublicAPITests"
         )
     ]

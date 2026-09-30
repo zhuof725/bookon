@@ -1,1 +1,21 @@
-{"_SAMPLE_KIND":"real rules from 🔥采墨阁 (rule real)","source":"用户第1步提供的 test_bookSources.json 内的真实书源规则","rules":{}}
+{
+  "_SAMPLE_KIND": "规则真实、数据合成。以下 XPath 规则逐字取自用户在第1步提供的 test_bookSources.json 中的真实书源『🔥采墨阁手机版』，仅供测试引用规则文本；本文件不含任何该网站的真实响应数据。",
+  "source": "test_bookSources.json -> 🔥采墨阁手机版 (https://m.caimoge.com)",
+  "rules": {
+    "ruleSearch.author": "//dd[2]/text()",
+    "ruleSearch.bookList": "//*[@id=\"sitebox\"]/dl",
+    "ruleSearch.bookUrl": "//dt/a/@href",
+    "ruleSearch.coverUrl": "//img/@src",
+    "ruleSearch.kind": "//dd[2]/span/text()",
+    "ruleSearch.name": "//h3/a/text()",
+    "ruleBookInfo.author": "//*[@property=\"og:novel:author\"]/@content",
+    "ruleBookInfo.coverUrl": "//*[@property=\"og:image\"]/@content",
+    "ruleBookInfo.intro": "//*[@property=\"og:description\"]/@content",
+    "ruleBookInfo.kind": "//*[@property=\"og:novel:category\"]/@content",
+    "ruleBookInfo.lastChapter": "//*[@id=\"newlist\"]//li[1]/a/text()",
+    "ruleBookInfo.name": "//*[@property=\"og:novel:book_name\"]/@content",
+    "ruleBookInfo.tocUrl": "//a[text()=\"阅读\"]/@href",
+    "ruleToc.nextTocUrl": "//*[@id=\"pagelist\"]/*[position()>1]/@value",
+    "ruleContent.content": "//*[@id=\"content\"]"
+  }
+}
