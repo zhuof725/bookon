@@ -5,7 +5,16 @@
 > 再对每个字段在对应 Swift 文件里做词边界匹配。脚本已接入 CI（Linux + macOS 均运行）。
 > **「Kotlin 有但 Swift 没实现的字段」清单：空。** 全部 225 个数据字段均已实现（脚本自动统计）。
 >
-> CI 结果：Linux (swift 5.10.1) 与 macOS (swift 5.x) 双系统 `swift build` + `swift test` 全绿，**10 个测试 0 失败**。
+> CI 结果：Linux (swift 5.10.1) 与 macOS (swift 5.10) 双系统 `swift build` + `swift test` 全绿，**17 个测试 0 失败**
+> （14 个 `@testable` 单元测试 + 3 个纯 public 接口测试）。
+>
+> **public 可见性守护**：独立 target `LegadoBookSourcePublicAPITests` 用普通 `import LegadoBookSource`（非 `@testable`），
+> 逐一读取全部字段、手动 public-init 每个类型。若任何对外成员漏 `public`，该 target 编译失败——
+> 这保证「加全 public」不是靠 `@testable` 掩盖的。
+>
+> **ruleReview 测试样本**：`test_bookSources.json` #4/#5 的 ruleReview 为**合成样本（非真实书源）**，
+> 已在测试注释与 README 明确标注。用户提供的真实书源（🍅木里番茄）通过 JS(callBackJs) 实现段评，
+> 不含 ruleReview 结构化字段，故仅用于真实书源整体往返测试。
 
 ## 移植范围说明
 

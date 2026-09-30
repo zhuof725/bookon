@@ -121,6 +121,13 @@ final class BookSourceImporterTests: XCTestCase {
     }
 
     // MARK: 验收 3：ruleReview 对象形式与字符串形式，各字段 decode/encode 一致
+    //
+    // ⚠️ 合成样本，非真实书源：
+    //   test_bookSources.json 里 #4/#5（“段评测试-对象/字符串”）的 ruleReview 是本项目为
+    //   覆盖 ReviewRule 全字段而手工构造的合成数据，不是从真实书源采集的。
+    //   用户提供的真实书源（🍅木里番茄，见 muli_real_source.json）通过 ruleContent.callBackJs
+    //   的 JS 实现段评，并不使用数据模型层的 ruleReview 结构化字段，因此无法作为
+    //   “真实 ruleReview 样本”。若后续拿到真实带 ruleReview 字段的书源，应替换此合成样本。
 
     func testReviewRuleBothForms() throws {
         let data = try loadTestJSONData()
