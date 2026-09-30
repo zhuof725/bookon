@@ -55,7 +55,7 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     // 4. chapterList "$.chapterInfo.chapters.[*]"（.[*] 点后方括号）
     func testLieyingChapterListDotBracket() throws {
         let json = try loadResource("synthetic_lieying_like")
-        let toc = AnalyzeByJSonPath(json).getObject("$.toc")
+        let toc = try AnalyzeByJSonPath(json).getObject("$.toc")
         let a = AnalyzeByJSonPath(toc)
         let chapters = a.getList("$.chapterInfo.chapters.[*]")
         XCTAssertEqual(chapters?.count, 3)
@@ -63,7 +63,7 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     // 5. chapterName / chapterUrl 从单章对象取
     func testLieyingChapterFields() throws {
         let json = try loadResource("synthetic_lieying_like")
-        let toc = AnalyzeByJSonPath(json).getObject("$.toc")
+        let toc = try AnalyzeByJSonPath(json).getObject("$.toc")
         let chapters = AnalyzeByJSonPath(toc).getList("$.chapterInfo.chapters.[*]")!
         let c0 = AnalyzeByJSonPath(chapters[0])
         XCTAssertEqual(c0.getString("$.title"), "第一章")
@@ -72,7 +72,7 @@ final class AnalyzeByJSonPathTests: XCTestCase {
     // 6. content "$.chapter.body"
     func testLieyingContentBody() throws {
         let json = try loadResource("synthetic_lieying_like")
-        let content = AnalyzeByJSonPath(json).getObject("$.content")
+        let content = try AnalyzeByJSonPath(json).getObject("$.content")
         let body = AnalyzeByJSonPath(content).getString("$.chapter.body")
         XCTAssertEqual(body, "正文内容第一段\n正文内容第二段")
     }

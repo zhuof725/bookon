@@ -25,15 +25,14 @@ public enum JSONValue: Equatable {
         switch any {
         case let s as String:
             self = .string(s)
-        case let n as NSNumber:
-            // 区分布尔与数字：NSNumber 的布尔用 CFBoolean。
-            if CFGetTypeID(n) == CFBooleanGetTypeID() {
-                self = .bool(n.boolValue)
-            } else {
-                self = .number(n.doubleValue)
-            }
-        case let b as Bool:
+        case let b as Bool where JSONValue.isBooleanNSNumber(any):
+            // 区分布尔与数字：JSONSerialization 把 JSON 的 true/false 解析成 objCType 为 "c"
+            // 的 NSNumber，把整数解析成 "q" 等。用 objCType == "c" 判定布尔，
+            // 跨平台（Apple / Linux swift-corelibs-foundation）均可用，避免依赖 CoreFoundation 的
+            // CFBooleanGetTypeID（Linux 未暴露）。
             self = .bool(b)
+        case let n as NSNumber:
+            self = .number(n.doubleValue)
         case let d as [String: Any]:
             var o: [String: JSONValue] = [:]
             for (k, v) in d { o[k] = JSONValue(fromFoundation: v) }
@@ -45,6 +44,13 @@ public enum JSONValue: Equatable {
         default:
             self = .null
         }
+    }
+
+    /// 判断一个来自 JSONSerialization 的值是否是「布尔」NSNumber。
+    /// JSONSerialization 把 JSON true/false 解析成 objCType 为 "c" 的 NSNumber。
+    private static func isBooleanNSNumber(_ any: Any) -> Bool {
+        guard let n = any as? NSNumber else { return false }
+        return String(cString: n.objCType) == "c"
     }
 
     /// 解析 JSON 文本。
