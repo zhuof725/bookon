@@ -74,25 +74,31 @@ extension AnalyzeByJSoup {
 
     /// 对应 Kotlin: private fun getResultList(ruleStr): ArrayList<String>?
     func getResultList(_ ruleStr: String) throws -> [String]? {
+        FileHandle.standardError.write("DEBUG2 getResultList called with ruleStr='\(ruleStr)' self=\(ObjectIdentifier(self)) element=\(ObjectIdentifier(element))\n".data(using: .utf8)!)
         if ruleStr.isEmpty { return nil }
 
         var elements = Elements()
         elements.add(element)
+        FileHandle.standardError.write("DEBUG2 initial elements.size=\(elements.size())\n".data(using: .utf8)!)
 
         let rule = RuleAnalyzer(ruleStr)   // 创建解析
         try rule.trim()                    // 修剪前置赘余符号
         let rules = try rule.splitRule("@")  // 切割成列表
+        FileHandle.standardError.write("DEBUG2 rules=\(rules)\n".data(using: .utf8)!)
 
         let last = rules.count - 1
         if last < 0 { return nil }
         for i in 0..<last {
             let es = Elements()
             for elt in elements.array() {
-                es.addElements(try ElementsSingle().getElementsSingle(elt, rules[i], host: self))
+                let single = try ElementsSingle().getElementsSingle(elt, rules[i], host: self)
+                FileHandle.standardError.write("DEBUG2 getElementsSingle(rule='\(rules[i])') -> size=\(single.size())\n".data(using: .utf8)!)
+                es.addElements(single)
             }
             elements.clearAll()
             elements = es
         }
+        FileHandle.standardError.write("DEBUG2 after loop elements.size=\(elements.size()) isEmpty=\(elements.isEmpty())\n".data(using: .utf8)!)
         if elements.isEmpty() { return nil }
         return try getResultLast(elements, rules[last])
     }
