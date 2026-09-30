@@ -140,13 +140,13 @@ extension AnalyzeByJSoup {
                 // 排除：标记删除
                 let keep = elements.array().enumerated().filter { !seen.contains($0.offset) }.map { $0.element }
                 let es = Elements()
-                try es.add(contentsOf: keep)
+                es.addElements(keep)
                 elements = es
             } else if split == "." {
                 let es = Elements()
                 for pcInt in indexSet {
-                    if pcInt >= 0 && pcInt < elements.size(), let e = try? elements.get(pcInt) {
-                        try es.add(e)
+                    if let e = elements.getOrNil(pcInt) {
+                        es.add(e)
                     }
                 }
                 elements = es

@@ -67,7 +67,7 @@ extension SwiftSoupXPathEvaluator {
                 }
                 return out
             case .attrExists(let name):
-                return elements.filter { (try? $0.hasAttr(name)) ?? false }
+                return elements.filter { $0.hasAttr(name) }  // SwiftSoup hasAttr 非 throwing
             case .attrCompare(let name, let op, let value):
                 return elements.filter { e in
                     let v = (try? e.attr(name)) ?? ""

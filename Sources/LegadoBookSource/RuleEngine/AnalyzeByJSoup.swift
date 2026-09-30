@@ -100,9 +100,8 @@ public final class AnalyzeByJSoup {
         let sourceRule = SourceRule(ruleStr)
 
         if sourceRule.elementsRule.isEmpty {
-            // Kotlin: textS.add(element.data() ?: "")
-            let data = (try? element.data()) ?? ""
-            textS.append(data)
+            // Kotlin: textS.add(element.data() ?: "")；SwiftSoup data() 非 throwing。
+            textS.append(element.data())
         } else {
             let ruleAnalyzes = RuleAnalyzer(sourceRule.elementsRule)
             let ruleStrS = try ruleAnalyzes.splitRule("&&", "||", "%%")

@@ -36,14 +36,14 @@ extension AnalyzeByJSoup {
                 let el: Elements
                 if rs.count > 1 {
                     let acc = Elements()
-                    try acc.add(temp)
+                    acc.add(temp)
                     for rl in rs {
                         let es = Elements()
                         for et in acc.array() {
-                            try es.add(contentsOf: try getElements(et, rl).array())
+                            es.addElements(try getElements(et, rl))
                         }
-                        acc.clear()
-                        try acc.add(contentsOf: es.array())
+                        acc.clearAll()
+                        acc.addElements(es)
                     }
                     el = acc
                 } else {
@@ -60,12 +60,12 @@ extension AnalyzeByJSoup {
                 let first = elementsList[0]
                 for i in 0..<first.size() {
                     for es in elementsList where i < es.size() {
-                        if let e = try? es.get(i) { try elements.add(e) }
+                        if let e = es.getOrNil(i) { elements.add(e) }
                     }
                 }
             } else {
                 for es in elementsList {
-                    try elements.add(contentsOf: es.array())
+                    elements.addElements(es)
                 }
             }
         }
@@ -77,7 +77,7 @@ extension AnalyzeByJSoup {
         if ruleStr.isEmpty { return nil }
 
         var elements = Elements()
-        try elements.add(element)
+        elements.add(element)
 
         let rule = RuleAnalyzer(ruleStr)   // 创建解析
         try rule.trim()                    // 修剪前置赘余符号
@@ -88,9 +88,9 @@ extension AnalyzeByJSoup {
         for i in 0..<last {
             let es = Elements()
             for elt in elements.array() {
-                try es.add(contentsOf: try ElementsSingle().getElementsSingle(elt, rules[i], host: self).array())
+                es.addElements(try ElementsSingle().getElementsSingle(elt, rules[i], host: self))
             }
-            elements.clear()
+            elements.clearAll()
             elements = es
         }
         if elements.isEmpty() { return nil }
@@ -118,7 +118,7 @@ extension AnalyzeByJSoup {
             }
         case "ownText":
             for element in elements.array() {
-                let text = (try? element.ownText()) ?? ""
+                let text = element.ownText()  // SwiftSoup: 非 throwing
                 if !text.isEmpty { textS.append(text) }
             }
         case "html":

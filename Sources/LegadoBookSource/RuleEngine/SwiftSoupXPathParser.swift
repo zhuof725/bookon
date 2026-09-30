@@ -120,7 +120,7 @@ extension SwiftSoupXPathEvaluator {
                 case .funcOuterHtml:
                     out.append(.text((try? e.outerHtml()) ?? ""))
                 case .funcOwnText:
-                    out.append(.text((try? e.ownText()) ?? ""))
+                    out.append(.text(e.ownText()))  // SwiftSoup ownText 非 throwing
                 }
             }
         } else {
