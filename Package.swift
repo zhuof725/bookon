@@ -36,6 +36,22 @@ let package = Package(
                 .copy("Resources/test_bookSources.json"),
                 .copy("Resources/muli_real_source.json")
             ]
+        ),
+        // 第 2 步：规则引擎的 @testable 单元测试。
+        .testTarget(
+            name: "LegadoRuleEngineTests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoRuleEngineTests",
+            resources: [
+                .copy("Resources/synthetic_lieying_like.json"),
+                .copy("Resources/real/muli_real_source.json")
+            ]
+        ),
+        // 第 2 步：规则引擎的纯 public 接口测试（普通 import，非 @testable）。
+        .testTarget(
+            name: "LegadoRuleEnginePublicAPITests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoRuleEnginePublicAPITests"
         )
     ]
 )
