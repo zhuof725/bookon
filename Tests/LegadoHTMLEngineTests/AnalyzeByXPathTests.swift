@@ -304,10 +304,15 @@ final class AnalyzeByXPathTests: XCTestCase {
     // HTML 数据为按其真实页面结构手工构造的合成样本，非真实抓取内容。
 
     private func loadRealRules(_ name: String) throws -> [String: String] {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "real") else {
-            XCTFail("找不到真实规则资源 \(name)"); throw NSError(domain: "t", code: 1)
+        var url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "real")
+        if url == nil { url = Bundle.module.url(forResource: name, withExtension: "json") }
+        if url == nil, let resourceURL = Bundle.module.resourceURL {
+            if let en = FileManager.default.enumerator(at: resourceURL, includingPropertiesForKeys: nil) {
+                for case let f as URL in en where f.lastPathComponent == "\(name).json" { url = f; break }
+            }
         }
-        let data = try Data(contentsOf: url)
+        guard let u = url else { XCTFail("找不到真实规则资源 \(name)"); throw NSError(domain: "t", code: 1) }
+        let data = try Data(contentsOf: u)
         let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         return obj["rules"] as! [String: String]
     }

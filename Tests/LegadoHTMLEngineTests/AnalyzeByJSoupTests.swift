@@ -60,9 +60,12 @@ final class AnalyzeByJSoupTests: XCTestCase {
         XCTAssertEqual(r, ["你好世界"])
     }
     func testChildrenSelector() throws {
-        let html = "<div><span>A</span><span>B</span></div>"
+        // 注意：`element` 是解析后的文档根（SwiftSoup.parse 会自动补全 html/head/body），
+        // "children" 直接作用于根时取的是 [head, body] 而非 body 内的 span；
+        // 需要先选中 div 再取 children，才能得到 span 列表（与 Kotlin Jsoup.parse 行为一致）。
+        let html = "<div class='c'><span>A</span><span>B</span></div>"
         let j = try AnalyzeByJSoup(html)
-        XCTAssertEqual(try j.getStringList("children@text"), ["A", "B"])
+        XCTAssertEqual(try j.getStringList("class.c@children@text"), ["A", "B"])
     }
 
     // MARK: - 二、@ 链式
@@ -123,10 +126,14 @@ final class AnalyzeByJSoupTests: XCTestCase {
         XCTAssertEqual(try j.getStringList("tag.li!0@text"), ["二", "三", "四", "五"])
     }
     func testColonRangeOldSyntax() throws {
-        // tag.li.0:2 旧写法区间：索引 0,1,2（含端点）
+        // 注意：旧写法 ".0:2" 里的 ':' 与 '.'/'!' 同为「索引分隔符」，
+        // 不是区间语法（区间语法只在新版 [] 写法里支持，见 ElementsSingle.findIndexSet
+        // 对应 Kotlin: rl==':' 时把数字压入 indexDefault 但不返回，继续扫描前一个分隔符）。
+        // 因此 "tag.li.0:2" 实际选取的是「索引 0」和「索引 2」两个元素，而非 0~2 区间。
         let j = try AnalyzeByJSoup(basicHTML)
         let r = try j.getStringList("tag.li.0:2@text")
-        XCTAssertEqual(Set(r), Set(["一", "二", "三"]))
+        XCTAssertEqual(Set(r), Set(["一", "三"]))
+        XCTAssertEqual(r.count, 2)
     }
 
     // MARK: - 五、[] 索引语法：正数、负数、区间、步长、反转

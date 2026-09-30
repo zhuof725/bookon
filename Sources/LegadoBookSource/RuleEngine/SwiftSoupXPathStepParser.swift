@@ -274,15 +274,17 @@ extension SwiftSoupXPathEvaluator {
             }
             // @attr 存在 / 比较
             if t.hasPrefix("@") {
-                if let eq = t.range(of: "=") {
-                    let name = String(t[t.index(t.startIndex, offsetBy: 1)..<eq.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    let val = stripQuotes(String(t[eq.upperBound...]).trimmingCharacters(in: .whitespaces))
-                    return Predicate(kind: .attrCompare(name: name, op: .eq, value: val))
-                }
+                // ⚠️ 必须先检查 "!="，再检查单独的 "="：否则 "@class!='odd'" 里的 "="（属于 "!="
+                // 的一部分）会被 range(of:"=") 先匹配到，导致属性名被错误解析成 "class!"。
                 if let ne = t.range(of: "!=") {
                     let name = String(t[t.index(t.startIndex, offsetBy: 1)..<ne.lowerBound]).trimmingCharacters(in: .whitespaces)
                     let val = stripQuotes(String(t[ne.upperBound...]).trimmingCharacters(in: .whitespaces))
                     return Predicate(kind: .attrCompare(name: name, op: .ne, value: val))
+                }
+                if let eq = t.range(of: "=") {
+                    let name = String(t[t.index(t.startIndex, offsetBy: 1)..<eq.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    let val = stripQuotes(String(t[eq.upperBound...]).trimmingCharacters(in: .whitespaces))
+                    return Predicate(kind: .attrCompare(name: name, op: .eq, value: val))
                 }
                 let name = String(t.dropFirst())
                 return Predicate(kind: .attrExists(name))

@@ -259,7 +259,140 @@ CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `ve
   **统计并打印实际执行的测试总数，为 0 时 job 失败**。
 - 已按要求**去掉 Linux job**。
 
+---
+
+# 第 3 步：HTML 规则引擎（AnalyzeByJSoup + AnalyzeByXPath）
+
+移植 legado 的 CSS(JSoup) 与 XPath 规则解析后端。**不做** `AnalyzeRule` 总调度、JS、网络、UI；
+第 1、2 步 API 名称与行为未改动。目标平台 iOS 15+（macOS 仅本地开发用）。
+
+## 依赖选型
+
+### CSS / DOM：SwiftSoup
+
+Kotlin 用 **jsoup 1.16.2**（`libs.versions.toml` 里有注释提示新版有破坏性变更，故锁定该版本）。
+Swift 侧选用 **SwiftSoup**（`scinfu/SwiftSoup`），是 jsoup 的逐方法移植，API 形态最接近，
+`select()` 支持同一套 CSS 选择器语法（含 `:eq()`、`,` 多选择器等书源常用写法）。
+
+版本锁定：`exact: "2.9.6"`（swift-tools-version 5.9，与 CI 的 Swift 5.10 工具链兼容）。
+**未选 2.10.0+**：SwiftSoup 自 2.10.0 起把 `swift-tools-version` 提到 6.0，
+GitHub Actions 当前 `swift:5.10`/Xcode 15.4 工具链无法解析该依赖（`Package.resolved` 报
+"incompatible tools version"），故锁定最后一个 tools-5.9 版本。
+
+### XPath：自实现子集（`SwiftSoupXPathEvaluator`）
+
+Kotlin 用 **JsoupXpath 2.5.3**（在 Jsoup DOM 上执行 XPath，并提供 `allText()/html()/outerHtml()/ownText()` 等扩展）。
+Swift 无等价库，评估两个方案：
+
+- **(a) libxml2 / Kanna**：Kanna 底层是 libxml2 的 HTML 解析器，其 HTML 容错策略（如何处理
+  未闭合标签、隐式 `<tbody>` 插入、属性大小写等）与 Jsoup **不同**，会导致同一份不规范书源 HTML
+  在两边选出不同的 DOM 结构，进而选择结果不一致——这违背"与 Kotlin 行为一致"的要求。
+- **(b) 在 SwiftSoup 的 DOM 上自实现 XPath 子集**：直接复用步骤里已经用 SwiftSoup 解析出的
+  同一棵 DOM 树，保证 CSS 和 XPath 两个后端看到的是同一份解析结果，行为可控、可与 JsoupXpath
+  的常见用法对齐。
+
+**选型结论：(b) 自实现子集**，已在 `XPathEvaluator` 协议后面隔离（`AnalyzeByXPath` 只依赖协议），
+以后如需替换为更完整的实现，可直接替换 `evaluatorType` 参数而不改调用方代码。
+
+## SwiftSoup 与 jsoup 1.16.2 已知差异
+
+| 方法 / 行为 | jsoup 1.16.2 | SwiftSoup 2.9.6 | 影响与应对 |
+|---|---|---|---|
+| `Elements.addAll(Collection)` / `clear()` | 有 | **无**（只有 `add(Element)`、`empty()`） | 本移植用内部扩展 `addElements(_:)` / `clearAll()` 包装，行为等价，不影响对外结果 |
+| `getElementsContainingOwnText(text)` | 存在，匹配元素自身直接文本包含 text | 存在，签名一致（`throws`） | 无差异 |
+| `textNodes()` | 返回直接子 `TextNode` 列表 | 同 | 无差异 |
+| `ownText()` | 返回元素自身文本（不含子元素），非 throwing | 同，非 throwing | 无差异 |
+| `outerHtml()` / `html()` | 抛检查异常（Java 少见但 Kotlin 侧不特殊处理） | `throws`（Swift 强制处理） | 本移植统一用 `try?` 吞掉转空字符串，不影响正常路径结果 |
+| `text()` 的空白规整 | 默认 `trimAndNormaliseWhitespace = true`，合并连续空白为单个空格 | 同样默认 `true`（`text(trimAndNormaliseWhitespace: Bool = true)`） | 无差异（本移植未显式传 false，行为一致） |
+| `Collector.collect(Evaluator.Id(id), el)` | 存在 | 存在，API 形态一致 | 无差异 |
+| 中文 / emoji 解析 | 按 UTF-16 处理属性/选择器字符串（JVM String） | Swift `Character`/`UInt16` 混用；本移植所有下标逻辑改在 UTF-16 code unit 上处理 | 已通过含中文/emoji 的测试验证一致 |
+
+> 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充；**目前测试覆盖范围内未发现其它差异**。
+
+## XPath 已支持 / 不支持语法表
+
+| 语法 / 函数 | 示例 | 支持 |
+|---|---|---|
+| 绝对/任意深度路径 | `//div`、`/html/body` | ✅ |
+| 相对路径 / 当前节点 | `.//a`、`.` | ✅ |
+| 属性取值 | `@href`、`//a/@href` | ✅ |
+| `text()` | `//p/text()` | ✅（作用于上下文节点自身的直接子文本） |
+| 位置谓词 `[n]` | `//li[1]` | ✅ |
+| `[last()]` / `[last()-n]` | `//li[last()]` | ✅ |
+| `[position()>n]` 等比较 | `//li[position()>1]` | ✅（`>` `<` `>=` `<=` `=`） |
+| `contains(@attr,'v')` / `contains(text(),'v')` | `//p[contains(@class,'x')]` | ✅ |
+| `starts-with(...)` | `//p[starts-with(@class,'x')]` | ✅ |
+| `normalize-space(...)` | `//p[normalize-space(text())='x']` | ✅ |
+| 属性存在 / 比较 | `[@id]`、`[@id='x']`、`[@id!='x']` | ✅ |
+| `text()='v'` / `!='v'` | `//a[text()='阅读']` | ✅ |
+| 多条件 `and` / `or` | `[@a='1' and @b='2']` | ✅（简单顶层拆分，不支持带括号的复杂嵌套分组） |
+| `following-sibling::` | `//li[@id='x']/following-sibling::li` | ✅ |
+| `preceding-sibling::` | 同上反向 | ✅ |
+| `parent::` / `..` | `//p/parent::div`、`//p/..` | ✅ |
+| `child::`（默认轴） | `//div/child::p` | ✅ |
+| `descendant::` / `ancestor::` | `//div/descendant::p` | ✅ |
+| `following::` / `preceding::` | 文档顺序前后（非祖先/后代） | ✅ |
+| `self::` | `//div/self::div` | ✅ |
+| 通配符 `*` | `//div/*` | ✅ |
+| `node()` | `//div/node()` | ✅（子节点，不做类型区分） |
+| JsoupXpath 扩展 `allText()` | `//div/allText()` | ✅（对齐 Jsoup `text()` 语义：所有后代文本拼接） |
+| JsoupXpath 扩展 `ownText()` | `//div/ownText()` | ✅ |
+| JsoupXpath 扩展 `html()` | `//div/html()` | ✅（innerHtml） |
+| JsoupXpath 扩展 `outerHtml()` | `//div/outerHtml()` | ✅ |
+| `</td>`/`</tr>`/`</tbody>` 片段自动补全 | 输入以这些结尾时自动包一层 | ✅（对齐 Kotlin `strToJXDocument`） |
+| `<?xml` 输入走 XML 解析器 | | ✅ |
+| **命名空间轴 `namespace::`** | | ❌ **不支持**（Jsoup DOM 无命名空间概念，JsoupXpath 文档也标注不支持） |
+| **`[@a='1' and (@b='2' or @c='3')]` 带括号的复杂逻辑分组** | | ❌ **不支持**（仅支持顶层单层 `and`/`or` 拆分，不解析括号分组） |
+| **数值/字符串函数**（`concat()`、`substring()`、`string-length()`、`count()`、`sum()` 等） | | ❌ **不支持** |
+| **多重谓词的复合轴表达式**（如 `//a[1][@href]` 连续多个 `[]`） | | ❌ **不支持**（本实现每个 step 只解析一组 `[...]`，多个方括号会被当成单个谓词文本解析失败） |
+| **变量引用 `$var`** | | ❌ **不支持** |
+| `//*[@id="x"]/*[position()>1]` 这类真实规则里出现的写法 | 采墨阁 `nextTocUrl` 规则 | ✅（`*` 通配 + position 谓词组合，已用真实规则测试验证） |
+
+> 不支持的语法在解析阶段抛 `RuleEngineError.invalidXPath`，`AnalyzeByXPath` 按 Kotlin 吞异常的语义
+> 捕获后返回空值，并记入可选的 `RuleEngineDiagnostics`。
+
+## 真实书源规则扫描清单（测试用例来源）
+
+扫描 `Tests/LegadoBookSourceTests/Resources/test_bookSources.json`（第 1 步提供）、
+`Tests/LegadoRuleEngineTests/Resources/real/{muli,qimo}_real_source.json`（第 2 步用户提供）后，
+用于本步骤测试的真实 CSS / XPath 规则汇总（完整清单见 `Tests/LegadoHTMLEngineTests/Resources/real/*.json`）：
+
+- **CSS（🔥小说2016）**：`@css:.name@text`、`@css:p:eq(2)>a@text`、`@css:li.clearfix`、
+  `@css:.name>a@href`、`@css:img@src`、`@css:.note.clearfix p@text`、`@css:.note_text,p:eq(4)@text`、
+  `@css:p:eq(3)@text`、`.articleDiv p@textNodes`。
+- **XPath（🔥采墨阁手机版）**：`//dd[2]/text()`、`//*[@id="sitebox"]/dl`、`//dt/a/@href`、`//img/@src`、
+  `//dd[2]/span/text()`、`//h3/a/text()`、`//*[@property="og:novel:author"]/@content`、
+  `//*[@property="og:image"]/@content`、`//*[@property="og:description"]/@content`、
+  `//*[@property="og:novel:category"]/@content`、`//*[@id="newlist"]//li[1]/a/text()`、
+  `//*[@property="og:novel:book_name"]/@content`、`//a[text()="阅读"]/@href`、
+  `//*[@id="pagelist"]/*[position()>1]/@value`、`//*[@id="content"]`。
+- 木里番茄 / 七猫小说（第 2 步真实书源）未见 CSS/XPath 规则（分别用 JS 和 JSONPath），故第 3 步真实规则
+  以上述两个书源为准，符合任务要求「用两个真实书源里扫描出来的 CSS/XPath 规则各写至少 10 个用例」。
+
+## 样本诚实标注（第 3 步）
+
+- 所有合成 HTML 测试数据：文件内/测试方法注释均以 `⚠️ 合成样本，非真实数据` 标注；
+  `Tests/LegadoHTMLEngineTests/AnalyzeByJSoupTests.swift`、`AnalyzeByJSoupTests2.swift`、
+  `AnalyzeByXPathTests.swift` 文件头注释统一声明。
+- 真实规则文本：`Tests/LegadoHTMLEngineTests/Resources/real/xiaoshuo2016_rules.json` 与
+  `caimoge_rules.json`，文件内 `_SAMPLE_KIND` 字段与对应测试方法注释均标注「规则真实、数据合成」，
+  并注明规则来源（`test_bookSources.json` 中的具体书源名）。
+- 本步骤未收到用户提供的真实网页响应文件，因此**不存在** `Resources/real/*.html` 类真实网页数据；
+  凡涉及真实规则的测试均搭配合成 HTML，已如实标注，未冒充为真实抓取数据。
+
+## 崩溃写法审计（第 3 步新增代码）
+
+```
+rg -n "fatalError|try!|\bas!" Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoup*.swift \
+   Sources/LegadoBookSource/RuleEngine/SwiftSoupXPath*.swift Sources/LegadoBookSource/RuleEngine/XPathEvaluator.swift
+# 结果：无命中
+```
+新增错误类型 `RuleEngineError.invalidSelector` / `.invalidXPath` / `.invalidHTML`，
+CSS 选择器解析失败、XPath 语法不支持、HTML 解析失败均抛这些错误，public 方法标 `throws`；
+`AnalyzeByXPath.getString/getStringList` 里 `getResult` 失败（对齐 Kotlin `getResult(xPath)?.let{}` 的
+`null` 分支）保持返回空值/nil，同时记入可选的 `RuleEngineDiagnostics`。
+
 ## 后续步骤（TODO）
 
 源码中以 `TODO(后续步骤)` 标注：BaseSource/BaseBook 运行时方法、Book/BookChapter/SearchBook 业务方法、变量存取、`ReadConfig.startDate` 的 LocalDate 强类型化、SwiftData/GRDB 持久化接入。
-第 2 步之后仍未做：JSoup / XPath 后端、`AnalyzeRule` 总调度、JS 引擎、网络、UI（本步骤不含，按任务约定）。
+第 3 步之后仍未做：`AnalyzeRule` 总调度（把 Regex/JSONPath/JSoup/XPath 四个后端按 Mode 统一调度）、JS 引擎、网络、UI。

@@ -129,13 +129,26 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     // MARK: - 十二、data()（空规则时取 element.data()）
 
     func testEmptyElementsRuleUsesElementData() throws {
-        // SourceRule("").elementsRule 为空 -> element.data()（脚本内容），此处用 script 验证
+        // 注意：ruleStr 为空字符串会在 getStringList 开头直接返回 []（对齐 Kotlin
+        // `if (ruleStr.isEmpty()) return textS`，不会走到这里）。
+        // 要触发 `SourceRule.elementsRule.isEmpty` 分支（-> element.data()），
+        // 需要 ruleStr 本身非空、但去掉 "@CSS:" 前缀后为空，如 "@CSS:" 本身。
         let html = "<script>var a=1;</script>"
         let doc = try SwiftSoup.parse(html)
         guard let script = try doc.select("script").first() else { return XCTFail("select 失败") }
         let j = try AnalyzeByJSoup(script)
-        let r = try j.getStringList("")
+        let r = try j.getStringList("@CSS:")
         XCTAssertEqual(r, ["var a=1;"])
+    }
+
+    // MARK: 调试用例（临时）：排查 && 组合失效
+    func testDebugAndJoinParts() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let j = try AnalyzeByJSoup(html)
+        let r1 = try j.getStringList("class.a@text")
+        let r2 = try j.getStringList("class.b@text")
+        XCTAssertEqual(r1, ["甲"], "class.a@text 单独结果：\(r1)")
+        XCTAssertEqual(r2, ["乙"], "class.b@text 单独结果：\(r2)")
     }
 
     // MARK: - 十三、真实规则（规则真实、数据合成）—— 🔥小说2016
@@ -144,10 +157,15 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     // HTML 数据为按其真实页面结构手工构造的合成样本，非真实抓取内容。
 
     private func loadRealRules(_ name: String) throws -> [String: String] {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "real") else {
-            XCTFail("找不到真实规则资源 \(name)"); throw NSError(domain: "t", code: 1)
+        var url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "real")
+        if url == nil { url = Bundle.module.url(forResource: name, withExtension: "json") }
+        if url == nil, let resourceURL = Bundle.module.resourceURL {
+            if let en = FileManager.default.enumerator(at: resourceURL, includingPropertiesForKeys: nil) {
+                for case let f as URL in en where f.lastPathComponent == "\(name).json" { url = f; break }
+            }
         }
-        let data = try Data(contentsOf: url)
+        guard let u = url else { XCTFail("找不到真实规则资源 \(name)"); throw NSError(domain: "t", code: 1) }
+        let data = try Data(contentsOf: u)
         let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         return obj["rules"] as! [String: String]
     }

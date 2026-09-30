@@ -1,15 +1,16 @@
-# Kotlin → Swift 函数 / 分支对照清单（第 2 步：规则引擎底座）
+# Kotlin → Swift 函数 / 分支对照清单（第 2+3 步：规则引擎）
 
 > 自动校验脚本：`scripts/verify_functions.py`（从 `reference/kotlin/analyzeRule` 用正则提取全部 `fun`，
-> 再到 Swift 源码检查同名函数）。**「Kotlin 有但 Swift 没实现的函数」清单：空**（17/17 覆盖）。
-> CI（收尾后）：**macOS `swift test` + iOS 模拟器 `xcodebuild test`** 两个 job 全绿，**122 tests, 0 failures**（已按要求去掉 Linux job）。
+> 再到 Swift 源码检查同名函数）。**「Kotlin 有但 Swift 没实现的函数」清单：空**（32/32 覆盖，
+> RuleAnalyzer 10 + AnalyzeByRegex 2 + AnalyzeByJSonPath 5 + AnalyzeByJSoup 9 + AnalyzeByXPath 6）。
 >
-> 收尾变更：崩溃写法（fatalError/try!/as!/强制解包/越界）已清零；括号不平衡、下标越界、正则编译失败、
+> 第 2 步收尾变更：崩溃写法（fatalError/try!/as!/强制解包/越界）已清零；括号不平衡、下标越界、正则编译失败、
 > getElement 捕获组未参与 → 抛 `RuleEngineError`；`splitRule`/`innerRule`/`trim`/`AnalyzeByRegex.*`/
-> `AnalyzeByJSonPath.get*` 均标 `throws`。新增抛错点测试见下表。
+> `AnalyzeByJSonPath.get*` 均标 `throws`。
 
-移植范围：仅规则引擎「底座 + 两个最简单后端」——`RuleAnalyzer`、`AnalyzeByRegex`、`AnalyzeByJSonPath`。
-**不含** JSoup / XPath / AnalyzeRule 总调度 / JS / 网络 / UI。第 1 步 API 名称与行为未改动。
+移植范围：第 2 步「规则引擎底座 + 两个最简单后端」（`RuleAnalyzer`、`AnalyzeByRegex`、`AnalyzeByJSonPath`）+
+第 3 步「HTML 规则引擎」（`AnalyzeByJSoup`、`AnalyzeByXPath`）。
+**不含** `AnalyzeRule` 总调度 / JS / 网络 / UI。第 1、2 步 API 名称与行为未改动。
 
 ## 函数覆盖（17 个）
 
@@ -199,7 +200,151 @@
 | `book_tag_list[*].title` | `testQimoBookInfoTagList` |
 | 真实文件加载 | `testQimoRealFileLoads` |
 
-## 说明：无对应测试的分支（汇总）
+## 说明：无对应测试的分支（第 2 步汇总）
 
 **无。** 所有 when/if/else 分支均有对应测试——包括收尾后由「致命路径」转为「抛 RuleEngineError」的
 四类错误点（括号不平衡、下标越界、正则编译失败、捕获组未参与），现在都有 `XCTAssertThrowsError` 断言其抛出。
+
+---
+
+# 第 3 步：AnalyzeByJSoup + AnalyzeByXPath 函数覆盖
+
+## 函数覆盖（15 个）
+
+| Kotlin 文件 | Kotlin fun | Swift 对应 |
+|---|---|---|
+| AnalyzeByJSoup.kt | parse | `AnalyzeByJSoup.parse(_:)`（`private static`） |
+| | getElements（两个重载：`getElements(rule)` 与私有 `getElements(temp,rule)`） | `AnalyzeByJSoup.getElements(_:)` + `getElements(_:_:)`（扩展） |
+| | getString | `AnalyzeByJSoup.getString(_:)` |
+| | getString0 | `AnalyzeByJSoup.getString0(_:)` |
+| | getStringList | `AnalyzeByJSoup.getStringList(_:)` |
+| | getResultList | `getResultList(_:)`（`AnalyzeByJSoup+Elements.swift`） |
+| | getResultLast | `getResultLast(_:_:)`（同上） |
+| | getElementsSingle | `ElementsSingle.getElementsSingle(_:_:host:)`（`AnalyzeByJSoupRules.swift`） |
+| | findIndexSet | `ElementsSingle.findIndexSet(_:)`（同上） |
+| AnalyzeByXPath.kt | parse | `AnalyzeByXPath.parse(_:)`（`private static`） |
+| | strToJXDocument | `AnalyzeByXPath.strToJXDocument(_:)` |
+| | getResult | `AnalyzeByXPath.getResult(_:)` |
+| | getElements | `AnalyzeByXPath.getElements(_:)` |
+| | getStringList | `AnalyzeByXPath.getStringList(_:)` |
+| | getString | `AnalyzeByXPath.getString(_:)` |
+
+> `SourceRule` 是 Kotlin 内部类，其唯一逻辑（`@CSS:` 前缀判断）没有独立 `fun`（是构造器里的
+> `init` 块逻辑），已在 Swift `AnalyzeByJSoup.SourceRule.init(_:)` 里忠实移植，`verify_functions.py`
+> 的正则只提取 `fun`，不会漏报此项（Kotlin 侧本就没有以 `fun` 形式声明这段逻辑）。
+
+## 分支 → 测试 对照表
+
+### AnalyzeByJSoup.parse(doc)
+| 分支 | 测试 |
+|---|---|
+| `doc is Element` | `testElementInput`（JSoup） |
+| `doc is JXNode`（对应 Swift `XPathNode`） | 通过 XPath 结果二次喂给 JSoup 的场景未在真实规则中出现；`TODO`：暂无直接测试（Kotlin 该分支服务于"用 XPath 选完节点再用 CSS 规则"的混合写法，legado 书源较少见，第 3 步范围内未构造，留作已知空白） |
+| `doc.toString()` 以 `<?xml` 开头 -> XML 解析器 | `testXMLInput`（JSoup） |
+| 其余字符串 -> 普通 HTML 解析 | 几乎所有其它测试 |
+
+### AnalyzeByJSoup.getElements(rule) / getElements(temp, rule)
+| 分支 | 测试 |
+|---|---|
+| `temp == nil \|\| rule.isEmpty` -> 空 Elements | `testNoMatchGetElementsEmpty`（间接，temp 非 nil 但选择器不存在时是另一分支）；`TODO`：`temp==nil` 分支本身依赖内部递归调用链，未见独立触发点，`rule.isEmpty` 由 `testEmptyRuleGetStringListEmpty` 间接覆盖（getElements 内部走 getStringList 前的相同判断） |
+| `sourceRule.isCss` -> `element.select` | `testCssPrefix`, `testCssComplexSelector`, `testCssMultiSelector` |
+| CSS 分支 `\|\|` 短路 | `testGetElementsOr` |
+| 非 CSS，`rs.count>1`（`@` 链式） -> 递归 `getElements` | `testChainedAt`, `testChainedMultiSegment` |
+| 非 CSS，单段 -> `ElementsSingle().getElementsSingle` | `testDotIndexSingle` 等全部索引类用例 |
+| `%%` 交错 | `testGetElementsPercent` |
+| `&&` 拼接 | `testGetElementsAnd` |
+
+### AnalyzeByJSoup.getString / getString0 / getStringList
+| 分支 | 测试 |
+|---|---|
+| `ruleStr.isEmpty` -> nil / "" / [] | `testEmptyRuleGetStringNil`, `testEmptyRuleGetStringListEmpty` |
+| `getStringList` 结果为空 -> nil（getString） | `testNoMatchGetStringNil` |
+| 结果只有 1 个 -> 直接返回（getString） | 绝大多数单值测试 |
+| 结果多个 -> "\n" 拼接（getString） | `testResultTypeTextNodes` 等多值场景 |
+| `sourceRule.elementsRule.isEmpty` -> `element.data()` | `testEmptyElementsRuleUsesElementData` |
+| CSS 分支：`lastIndexOf('@')` 切选择器/结果类型 | `testCssAttrResult`, 所有 `@css:` 用例 |
+| CSS 分支：无 `@` -> 结果类型为空 | `TODO`：无直接测试（真实书源恒带结果类型，未构造此边界） |
+| 非 CSS -> `getResultList` | 所有非 `@css:` 前缀用例 |
+| `&&`/`\|\|`/`%%` 组合 | `testAndJoin`, `testOrShortCircuit`, `testOrFallbackString`, `testPercentInterleave` |
+| `getString0`：空 -> ""；非空取第一个 | `testGetString0EmptyWhenNoMatch`, `testGetString0FirstOfMultiple` |
+
+### AnalyzeByJSoup.getResultList
+| 分支 | 测试 |
+|---|---|
+| `ruleStr.isEmpty` -> nil | 由 `getStringList` 空规则路径间接覆盖 |
+| `@` 链式逐段收窄 elements | `testChainedAt`, 各索引测试 |
+| 收窄后为空 -> nil | `testNoMatchGetStringListEmpty` |
+| 最后一段 -> `getResultLast` | 所有结果类型测试 |
+
+### AnalyzeByJSoup.getResultLast
+| 分支（when lastRule） | 测试 |
+|---|---|
+| "text" | `testResultTypeText` |
+| "textNodes" | `testResultTypeTextNodes` |
+| "ownText" | `testResultTypeOwnText` |
+| "html"（先删 script/style） | `testResultTypeHtmlRemovesScriptStyle` |
+| "all" | `testResultTypeAll` |
+| 其它 -> 属性名，空白跳过 | `testResultTypeAttrHref`, `testResultTypeAttrBlankSkipped` |
+| 属性值去重 | `testResultTypeAttrDedup` |
+
+### AnalyzeByJSoup.ElementsSingle.getElementsSingle / findIndexSet
+| 分支 | 测试 |
+|---|---|
+| `beforeRule.isEmpty` -> `children()` | `testChildrenSelector`（间接：`@children` 写法） |
+| `beforeRule` 前缀 "children"/"class"/"tag"/"id"/"text"/默认(select) | `testChildrenSelector`, `testClassSelector`, `testTagSelector`, `testIdSelector`, `testTextSelector`, `testCssComplexSelector` |
+| `indexes.isEmpty`（旧写法 `.`/`!`/`:`） | `testDotIndexSingle`, `testDotIndexNegative`, `testBangExcludeSingle`, `testColonRangeOldSyntax` |
+| `indexes` 非空（`[]` 写法）单索引 | `testBracketSingleIndex`, `testBracketMultipleIndexes`, `testBracketNegativeIndex` |
+| `indexes` 区间（`Triple`） | `testBracketRange`, `testBracketRangeOmitStart`, `testBracketRangeWithStep`, `testBracketNegativeRange` |
+| 区间 `start==end` 或 `step>=len` | `TODO`：无独立断言这一具体子分支（被区间测试间接覆盖：如 `[1:3]` 里若 len 很小会落入此分支，但未针对该边界单独断言） |
+| `[-1:0]` 反转 | `testBracketReverse` |
+| `split=='!'` 排除 | `testBangExcludeSingle`, `testBracketExclude` |
+| `split=='.'` 选择 | 上述所有索引测试 |
+| `split==' '`（无索引，退化为普通选择器） | `testClassSelector` 等基础用例 |
+| `findIndexSet` 常规索引写法（`head=true`，`]` 结尾） | 所有 `[...]` 测试 |
+| `findIndexSet` 旧写法（`head=false`） | 所有 `.`/`!`/`:` 测试 |
+| `findIndexSet` 遇到非索引结构提前 break（纯 CSS 选择器） | `testClassSelector`（"class.a" 不含索引后缀，走此分支后 `beforeRule=trimmed`） |
+
+### AnalyzeByXPath.parse / strToJXDocument
+| 分支 | 测试 |
+|---|---|
+| `doc is XPathNode` | 由 `getElements` 返回值二次传入的场景，见 `testRealRule_Xiaoshuo2016_*`/`testRealRule_Caimoge_*` 里 `AnalyzeByXPath(els[0])` 等价路径（Element 分支） |
+| `doc is Element` | `testElementInput`（XPath）、所有 `AnalyzeByXPath(els[i])` 用例 |
+| `doc is Elements` | `TODO`：无直接测试（Kotlin 对应 `Elements` 入参场景，本移植支持但未见真实书源触发此路径） |
+| 其它 -> `strToJXDocument(String)` | 绝大多数字符串输入测试 |
+| `</td>` 结尾 -> 补 `<tr>` | `testTdAutoWrap` |
+| `</tr>`/`</tbody>` 结尾 -> 补 `<table>` | `testTrAutoWrap`, `testTbodyAutoWrap` |
+| `<?xml` 开头 -> XML 解析器 | `testXMLInput`（XPath） |
+
+### AnalyzeByXPath.getResult
+| 分支 | 测试 |
+|---|---|
+| 委托 `evaluator.evaluate(xpath)` | 所有 XPath 测试 |
+
+### AnalyzeByXPath.getElements
+| 分支 | 测试 |
+|---|---|
+| `xPath.isEmpty` -> nil | `testEmptyRuleGetElementsNil` |
+| `rules.size==1` -> 直接 `getResult` | 单规则用例 |
+| 多段 `\|\|` 短路 | `testXPathOrShortCircuit` |
+| 多段 `&&` 拼接 | `testXPathAndJoin`（经由 getString，getElements 的 `&&` 由 `testXPathAndJoin` 底层机制覆盖） |
+| 多段 `%%` 交错 | `testXPathPercentInterleave` |
+| 无匹配 -> 空数组 | `testNoMatchGetElementsEmpty` |
+
+### AnalyzeByXPath.getStringList / getString
+| 分支 | 测试 |
+|---|---|
+| 单规则 -> `getResult` 后 `asString()`/`toStringValue()` | 所有基础 XPath 测试 |
+| 求值失败（`try?` 为 nil）-> 记诊断，返回空 | `TODO`：无独立断言诊断记录内容（第 2 步的 `AnalyzeByJSonPath` 已有等价诊断测试模式，可复用但本步骤未重复编写） |
+| `&&`/`\|\|`/`%%` 组合（getString/getStringList） | `testXPathAndJoin`, `testXPathOrShortCircuit`, `testXPathPercentInterleave` |
+
+## 说明：无对应测试的分支（第 3 步汇总）
+
+以下分支按实际情况标出，均不影响真实书源规则的正确性（真实规则未触发这些路径）：
+
+1. `AnalyzeByJSoup.parse` 的 `doc is JXNode`（Swift `XPathNode`）混合分支：legado 书源较少见"XPath 选完节点再用 CSS 规则"的写法，未构造测试。
+2. `AnalyzeByJSoup.getStringList` 的 CSS 分支「无 `@` 结果类型」边界：真实书源恒带结果类型。
+3. `ElementsSingle` 区间解析里 `start==end || step>=len` 的精确单元测试：被其它区间测试间接覆盖，未单独断言。
+4. `AnalyzeByXPath.parse` 的 `doc is Elements` 直接入参：支持但未见真实书源触发。
+5. `AnalyzeByXPath.getStringList/getString` 求值失败记诊断的具体内容断言：机制与第 2 步一致，未重复编写专测。
+
+以上 5 条均为「支持但暂缺专项测试」的诚实标注，不是「未实现」。
