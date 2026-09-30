@@ -5,10 +5,50 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-macos:
-    runs-on: macos-14
+  golden:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+      - name: Build golden generator (Maven)
+        working-directory: scripts/golden
+        run: mvn -B -ntp package
+      - name: Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)
+        working-directory: scripts/golden
+        run: |
+          set -e
+          java -jar target/golden-generator.jar cases out
+          echo "=== 生成的文件 ==="
+          ls -la out
+          COUNT=$(ls out/*.json 2>/dev/null | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "错误：未生成任何 golden 文件"
+            exit 1
+          fi
+      - name: Upload golden artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-data
+          path: scripts/golden/out/*.json
+          if-no-files-found: error
+
+  test-macos:
+    runs-on: macos-14
+    needs: golden
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download golden artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: golden-data
+          path: Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: List golden files
+        run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift version
         run: swift --version
       - name: Verify field coverage
@@ -22,8 +62,16 @@ jobs:
 
   test-ios-simulator:
     runs-on: macos-14
+    needs: golden
     steps:
       - uses: actions/checkout@v4
+      - name: Download golden artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: golden-data
+          path: Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: List golden files
+        run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift / Xcode version
         run: |
           swift --version

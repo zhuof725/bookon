@@ -44,6 +44,8 @@ extension SwiftSoupXPathEvaluator {
             case function(FuncPred)                     // contains(...)/starts-with(...)/normalize-space(...)
             case and([Predicate])
             case or([Predicate])
+            case not(Predicate)                                       // not(...)
+            case funcCompare(PredicateFuncCall, CompareOp, String)     // count(...)=3 / string(...)='x' 等
         }
         enum CompareOp { case eq, ne }
         struct FuncPred {
@@ -93,6 +95,14 @@ extension SwiftSoupXPathEvaluator {
                 }
                 // 保持文档顺序：按原 elements 顺序输出
                 return elements.filter { seen.contains(ObjectIdentifier($0)) }
+            case .not(let inner):
+                let matched = Set((try? inner.filter(elements))?.map { ObjectIdentifier($0) } ?? [])
+                return elements.filter { !matched.contains(ObjectIdentifier($0)) }
+            case .funcCompare(let call, let op, let rhs):
+                return elements.filter { e in
+                    let lhs = (try? call.evaluate(context: e)) ?? ""
+                    return op == .eq ? (lhs == rhs) : (lhs != rhs)
+                }
             }
         }
 

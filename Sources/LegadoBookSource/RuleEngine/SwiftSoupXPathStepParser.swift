@@ -225,6 +225,18 @@ extension SwiftSoupXPathEvaluator {
 
             let t = inner.trimmingCharacters(in: .whitespaces)
 
+            // not(...)
+            if t.hasPrefix("not(") && t.hasSuffix(")") {
+                let innerExpr = String(t.dropFirst(4).dropLast())
+                return Predicate(kind: .not(try parseOnePredicate(innerExpr, whole: whole)))
+            }
+
+            // 函数比较：count(...)=n / string(...)='x' / concat(...)='x' / substring*(...)='x' / string-length(...)=n
+            // 必须在 contains/starts-with/normalize-space 等专用函数分支之前尝试，覆盖更广的函数名集合。
+            if let funcPred = try SwiftSoupXPathEvaluator.tryParsePredicateFunctionCompare(t, whole: whole) {
+                return funcPred
+            }
+
             // 纯数字 [n]
             if let n = Int(t) {
                 return Predicate(kind: .position(PositionSpec(usesLast: false, offset: n, op: .eq, literalIndex: n)))

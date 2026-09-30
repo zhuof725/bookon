@@ -66,7 +66,10 @@ let package = Package(
             path: "Tests/LegadoHTMLEngineTests",
             resources: [
                 .copy("Resources/real/xiaoshuo2016_rules.json"),
-                .copy("Resources/real/caimoge_rules.json")
+                .copy("Resources/real/caimoge_rules.json"),
+                // CI 的 golden job 用真实 jsoup 1.16.2 + JsoupXpath 2.5.3 生成的对照数据，
+                // 在 test-macos / test-ios-simulator 跑 swift build 之前下载到这个目录。
+                .copy("Resources/golden")
             ]
         ),
         // 第 3 步：HTML 规则引擎的纯 public 接口测试（普通 import，非 @testable）。

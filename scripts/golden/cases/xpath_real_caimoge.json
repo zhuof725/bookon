@@ -1,0 +1,23 @@
+{
+  "_SAMPLE_KIND": "规则真实、数据合成。XPath 规则取自真实书源『🔥采墨阁手机版』(Tests/LegadoHTMLEngineTests/Resources/real/caimoge_rules.json)；HTML 为按其真实页面结构手工构造的合成样本。第一个 <dl> 的 outerHTML 作为独立文档，等价于 Swift 测试里 AnalyzeByXPath(els[0]) 的效果。",
+  "htmls": {
+    "fullSitebox": "<html><body><div id=\"sitebox\"><dl><dt><a href=\"/book/101\">链接一</a></dt><h3><a>合成书名一</a></h3><dd>占位</dd><dd>合成作者一<span>玄幻</span></dd><img src=\"/c/1.jpg\"></dl><dl><dt><a href=\"/book/102\">链接二</a></dt><h3><a>合成书名二</a></h3><dd>占位</dd><dd>合成作者二<span>都市</span></dd><img src=\"/c/2.jpg\"></dl></div></body></html>",
+    "firstDl": "<dl><dt><a href=\"/book/101\">链接一</a></dt><h3><a>合成书名一</a></h3><dd>占位</dd><dd>合成作者一<span>玄幻</span></dd><img src=\"/c/1.jpg\"></dl>",
+    "bookInfoAuthorSample": "<html><head><meta property=\"og:novel:author\" content=\"合成作者X\"></head><body></body></html>",
+    "bookInfoCoverSample": "<html><head><meta property=\"og:image\" content=\"/cover/x.jpg\"></head></html>",
+    "tocUrlSample": "<div><a href='/x'>下载</a><a href='/toc/1'>阅读</a></div>",
+    "contentSample": "<div id='content'>正文内容合成文本</div>"
+  },
+  "xpathCases": [
+    { "name": "realBookList", "html": "fullSitebox", "rule": "//*[@id=\"sitebox\"]/dl" },
+    { "name": "realName", "html": "firstDl", "rule": "//h3/a/text()" },
+    { "name": "realAuthor", "html": "firstDl", "rule": "//dd[2]/text()" },
+    { "name": "realBookUrl", "html": "firstDl", "rule": "//dt/a/@href" },
+    { "name": "realCoverUrl", "html": "firstDl", "rule": "//img/@src" },
+    { "name": "realKind", "html": "firstDl", "rule": "//dd[2]/span/text()" },
+    { "name": "realBookInfoAuthor", "html": "bookInfoAuthorSample", "rule": "//*[@property=\"og:novel:author\"]/@content" },
+    { "name": "realBookInfoCoverUrl", "html": "bookInfoCoverSample", "rule": "//*[@property=\"og:image\"]/@content" },
+    { "name": "realTocUrl", "html": "tocUrlSample", "rule": "//a[text()=\"阅读\"]/@href" },
+    { "name": "realContentDiv", "html": "contentSample", "rule": "//*[@id=\"content\"]" }
+  ]
+}
