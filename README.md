@@ -254,8 +254,9 @@ rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：�
 CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
 - **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
 - **test-ios-simulator**：`xcodebuild test` 在可用的 iPhone 模拟器上跑全部测试 target。
-  脚本 `scripts/ios_sim_test.sh` 用**固定 scheme `LegadoBookSource-Package`**（SwiftPM 自动生成，不取列表第一个）、
-  自动挑可用 iPhone UDID；**统计并打印实际执行的测试总数，为 0 时 job 失败**。
+  脚本 `scripts/ios_sim_test.sh` 用**固定 scheme `LegadoBookSource`**（本 SwiftPM 包被 xcodebuild 打开时
+  唯一的自动 scheme，`-list` 实测无 `-Package` 后缀；不取列表第一个而是写死此名）、自动挑可用 iPhone UDID；
+  **统计并打印实际执行的测试总数，为 0 时 job 失败**。
 - 已按要求**去掉 Linux job**。
 
 ## 后续步骤（TODO）

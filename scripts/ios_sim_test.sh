@@ -2,8 +2,10 @@
 # 在可用的 iPhone 模拟器上用 xcodebuild test 跑全部测试 target。
 set -euo pipefail
 
-# SwiftPM 包由 Xcode 自动生成的 scheme 名固定为 "<PackageName>-Package"。
-SCHEME="LegadoBookSource-Package"
+# 固定 scheme（不取列表第一个）。本 SwiftPM 包被 xcodebuild 打开时，
+# 自动生成的唯一 scheme 名等于 package/library 名 "LegadoBookSource"
+# （`-list` 实测：Schemes 只有 LegadoBookSource；"-Package" 后缀 scheme 在本包不存在）。
+SCHEME="LegadoBookSource"
 echo "使用 scheme: $SCHEME"
 echo "可用 scheme 列表（供核对）："
 xcodebuild -list || true
