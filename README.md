@@ -242,22 +242,15 @@ rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：�
   用于 6+ 个测试（`testQimo*`）——**规则真实、数据为按规则形状构造的合成 JSON**，已在注释标注。
 - 用真实书源『规则文本』+ 合成『数据』的测试（如木里的 `$.author||...` 短路），已在注释里注明「规则真实 / 数据合成」。
 
-## 函数与分支覆盖
+## 函数与分支覆盖（第 2 步部分）
 
 见 [FUNCTION_MAPPING.md](FUNCTION_MAPPING.md)。`scripts/verify_functions.py` 自动从 Kotlin 源码提取全部 `fun` 校验，
-**「Kotlin 有但 Swift 没实现的函数」清单为空**（17/17）。分支→测试对照表见该文件，未覆盖分支已明确标出。
+**「Kotlin 有但 Swift 没实现的函数」清单为空**（第 2 步 17/17；连同第 3 步共 32/32，见文件末尾）。
+分支→测试对照表见该文件，未覆盖分支已明确标出。
 
-## 第 2 步测试规模与 CI
+## 第 2 步测试规模与 CI（历史记录，第 3 步 CI 配置见下方最新版）
 
-规则引擎测试连同第 1 步共 **130+ 个测试**（收尾又新增：超 Int64 大整数 3、无效 JSON 3、innerRule 立即传播 1 等）。
-
-CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
-- **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
-- **test-ios-simulator**：`xcodebuild test` 在可用的 iPhone 模拟器上跑全部测试 target。
-  脚本 `scripts/ios_sim_test.sh` 用**固定 scheme `LegadoBookSource`**（本 SwiftPM 包被 xcodebuild 打开时
-  唯一的自动 scheme，`-list` 实测无 `-Package` 后缀；不取列表第一个而是写死此名）、自动挑可用 iPhone UDID；
-  **统计并打印实际执行的测试总数，为 0 时 job 失败**。
-- 已按要求**去掉 Linux job**。
+第 2 步交付时规则引擎测试连同第 1 步共 130+ 个测试；第 3 步完成后总数见文末「测试规模」章节。
 
 ---
 
@@ -298,7 +291,7 @@ Swift 无等价库，评估两个方案：
 
 | 方法 / 行为 | jsoup 1.16.2 | SwiftSoup 2.9.6 | 影响与应对 |
 |---|---|---|---|
-| `Elements.addAll(Collection)` / `clear()` | 有 | **无**（只有 `add(Element)`、`empty()`） | 本移植用内部扩展 `addElements(_:)` / `clearAll()` 包装，行为等价，不影响对外结果 |
+| `Elements.addAll(Collection)` / `clear()` | `clear()` 只清空集合，不碰 DOM | **无 `addAll`/`clear`**；`empty()` 存在但语义是"清空每个元素的子节点"（会改 DOM，完全不是"清空集合"！） | 本移植用内部扩展 `addElements(_:)` 包装批量添加；**不提供、也不使用**任何"clear 集合"包装——开发中一度错误地用 `empty()` 模拟 `clear()` 导致真实 bug（见下方专门记录），现已改为直接用新 `Elements()` 替换变量，`SwiftSoupElementsCompat.swift` 里保留了该教训的说明注释 |
 | `getElementsContainingOwnText(text)` | 存在，匹配元素自身直接文本包含 text | 存在，签名一致（`throws`） | 无差异 |
 | `textNodes()` | 返回直接子 `TextNode` 列表 | 同 | 无差异 |
 | `ownText()` | 返回元素自身文本（不含子元素），非 throwing | 同，非 throwing | 无差异 |
@@ -319,8 +312,19 @@ SwiftSoup 的 `Elements.empty()`——但 `empty()` 的真实语义是 **"清空
 连续两次 `getStringList` 调用等均受影响）。
 **修复**：删除这个错误的 `clearAll()` 包装，所有"清空复用"的地方一律改为直接赋值一个新的 `Elements()`
 实例。已用专门的回归测试固定（`testRegressionConsecutiveClassSelectors`、
-`testRegressionConsecutiveTagSelectors`、以及 `testAndJoin` 等全部 `&&`/`||`/`%%` 组合测试）。
+`testRegressionConsecutiveTagSelectors`、`testRegressionGetResultListTwiceInSequence`、
+以及 `testAndJoin` 等全部 `&&`/`||`/`%%` 组合测试）。
 这不是 Kotlin 与 Swift 的行为差异，纯属移植过程中的实现错误，已在交付前发现并修复。
+
+### 开发中的一处自我认知纠正：CSS `:eq(n)` 的真实语义
+
+调试上面那个 bug 时，一度误以为 CSS `p:eq(2)` 表示"匹配到的所有 `<p>` 里的第 3 个"，
+但 jsoup/SwiftSoup 的 `Evaluator.IndexEquals` 实际用 `element.elementSiblingIndex() == index`
+判断——**`:eq(n)` 匹配的是"该元素在其父节点所有子节点（不分标签）中的兄弟序号"**，
+而不是"在同标签匹配集合里的第 n 个"。这不是 SwiftSoup 与 jsoup 的差异（两者行为一致，
+都是标准 CSS 选择器语义），纯粹是移植过程中构造测试用合成 HTML 时的认知错误，已按正确语义
+重新设计 `Tests/LegadoHTMLEngineTests/AnalyzeByJSoupTests2.swift` 里 `xiaoshuo2016SearchHTML`
+的 DOM 结构（让 `<li>` 的直接子节点顺序与真实规则 `p:eq(2)>a`/`p:eq(3)`/`p:eq(4)` 期望的兄弟位置一致）。
 
 ## XPath 已支持 / 不支持语法表
 
@@ -404,6 +408,20 @@ rg -n "fatalError|try!|\bas!" Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoup
 CSS 选择器解析失败、XPath 语法不支持、HTML 解析失败均抛这些错误，public 方法标 `throws`；
 `AnalyzeByXPath.getString/getStringList` 里 `getResult` 失败（对齐 Kotlin `getResult(xPath)?.let{}` 的
 `null` 分支）保持返回空值/nil，同时记入可选的 `RuleEngineDiagnostics`。
+
+## 第 3 步 + 累计测试规模与 CI（最新，含实测输出）
+
+- AnalyzeByJSoup：`AnalyzeByJSoupTests.swift`（34）+ `AnalyzeByJSoupTests2.swift`（33，含真实规则用例与
+  两个 SwiftSoup Elements bug 的回归测试）；AnalyzeByXPath：`AnalyzeByXPathTests.swift`（52）；
+  `HTMLEnginePublicAPITests.swift`（4）。第 3 步小计 123，连同第 1、2 步共 **252 个测试**。
+- CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
+  - **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
+  - **test-ios-simulator**：`xcodebuild test`，脚本 `scripts/ios_sim_test.sh` 固定 scheme
+    `LegadoBookSource`、自动挑可用 iPhone 模拟器、统计并打印实际执行的测试总数（为 0 则失败）。
+  - 已去掉 Linux job（SwiftSoup/XPath 目标平台仅 iOS 15+ / macOS 本地开发）。
+- **最近一次绿色运行**（commit `61fcb77`，run 36758479905）：
+  - macOS job：`Executed 252 tests, with 0 failures (0 unexpected)`。
+  - iOS 模拟器 job：`conclusion: success`（同样跑全部 252 个测试，`ios_sim_test.sh` 统计通过）。
 
 ## 后续步骤（TODO）
 

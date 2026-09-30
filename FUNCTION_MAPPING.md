@@ -127,7 +127,7 @@
 | `rule.isEmpty` → nil | `testGetStringEmptyRuleNil` |
 | `rules.size==1` + innerRule 命中 | `testInnerRuleWithText`, `testLieyingBookUrlInnerRule` |
 | `rules.size==1` + 无内嵌 + read 是 List → "\n" 拼接 | `testGetStringListJoin` |
-| `rules.size==1` + 无内嵌 + read 是标量 → toString | `testGetStringNumber`, `testGetStringBool`, `testLieyingContentBody`, `testLieyingBookTitle` |
+| `rules.size==1` + 无内嵌 + read 是标量 → toString | `testIntegerNoDecimal`, `testGetStringBool`, `testLieyingContentBody`, `testLieyingBookTitle` |
 | `rules.size==1` + read 抛异常 → 吞掉，返回空 | `testGetStringMissingReturnsEmpty` |
 | 多段 + `||` 短路 | `testOrShortCircuit`, `testOrFallback`, `testMuliAuthorOrChainSyntheticData` |
 | 多段 + `||` 全缺失 → "" | `testOrAllMissing` |
@@ -139,7 +139,7 @@
 | `rule.isEmpty` → 空数组 | `testGetStringListEmptyRule` |
 | `rules.size==1` + innerRule 命中 → add(st) | （经 getString 内嵌路径覆盖，见 `testInnerRuleWithText`） |
 | `rules.size==1` + read 是 List → 逐个 toString | `testLieyingBookListRecursiveWildcard`（间接）, `testStringListAnd` |
-| `rules.size==1` + read 是标量 → add(toString) | `testGetStringNumber`（getString 路径） |
+| `rules.size==1` + read 是标量 → add(toString) | `testIntegerNoDecimal`（getString 路径） |
 | `rules.size==1` + 异常 → 吞掉 | `testGetListMissingEmpty`（同类容错） |
 | 多段 `||` 短路 | `testStringListOr` |
 | 多段 `&&` addAll | `testStringListAnd` |
