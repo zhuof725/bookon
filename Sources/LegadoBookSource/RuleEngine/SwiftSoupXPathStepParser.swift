@@ -137,18 +137,27 @@ extension SwiftSoupXPathEvaluator {
             var terminal: Step.Terminal? = nil
             var nodeTest: Step.NodeTest = .wildcard
 
+            // 这些函数作用于「当前上下文节点自身」（对齐 XPath text()/JsoupXpath 扩展语义）：
+            // 若这一步既没有显式轴前缀、也不是 // 引出的 descendant-or-self，
+            // 须用 selfAxis 而非默认 child，否则会变成"取子元素的文本"而非"取自身的文本"。
+            // 但 //text() 这种由 // 引出的情形要保留 descendantOrSelf（取所有后代的文本）。
             let lower = t.lowercased()
+            let isPlainChildDefault = (axis == .child)  // 未被 axis:: 或 // 覆盖过的默认值
             if lower == "text()" {
                 terminal = .funcText; nodeTest = .wildcard
-                // text() 作为独立末端：轴保持，但节点测试用 wildcard 收集元素，terminal 产出文本
+                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "alltext()" {
                 terminal = .funcAllText
+                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "html()" {
                 terminal = .funcHtml
+                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "outerhtml()" {
                 terminal = .funcOuterHtml
+                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "owntext()" {
                 terminal = .funcOwnText
+                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "node()" {
                 nodeTest = .node
             } else if t == "*" {

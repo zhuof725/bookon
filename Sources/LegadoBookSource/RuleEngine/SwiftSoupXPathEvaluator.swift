@@ -52,8 +52,10 @@ public struct SwiftSoupXPathEvaluator: XPathEvaluator {
             switch n {
             case .element(let e):
                 if seenEls.insert(ObjectIdentifier(e)).inserted { out.append(n) }
-            case .attribute(let name, let value, _):
-                let key = "a:\(name)=\(value)"
+            case .attribute(let name, let value, let owner):
+                // 用 owner 的身份区分不同元素的同名同值属性，避免误去重。
+                let ownerKey = owner.map { String(ObjectIdentifier($0).hashValue) } ?? "nil"
+                let key = "a:\(ownerKey):\(name)=\(value)"
                 if seenOther.insert(key).inserted { out.append(n) }
             case .text(let t):
                 // 文本节点不强制去重（不同元素可能有相同文本），但同一遍内保序即可。
