@@ -148,6 +148,22 @@ final class AnalyzeByJSoupTests2: XCTestCase {
     // 第二次起会因弱引用失效返回空结果（即使目标元素确实存在）。本项目已在
     // ElementsSingle.getElementsSingle 里改用等价的 CSS 选择器（`.className` / `tagName`）
     // 规避，这里用真正会触发该缺陷的「连续两次不同 class 查询」场景做回归测试。
+    func testDebugRawSelectTwice() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let doc = try SwiftSoup.parse(html)
+        let r1 = try doc.select(".a")
+        XCTAssertEqual(r1.size(), 1, "select('.a') 第一次: \(r1.size())")
+        let r2 = try doc.select(".b")
+        XCTAssertEqual(r2.size(), 1, "select('.b') 第二次(直接在doc上，绕过ElementsSingle): \(r2.size())")
+    }
+    func testDebugRawGetElementsByClassTwice() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let doc = try SwiftSoup.parse(html)
+        let r1 = try doc.getElementsByClass("a")
+        XCTAssertEqual(r1.size(), 1, "getElementsByClass('a') 第一次: \(r1.size())")
+        let r2 = try doc.getElementsByClass("b")
+        XCTAssertEqual(r2.size(), 1, "getElementsByClass('b') 第二次: \(r2.size())")
+    }
     func testRegressionConsecutiveClassSelectors() throws {
         let html = "<div class='a'>甲</div><div class='b'>乙</div>"
         let j = try AnalyzeByJSoup(html)
