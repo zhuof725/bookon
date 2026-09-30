@@ -2,7 +2,11 @@
 
 > 自动校验脚本：`scripts/verify_functions.py`（从 `reference/kotlin/analyzeRule` 用正则提取全部 `fun`，
 > 再到 Swift 源码检查同名函数）。**「Kotlin 有但 Swift 没实现的函数」清单：空**（17/17 覆盖）。
-> CI（Linux swift 5.10.1 + macOS swift 5.10）两平台 `swift build` + `swift test` 全绿，**93 tests, 0 failures**。
+> CI（收尾后）：**macOS `swift test` + iOS 模拟器 `xcodebuild test`** 两个 job 全绿，**122 tests, 0 failures**（已按要求去掉 Linux job）。
+>
+> 收尾变更：崩溃写法（fatalError/try!/as!/强制解包/越界）已清零；括号不平衡、下标越界、正则编译失败、
+> getElement 捕获组未参与 → 抛 `RuleEngineError`；`splitRule`/`innerRule`/`trim`/`AnalyzeByRegex.*`/
+> `AnalyzeByJSonPath.get*` 均标 `throws`。新增抛错点测试见下表。
 
 移植范围：仅规则引擎「底座 + 两个最简单后端」——`RuleAnalyzer`、`AnalyzeByRegex`、`AnalyzeByJSonPath`。
 **不含** JSoup / XPath / AnalyzeRule 总调度 / JS / 网络 / UI。第 1 步 API 名称与行为未改动。
@@ -46,7 +50,7 @@
 | `st > end`（分隔符在选择器前） | 选择器前先切 | `testMixedSeparators`, `testMixedSeparatorsOrFirst` |
 | `st > end` 内 `pos > st` → 调二段 | 首段完当前段未完 | `testSeparatorInsideBrackets`（间接） |
 | `st <= end`（分隔符在选择器内）→ chompBalanced | 平衡组保护分隔符 | `testSeparatorInsideBrackets`, `testSeparatorInsideParen`, `testSeparatorNestedBrackets`, `testBalancedBracketBoundary` |
-| chompBalanced 失败 → 抛错 | 括号不平衡 | ⚠️ **无直接测试**：不平衡触发 `fatalError`（对齐 Kotlin 抛 Error），无法用 XCTest 安全断言崩溃；以 `testBalancedBracketBoundary` 作平衡对照。 |
+| chompBalanced 失败 → 抛 `RuleEngineError.unbalanced` | 括号不平衡 | `testUnbalancedBracketThrows`、`testUnbalancedParenThrows`（断言抛出 RuleEngineError）；`testBalancedBracketBoundary` 作平衡对照 |
 | 首白空白保留 | splitRule 不 trim | `testLeadingTrailingWhitespacePreserved` |
 
 ### RuleAnalyzer.splitRule（二段匹配 / splitRuleNext）
@@ -65,7 +69,7 @@
 | `[`/`]` 深度增减 | `testSeparatorInsideBrackets`（code 版经由 splitRule） |
 | depth==0 时 open/close 平衡 | `testInnerRuleNestedBraces`（`{...}` 平衡） |
 | 转义字符 ESC 跳过下一个 | `testEscapeInCode` |
-| 未平衡返回 false | ⚠️ **无直接测试**（同上，崩溃不便断言） |
+| 未平衡 → 上层抛 `RuleEngineError.unbalanced` | `testUnbalancedBracketThrows` |
 
 ### RuleAnalyzer.chompRuleBalanced（code=false）
 | 分支 | 测试 |
@@ -73,7 +77,7 @@
 | 单/双引号切换 | `testEscapeInRuleMode`（引号外转义） |
 | 引号外 `\` 转义下一个 | `testEscapeInRuleMode` |
 | `open`/`close` 深度增减 | `testSeparatorInsideParen`, `testSeparatorNestedBrackets`, `testBalancedBracketBoundary` |
-| 未平衡返回 false | ⚠️ **无直接测试**（崩溃不便断言） |
+| 未平衡 → 上层抛 `RuleEngineError.unbalanced` | `testUnbalancedParenThrows` |
 
 ### RuleAnalyzer.trim
 | 分支 | 测试 |
@@ -105,7 +109,7 @@
 | `!find()` → nil | `testGetElementNoMatchNil` |
 | 最后规则 → 收集 group0..N | `testGetElementSingle`, `testGetElementNoGroup`, `testGetElementChinese`, `testGetElementAllGroupsParticipate` |
 | 非最后规则 → 串接后递归 | `testGetElementMultiLayer` |
-| 最后规则里捕获组未参与 → Kotlin NPE（Swift fatalError） | ⚠️ **无直接测试**：致命路径（对齐 Kotlin `!!` 抛 NPE），以 `testGetElementAllGroupsParticipate` 作对照。 |
+| 最后规则里捕获组未参与 → 抛 `RuleEngineError.regexGroupNotParticipated` | `testGetElementMissingGroupThrows`（断言抛出 + groupIndex==1） |
 | 多行文本 | `testGetElementMultiline` |
 
 ### AnalyzeByRegex.getElements
@@ -154,11 +158,48 @@
 | 多段 `||` 短路 | `testGetListOr` |
 | 多段 `&&` addAll | `testGetListAnd` |
 | 多段 `%%` 交错 | `testGetListPercentInterleave` |
+| 切分器错误向上传播 | `testGetListPropagatesUnbalanced` |
+
+### 收尾新增：抛错点（RuleEngineError）
+| 抛错点 | 测试 |
+|---|---|
+| RuleAnalyzer 括号不平衡（`[`）| `testUnbalancedBracketThrows` |
+| RuleAnalyzer 括号不平衡（`(`）| `testUnbalancedParenThrows` |
+| RuleAnalyzer trim 越界 | `testTrimOutOfBoundsThrows` |
+| innerRule(start,end) 回调返回 nil → 拼 "null" | `testInnerRuleStartEndReturnsNilAppendsNullLiteral` |
+| AnalyzeByRegex 正则编译失败（getElement）| `testGetElementBadPatternThrows` |
+| AnalyzeByRegex 正则编译失败（getElements）| `testGetElementsBadPatternThrows` |
+| AnalyzeByRegex getElement 捕获组未参与 | `testGetElementMissingGroupThrows` |
+| getString 切分器错误传播 | `testGetStringPropagatesUnbalanced` |
+| getList 切分器错误传播 | `testGetListPropagatesUnbalanced` |
+| ctx.read 失败记入诊断（仍返回空）| `testDiagnosticsRecordedOnReadFailure` |
+
+### 收尾新增：数字精度 / 键顺序
+| 点 | 测试 |
+|---|---|
+| 19 位整数原样 | `testBigIntegerExact` |
+| `1.0` → "1.0" | `testDoubleOnePointZero` |
+| `1.5` → "1.5" | `testDoubleOnePointFive` |
+| 整数无小数点 | `testIntegerNoDecimal` |
+| 负数 | `testNegativeNumber` |
+| 大整数（Int64.max）| `testLargeInteger` |
+| 科学计数法 → Double | `testScientificNotation` |
+| `$.obj.*` 键顺序 | `testObjectWildcardKeyOrder` |
+| `$..*` 顺序 | `testRecursiveWildcardKeyOrder` |
+| getObject 紧凑输出键顺序 | `testGetObjectCompactKeyOrder` |
+
+### 收尾新增：七猫真实规则（≥5）
+| 真实规则 | 测试 |
+|---|---|
+| `data.books`（无 $ 前缀）| `testQimoBookList` |
+| `original_title` | `testQimoName` |
+| `original_author` | `testQimoAuthor` |
+| `ptags`/`image_link`/`words_num` | `testQimoOtherSearchFields` |
+| `data.chapter_lists`/`title`/`id` | `testQimoTocRules` |
+| `book_tag_list[*].title` | `testQimoBookInfoTagList` |
+| 真实文件加载 | `testQimoRealFileLoads` |
 
 ## 说明：无对应测试的分支（汇总）
-1. `chompBalanced` 未平衡 → 抛错/`fatalError`：崩溃路径，XCTest 无法安全断言，以平衡用例作对照。
-2. `AnalyzeByRegex.getElement` 最后规则里捕获组未参与 → Kotlin NPE / Swift `fatalError`：同上。
 
-以上两条都是「对齐 Kotlin 致命行为」的路径（Kotlin 分别抛 Error / NPE），不是本移植新增行为，
-因崩溃路径不便用 XCTest 安全断言而未写直接用例，均以「平衡 / 全组参与」的正常路径作对照。
-除此之外，所有 when/if/else 分支均有对应测试。
+**无。** 所有 when/if/else 分支均有对应测试——包括收尾后由「致命路径」转为「抛 RuleEngineError」的
+四类错误点（括号不平衡、下标越界、正则编译失败、捕获组未参与），现在都有 `XCTAssertThrowsError` 断言其抛出。

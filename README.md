@@ -133,6 +133,18 @@ Kotlin 用的是 **Jayway JsonPath**（JVM 库，无法直接用于 Swift/iOS/Li
 
 > 选型结论：**自实现子集 `DefaultJSONPathEvaluator`**，协议隔离，便于替换。
 
+### Jayway JsonProvider 确认（对象/数组转字符串格式、数字、键顺序）
+
+去 Kotlin 源码确认：`AnalyzeByJSonPath.parse` 用的是 `JsonPath.parse(json)`，即 Jayway 的
+**默认 Configuration**（`utils/JsonExtensions.kt` 里那个 `SUPPRESS_EXCEPTIONS` 的 ParseContext 是另一处工具，
+`AnalyzeByJSonPath` 未使用）。Jayway 默认 provider 是 **json-smart（`JsonSmartJsonProvider`）**，因此：
+- **对象有序**：json-smart 用 `net.minidev.json.JSONObject`（`LinkedHashMap`），保留 JSON 文本键顺序。
+  → 本移植用保序的 `JSONValue.OrderedObject` 对齐。
+- **数字**：整数解析为 `Long`（`toString` 无小数点、19 位精确），小数解析为 `Double`（`1.0`→`"1.0"`）。
+  → 本移植 `JSONValue` 拆 `int(Int64)` / `double(Double)`，用自实现保序解析器直接解析数字文本，不经 `Double` 丢精度。
+- **对象/数组 `toString`**：json-smart 输出**紧凑 JSON**（`{"k":v,...}`，键值无空格）。
+  → 本移植 `compactJSONString` 输出同样的紧凑、保序格式。
+
 ### 已支持 / 不支持的 JSONPath 语法
 
 | 语法 | 示例 | 支持 |
@@ -154,25 +166,66 @@ Kotlin 用的是 **Jayway JsonPath**（JVM 库，无法直接用于 Swift/iOS/Li
 | **下标含表达式 / 逗号多下标** | `$.a[0,2]` | ❌ **不支持** |
 | **步长切片** | `$.a[0:6:2]` | ❌ **不支持** |
 | **`@`(当前节点根)作为路径根** | `@.x` 作为顶层 | ❌ **不支持**（仅过滤器内 `@.` 支持） |
+| 无 `$` 前缀的裸路径 | `data.books`、`original_author` | ✅（Jayway/legado 容忍；七猫书源即此写法） |
 
 > 不支持的语法在解析时抛 `JSONPathError.unsupportedSyntax`；`AnalyzeByJSonPath` 会（如同 Kotlin 吞异常）
 > 返回空值，并把错误记入可选的 `RuleEngineDiagnostics`（默认关闭）。
+>
+> **对象键顺序**：`$.obj.*` / `$..*` 等通配结果按 JSON 文本顺序返回（对齐 Jayway 有序语义），
+> 有测试 `testObjectWildcardKeyOrder` / `testRecursiveWildcardKeyOrder` / `testGetObjectCompactKeyOrder` 固定。
+> **数字精度**：19 位整数原样输出、`1.0`→`"1.0"`、`1.5`→`"1.5"`、负数/大整数/科学计数法各有测试固定。
 
-## 非致命错误：诊断而非静默 / 抛出
+## 错误处理：无崩溃、抛 Swift Error、非致命走诊断
 
-Kotlin 里 `AnalyzeByJSonPath` 用 `try-catch` + `e.printOnDebug()` 吞掉的异常（如 JSONPath 读取失败），
-本移植**保持返回空值的行为不变**，同时提供可选的 `RuleEngineDiagnostics` 收集器（默认 `nil`，不收集、不影响返回值）。
-构造时传入即可记录：`AnalyzeByJSonPath(json, diagnostics: collector)` / `AnalyzeByRegex.getElement(..., diagnostics: collector)`。
+本轮收尾把所有会让 App 崩溃的写法全部消除，改为：
 
-> ⚠️ 两处「致命」路径按 Kotlin 原行为复刻（非本移植新增）：`RuleAnalyzer` 括号不平衡（Kotlin 抛 `Error`）、
-> `AnalyzeByRegex.getElement` 最后规则里捕获组未参与匹配（Kotlin `group(i)!!` 抛 NPE）——Swift 用 `fatalError` 触发。
+**会抛 `RuleEngineError`（对齐 Kotlin 会向上传播的异常）：**
+- `RuleAnalyzer` 括号/平衡组不平衡（Kotlin 抛 `Error`）→ `RuleEngineError.unbalanced`。
+- `RuleAnalyzer` 下标越界 / `trim()` 越界（Kotlin `queue[pos]`/`substring` 抛异常）→ `RuleEngineError.indexOutOfBounds`。
+- `AnalyzeByRegex` 正则编译失败（Kotlin `Pattern.compile` 抛异常）→ `RuleEngineError.regexCompileFailed`。
+- `AnalyzeByRegex.getElement` 最后规则里捕获组未参与匹配（Kotlin `group(i)!!` 抛 NPE）→ `RuleEngineError.regexGroupNotParticipated`。
+
+因 Kotlin 里 `splitRule` 不在 try 内、异常会向上传播，Swift 对应 public 方法都标 `throws`：
+`RuleAnalyzer.splitRule/innerRule/trim`、`AnalyzeByRegex.getElement/getElements`、
+`AnalyzeByJSonPath.getString/getStringList/getList/getObject`。
+
+**保持吞掉并记录（对齐 Kotlin `try-catch`+`printOnDebug`）：**
+- `AnalyzeByJSonPath` 里 `ctx.read` 读取失败：仍返回空值（`""`/`[]`/`nil`），
+  同时记入可选的 `RuleEngineDiagnostics`（默认 `nil`，不收集、不影响返回值）。
+  构造时传入即可：`AnalyzeByJSonPath(json, diagnostics: collector)`。
+
+**全仓库审计（命令与结果）：**
+```
+rg -n "fatalError" Sources     # 仅注释命中，代码 0 处
+rg -n "try!" Sources           # 无
+rg -n '\bas!' Sources          # 无
+rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：无
+```
+`fatalError` / `try!` / `as!` / 强制解包 / 可能越界的数组访问：**代码中均已清零**（`fatalError` 只在注释里描述 Kotlin 行为）。
+
+## 与 Kotlin 已知差异
+
+| # | 位置 | Kotlin 行为 | 本移植行为 | 说明 |
+|---|---|---|---|---|
+| 1 | 括号不平衡 | `throw Error("…后未平衡")`（未捕获则崩） | 抛 `RuleEngineError.unbalanced`（message 同为 "…后未平衡"） | 语义一致，收敛为可捕获的 Swift Error，不崩溃 |
+| 2 | 下标越界 | `StringIndexOutOfBoundsException` | 抛 `RuleEngineError.indexOutOfBounds` | 同上 |
+| 3 | 正则编译失败 | `PatternSyntaxException` | 抛 `RuleEngineError.regexCompileFailed` | 同上 |
+| 4 | getElement 捕获组未参与 | `group(i)!!` 抛 NPE | 抛 `RuleEngineError.regexGroupNotParticipated` | 同上；getElements 仍取 `""`（与 Kotlin `?: ""` 一致） |
+| 5 | `innerRule(start,end)` 回调返回 null | `st.append(前缀 + null)` → 拼接字面量 `"null"` | `frv ?? "null"`，同样拼接 `"null"` | **精确对齐**（易被误写成 `?? ""`，已用测试 `testInnerRuleStartEndReturnsNilAppendsNullLiteral` 固定） |
+| 6 | `innerRule("{$.")` 回调返回 null/空 | `!frv.isNullOrEmpty()` 才拼接，否则跳过 | `if let frv, !frv.isEmpty` 才拼接 | 一致 |
+| 7 | 超过 Int64 的纯整数 | json-smart 用 `BigInteger`，精确 | 目前退回失败（解析返回 nil）→ 该值读取按空处理 | ⚠️ **已知限制**：19 位内（≤`Int64.max`）精确；超过 Int64 的超大整数不支持，已在此列出（书源实际未见） |
+| 8 | 浮点 `toString` | Java `Double.toString`（最短往返） | 整数值浮点输出 `"x.0"`，其余用 Swift `String(Double)` | 常见小数一致；极端边界（非常长的尾数）可能与 Java 最短表示有细微差别，如遇到再对齐 |
+
+> 除以上 8 条，暂无其它已知不一致。第 7、8 条为如实标注的边界差异，不影响真实书源用例。
 
 ## 样本诚实标注
 
 - `synthetic_lieying_like.json`、以及测试里各内联 JSON：**合成样本，非真实数据**（文件名 `synthetic_` 前缀 +
   文件内 `_SAMPLE_KIND` 字段 + 测试注释三处标注）。
 - `Resources/real/muli_real_source.json`（🍅木里番茄）、`Resources/real/qimo_real_source.json`（七猫小说）：
-  **真实书源，来源：用户提供**，放在 `real/` 目录。
+  **真实书源，来源：用户提供**，放在 `real/` 目录。七猫的 `ruleSearch`/`ruleToc`/`ruleBookInfo` 里的
+  纯 JSONPath 规则（`data.books`、`original_author`、`book_tag_list[*].title`、`data.chapter_lists` 等）
+  用于 6+ 个测试（`testQimo*`）——**规则真实、数据为按规则形状构造的合成 JSON**，已在注释标注。
 - 用真实书源『规则文本』+ 合成『数据』的测试（如木里的 `$.author||...` 短路），已在注释里注明「规则真实 / 数据合成」。
 
 ## 函数与分支覆盖
@@ -180,10 +233,17 @@ Kotlin 里 `AnalyzeByJSonPath` 用 `try-catch` + `e.printOnDebug()` 吞掉的异
 见 [FUNCTION_MAPPING.md](FUNCTION_MAPPING.md)。`scripts/verify_functions.py` 自动从 Kotlin 源码提取全部 `fun` 校验，
 **「Kotlin 有但 Swift 没实现的函数」清单为空**（17/17）。分支→测试对照表见该文件，未覆盖分支已明确标出。
 
-## 第 2 步测试规模
+## 第 2 步测试规模与 CI
 
-RuleAnalyzer 34 + AnalyzeByRegex 12 + AnalyzeByJSonPath 28 + RuleEnginePublicAPI 5，
-连同第 1 步共 **93 个测试**，Linux (swift 5.10.1) 与 macOS (swift 5.10) 两平台 `swift build` + `swift test` 全绿。
+RuleAnalyzer 38 + AnalyzeByRegex 15 + AnalyzeByJSonPath 47 + RuleEnginePublicAPI 5，
+连同第 1 步共 **122 个测试**。
+
+CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
+- **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
+- **test-ios-simulator**：`xcodebuild test` 在可用的 iPhone 模拟器上跑全部测试 target（脚本 `scripts/ios_sim_test.sh` 自动挑 scheme + 模拟器 UDID）。
+- 已按要求**去掉 Linux job**。
+
+最近一次绿色运行：macOS `Executed 122 tests, with 0 failures`；iOS 模拟器 `** TEST SUCCEEDED **`（全部 target 0 失败）。
 
 ## 后续步骤（TODO）
 
