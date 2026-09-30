@@ -93,7 +93,7 @@ public struct SwiftSoupXPathEvaluator: XPathEvaluator {
 
     /// 求值「不含顶层 `|`」的单个表达式：可能是函数调用，也可能是普通路径。
     private func evaluateSingle(_ expr: String) throws -> [Node] {
-        if let funcResult = try XPathParser.tryEvalTopLevelFunction(expr, roots: roots, evaluator: self) {
+        if let funcResult = try SwiftSoupXPathEvaluator.tryEvalTopLevelFunction(expr, roots: roots, evaluator: self) {
             return [funcResult]
         }
         let steps = try XPathParser.parse(expr)

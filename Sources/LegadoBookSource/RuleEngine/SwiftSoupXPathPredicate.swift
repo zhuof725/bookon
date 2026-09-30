@@ -44,8 +44,8 @@ extension SwiftSoupXPathEvaluator {
             case function(FuncPred)                     // contains(...)/starts-with(...)/normalize-space(...)
             case and([Predicate])
             case or([Predicate])
-            case not(Predicate)                                       // not(...)
-            case funcCompare(PredicateFuncCall, CompareOp, String)     // count(...)=3 / string(...)='x' 等
+            indirect case not(Predicate)                                 // not(...)
+            case funcCompare(PredicateFuncCall, CompareOp, String)        // count(...)=3 / string(...)='x' 等
         }
         enum CompareOp { case eq, ne }
         struct FuncPred {
