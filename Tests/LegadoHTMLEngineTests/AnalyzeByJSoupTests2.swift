@@ -182,6 +182,49 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         let parts = try ra.splitRule("&&", "||", "%%")
         XCTAssertEqual(parts, ["class.b@text"], "单规则(无分隔符)时 splitRule 应原样返回一个元素，实际 \(parts)")
     }
+    func testDebugManualReplicateGetStringList() throws {
+        let html = "<div class='a'>甲</div><div class='b'>乙</div>"
+        let j = try AnalyzeByJSoup(html)
+        let ruleStr = "class.b@text"
+
+        // 手动复刻 getStringList 的每一步，逐步断言
+        let sourceRule = AnalyzeByJSoup.SourceRule(ruleStr)
+        XCTAssertFalse(sourceRule.isCss)
+        XCTAssertEqual(sourceRule.elementsRule, "class.b@text")
+        XCTAssertFalse(sourceRule.elementsRule.isEmpty)
+
+        let ruleAnalyzes = RuleAnalyzer(sourceRule.elementsRule)
+        let ruleStrS = try ruleAnalyzes.splitRule("&&", "||", "%%")
+        XCTAssertEqual(ruleStrS, ["class.b@text"], "ruleStrS 实际：\(ruleStrS)")
+        XCTAssertEqual(ruleStrS.count, 1)
+
+        var results: [[String]] = []
+        for ruleStrX in ruleStrS {
+            XCTAssertEqual(ruleStrX, "class.b@text", "ruleStrX 实际：'\(ruleStrX)'")
+            let temp: [String]?
+            if sourceRule.isCss {
+                XCTFail("不应进入 CSS 分支")
+                temp = nil
+            } else {
+                temp = try j.getResultList(ruleStrX)
+            }
+            XCTAssertEqual(temp, ["乙"], "temp 实际：\(String(describing: temp))")
+            if let temp = temp, !temp.isEmpty {
+                results.append(temp)
+            }
+        }
+        XCTAssertEqual(results, [["乙"]], "results 实际：\(results)")
+
+        var textS: [String] = []
+        if !results.isEmpty {
+            for temp in results { textS.append(contentsOf: temp) }
+        }
+        XCTAssertEqual(textS, ["乙"], "手动复刻最终结果：\(textS)")
+
+        // 最后对比真实方法调用
+        let real = try j.getStringList(ruleStr)
+        XCTAssertEqual(real, ["乙"], "真实 getStringList 结果：\(real)")
+    }
 
     // MARK: - 十三、真实规则（规则真实、数据合成）—— 🔥小说2016
 
