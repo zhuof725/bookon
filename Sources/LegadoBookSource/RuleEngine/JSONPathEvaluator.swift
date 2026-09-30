@@ -12,29 +12,75 @@
 import Foundation
 
 /// JSON 值模型（供 JSONPath 引擎在内部传递，避免 Any 到处飞）。
+///
+/// 数字拆成 int(Int64) 与 double(Double) 两种，保留「整数字面量 / 小数字面量」的区别，
+/// 对齐 Kotlin 侧 Jayway 默认的 json-smart provider（整数解析为 Long、小数解析为 Double）。
+///
+/// ⚠️ 对象用「保序」结构 OrderedObject 承载，保留 JSON 文本里的键顺序
+/// （Jayway/json-smart 用 LinkedHashMap，是有序的）。
 public enum JSONValue: Equatable {
-    case object([String: JSONValue])
+    case object(OrderedObject)
     case array([JSONValue])
     case string(String)
-    case number(Double)
+    case int(Int64)
+    case double(Double)
     case bool(Bool)
     case null
 
-    /// 从 Foundation 的 JSONSerialization 结果构造。
+    /// 保序 JSON 对象：既能按键取值，又保留插入（=JSON 文本）顺序。
+    public struct OrderedObject: Equatable {
+        public private(set) var keys: [String]
+        private var map: [String: JSONValue]
+
+        public init() { keys = []; map = [:] }
+        public init(_ pairs: [(String, JSONValue)]) {
+            keys = []; map = [:]
+            for (k, v) in pairs { self[k] = v }
+        }
+
+        public subscript(_ key: String) -> JSONValue? {
+            get { map[key] }
+            set {
+                if let nv = newValue {
+                    if map[key] == nil { keys.append(key) }
+                    map[key] = nv
+                } else {
+                    if map[key] != nil { keys.removeAll { $0 == key } }
+                    map[key] = nil
+                }
+            }
+        }
+
+        /// 按 JSON 文本顺序遍历的 (键, 值) 序列。
+        public var orderedPairs: [(String, JSONValue)] {
+            keys.compactMap { k in map[k].map { (k, $0) } }
+        }
+        /// 按顺序的值序列。
+        public var orderedValues: [JSONValue] { keys.compactMap { map[$0] } }
+        public var count: Int { keys.count }
+    }
+
+    /// 从 Foundation 的 JSONSerialization 结果构造（数字精度处理见下）。
     public init(fromFoundation any: Any) {
         switch any {
         case let s as String:
             self = .string(s)
-        case let b as Bool where JSONValue.isBooleanNSNumber(any):
-            // 区分布尔与数字：JSONSerialization 把 JSON 的 true/false 解析成 objCType 为 "c"
-            // 的 NSNumber，把整数解析成 "q" 等。用 objCType == "c" 判定布尔，
-            // 跨平台（Apple / Linux swift-corelibs-foundation）均可用，避免依赖 CoreFoundation 的
-            // CFBooleanGetTypeID（Linux 未暴露）。
-            self = .bool(b)
         case let n as NSNumber:
-            self = .number(n.doubleValue)
+            // 用 objCType 区分布尔 / 整数 / 小数，避免统一走 doubleValue 丢精度：
+            //  - "c"（char/BOOL）-> 布尔
+            //  - 浮点（"f"/"d"）-> double
+            //  - 其它（整数 "q"/"l"/"i"/"s"...）-> int(Int64)，Int64 范围内精确（如 19 位整数）
+            let t = String(cString: n.objCType)
+            if t == "c" {
+                self = .bool(n.boolValue)
+            } else if t == "f" || t == "d" {
+                self = .double(n.doubleValue)
+            } else {
+                self = .int(n.int64Value)
+            }
         case let d as [String: Any]:
-            var o: [String: JSONValue] = [:]
+            // 普通字典无序；用 OrderedObject 承载（顺序由 orderedInit 负责，见 parse）。
+            var o = OrderedObject()
             for (k, v) in d { o[k] = JSONValue(fromFoundation: v) }
             self = .object(o)
         case let a as [Any]:
@@ -46,73 +92,85 @@ public enum JSONValue: Equatable {
         }
     }
 
-    /// 判断一个来自 JSONSerialization 的值是否是「布尔」NSNumber。
-    /// JSONSerialization 把 JSON true/false 解析成 objCType 为 "c" 的 NSNumber。
-    private static func isBooleanNSNumber(_ any: Any) -> Bool {
-        guard let n = any as? NSNumber else { return false }
-        return String(cString: n.objCType) == "c"
-    }
-
-    /// 解析 JSON 文本。
+    /// 解析 JSON 文本。用自实现的保序解析器（保留对象键顺序 + 整数/小数区别 + 大整数精度），
+    /// 不经过 JSONSerialization → NSNumber.doubleValue，避免丢精度与丢顺序。
     public static func parse(_ jsonString: String) -> JSONValue? {
-        guard let data = jsonString.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
-        else { return nil }
-        return JSONValue(fromFoundation: obj)
+        var parser = OrderedJSONParser(jsonString)
+        return parser.parse()
     }
 
     /// 对应 Kotlin/Jayway 里把读到的对象 toString() 的效果：
-    /// 标量转成其字符串表示；对象/数组转成紧凑 JSON。
+    /// 标量转成其字符串表示；对象/数组转成紧凑 JSON（json-smart 风格）。
     public var stringValue: String {
         switch self {
         case .string(let s): return s
         case .bool(let b): return b ? "true" : "false"
-        case .number(let n):
-            // 整数值不带小数点（贴近 Jayway 对整型的 toString）。
-            if n == n.rounded() && abs(n) < 9.007e15 {
-                return String(Int64(n))
-            }
-            return String(n)
+        case .int(let i):
+            // 整数字面量输出整数（19 位大整数原样、负数原样）。
+            return String(i)
+        case .double(let d):
+            return JSONValue.formatDouble(d)
         case .null: return "null"
         case .object, .array:
             return JSONValue.compactJSONString(self)
         }
     }
 
-    /// 生成紧凑 JSON 字符串（用于对象/数组 toString）。
+    /// 浮点格式化，对齐 Java Double.toString 的常见情形：整数值的浮点输出带 ".0"
+    /// （如 1.0 -> "1.0"，1000.0 -> "1000.0"），非整数输出其十进制表示（如 1.5 -> "1.5"）。
+    static func formatDouble(_ d: Double) -> String {
+        if d.isNaN { return "NaN" }
+        if d.isInfinite { return d > 0 ? "Infinity" : "-Infinity" }
+        if d == d.rounded() && abs(d) < 1e16 {
+            // 整数值的浮点：Java 输出 "x.0"
+            return String(format: "%.1f", d)
+        }
+        // 非整数：用 Swift 默认最短往返表示（与 Java 的最短表示在常见小数上一致）。
+        return String(d)
+    }
+
+    /// 生成紧凑 JSON 字符串（用于对象/数组 toString），保序、自控数字格式（不经 JSONSerialization）。
     static func compactJSONString(_ v: JSONValue) -> String {
-        let foundation = v.toFoundation()
-        if let data = try? JSONSerialization.data(withJSONObject: wrapForSerialization(foundation), options: []),
-           let s = String(data: data, encoding: .utf8) {
-            // 去掉包裹层
-            return unwrapSerialized(s)
-        }
-        return "\(foundation)"
-    }
-
-    // JSONSerialization 顶层必须是数组/字典；标量需包裹。这里对象/数组可直接序列化。
-    private static func wrapForSerialization(_ any: Any) -> Any {
-        if any is [Any] || any is [String: Any] { return any }
-        return [any]
-    }
-    private static func unwrapSerialized(_ s: String) -> String { s }
-
-    /// 转回 Foundation 对象（供序列化）。
-    public func toFoundation() -> Any {
-        switch self {
-        case .string(let s): return s
-        case .number(let n):
-            if n == n.rounded() && abs(n) < 9.007e15 { return Int64(n) }
-            return n
-        case .bool(let b): return b
-        case .null: return NSNull()
-        case .object(let o):
-            var d: [String: Any] = [:]
-            for (k, v) in o { d[k] = v.toFoundation() }
-            return d
+        switch v {
+        case .string(let s):
+            return "\"\(escapeJSONString(s))\""
+        case .int(let i):
+            return String(i)
+        case .double(let d):
+            return formatDouble(d)
+        case .bool(let b):
+            return b ? "true" : "false"
+        case .null:
+            return "null"
         case .array(let a):
-            return a.map { $0.toFoundation() }
+            return "[" + a.map { compactJSONString($0) }.joined(separator: ",") + "]"
+        case .object(let o):
+            let body = o.orderedPairs
+                .map { "\"\(escapeJSONString($0.0))\":\(compactJSONString($0.1))" }
+                .joined(separator: ",")
+            return "{" + body + "}"
         }
+    }
+
+    /// JSON 字符串转义（紧凑输出用）。
+    static func escapeJSONString(_ s: String) -> String {
+        var out = ""
+        for ch in s.unicodeScalars {
+            switch ch {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default:
+                if ch.value < 0x20 {
+                    out += String(format: "\\u%04x", ch.value)
+                } else {
+                    out.unicodeScalars.append(ch)
+                }
+            }
+        }
+        return out
     }
 }
 

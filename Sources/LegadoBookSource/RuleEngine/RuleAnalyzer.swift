@@ -13,6 +13,10 @@
 //  范围重建 String，与 Kotlin 行为一致。分隔符（&&、||、%%、{$.、[]、()、@、引号、\）
 //  都是 BMP ASCII，单个 UTF-16 单位，因此比较与 Kotlin 完全对齐。
 //
+//  ⚠️ 崩溃收敛：原先用 fatalError 表达的「括号不平衡」、以及可能的下标越界，
+//  统一改为抛 RuleEngineError（对齐 Kotlin 会向上传播的异常）。因此 splitRule /
+//  splitRuleNext / innerRule / trim 均标 throws。
+//
 
 import Foundation
 
@@ -47,15 +51,30 @@ public final class RuleAnalyzer {
 
     private var queueLength: Int { queue.count }
 
+    /// 安全读取 queue[i]；越界抛错（对齐 Kotlin queue[pos] 越界抛异常）。
+    private func charAt(_ i: Int) throws -> UInt16 {
+        guard i >= 0 && i < queueLength else {
+            throw RuleEngineError.indexOutOfBounds("charAt(\(i)), length=\(queueLength)")
+        }
+        return queue[i]
+    }
+
     /// 把 UTF-16 范围 [from, to) 重建为 String（等价 Kotlin queue.substring(from, to)）。
-    private func substring(_ from: Int, _ to: Int) -> String {
-        if from >= to { return "" }
+    /// 起点>终点或越界时抛错（对齐 Kotlin substring 抛 StringIndexOutOfBounds）。
+    private func substring(_ from: Int, _ to: Int) throws -> String {
+        guard from >= 0, to <= queueLength, from <= to else {
+            throw RuleEngineError.indexOutOfBounds("substring(\(from), \(to)), length=\(queueLength)")
+        }
+        if from == to { return "" }
         return String(utf16CodeUnits: Array(queue[from..<to]), count: to - from)
     }
 
-    /// 等价 Kotlin queue.substring(from)。
-    private func substring(_ from: Int) -> String {
-        if from >= queueLength { return "" }
+    /// 等价 Kotlin queue.substring(from)。越界抛错。
+    private func substring(_ from: Int) throws -> String {
+        guard from >= 0, from <= queueLength else {
+            throw RuleEngineError.indexOutOfBounds("substring(\(from)), length=\(queueLength)")
+        }
+        if from == queueLength { return "" }
         return String(utf16CodeUnits: Array(queue[from..<queueLength]), count: queueLength - from)
     }
 
@@ -90,11 +109,12 @@ public final class RuleAnalyzer {
     // MARK: - trim / reSetPos
 
     /// 修剪当前规则之前的 "@" 或者空白符。
-    public func trim() {
+    /// Kotlin 里 `queue[pos]` 越界会抛异常；这里对齐为抛 RuleEngineError。
+    public func trim() throws {
         // 在 while 里重复设置 start 和 startX 会拖慢执行速度，所以先判断是否存在需要修剪的字段，最后再一次性设置
-        if queue[pos] == chAt || queue[pos] < chBang {
+        if try charAt(pos) == chAt || (try charAt(pos)) < chBang {
             pos += 1
-            while queue[pos] == chAt || queue[pos] < chBang { pos += 1 }
+            while try charAt(pos) == chAt || (try charAt(pos)) < chBang { pos += 1 }
             start = pos   // 开始点推移
             startX = pos  // 规则起始点推移
         }
@@ -231,29 +251,30 @@ public final class RuleAnalyzer {
     /// 首段匹配，elementsType 为空。
     ///
     /// 对应 Kotlin: tailrec fun splitRule(vararg split: String): ArrayList<String>
+    /// - Throws: RuleEngineError.unbalanced（括号不平衡）/ .indexOutOfBounds。
     @discardableResult
-    public func splitRule(_ split: String...) -> [String] {
-        return splitRule(split)
+    public func splitRule(_ split: String...) throws -> [String] {
+        return try splitRule(split)
     }
 
     /// 数组入参版本（便于 public 调用方直接传数组，语义与可变参数版一致）。
     @discardableResult
-    public func splitRule(_ split: [String]) -> [String] {
+    public func splitRule(_ split: [String]) throws -> [String] {
         // 用循环替代 Kotlin 的 tailrec（尾递归），行为等价。
-        var split = split
+        let split = split
         while true {
             if split.count == 1 {
                 elementsType = split[0]  // 设置分割字串
                 let et = Array(elementsType.utf16)
                 if !consumeTo(et) {
-                    rule.append(substring(startX))
+                    rule.append(try substring(startX))
                     return rule
                 } else {
                     step = et.count  // 设置分隔符长度
-                    return splitRuleNext()
+                    return try splitRuleNext()
                 }  // 递归匹配
             } else if !consumeToAny(split.map { Array($0.utf16) }) {  // 未找到分隔符
-                rule.append(substring(startX))
+                rule.append(try substring(startX))
                 return rule
             }
 
@@ -264,38 +285,38 @@ public final class RuleAnalyzer {
                 let st = findToAny(charsBracketParenOpen)  // 查找筛选器位置
 
                 if st == -1 {
-                    rule = [substring(startX, end)]  // 压入分隔的首段规则到数组
+                    rule = [try substring(startX, end)]  // 压入分隔的首段规则到数组
 
-                    elementsType = substring(end, end + step)  // 设置组合类型
+                    elementsType = try substring(end, end + step)  // 设置组合类型
                     pos = end + step  // 跳过分隔符
 
                     let et = Array(elementsType.utf16)
                     while consumeTo(et) {  // 循环切分规则压入数组
-                        rule.append(substring(start, pos))
+                        rule.append(try substring(start, pos))
                         pos += step  // 跳过分隔符
                     }
 
-                    rule.append(substring(pos))  // 将剩余字段压入数组末尾
+                    rule.append(try substring(pos))  // 将剩余字段压入数组末尾
                     return rule
                 }
 
                 if st > end {  // 先匹配到 st，表明分隔字串不在选择器中，将选择器前分隔字串分隔的字段依次压入数组
-                    rule = [substring(startX, end)]  // 压入分隔的首段规则到数组
+                    rule = [try substring(startX, end)]  // 压入分隔的首段规则到数组
 
-                    elementsType = substring(end, end + step)  // 设置组合类型
+                    elementsType = try substring(end, end + step)  // 设置组合类型
                     pos = end + step  // 跳过分隔符
 
                     let et = Array(elementsType.utf16)
                     while consumeTo(et) && pos < st {  // 循环切分规则压入数组
-                        rule.append(substring(start, pos))
+                        rule.append(try substring(start, pos))
                         pos += step  // 跳过分隔符
                     }
 
                     if pos > st {
                         startX = start
-                        return splitRuleNext()  // 首段已匹配,但当前段匹配未完成,调用二段匹配
+                        return try splitRuleNext()  // 首段已匹配,但当前段匹配未完成,调用二段匹配
                     } else {  // 执行到此，证明后面再无分隔字符
-                        rule.append(substring(pos))  // 将剩余字段压入数组末尾
+                        rule.append(try substring(pos))  // 将剩余字段压入数组末尾
                         return rule
                     }
                 }
@@ -304,7 +325,7 @@ public final class RuleAnalyzer {
                 let next: UInt16 = queue[pos] == chBracketOpen ? chBracketClose : chParenClose  // 平衡组末尾字符
 
                 if !chompBalanced(queue[pos], next) {  // 拉出一个筛选器,不平衡则报错
-                    fatalErrorUnbalanced()
+                    throw RuleEngineError.unbalanced(try substring(0, start))
                 }
 
             } while end > pos
@@ -320,8 +341,8 @@ public final class RuleAnalyzer {
     /// 二段匹配被调用，elementsType 非空（已在首段赋值），直接按 elementsType 查找，比首段更快。
     /// 对应 Kotlin: @JvmName("splitRuleNext") private tailrec fun splitRule(): ArrayList<String>
     @discardableResult
-    private func splitRuleNext() -> [String] {
-        // 用循环替代 tailrec。restartOuter 用来模拟 Kotlin 的 `return splitRule()` 尾递归重启。
+    private func splitRuleNext() throws -> [String] {
+        // 用循环替代 tailrec。continue outer 模拟 Kotlin 的 `return splitRule()` 尾递归重启。
         outer: while true {
             let end = pos    // 记录分隔位置
             pos = start      // 重回开始，启动另一种查找
@@ -330,26 +351,26 @@ public final class RuleAnalyzer {
                 let st = findToAny(charsBracketParenOpen)  // 查找筛选器位置
 
                 if st == -1 {
-                    rule.append(substring(startX, end))  // 压入分隔的首段规则到数组
+                    rule.append(try substring(startX, end))  // 压入分隔的首段规则到数组
                     pos = end + step  // 跳过分隔符
 
                     let et = Array(elementsType.utf16)
                     while consumeTo(et) {  // 循环切分规则压入数组
-                        rule.append(substring(start, pos))
+                        rule.append(try substring(start, pos))
                         pos += step  // 跳过分隔符
                     }
 
-                    rule.append(substring(pos))  // 将剩余字段压入数组末尾
+                    rule.append(try substring(pos))  // 将剩余字段压入数组末尾
                     return rule
                 }
 
                 if st > end {  // 先匹配到 st，表明分隔字串不在选择器中，将选择器前分隔字串分隔的字段依次压入数组
-                    rule.append(substring(startX, end))  // 压入分隔的首段规则到数组
+                    rule.append(try substring(startX, end))  // 压入分隔的首段规则到数组
                     pos = end + step  // 跳过分隔符
 
                     let et = Array(elementsType.utf16)
                     while consumeTo(et) && pos < st {  // 循环切分规则压入数组
-                        rule.append(substring(start, pos))
+                        rule.append(try substring(start, pos))
                         pos += step  // 跳过分隔符
                     }
 
@@ -357,7 +378,7 @@ public final class RuleAnalyzer {
                         startX = start
                         continue outer  // Kotlin: return splitRule() —— 二段匹配重启
                     } else {  // 执行到此，证明后面再无分隔字符
-                        rule.append(substring(pos))  // 将剩余字段压入数组末尾
+                        rule.append(try substring(pos))  // 将剩余字段压入数组末尾
                         return rule
                     }
                 }
@@ -366,7 +387,7 @@ public final class RuleAnalyzer {
                 let next: UInt16 = queue[pos] == chBracketOpen ? chBracketClose : chParenClose  // 平衡组末尾字符
 
                 if !chompBalanced(queue[pos], next) {  // 拉出一个筛选器,不平衡则报错
-                    fatalErrorUnbalanced()
+                    throw RuleEngineError.unbalanced(try substring(0, start))
                 }
 
             } while end > pos
@@ -375,7 +396,7 @@ public final class RuleAnalyzer {
 
             let et = Array(elementsType.utf16)
             if !consumeTo(et) {
-                rule.append(substring(startX))
+                rule.append(try substring(startX))
                 return rule
             } else {
                 continue outer  // Kotlin: splitRule() —— 二段匹配重启
@@ -391,21 +412,22 @@ public final class RuleAnalyzer {
     ///   - startStep: 不属于规则部分的前置字符长度，如 "{$." 中 "{" 不属于规则，故 startStep 为 1
     ///   - endStep: 不属于规则部分的后置字符长度
     ///   - fr: 查找到内嵌规则时，用于解析的函数
+    /// - Throws: RuleEngineError.indexOutOfBounds（substring 越界，对齐 Kotlin）。
     public func innerRule(
         _ inner: String,
         startStep: Int = 1,
         endStep: Int = 1,
         fr: (String) -> String?
-    ) -> String {
+    ) throws -> String {
         var st = ""
         let innerU = Array(inner.utf16)
 
         while consumeTo(innerU) {  // 拉取成功返回 true，pos 后移相应位置，否则返回 false
             let posPre = pos  // 记录 consumeTo 匹配位置
             if chompCodeBalanced(chBraceOpen, chBraceClose) {
-                let frv = fr(substring(posPre + startStep, pos - endStep))
+                let frv = fr(try substring(posPre + startStep, pos - endStep))
                 if let frv = frv, !frv.isEmpty {
-                    st += substring(startX, posPre) + frv  // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串
+                    st += try substring(startX, posPre) + frv  // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串
                     startX = pos  // 记录下次规则起点
                     continue      // 获取内容成功，继续选择下个内嵌规则
                 }
@@ -413,16 +435,20 @@ public final class RuleAnalyzer {
             pos += innerU.count  // 拉出字段不平衡，inner 只是个普通字串，跳到此 inner 后继续匹配
         }
 
-        return startX == 0 ? "" : (st + substring(startX))
+        return startX == 0 ? "" : (st + (try substring(startX)))
     }
 
     /// 替换内嵌规则（起止字符串版）。
     /// - Parameter fr: 查找到内嵌规则时，用于解析的函数
+    ///
+    /// ⚠️ 已知行为（对齐 Kotlin）：Kotlin 里此重载在 fr 返回 null 时，会把字符串 "null"
+    /// 拼接进结果（`st.append(... + frv)`，frv 为 null 时 Kotlin 字符串拼接得到 "null"）。
+    /// 本移植用 `frv ?? "null"` 精确对齐该行为（不是 `?? ""`）。
     public func innerRule(
         _ startStr: String,
         _ endStr: String,
         fr: (String) -> String?
-    ) -> String {
+    ) throws -> String {
         var st = ""
         let startU = Array(startStr.utf16)
         let endU = Array(endStr.utf16)
@@ -431,24 +457,17 @@ public final class RuleAnalyzer {
             pos += startU.count  // 跳过开始字符串
             let posPre = pos     // 记录 consumeTo 匹配位置
             if consumeTo(endU) {
-                let frv = fr(substring(posPre, pos))
-                // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串
-                st += substring(startX, posPre - startU.count) + (frv ?? "")
+                let frv = fr(try substring(posPre, pos))
+                // 压入内嵌规则前的内容，及内嵌规则解析得到的字符串。
+                // Kotlin: st.append(queue.substring(startX, posPre - startStr.length) + frv)
+                // frv 为 null 时 Kotlin 拼接得到字面量 "null"，此处对齐。
+                st += try substring(startX, posPre - startU.count) + (frv ?? "null")
                 pos += endU.count  // 跳过结束字符串
                 startX = pos       // 记录下次规则起点
             }
         }
 
-        return startX == 0 ? substring(0) : (st + substring(startX))
-    }
-
-    // MARK: - 错误处理
-
-    /// 对应 Kotlin: throw Error(queue.substring(0, start) + "后未平衡")
-    /// 保持"报错"语义（Kotlin 是抛 Error）；这里用 fatalError 触发（与 Kotlin 未捕获 Error 一致地终止流程）。
-    /// 注意：上层 AnalyzeByJSonPath 的 splitRule 输入均来自平衡的规则，正常路径不会触发。
-    private func fatalErrorUnbalanced() -> Never {
-        fatalError(substring(0, start) + "后未平衡")
+        return startX == 0 ? (try substring(0)) : (st + (try substring(startX)))
     }
 
     // MARK: - 字符常量（UTF-16 单位，均为 BMP ASCII）

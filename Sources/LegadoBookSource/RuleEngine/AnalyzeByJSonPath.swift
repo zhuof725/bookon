@@ -14,8 +14,12 @@
 //   - getObject：ctx.read（Kotlin 直接返回 Any，不吞异常）。
 //   - getList：ctx.read<ArrayList<Any>>；组合 && / || / %%。异常被吞，返回累积结果。
 //
-//  Kotlin 里 e.printOnDebug() 吞掉的异常，这里改为记入可选的 RuleEngineDiagnostics（默认关闭），
-//  不影响返回值。
+//  异常语义（本轮收尾修正）：
+//   - Kotlin 里 splitRule 不在 try 内，其异常（括号不平衡 / 越界）会向上传播；因此
+//     getString / getStringList / getList / getObject 均标 throws，把 RuleAnalyzer 的
+//     RuleEngineError 向上传播（不再崩溃）。
+//   - Kotlin 里被 catch 吞掉的地方（ctx.read 读取失败）保持吞掉，并记入可选的
+//     RuleEngineDiagnostics（默认关闭），不影响返回值。
 //
 
 import Foundation
@@ -48,15 +52,22 @@ public final class AnalyzeByJSonPath {
     // MARK: - getString
 
     /// 对应 Kotlin: fun getString(rule: String): String?
-    public func getString(_ rule: String) -> String? {
+    /// - Throws: RuleEngineError（切分器括号不平衡/越界，对齐 Kotlin 向上传播）。
+    public func getString(_ rule: String) throws -> String? {
         if rule.isEmpty { return nil }
         var result: String
         let ruleAnalyzes = RuleAnalyzer(rule, code: true)  // 设置平衡组为代码平衡
-        let rules = ruleAnalyzes.splitRule("&&", "||")
+        let rules = try ruleAnalyzes.splitRule("&&", "||")
 
         if rules.count == 1 {
             ruleAnalyzes.reSetPos()  // 将 pos 重置为 0，复用解析器
-            result = ruleAnalyzes.innerRule("{$.") { self.getString($0) }  // 替换所有 {$.rule...}
+            // innerRule 的回调里递归 getString 可能抛错；用一个捕获变量把内层错误带出。
+            var innerError: Error?
+            result = try ruleAnalyzes.innerRule("{$.") { inner in
+                do { return try self.getString(inner) }
+                catch { innerError = error; return nil }
+            }
+            if let e = innerError { throw e }
 
             if result.isEmpty {  // st 为空，表明无成功替换的内嵌规则
                 do {
@@ -81,7 +92,7 @@ public final class AnalyzeByJSonPath {
         } else {
             var textList: [String] = []
             for rl in rules {
-                let temp = getString(rl)
+                let temp = try getString(rl)
                 if let temp = temp, !temp.isEmpty {
                     textList.append(temp)
                     if ruleAnalyzes.elementsType == "||" {
@@ -96,15 +107,21 @@ public final class AnalyzeByJSonPath {
     // MARK: - getStringList
 
     /// 对应 Kotlin: internal fun getStringList(rule: String): List<String>
-    public func getStringList(_ rule: String) -> [String] {
+    /// - Throws: RuleEngineError（切分器错误，对齐 Kotlin 向上传播）。
+    public func getStringList(_ rule: String) throws -> [String] {
         var result: [String] = []
         if rule.isEmpty { return result }
         let ruleAnalyzes = RuleAnalyzer(rule, code: true)  // 设置平衡组为代码平衡
-        let rules = ruleAnalyzes.splitRule("&&", "||", "%%")
+        let rules = try ruleAnalyzes.splitRule("&&", "||", "%%")
 
         if rules.count == 1 {
             ruleAnalyzes.reSetPos()  // 将 pos 重置为 0，复用解析器
-            let st = ruleAnalyzes.innerRule("{$.") { self.getString($0) }  // 替换所有 {$.rule...}
+            var innerError: Error?
+            let st = try ruleAnalyzes.innerRule("{$.") { inner in
+                do { return try self.getString(inner) }
+                catch { innerError = error; return nil }
+            }
+            if let e = innerError { throw e }
             if st.isEmpty {  // st 为空，表明无成功替换的内嵌规则
                 do {
                     let obj = try ctx.read(rule)
@@ -129,7 +146,7 @@ public final class AnalyzeByJSonPath {
         } else {
             var results: [[String]] = []
             for rl in rules {
-                let temp = getStringList(rl)
+                let temp = try getStringList(rl)
                 if !temp.isEmpty {
                     results.append(temp)
                     if !temp.isEmpty && ruleAnalyzes.elementsType == "||" {
@@ -171,11 +188,12 @@ public final class AnalyzeByJSonPath {
     // MARK: - getList
 
     /// 对应 Kotlin: internal fun getList(rule: String): ArrayList<Any>?
-    public func getList(_ rule: String) -> [JSONValue]? {
+    /// - Throws: RuleEngineError（切分器错误，对齐 Kotlin 向上传播）。
+    public func getList(_ rule: String) throws -> [JSONValue]? {
         var result: [JSONValue] = []
         if rule.isEmpty { return result }
         let ruleAnalyzes = RuleAnalyzer(rule, code: true)  // 设置平衡组为代码平衡
-        let rules = ruleAnalyzes.splitRule("&&", "||", "%%")
+        let rules = try ruleAnalyzes.splitRule("&&", "||", "%%")
         if rules.count == 1 {
             do {
                 // 对应 Kotlin: return it.read<ArrayList<Any>>(rules[0])
@@ -195,7 +213,7 @@ public final class AnalyzeByJSonPath {
         } else {
             var results: [[JSONValue]] = []
             for rl in rules {
-                let temp = getList(rl)
+                let temp = try getList(rl)
                 if let temp = temp, !temp.isEmpty {
                     results.append(temp)
                     if !temp.isEmpty && ruleAnalyzes.elementsType == "||" {

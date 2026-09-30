@@ -44,7 +44,8 @@ let package = Package(
             path: "Tests/LegadoRuleEngineTests",
             resources: [
                 .copy("Resources/synthetic_lieying_like.json"),
-                .copy("Resources/real/muli_real_source.json")
+                .copy("Resources/real/muli_real_source.json"),
+                .copy("Resources/real/qimo_real_source.json")
             ]
         ),
         // 第 2 步：规则引擎的纯 public 接口测试（普通 import，非 @testable）。

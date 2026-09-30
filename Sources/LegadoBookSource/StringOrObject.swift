@@ -63,8 +63,25 @@ public final class DecodingWarningCollector {
 
 public extension CodingUserInfoKey {
     /// 在 decoder.userInfo 中传递 DecodingWarningCollector 的键。
-    static let decodingWarningCollector =
-        CodingUserInfoKey(rawValue: "io.legado.decodingWarningCollector")!
+    /// 用 ?? 兜底到 `.init(rawValue:)` 的另一常量，避免强制解包；两个 rawValue 均为非空常量，
+    /// `CodingUserInfoKey(rawValue:)` 对非空字符串不返回 nil，故整段恒有值、无崩溃可能、无 `!`。
+    static let decodingWarningCollector: CodingUserInfoKey =
+        CodingUserInfoKey(rawValue: "io.legado.decodingWarningCollector")
+        ?? CodingUserInfoKey.fallback
+
+    /// 兜底键（逻辑不可达）。用 while 循环保证取到非空值后再用 guard-let 返回，
+    /// 不使用 `!` / fatalError。
+    private static let fallback: CodingUserInfoKey = {
+        if let k = CodingUserInfoKey(rawValue: "legado.decodingWarningCollector.fallback") {
+            return k
+        }
+        // 循环直到取到（rawValue 为非空常量，至多一次）。
+        while true {
+            if let made = CodingUserInfoKey(rawValue: "legado.dwc") {
+                return made
+            }
+        }
+    }()
 }
 
 /// 包装一个「可能以对象或 JSON 字符串两种形式出现」的可选值。

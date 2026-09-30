@@ -10,15 +10,15 @@
 //   - getElement：
 //       · 首个规则若 find() 失败 -> 返回 nil。
 //       · 最后一个规则：收集 group(0..groupCount)，Kotlin 用 `resM.group(i)!!`——
-//         若某捕获组未参与匹配（group 为 null），Kotlin 抛 NPE（会崩）。
-//         Swift 无法用可选签名表达"抛"，为忠实复刻该"致命"语义，遇到未参与的捕获组时
-//         触发 fatalError（等价 Kotlin 未捕获的 NPE 会终止流程）。若提供了诊断收集器，
-//         先记录再触发。⚠️ 这是按 Kotlin 原行为复刻，非本移植新增行为。
+//         若某捕获组未参与匹配（group 为 null），Kotlin 抛 NPE。
+//         本移植改为抛 RuleEngineError.regexGroupNotParticipated（不再崩溃）。
 //       · 非最后规则：把所有 match 的整体串接后，递归下一个规则。
 //   - getElements：
 //       · find() 失败 -> 返回空数组。
 //       · 最后规则：每个 match 收集 group(0..groupCount)，未参与的组取 ""（Kotlin `?: ""`）。
 //       · 非最后规则：串接所有 match 后递归。
+//   - 正则编译失败：Kotlin Pattern.compile 抛 PatternSyntaxException；
+//     本移植改为抛 RuleEngineError.regexCompileFailed（不再崩溃）。
 //
 
 import Foundation
@@ -26,19 +26,21 @@ import Foundation
 public enum AnalyzeByRegex {
 
     /// 对应 Kotlin: fun getElement(res, regs, index=0): List<String>?
+    /// - Throws: RuleEngineError.regexCompileFailed / .regexGroupNotParticipated
     public static func getElement(
         _ res: String,
         _ regs: [String],
         index: Int = 0,
         diagnostics: RuleEngineDiagnostics? = nil
-    ) -> [String]? {
+    ) throws -> [String]? {
         var vIndex = index
         let pattern = regs[vIndex]
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            // Kotlin: Pattern.compile 抛 PatternSyntaxException（未捕获会崩）。
-            // 此处按"致命"处理并记录诊断，保持与 Kotlin 一致的失败传播。
+        let regex: NSRegularExpression
+        do {
+            regex = try NSRegularExpression(pattern: pattern)
+        } catch {
             diagnostics?.record(source: "AnalyzeByRegex.getElement", rule: pattern, message: "正则编译失败")
-            fatalError("正则编译失败: \(pattern)")
+            throw RuleEngineError.regexCompileFailed(pattern: pattern)
         }
 
         let nsRes = res as NSString
@@ -52,13 +54,13 @@ public enum AnalyzeByRegex {
         if vIndex + 1 == regs.count {
             // 新建容器
             var info: [String] = []
-            for groupIndex in 0...first.numberOfRanges - 1 {
+            for groupIndex in 0...(first.numberOfRanges - 1) {
                 let r = first.range(at: groupIndex)
                 if r.location == NSNotFound {
-                    // Kotlin `resM.group(i)!!` 未参与匹配的组会抛 NPE。
+                    // Kotlin `resM.group(i)!!` 未参与匹配的组会抛 NPE；此处改为抛 RuleEngineError。
                     diagnostics?.record(source: "AnalyzeByRegex.getElement", rule: pattern,
-                                        message: "捕获组 \(groupIndex) 未参与匹配（Kotlin 会抛 NPE）")
-                    fatalError("捕获组 \(groupIndex) 未参与匹配")
+                                        message: "捕获组 \(groupIndex) 未参与匹配")
+                    throw RuleEngineError.regexGroupNotParticipated(groupIndex: groupIndex, pattern: pattern)
                 }
                 info.append(nsRes.substring(with: r))
             }
@@ -70,22 +72,26 @@ public enum AnalyzeByRegex {
                 result += nsRes.substring(with: m.range)
             }
             vIndex += 1
-            return getElement(result, regs, index: vIndex, diagnostics: diagnostics)
+            return try getElement(result, regs, index: vIndex, diagnostics: diagnostics)
         }
     }
 
     /// 对应 Kotlin: fun getElements(res, regs, index=0): List<List<String>>
+    /// - Throws: RuleEngineError.regexCompileFailed（getElements 里 Kotlin 不处理组缺失，取 ""，故不抛组错误）
     public static func getElements(
         _ res: String,
         _ regs: [String],
         index: Int = 0,
         diagnostics: RuleEngineDiagnostics? = nil
-    ) -> [[String]] {
+    ) throws -> [[String]] {
         var vIndex = index
         let pattern = regs[vIndex]
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        let regex: NSRegularExpression
+        do {
+            regex = try NSRegularExpression(pattern: pattern)
+        } catch {
             diagnostics?.record(source: "AnalyzeByRegex.getElements", rule: pattern, message: "正则编译失败")
-            fatalError("正则编译失败: \(pattern)")
+            throw RuleEngineError.regexCompileFailed(pattern: pattern)
         }
 
         let nsRes = res as NSString
@@ -103,7 +109,7 @@ public enum AnalyzeByRegex {
             for m in matches {
                 // 新建容器
                 var info: [String] = []
-                for groupIndex in 0...m.numberOfRanges - 1 {
+                for groupIndex in 0...(m.numberOfRanges - 1) {
                     let r = m.range(at: groupIndex)
                     // Kotlin: resM.group(groupIndex) ?: ""
                     if r.location == NSNotFound {
@@ -121,7 +127,7 @@ public enum AnalyzeByRegex {
                 result += nsRes.substring(with: m.range)
             }
             vIndex += 1
-            return getElements(result, regs, index: vIndex, diagnostics: diagnostics)
+            return try getElements(result, regs, index: vIndex, diagnostics: diagnostics)
         }
     }
 }

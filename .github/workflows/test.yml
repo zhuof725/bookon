@@ -5,23 +5,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-linux:
-    runs-on: ubuntu-latest
-    container:
-      image: swift:5.10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Show Swift version
-        run: swift --version
-      - name: Verify field coverage
-        run: python3 scripts/verify_fields.py
-      - name: Verify function coverage
-        run: python3 scripts/verify_functions.py
-      - name: Build
-        run: swift build -v
-      - name: Run tests
-        run: swift test -v
-
   test-macos:
     runs-on: macos-14
     steps:
@@ -34,5 +17,41 @@ jobs:
         run: python3 scripts/verify_functions.py
       - name: Build
         run: swift build -v
-      - name: Run tests
+      - name: Run tests (macOS, swift test)
         run: swift test -v
+
+  test-ios-simulator:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift / Xcode version
+        run: |
+          swift --version
+          xcodebuild -version
+      - name: Verify field coverage
+        run: python3 scripts/verify_fields.py
+      - name: Verify function coverage
+        run: python3 scripts/verify_functions.py
+      - name: List available iOS simulators
+        run: xcrun simctl list devices available | grep -i iphone || true
+      - name: Run tests on iOS Simulator (xcodebuild test)
+        run: |
+          set -o pipefail
+          # 选一个可用的 iPhone 模拟器（取列表里第一个可用的 iPhone）。
+          DEST=$(xcrun xctrace list devices 2>/dev/null | grep -Eo 'iPhone [0-9][^(]*\([0-9.]+\) \([0-9A-F-]+\)' | head -1 || true)
+          if [ -z "$DEST" ]; then
+            # 退回按名字指定，让 xcodebuild 自己挑最新 iPhone。
+            echo "未解析到具体设备，使用通用 destination"
+            xcodebuild test \
+              -scheme LegadoBookSource-Package \
+              -destination 'platform=iOS Simulator,name=iPhone 15' \
+              | xcbeautify || xcodebuild test \
+              -scheme LegadoBookSource-Package \
+              -destination 'platform=iOS Simulator,name=iPhone 15'
+          else
+            UDID=$(echo "$DEST" | grep -Eo '\([0-9A-F-]+\)$' | tr -d '()')
+            echo "使用模拟器 UDID: $UDID"
+            xcodebuild test \
+              -scheme LegadoBookSource-Package \
+              -destination "platform=iOS Simulator,id=$UDID"
+          fi

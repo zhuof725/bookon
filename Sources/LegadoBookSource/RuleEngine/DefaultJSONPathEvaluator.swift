@@ -90,7 +90,7 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
             case .wildcard:
                 switch node {
                 case .array(let a): out.append(contentsOf: a)
-                case .object(let o): out.append(contentsOf: o.values)
+                case .object(let o): out.append(contentsOf: o.orderedValues)  // 保序
                 default: break
                 }
 
@@ -117,9 +117,9 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
 
             case .lengthFunc:
                 switch node {
-                case .array(let a): out.append(.number(Double(a.count)))
-                case .string(let s): out.append(.number(Double(s.count)))
-                case .object(let o): out.append(.number(Double(o.count)))
+                case .array(let a): out.append(.int(Int64(a.count)))
+                case .string(let s): out.append(.int(Int64(s.count)))
+                case .object(let o): out.append(.int(Int64(o.count)))
                 default: break
                 }
             }
@@ -134,7 +134,7 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
             }
             switch node {
             case .object(let o):
-                for v in o.values { collectRecursive(v, name: name, into: &out) }
+                for v in o.orderedValues { collectRecursive(v, name: name, into: &out) }
             case .array(let a):
                 for v in a { collectRecursive(v, name: name, into: &out) }
             default:
@@ -162,7 +162,7 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
                 return target != value
             case .gt, .lt, .ge, .le:
                 guard let t = target, let v = value,
-                      case .number(let tn) = t, case .number(let vn) = v else { return false }
+                      let tn = FilterExpr.numeric(t), let vn = FilterExpr.numeric(v) else { return false }
                 switch op {
                 case .gt: return tn > vn
                 case .lt: return tn < vn
@@ -170,6 +170,15 @@ public struct DefaultJSONPathEvaluator: JSONPathEvaluator {
                 case .le: return tn <= vn
                 default: return false
                 }
+            }
+        }
+
+        /// 从 JSONValue 提取数值（int / double 皆可），用于比较。
+        static func numeric(_ v: JSONValue) -> Double? {
+            switch v {
+            case .int(let i): return Double(i)
+            case .double(let d): return d
+            default: return nil
             }
         }
 

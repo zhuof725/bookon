@@ -230,7 +230,9 @@ enum PathParser {
         if v == "true" { return .bool(true) }
         if v == "false" { return .bool(false) }
         if v == "null" { return .null }
-        if let d = Double(v) { return .number(d) }
+        // 整数字面量优先按 int，其余按 double（对齐数字精度拆分）。
+        if !v.contains(".") && !v.lowercased().contains("e"), let i = Int64(v) { return .int(i) }
+        if let d = Double(v) { return .double(d) }
         return .string(v)
     }
 }
