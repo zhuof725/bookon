@@ -83,13 +83,28 @@ enum PathParser {
             } else if c == "*" {
                 tokens.append(.wildcard)
                 i += 1
+            } else if isNameStart(c) {
+                // 裸字段名开头（如无 $ 前缀的 "data.books"，或 $ 后紧跟名字 "$data"）。
+                // Jayway/legado 允许不带前导点的首段属性名，这里对齐兼容。
+                let name = readName(s, &i)
+                if name == "length" && i + 1 < n && s[i] == "(" && s[i + 1] == ")" {
+                    tokens.append(.lengthFunc)
+                    i += 2
+                } else {
+                    tokens.append(.child(name))
+                }
             } else {
-                // 其它字符：跳过（容错）；出现未知结构时不猜。
+                // 其它字符：出现未知结构时不猜，抛不支持。
                 throw JSONPathError.unsupportedSyntax("无法解析的字符 '\(c)' in \(path)")
             }
         }
 
         return tokens
+    }
+
+    /// 是否是「字段名」的合法起始字符（字母 / 下划线 / 数字 / 中文等非结构字符）。
+    private static func isNameStart(_ c: Character) -> Bool {
+        return c != "." && c != "[" && c != "]" && c != "*" && c != "$" && c != "(" && c != ")"
     }
 
     /// 读取一个字段名（直到 . [ 或结尾）。
