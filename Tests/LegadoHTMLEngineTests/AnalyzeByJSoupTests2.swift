@@ -229,10 +229,14 @@ final class AnalyzeByJSoupTests2: XCTestCase {
         let items = try j.getElements(rules["ruleSearch.bookList"]!)
         let first = try AnalyzeByJSoup(items.get(0))
         let allP = try first.getStringList("@css:p@text")
+        let eq0 = try first.getStringList("@css:p:eq(0)@text")
+        let eq1 = try first.getStringList("@css:p:eq(1)@text")
         let eq2 = try first.getStringList("@css:p:eq(2)@text")
         let eq2a = try first.getStringList("@css:p:eq(2)>a@text")
         let eq3 = try first.getStringList("@css:p:eq(3)@text")
-        XCTAssertEqual(allP, ["DEBUG_MARKER"], "所有p: \(allP) | eq(2): \(eq2) | eq(2)>a: \(eq2a) | eq(3): \(eq3)")
+        let eq4 = try first.getStringList("@css:p:eq(4)@text")
+        let eq5 = try first.getStringList("@css:p:eq(5)@text")
+        XCTAssertEqual(allP, ["DEBUG_MARKER"], "所有p: \(allP) | eq0:\(eq0) eq1:\(eq1) eq2:\(eq2) eq2a:\(eq2a) eq3:\(eq3) eq4:\(eq4) eq5:\(eq5)")
     }
     func testRealRule_Xiaoshuo2016_BookList() throws {
         let rules = try loadRealRules("xiaoshuo2016_rules")
