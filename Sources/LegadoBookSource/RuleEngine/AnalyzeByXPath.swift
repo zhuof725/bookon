@@ -1,0 +1,177 @@
+//
+//  AnalyzeByXPath.swift
+//  LegadoBookSource
+//
+//  对应 Kotlin: model/analyzeRule/AnalyzeByXPath.kt（155 行）
+//
+//  XPath 后端。底层通过 XPathEvaluator 协议注入，默认 SwiftSoupXPathEvaluator。
+//  规则切分复用第 2 步的 RuleAnalyzer。
+//
+//  错误策略：切分器错误 / XPath 无效 -> 抛 RuleEngineError；public 方法标 throws。
+//
+
+import Foundation
+import SwiftSoup
+
+public final class AnalyzeByXPath {
+
+    // 求值上下文：一组根元素（对应 Kotlin 的 JXDocument / JXNode）。
+    private let evaluator: XPathEvaluator
+    private let diagnostics: RuleEngineDiagnostics?
+
+    /// 用任意输入构造（Element / Elements / XPathNode / HTML 文本）。
+    /// - Throws: RuleEngineError.invalidHTML（HTML 解析失败）。
+    public init(_ doc: Any,
+                evaluatorType: XPathEvaluator.Type = SwiftSoupXPathEvaluator.self,
+                diagnostics: RuleEngineDiagnostics? = nil) throws {
+        self.diagnostics = diagnostics
+        let roots = try AnalyzeByXPath.parseRoots(doc)
+        self.evaluator = evaluatorType.init(roots: roots)
+    }
+
+    /// 对应 Kotlin: private fun parse(doc) + strToJXDocument
+    private static func parseRoots(_ doc: Any) throws -> [Element] {
+        if let node = doc as? XPathNode {
+            if let el = node.asElement() { return [el] }
+            return try strToRoots(node.stringForParse())
+        }
+        if let e = doc as? Element {
+            return [e]
+        }
+        if let es = doc as? Elements {
+            return es.array()
+        }
+        return try strToRoots(String(describing: doc))
+    }
+
+    /// 对应 Kotlin: strToJXDocument（末尾补全 + <?xml 走 XML 解析）。
+    private static func strToRoots(_ html: String) throws -> [Element] {
+        var html1 = html
+        if html1.hasSuffix("</td>") {
+            html1 = "<tr>\(html1)</tr>"
+        }
+        if html1.hasSuffix("</tr>") || html1.hasSuffix("</tbody>") {
+            html1 = "<table>\(html1)</table>"
+        }
+        let trimmed = html1.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("<?xml") {
+            if let xml = try? SwiftSoup.parse(html1, "", Parser.xmlParser()) {
+                return [xml]
+            }
+        }
+        do {
+            let doc = try SwiftSoup.parse(html1)
+            return [doc]
+        } catch {
+            throw RuleEngineError.invalidHTML(String(html1.prefix(120)))
+        }
+    }
+
+    /// select 包装：把 XPath 求值错误统一为 RuleEngineError 并记诊断。
+    private func result(_ xPath: String) throws -> [XPathNode] {
+        return try evaluator.evaluate(xPath)
+    }
+
+    // MARK: - getElements
+
+    /// 对应 Kotlin: internal fun getElements(xPath): List<JXNode>?
+    public func getElements(_ xPath: String) throws -> [XPathNode]? {
+        if xPath.isEmpty { return nil }
+
+        var jxNodes: [XPathNode] = []
+        let ruleAnalyzes = RuleAnalyzer(xPath)
+        let rules = try ruleAnalyzes.splitRule("&&", "||", "%%")
+
+        if rules.count == 1 {
+            return try result(rules[0])
+        } else {
+            var results: [[XPathNode]] = []
+            for rl in rules {
+                let temp = try getElements(rl)
+                if let temp = temp, !temp.isEmpty {
+                    results.append(temp)
+                    if ruleAnalyzes.elementsType == "||" { break }
+                }
+            }
+            if !results.isEmpty {
+                if ruleAnalyzes.elementsType == "%%" {
+                    for i in results[0].indices {
+                        for temp in results where i < temp.count {
+                            jxNodes.append(temp[i])
+                        }
+                    }
+                } else {
+                    for temp in results { jxNodes.append(contentsOf: temp) }
+                }
+            }
+        }
+        return jxNodes
+    }
+
+    // MARK: - getStringList
+
+    /// 对应 Kotlin: internal fun getStringList(xPath): List<String>
+    public func getStringList(_ xPath: String) throws -> [String] {
+        var result: [String] = []
+        let ruleAnalyzes = RuleAnalyzer(xPath)
+        let rules = try ruleAnalyzes.splitRule("&&", "||", "%%")
+
+        if rules.count == 1 {
+            // Kotlin: getResult(xPath)?.map { result.add(it.asString()) }
+            if let nodes = try? self.result(xPath) {
+                for n in nodes { result.append(n.asString()) }
+            } else {
+                // 求值失败被吞：记诊断（对齐 Kotlin 里 selN 内部异常不抛的容错）。
+                diagnostics?.record(source: "AnalyzeByXPath.getStringList", rule: xPath, message: "XPath 求值失败")
+            }
+            return result
+        } else {
+            var results: [[String]] = []
+            for rl in rules {
+                let temp = try getStringList(rl)
+                if !temp.isEmpty {
+                    results.append(temp)
+                    if ruleAnalyzes.elementsType == "||" { break }
+                }
+            }
+            if results.count > 0 {
+                if ruleAnalyzes.elementsType == "%%" {
+                    for i in results[0].indices {
+                        for temp in results where i < temp.count {
+                            result.append(temp[i])
+                        }
+                    }
+                } else {
+                    for temp in results { result.append(contentsOf: temp) }
+                }
+            }
+        }
+        return result
+    }
+
+    // MARK: - getString
+
+    /// 对应 Kotlin: fun getString(rule): String?
+    public func getString(_ rule: String) throws -> String? {
+        let ruleAnalyzes = RuleAnalyzer(rule)
+        let rules = try ruleAnalyzes.splitRule("&&", "||")
+        if rules.count == 1 {
+            // Kotlin: getResult(rule)?.let { return TextUtils.join("\n", it) }
+            if let nodes = try? self.result(rule) {
+                return nodes.map { $0.toStringValue() }.joined(separator: "\n")
+            }
+            diagnostics?.record(source: "AnalyzeByXPath.getString", rule: rule, message: "XPath 求值失败")
+            return nil
+        } else {
+            var textList: [String] = []
+            for rl in rules {
+                let temp = try getString(rl)
+                if let temp = temp, !temp.isEmpty {
+                    textList.append(temp)
+                    if ruleAnalyzes.elementsType == "||" { break }
+                }
+            }
+            return textList.joined(separator: "\n")
+        }
+    }
+}

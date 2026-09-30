@@ -13,9 +13,14 @@ let package = Package(
             targets: ["LegadoBookSource"]
         )
     ],
+    dependencies: [
+        // CSS/DOM 解析后端（对应 Kotlin 的 Jsoup）。选型理由见 README。
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", exact: "2.13.9")
+    ],
     targets: [
         .target(
             name: "LegadoBookSource",
+            dependencies: ["SwiftSoup"],
             path: "Sources/LegadoBookSource"
         ),
         .testTarget(
@@ -53,6 +58,22 @@ let package = Package(
             name: "LegadoRuleEnginePublicAPITests",
             dependencies: ["LegadoBookSource"],
             path: "Tests/LegadoRuleEnginePublicAPITests"
+        ),
+        // 第 3 步：HTML 规则引擎（JSoup/XPath）的 @testable 单元测试。
+        .testTarget(
+            name: "LegadoHTMLEngineTests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoHTMLEngineTests",
+            resources: [
+                .copy("Resources/real/xiaoshuo2016_rules.json"),
+                .copy("Resources/real/caimoge_rules.json")
+            ]
+        ),
+        // 第 3 步：HTML 规则引擎的纯 public 接口测试（普通 import，非 @testable）。
+        .testTarget(
+            name: "LegadoHTMLEnginePublicAPITests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoHTMLEnginePublicAPITests"
         )
     ]
 )

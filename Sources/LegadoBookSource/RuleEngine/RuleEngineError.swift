@@ -26,6 +26,12 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
     case regexGroupNotParticipated(groupIndex: Int, pattern: String)
     /// 传入的 JSON 字符串无法解析（对齐 Jayway JsonPath.parse 解析失败抛异常）。
     case invalidJSON(String)
+    /// CSS 选择器 / JSoup 规则无效（对齐 Jsoup Selector 解析抛异常）。
+    case invalidSelector(String)
+    /// XPath 表达式无效 / 不支持的语法。
+    case invalidXPath(String)
+    /// HTML 无法解析。
+    case invalidHTML(String)
 
     public var errorDescription: String? {
         switch self {
@@ -34,6 +40,9 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
         case .regexCompileFailed(let p): return "正则编译失败: \(p)"
         case .regexGroupNotParticipated(let i, let p): return "捕获组 \(i) 未参与匹配: \(p)"
         case .invalidJSON(let s): return "无法解析的 JSON: \(s)"
+        case .invalidSelector(let s): return "无效的选择器: \(s)"
+        case .invalidXPath(let s): return "无效或不支持的 XPath: \(s)"
+        case .invalidHTML(let s): return "无法解析的 HTML: \(s)"
         }
     }
 }
