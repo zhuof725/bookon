@@ -209,10 +209,20 @@ enum SwiftSoupVoidElementFix {
 }
 
 
-/// 组合入口：依次应用 void 元素自闭合修正 + br 后文本缩进修正。
+/// 组合入口：应用 void 元素自闭合修正。
 /// 所有对外输出 outerHtml()/html() 的地方都应使用这个函数，而不是分别调用。
+///
+/// ⚠️ 不包含 `<br>` 后文本缩进修正：经进一步用多组 golden 用例交叉验证（`<p>` 被
+/// 外层容器包裹时 vs 直接对 `<p>`/`<body>` 调用 `.html()`/`.outerHtml()` 时），
+/// jsoup 对"`<br>` 后文本"实际使用的缩进深度，依赖于该文本节点在完整 DOM 树里的
+/// 真实嵌套深度（与是否是`.html()`"从自身开始渲染"还是被外层`.outerHtml()`携带渲染
+/// 密切相关），纯字符串级后处理（只看当前行的前导空白）无法在所有结构下都正确推算
+/// 这个深度——分别测得同一种"文本紧跟 `<br>`"场景在不同 DOM 嵌套位置下，真实缩进
+/// 可能是"与当前行相同"或"当前行+1"，规律不是简单的字符串局部可判定的。
+/// 已回退该尝试性修正，改为如实记录在 README「与 Kotlin 已知差异」表，避免引入
+/// 不稳定、因场景而异的错误缩进（那样反而会在更多用例上制造新的不一致）。
 enum SwiftSoupHtmlFix {
     static func fix(_ html: String) -> String {
-        SwiftSoupBrIndentFix.fix(SwiftSoupVoidElementFix.fix(html))
+        SwiftSoupVoidElementFix.fix(html)
     }
 }

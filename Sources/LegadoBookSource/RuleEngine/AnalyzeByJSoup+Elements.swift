@@ -118,7 +118,8 @@ extension AnalyzeByJSoup {
                 var tn: [String] = []
                 let contentEs = element.textNodes()
                 for item in contentEs {
-                    let text = item.text().trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r").union(.whitespacesAndNewlines))
+                    let text = SwiftSoupTextNormalizeFix.normalize(item.text())
+                        .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r").union(.whitespacesAndNewlines))
                     if !text.isEmpty { tn.append(text) }
                 }
                 if !tn.isEmpty { textS.append(tn.joined(separator: "\n")) }

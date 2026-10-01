@@ -91,7 +91,7 @@ extension SwiftSoupXPathEvaluator {
             var texts: [Node] = []
             for e in candidates {
                 for tn in e.textNodes() {
-                    let t = tn.text()
+                    let t = SwiftSoupTextNormalizeFix.normalize(tn.text())
                     if !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { texts.append(.text(t)) }
                 }
             }
@@ -116,7 +116,7 @@ extension SwiftSoupXPathEvaluator {
                     out.append(.attribute(name: attr, value: v, owner: e))
                 case .funcText:
                     for tn in e.textNodes() {
-                        let t = tn.text()
+                        let t = SwiftSoupTextNormalizeFix.normalize(tn.text())
                         if !t.isEmpty { out.append(.text(t)) }
                     }
                 case .funcAllText:

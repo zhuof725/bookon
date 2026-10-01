@@ -301,7 +301,9 @@ Swift 无等价库，评估两个方案：
 | `text()` 的空白规整 | 默认 `trimAndNormaliseWhitespace = true`，合并连续空白为单个空格 | 同样默认 `true` | 无差异（golden 验证一致） |
 | `Collector.collect(Evaluator.Id(id), el)` | 存在 | 存在，API 形态一致 | 无差异 |
 | 中文 / emoji 解析 | 按 UTF-16 处理属性/选择器字符串（JVM String） | Swift `Character`/`UInt16` 混用；本移植所有下标逻辑改在 UTF-16 code unit 上处理 | 已通过含中文/emoji 的测试验证一致 |
-| void 元素（如 `<img>`）的 `outerHtml()` 渲染 | 渲染为 `<img src="...">`（无自闭合斜杠） | 渲染为 `<img src="..." />`（自闭合） | **发现差异**：仅影响"直接取整个元素字符串表示"的场景（如 XPath 命中纯元素节点时 `asString()`=outerHtml、CSS 的 `@html`/`@all` 结果类型），不影响 `text()`/`@attr` 等常规取值；已在 golden 对照里记录为已知差异（`GoldenComparisonTests.knownDivergences` 里的 `realBookList` 两条），未改代码（SwiftSoup 的 void 元素渲染策略是其内部实现细节，非本项目可控） |
+| void 元素（如 `<img>`）的 `outerHtml()` 渲染 | 渲染为 `<img src="...">`（无自闭合斜杠） | SwiftSoup 源码 `Element.swift` 的 `outerHtmlHead` 把 HTML/XML 两个语法分支都错写成了 `" />"`（库自身 bug，已读源码定位到具体行） | **已修正**：`SwiftSoupVoidElementFix` 做受控字符串后处理，见下方「XPath 引擎已知差异」表第 13 条 |
+| `&nbsp;`（U+00A0）的空白规整 | `StringUtil.isActuallyWhitespace` 把 nbsp 纳入可折叠空白（jsoup 特有扩展，非 HTML 规范） | 只认标准空白字符，遗漏 nbsp，导致含 nbsp 的文本前导/连续空白未被裁剪折叠 | **已修正**：`SwiftSoupTextNormalizeFix`，见下方「XPath 引擎已知差异」表第 14 条 |
+| `<br>` 后文本节点的 pretty-print 换行缩进 | `TextNode.outerHtmlHead` 有 `前一兄弟是 <br>` 的专门换行规则，缩进深度取其在 DOM 树里的真实嵌套深度 | 缺失这条分支，`<br>` 后文本永远不换行 | **已尝试修复、确认无法用字符串级后处理可靠对齐**，已回退并记录为已知差异，见下方「XPath 引擎已知差异」表第 15 条；仅影响 `@html`/`@all` 等整块 HTML 字符串结果类型的格式，不影响实际取值 |
 
 > 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充。
 
@@ -409,11 +411,13 @@ Element 序号命中，不受中间文本节点干扰。
 | 9 | `substring-before(s,sep)` 分隔符不存在 | 返回**原字符串**（不是 W3C 规范要求的空串，是 JsoupXpath 自身实现偏差） | 完全对齐，复刻这一偏差行为 | `testSubstringBeforeNoMatchReturnsOriginal` |
 | 10 | `not(...)` 与 `and`/`or` 组合 | 不支持，解析通过但恒不匹配（不是语法错误） | 对齐：遇到该组合返回恒不匹配的谓词，不抛错 | `testNotFunctionCombinedWithAndIsUnsupported` |
 | 11 | `getString`/`getStringList` 对 XPath 解析失败的处理 | Kotlin 原始签名 `getResult(rule)?.let{}`/`?.map{}` 的 `?.` 只处理 null，**不捕获异常**——解析失败会直接向上传播 | 已修正：早期版本误用 `try?` 吞掉异常（行为不对齐），现改为 `try` 直接传播，与 Kotlin 真实语义一致 | `testStringFunctionOnElementIsUnsupported`（断言 `XCTAssertThrowsError`）等 |
-| 12 | `getString` 对 XPath 的 `%%` 组合符 | Kotlin 原始签名里 `getString` 只识别 `&&`/`||`，不识别 `%%`；传入含字面 `%%` 的规则时，JsoupXpath 的 ANTLR 解析器有自己的容错路径返回 `""` | 本项目的解析器判定整体语法无效返回 `nil`。两者都不是"正确"用法（`%%` 本就不是 `getString` 支持的组合符），**无法进一步对齐、也无必要**（真实书源不会这样写） | golden `xpath_basic/xpathPercentInterleave`，已在 `GoldenComparisonTests.knownDivergences` 里登记跳过，不隐藏 |
-| 13 | void 元素 outerHtml 自闭合格式 | `<img src="...">` | `<img src="..." />`（SwiftSoup 库本身差异，见上表） | golden `xpath_real_caimoge/realBookList`，已登记跳过 |
+| 12 | `getString` 对 XPath 的 `%%` 组合符 | Kotlin 原始签名里 `getString` 只识别 `&&`/`||`，不识别 `%%`；传入含字面 `%%` 的规则时，JsoupXpath 的 ANTLR 解析器有自己的容错路径返回 `""` | **已修正对齐**：`AnalyzeByXPath.getString` 在侦测到规则含字面 `%%` 且解析失败时，专门把结果降级为 `""`（而不是抛错/返回 nil），与真实库一致 | `testXPathGetStringWithPercentReturnsEmptyString`，golden `xpath_basic/xpathPercentInterleave` 已不再需要跳过 |
+| 13 | void 元素 `outerHtml()` 自闭合格式 | `<img src="...">`（无斜杠）——已读 jsoup `Element.java:1737-1744` 源码确认：HTML 语法下 `isEmpty` 标签只输出 `>` | SwiftSoup 2.9.6 源码 `Element.swift` 的 `outerHtmlHead` 把 if/else 两个分支都错写成了自闭合 `" />"`（库自身的移植缺陷，两分支本该一个输出 `>`、一个输出 `" />"`） | **已修正**：新增 `SwiftSoupVoidElementFix`，对 `outerHtml()`/`html()` 结果做受控字符串后处理，把 void 标签（`meta/link/base/frame/img/br/wbr/embed/hr/input/keygen/col/command/device/area/basefont/bgsound/menuitem/param/source/track`，抄自 SwiftSoup `Tag.swift` 的 `emptyTags` 清单）的自闭合斜杠去掉；应用在 CSS `@html`/`@all`、XPath `html()`/`outerHtml()`/元素节点 `asString()` 全部 5 个输出口 | `VoidElementFixTests.swift`（6 个单测，含直接单测 `fix()` 函数本身、多个 void 元素混排、非 void 标签不误伤） |
+| 14 | `&nbsp;`（U+00A0）在 `text()`/`ownText()`/`allText()` 规整中的处理 | jsoup `StringUtil.isActuallyWhitespace` 特意把 `&nbsp;` 纳入"可折叠空白"（源码注释："Not in the spec but expected"），前导/尾随/连续 nbsp 会被裁剪或折叠成单个空格，等同普通空白 | SwiftSoup 2.9.6 的空白判定只认标准空白（空格/Tab/换行/换页/回车），遗漏了这个 jsoup 特有扩展，导致含 `&nbsp;` 的文本前导空白不会被裁剪 | **已修正**：新增 `SwiftSoupTextNormalizeFix`，复刻 jsoup `appendNormalisedWhitespace(stripLeading:true)` 算法对结果做等价再规整，应用在 CSS `@text`/`@ownText`/`@textNodes`、XPath `text()`/`allText()`/内部字符串函数取值 等全部文本抽取口 | golden `malformed_html/htmlEntities_text`（CSS + XPath 两侧均验证） |
+| 15 | `<br>` 后文本节点在 pretty-print 输出里的换行缩进 | jsoup `TextNode.outerHtmlHead` 有一条专门规则：`siblingIndex > 0 && 前一个兄弟节点是 <br>` 时换行缩进（源码注释 "special case wrap on inline `<br>` - doesn't make sense as a block tag"），缩进深度取决于该文本节点在完整 DOM 树中的真实嵌套深度 | SwiftSoup 的 `TextNode.outerHtmlHead` 移植遗漏了这整条分支（以及同方法里的 trimLeading/trimTrailing/couldSkip 逻辑），`<br>` 后文本永远不换行，紧跟在同一行 | **尝试修复后判定无法用字符串级后处理可靠对齐，已回退**：交叉验证了"`<p>` 被外层容器 `.outerHtml()` 携带渲染"（缩进=父标签缩进+1）与"直接对 `<p>`/`<body>` 调 `.html()`/`.outerHtml()`"（缩进=与同级文本相同，不+1）两种结构，发现同一条"文本紧跟 `<br>`"规则在不同 DOM 位置下的真实缩进深度不同，纯字符串级处理（只能看当前行局部文本）无法正确推算真实树深度——这需要完整复刻 jsoup TextNode 的 depth 传递算法，超出"受控字符串后处理"的范畴。**只影响 `@html`/`@all`/XPath `html()`/`outerHtml()` 这类"整块 HTML 字符串"结果类型的格式**，不影响 `text()`/`textNodes()`/`@attr` 等实际取值（已用 golden 的 `brSeparatedContent_textNodes` 等用例验证文本抽取本身不受影响，仅格式化字符串的换行位置有差异） | golden `malformed_html/brSeparatedContent_html`（CSS 侧用例因容器包裹结构凑巧与当前实现一致，XPath 两个直接调用变体与 `consecutiveBr_bodyOuterHtml`、`xpath_real_caimoge/realBookList` 已在 `GoldenComparisonTests.knownDivergences` 登记，均在失败信息里可查 |
 
-> 以上 13 条全部来自 golden 真实对照，**不是主观猜测**；除 12、13 两条（已论证"无法/无需进一步对齐"）外，
-> 其余均已让 Swift 实现与真实 JsoupXpath 行为完全一致。
+> 以上 15 条全部来自 golden 真实对照，**不是主观猜测**；除第 15 条（已论证"字符串级后处理无法可靠对齐，需要完整复刻 jsoup 渲染器深度传递算法"）外，
+> 其余均已让 Swift 实现与真实 JsoupXpath 行为完全一致，包括第 12、13、14 条在本轮收尾中新修复的内容。
 
 ## golden 对照（CI 自动生成，不需要本地跑任何东西）
 
