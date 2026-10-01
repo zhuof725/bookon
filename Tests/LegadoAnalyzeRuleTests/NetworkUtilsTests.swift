@@ -67,7 +67,9 @@ final class NetworkUtilsTests: XCTestCase {
         XCTAssertEqual(NetworkUtils.getAbsoluteURL("http://a.com/b/c.html", "./x.html"), "http://a.com/b/x.html")
     }
     func testAbs_queryOnly() {
-        XCTAssertEqual(NetworkUtils.getAbsoluteURL("http://a.com/b/c.html", "?k=v"), "http://a.com/b/c.html?k=v")
+        // 第 4 步 C golden 修正：真实 java.net.URL 对 "?query" 相对引用会把 base path 截到最后一个
+        // '/'（丢掉文件名段）再接 query —— 即 http://a.com/b/?k=v（B 部分旧断言 c.html?k=v 不符真实库）。
+        XCTAssertEqual(NetworkUtils.getAbsoluteURL("http://a.com/b/c.html", "?k=v"), "http://a.com/b/?k=v")
     }
     func testAbs_protocolRelative() {
         XCTAssertEqual(NetworkUtils.getAbsoluteURL("http://a.com/b", "//cdn.com/x.js"), "http://cdn.com/x.js")

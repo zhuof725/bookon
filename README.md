@@ -171,6 +171,13 @@ Kotlin 用的是 **Jayway JsonPath**（JVM 库，无法直接用于 Swift/iOS/Li
 > 不支持的语法在解析时抛 `JSONPathError.unsupportedSyntax`；`AnalyzeByJSonPath` 会（如同 Kotlin 吞异常）
 > 返回空值，并把错误记入可选的 `RuleEngineDiagnostics`（默认关闭）。
 >
+> ⚠️ **第 4 步 C golden 修正**：上表标「❌ 不支持」的过滤器多条件 `&&`/`||`/`=~`/`in`、聚合函数
+> `min/max/avg/sum`、逗号多下标 `[0,2]`、步长切片 `[0:6:2]`、`@` 作顶层根——经真实 Jayway 2.10.0
+> 跑 golden 确认**真实 Jayway 其实支持**（返回真实结果，不报错）。本项目自实现子集
+> `DefaultJSONPathEvaluator` 仍不支持这些（抛 `unsupportedSyntax` 吞成空），故它们属**本项目子集与
+> 真实 Jayway 的已知差异**，逐条记在下方「第 4 步 C」章节的差异表（附真实 Jayway 结果 + 影响面）。
+> 书源规则里这些高级语法几乎不出现。
+>
 > **对象键顺序**：`$.obj.*` / `$..*` 等通配结果按 JSON 文本顺序返回（对齐 Jayway 有序语义），
 > 有测试 `testObjectWildcardKeyOrder` / `testRecursiveWildcardKeyOrder` / `testGetObjectCompactKeyOrder` 固定。
 > **数字精度**：整数(`int` Int64) / 小数(`double`) / **超 Int64 大整数(`bigInteger` 原始文本)** 三分；
@@ -778,3 +785,103 @@ Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** 
 
 见 `JS_EXTENSIONS_USAGE.md`（7 个真实书源实际调用的 `java.xxx` 方法 + 次数 + 已/未实现状态 +
 Java 互操作标记 + 第 5 步实现优先级）。
+
+
+---
+
+## 第 4 步 C：真实 Java 库 golden 对照验证工具函数
+
+第 4 步 B 新增的三块工具函数（JavaURLResolver/NetworkUtils、HtmlUnescape/HtmlEntities、
+RegexTemplate）以及第 2 步的 JSONPath、AnalyzeByRegex 后端，之前只有合成单测。本步骤用真实
+Java 库生成 golden 对照数据，逐条比较并修正 Swift 实现。
+
+### 新增 golden 依赖（scripts/golden/pom.xml，版本与 legado `gradle/libs.versions.toml` 一致）
+
+| 依赖 | 版本 | 用途 | 是否成功打进 fat jar |
+|---|---|---|---|
+| json-path（Jayway） | 2.10.0 | JSONPath 真实对照 | ✅（CI golden job success） |
+| commons-text | 1.13.1 | unescapeHtml4 真实对照 | ✅ |
+| gson | 2.10.1 → **2.13.2** | 与 legado 一致 | ✅ |
+| commons-lang3 | 强制 **3.18.0** | commons-text 1.13.1 的 NumericEntityEscaper 用到 `Range.of`，旧的间接 lang3 会 `NoSuchMethodError`，dependencyManagement 收敛 | ✅ |
+
+shade 插件新增 `ServicesResourceTransformer`（合并多依赖的 META-INF/services）+ 去签名文件
+filter，保证 fat jar 可运行。jsoup 1.16.2 / JsoupXpath 2.5.3 不变。
+
+### golden 用例数（cases/*.json，均为合成测试数据 synthetic_ 前缀）
+
+| 类别 | 用例数 | 对照的真实库 | 状态 |
+|---|---|---|---|
+| getAbsoluteURL（url_absolute.json） | 67 | `java.net.URL(base, rel)`（经 Kotlin NetworkUtils 调度，手工移植 Java） | ✅ 全绿 |
+| unescapeHtml4（unescape_html4.json） | 52 | `commons-text StringEscapeUtils.unescapeHtml4` | ✅ 全绿 |
+| replaceRegex（regex_replace.json） | 51 | Kotlin AnalyzeRule.replaceRegex 语义（真实 `java.util.regex`） | ✅ 全绿 |
+| AnalyzeByRegex（regex_analyze.json） | 24 | 真实 Java 正则 getElement/getElements | ✅ 全绿 |
+| JSONPath（jsonpath_cases.json） | 63 | 真实 Jayway JsonPath 2.10.0（json-smart） | ✅ 49 对齐 / 14 登记已知差异（见下） |
+
+> 调度逻辑（Kotlin NetworkUtils.getAbsoluteURL / AnalyzeRule.replaceRegex / AnalyzeByJSonPath
+> 单规则路径）是为生成 golden 手工移植到 Java 的，**内部调用的是真实库**（java.net.URL /
+> java.util.regex / commons-text / Jayway）；对照的是 Kotlin 工具函数的最终行为。
+
+### golden 暴露并修复的差异（逐条）
+
+1. **getAbsoluteURL — java.net.URLStreamHandler.parseURL 精确算法**（`JavaURLResolver.resolve`）。
+   原 B 部分用 RFC 3986 remove_dot_segments 过度规范化，与真实 java.net.URL 不符。已重写为精确
+   移植 `java.net.URLStreamHandler.parseURL`：
+   - 路径消解（`/./`、`/../`、尾部 `/..` `/.`）**仅对相对路径生效**；绝对路径 `/a/../b` 与协议相对
+     `//h/c/../d` **不规范化**，保留字面 `/../`。
+   - 越过根的 `/../` 保留字面（如 `../../../b.html` → `/../../b.html`，不裁剪到根）。
+   - 路径里的 `//`（连续空段）保留。
+   - `"?query"` only 相对引用：path 截到最后一个 `/`（丢掉文件名段）+ query（如
+     `http://a.com/b/c.html` + `?k=v` → `http://a.com/b/?k=v`）。
+   - `..` / `.` 作为完整相对引用产生尾部 `/`。
+   连带修正 B 部分旧单测 `testAbs_queryOnly` 的错误断言。
+2. **replaceRegex — 命名组模板 `${name}`/`$<name>`**（`RegexTemplate`）。Java/Kotlin 替换模板支持
+   `${name}` 命名组引用，ICU/NSRegularExpression 不支持。已在 `javaToICU(_:pattern:)` 里从 pattern
+   解析命名组序号（`namedGroupIndices`，正确跳过非捕获组/断言/字符类/转义括号），把 `${name}`
+   转成 `$index`。
+3. **JSONPath `.length()` 解析 bug**（`JSONPathParser.readName`）。`readName` 未在 `(` 处停止，把
+   `length()` 整体当成字段名导致 pathNotFound → 空串。已让 `readName` 在 `(` 处停止，`.length()`
+   正确求值（返回元素个数）。
+4. **JSONPath 对象/数组 toString 格式**（`JSONValue.jaywayStringValue` + `javaMapString`）。真实
+   Jayway（json-smart）读到的对象经 `Object.toString()` 用 **Java Map 格式** `{key=value, key=value}`
+   （`=` 分隔、`, ` 连接、键值不加引号），其中值为数组时渲染成 JSON、值为对象时递归 Map 格式。
+   原 Swift 用紧凑 JSON `{"key":value}`。已为 AnalyzeByJSonPath 的 getString/getStringList 的
+   对象/数组 toString 路径改用 `jaywayStringValue`（不影响其它 `stringValue` 调用方）。
+
+### 剩余已知差异（真实 Jayway 支持、本项目自实现子集 `DefaultJSONPathEvaluator` 不支持）
+
+> 均经 golden 真实 Jayway 跑出真实行为后登记，附最小复现 + 两边结果 + 影响面。这些语法在真实
+> 书源 JSONPath 规则里几乎不出现（书源多用 `$.data.books`、`$..title`、`[*]`、`[n]` 等基础语法），
+> 完整复刻 Jayway 的嵌套过滤器布尔逻辑 / 聚合函数 / 逗号多下标 / 步长切片 / `@` 根超出第 4 步 C
+> 预算，故如实登记为子集边界（**非静默跳过**，golden 测试里用 `knownJSONPathDivergences` 显式豁免
+> 并在此表记录）。README 原「不支持」表述与真实 Jayway 一致处保留，不一致处以下表真实行为为准。
+
+| 规则（最小复现，doc 见 jsonpath_cases.json doc1） | 真实 Jayway 结果 | 本项目子集结果 | 影响面 |
+|---|---|---|---|
+| `$.store.book[?(@.price>5 && @.author=='A1')].title` | `T1` | 空（抛 unsupportedSyntax，被吞成空） | 过滤器布尔多条件；书源罕用 |
+| `$.store.book[?(@.price>18 \|\| @.price<6)].title` | `T2\nT3`（示例） | 空 | 同上 |
+| `$.store.book[?(@.title=~/T.*/)].title` | `T1\nT2\nT3` | 空 | 过滤器正则 `=~`；书源罕用 |
+| `$.store.book[?(@.author in ['A1','A2'])].title` | `T1\nT2\nT3` | 空 | 过滤器 `in`；书源罕用 |
+| `$.nums.min()` / `.max()` / `.avg()` / `.sum()` | `1.0` / `6.0` / `3.5` / `21.0`（Double） | 空 | 聚合函数；子集只支持 `length()` |
+| `$.nums[0,2]` | `1\n3` | 空 | 逗号多下标；书源罕用 |
+| `$.store.book[0,2].title` | （多下标）| 空 | 同上 |
+| `$.nums[0:6:2]` | `1\n2\n3\n4\n5\n6`（步长被 Jayway 忽略） | 空 | 步长切片；书源罕用 |
+| `@.expensive`（`@` 作顶层根） | `15` | 空 | `@` 根；子集仅过滤器内 `@.` 支持 |
+| `$.nums[?(@>3)]`（过滤器内裸 `@` 标量比较） | `4\n5\n6` | 空 | 裸 `@` 标量过滤；子集只支持 `@.field` |
+| `$.store.book[0]['title','author']` | `{title=T1, author=A1}`（返回 Map 对象） | `["T1","A1"]`（返回列表） | 多字段取值语义：Jayway 合成对象，子集返回列表 |
+| `$.store..*`（深度扫描通配） | 特定遍历顺序、不含中间容器对象节点 | 遍历顺序/节点集不同 | `..*` 深扫顺序；书源罕用 |
+
+> 其余 JSONPath 语法（`$`、`.`、`[]`、多字段键取对象外的列表形态、递归 `..`、通配 `*`、下标、
+> 切片、单条件过滤器、`length()`、超 Int64 大整数精度）golden 全部对齐。
+
+### ICU(NSRegularExpression) vs Java 正则根本性差异（匹配侧，非本步骤 golden 用例触发，预防性登记）
+
+replaceRegex / AnalyzeByRegex 的 50 + 24 条 golden 用例全绿（含懒惰/贪婪/锚点/多行/Unicode/
+emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU 不支持或语义不同，书源规则若用到会
+不一致（未纳入 golden 用例，预防性登记，真实书源未见使用）：占有量词 `a++`/`a*+`/`a?+`、
+`\h`/`\v`（Java 的水平/垂直空白）、`\Z`（Java 末尾锚点语义）、`\G`、内嵌标志作用域 `(?i:...)`
+在边角的差异。确需时可逐条补 golden 验证。
+
+### 第 4 步 C 样本诚实标注
+
+所有 golden 用例输入（URL 字符串、待转义字符串、正则、JSON 文档）均为**合成测试数据**，用
+`synthetic_` 前缀 + 文件 `_comment` 字段标注。无真实书源规则文本（纯工具函数输入）。
