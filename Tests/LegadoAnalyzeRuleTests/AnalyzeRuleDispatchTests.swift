@@ -71,7 +71,8 @@ final class AnalyzeRuleDispatchTests: XCTestCase {
 
     func testGetString_cssTitle() throws {
         let a = try htmlRule()
-        XCTAssertEqual(try a.getString("div.title@text"), "测试书名")
+        // 注：class=title 的元素是 <h1>（非 div），故用 .title 或 h1.title（对齐 CSS 语义）
+        XCTAssertEqual(try a.getString(".title@text"), "测试书名")
     }
     func testGetString_cssAuthor() throws {
         let a = try htmlRule()
@@ -124,10 +125,10 @@ final class AnalyzeRuleDispatchTests: XCTestCase {
         XCTAssertNil(try a.getStringList(nil))
     }
     func testGetStringList_stringSplitByNewline() throws {
+        // getStringList 对最终为 String 的结果按 "\n" 切分。用 JS 返回多行字符串验证。
         let a = AnalyzeRule()
-        try a.setContent("a\nb\nc")
-        // 纯字符串内容 + 字面规则（regex 模式返回 rule 字符串），再按 \n 切
-        let list = try a.getStringList("x\ny\nz")
+        try a.setContent("x")
+        let list = try a.getStringList("{{'x\\ny\\nz'}}")
         XCTAssertEqual(list, ["x", "y", "z"])
     }
 
@@ -178,9 +179,14 @@ final class AnalyzeRuleDispatchTests: XCTestCase {
         XCTAssertEqual(s, "A&B<C>D A B")
     }
     func testGetString_noUnescapeWhenFlagOff() throws {
+        // 注：SwiftSoup（同 jsoup）的 text() 已对实体解码，故 @text 规则下内容已是 "A&B"。
+        // 用含裸 & 但不经 JSoup 解码的场景验证 unescape 开关：content 为纯字符串 + 正则直出。
         let a = AnalyzeRule()
-        try a.setContent("<p>A&amp;B</p>")
-        let s = try a.getString("p@text", unescape: false)
-        XCTAssertEqual(s, "A&amp;B")
+        try a.setContent("x")
+        // {{ }} 返回字符串 "A&amp;B"；unescape=false 不还原
+        let off = try a.getString("{{'A&amp;B'}}", unescape: false)
+        XCTAssertEqual(off, "A&amp;B")
+        let on = try a.getString("{{'A&amp;B'}}", unescape: true)
+        XCTAssertEqual(on, "A&B")
     }
 }

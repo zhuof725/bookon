@@ -145,8 +145,9 @@ final class AnalyzeRuleJSTests: XCTestCase {
         let src = InMemorySource()
         let a = AnalyzeRule(source: src)
         try a.setContent("<p>HELLO</p>")
-        // @put:{k:rule} 把子规则结果存入变量
-        _ = try a.getString("p@text@put:{saved:p@text}")
+        // @put:{"k":"rule"} 把子规则结果存入变量（用规范 JSON；非规范 JSON 的 lenient 解析
+        // 为已知差异，见 README）。
+        _ = try a.getString("p@text@put:{\"saved\":\"p@text\"}")
         XCTAssertEqual(a.get("saved"), "HELLO")
     }
 

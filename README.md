@@ -746,6 +746,17 @@ Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** 
 
 > ⚠️ 最终由 **C 部分 golden（至少 40 例）** 验证。
 
+## 已知行为差异（第 4 步 B 补充）
+
+- **@put 非规范 JSON**：Kotlin 用 GSON（lenient）能解析 `@put:{saved:p@text}`（键/值未加引号）。
+  本移植的 `parseStringMap` 走标准 JSON 解析，**只接受规范 JSON** `@put:{"saved":"p@text"}`。
+  非规范写法会被忽略（不崩溃）。Legado 文档本身推荐规范 JSON；lenient 解析待后续补。
+- **`@text` 下的实体解码**：SwiftSoup（同 jsoup）的 `text()` 已对 HTML 实体解码，因此
+  `p@text` 规则返回的文本里 `&amp;` 已变 `&`。AnalyzeRule 的 `unescape` 开关作用在**最终
+  字符串**上（对还有残留实体的结果再解码），与 Kotlin 一致。
+- **`:eq(n)` 等 jsoup 伪选择器**：由底层 SwiftSoup 提供，索引语义与 jsoup 的对齐情况见
+  第 3 步「SwiftSoup 与 jsoup 已知差异」。
+
 ## 本步骤明确排除（后续 TODO）
 
 - `reGetBook` / `refreshTocUrl`：依赖 WebBook，**留桩抛 `.unsupported`**（第 6 步）。
