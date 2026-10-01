@@ -12,6 +12,27 @@
 第 3 步「HTML 规则引擎」（`AnalyzeByJSoup`、`AnalyzeByXPath`）。
 **不含** `AnalyzeRule` 总调度 / JS / 网络 / UI。第 1、2 步 API 名称与行为未改动。
 
+## Step4-A 新增：`JsoupCompatSerializer`（HTML 序列化重写，非 Kotlin 对照，是 jsoup 1.16.2 Java 源码对照）
+
+`Sources/LegadoBookSource/RuleEngine/JsoupCompatSerializer.swift`（internal enum，纯 static 方法，
+不对外暴露 public API，因此不需要单独的 PublicAPITests 覆盖）。替代原 `SwiftSoupVoidElementFix.swift`
+（已删除）里的字符串级后处理，详见 README「Step4-A：HTML 序列化重写」章节。关键函数：
+
+| Swift 函数 | 对应 jsoup 1.16.2 源码 |
+|---|---|
+| `JsoupCompatSerializer.outerHtml(_:Node)` | `org.jsoup.nodes.Node.outerHtml()` |
+| `JsoupCompatSerializer.innerHtml(_:Element)` | `org.jsoup.nodes.Element.html()` |
+| `JsoupCompatSerializer.elementsOuterHtml(_:[Element])` | `org.jsoup.select.Elements.outerHtml()` |
+| `JsoupCompatSerializer.elementsInnerHtml(_:[Element])` | `org.jsoup.select.Elements.html()` |
+| `JsoupCompatSerializer.escape(...)` | `org.jsoup.nodes.Entities.escape(Appendable, String, OutputSettings, boolean, boolean, boolean, boolean)` |
+| `JsoupCompatSerializer.tagInfo(for:)` | `org.jsoup.parser.Tag.valueOf` + 静态标签分类清单 |
+| 内部 `elementHead`/`elementTail`/`textNodeHead`/`commentHead`/`dataNodeHead`/`documentTypeHead` | 各节点类型的 `outerHtmlHead`/`outerHtmlTail` |
+
+调用点替换（原先经由 SwiftSoup 原生 `outerHtml()`/`html()` + 字符串后处理 `SwiftSoupHtmlFix`）：
+- `AnalyzeByJSoup+Elements.swift::getResultLast`（`html`/`all` 两种 lastRule）
+- `XPathEvaluator.swift::JXNode.asString()`（`.element` 分支）
+- `SwiftSoupXPathParser.swift`（XPath 终端函数 `.funcHtml`/`.funcOuterHtml`）
+
 ## 函数覆盖（17 个）
 
 | Kotlin 文件 | Kotlin fun | Swift 对应 |

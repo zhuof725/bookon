@@ -301,11 +301,127 @@ Swift 无等价库，评估两个方案：
 | `text()` 的空白规整 | 默认 `trimAndNormaliseWhitespace = true`，合并连续空白为单个空格 | 同样默认 `true` | 无差异（golden 验证一致） |
 | `Collector.collect(Evaluator.Id(id), el)` | 存在 | 存在，API 形态一致 | 无差异 |
 | 中文 / emoji 解析 | 按 UTF-16 处理属性/选择器字符串（JVM String） | Swift `Character`/`UInt16` 混用；本移植所有下标逻辑改在 UTF-16 code unit 上处理 | 已通过含中文/emoji 的测试验证一致 |
-| void 元素（如 `<img>`）的 `outerHtml()` 渲染 | 渲染为 `<img src="...">`（无自闭合斜杠） | SwiftSoup 源码 `Element.swift` 的 `outerHtmlHead` 把 HTML/XML 两个语法分支都错写成了 `" />"`（库自身 bug，已读源码定位到具体行） | **已修正**：`SwiftSoupVoidElementFix` 做受控字符串后处理，见下方「XPath 引擎已知差异」表第 13 条 |
-| `&nbsp;`（U+00A0）的空白规整 | `StringUtil.isActuallyWhitespace` 把 nbsp 纳入可折叠空白（jsoup 特有扩展，非 HTML 规范） | 只认标准空白字符，遗漏 nbsp，导致含 nbsp 的文本前导/连续空白未被裁剪折叠 | **已修正**：`SwiftSoupTextNormalizeFix`，见下方「XPath 引擎已知差异」表第 14 条 |
-| `<br>` 后文本节点的 pretty-print 换行缩进 | `TextNode.outerHtmlHead` 有 `前一兄弟是 <br>` 的专门换行规则，缩进深度取其在 DOM 树里的真实嵌套深度 | 缺失这条分支，`<br>` 后文本永远不换行 | **已尝试修复、确认无法用字符串级后处理可靠对齐**，已回退并记录为已知差异，见下方「XPath 引擎已知差异」表第 15 条；仅影响 `@html`/`@all` 等整块 HTML 字符串结果类型的格式，不影响实际取值 |
+| void 元素（如 `<img>`）的 `outerHtml()` 渲染 | 渲染为 `<img src="...">`（无自闭合斜杠） | SwiftSoup 源码 `Element.swift` 的 `outerHtmlHead` 把 HTML/XML 两个语法分支都错写成了 `" />"`（库自身 bug，已读源码定位到具体行） | **Step4-A 已彻底修复**：不再依赖字符串后处理，`JsoupCompatSerializer` 从零按 jsoup `Tag.java` 的 `emptyTags` 清单重新生成标签输出，详见下方「Step4-A：HTML 序列化重写」章节 |
+| `&nbsp;`（U+00A0）的空白规整（HTML 序列化路径，`@html`/`@all`/`outerHtml()`/`html()`） | `StringUtil.isActuallyWhitespace` 把 nbsp 纳入可折叠空白（jsoup 特有扩展，非 HTML 规范） | 只认标准空白字符，遗漏 nbsp | **Step4-A 已彻底修复**：`JsoupCompatSerializer.escape()` 复刻 jsoup `Entities.escape()` 的 nbsp 转义规则，序列化路径不再有此问题 |
+| `&nbsp;`（U+00A0）的空白规整（纯文本提取路径，`text()`/`ownText()`/`allText()`） | 同上 | 同上 | **已修正**：`SwiftSoupTextNormalizeFix`（职责边界见该文件顶部注释：只服务于不经过 HTML 序列化的纯文本提取 API） |
+| `<br>` 后文本节点的 pretty-print 换行缩进 | `TextNode.outerHtmlHead` 有 `前一兄弟是 <br>` 的专门换行规则，缩进深度取其在 DOM 树里的真实嵌套深度（由 `NodeTraversor` 遍历维护） | 缺失这条分支，`<br>` 后文本永远不换行 | **Step4-A 已彻底修复**：字符串级后处理（`SwiftSoupBrIndentFix`）已被证明不可靠并删除，`JsoupCompatSerializer` 改为自己做深度优先遍历（自带真实树深度 `depth` 参数），完整复刻 `TextNode.outerHtmlHead` 的该分支，详见下方「Step4-A：HTML 序列化重写」章节 |
 
 > 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充。
+
+## Step4-A：HTML 序列化重写（`JsoupCompatSerializer`）
+
+### 背景与动机
+
+Step3 发现 SwiftSoup 2.9.6 的 `outerHtml()`/`html()` 与真实 jsoup 1.16.2 在两类上有差异
+（见上表），当时用字符串级后处理（`SwiftSoupVoidElementFix` 修 void 元素自闭合、
+`SwiftSoupBrIndentFix` 尝试修 `<br>` 后缩进）。后者被证明**不可靠**：同一条"文本紧跟 `<br>`"
+规则在不同 DOM 嵌套位置下的真实缩进深度不同，纯字符串处理只能看到当前行的局部文本，无法正确
+推算该文本节点在完整 DOM 树里的真实深度，因此回退并记录为已知差异（9 项登记在
+`GoldenComparisonTests.knownDivergences`）。
+
+Step4-A 的目标就是彻底解决这个问题：**不再对 SwiftSoup 输出的字符串做任何后处理**，而是绕开
+SwiftSoup 自带的 `outerHtml()`/`html()`，自己从零遍历 SwiftSoup 解析出的 DOM 节点
+（`Node`/`Element`/`TextNode`/`Comment`/`DataNode`/`DocumentType`，均为 SwiftSoup 公开类型，
+通过 `getChildNodes()`/`parent()`/`previousSibling()`/`nextSibling()`/`siblingIndex` 等公开
+API 访问），按真实 jsoup 1.16.2 的算法重新生成字符串。这样"深度"就是遍历时天然维护的真实树深度，
+不再需要从字符串猜测。
+
+### 实现：`Sources/LegadoBookSource/RuleEngine/JsoupCompatSerializer.swift`
+
+对照来源（均已逐行读取 jsoup 1.16.2 官方 GitHub 源码确认，而非凭记忆）：
+
+| 复刻内容 | jsoup 源码位置 |
+|---|---|
+| Tag 分类清单（block/inline/empty/formatAsInline/preserveWhitespace） | `org.jsoup.parser.Tag`（静态初始化块：`blockTags`/`inlineTags`/`emptyTags`/`formatAsInlineTags`/`preserveWhitespaceTags`） |
+| 深度优先遍历 + 真实树深度 | `org.jsoup.select.NodeTraversor.traverse`（depth 随 descend/ascend 增减） |
+| `indent()` | `org.jsoup.nodes.Node.indent`：`'\n' + StringUtil.padding(depth * indentAmount, maxPaddingWidth)` |
+| 元素 head/tail、`shouldIndent`/`isFormatAsBlock`/`isInlineable` | `org.jsoup.nodes.Element`：`outerHtmlHead`/`outerHtmlTail`/`shouldIndent`/`isFormatAsBlock`/`isInlineable` |
+| 文本节点换行与转义（含 `<br>` 后文本特判） | `org.jsoup.nodes.TextNode.outerHtmlHead` |
+| 注释、DataNode（script/style 原样输出）、DocumentType | `org.jsoup.nodes.Comment`/`DataNode`/`DocumentType` 的 `outerHtmlHead` |
+| 转义规则（base 模式、`&nbsp;`、非 BMP 字符原样输出） | `org.jsoup.nodes.Entities.escape()` |
+| 属性输出（布尔属性折叠、属性值转义） | `org.jsoup.nodes.Attribute`/`Attributes`（`shouldCollapseAttribute`/`htmlNoValidate`） |
+| `StringUtil` 等价函数 | `org.jsoup.internal.StringUtil`（`padding`/`isActuallyWhitespace`/`isWhitespace`/`isInvisibleChar`/`appendNormalisedWhitespace`） |
+
+`OutputSettings` 固定为 jsoup 默认组合：`prettyPrint=true, indentAmount=1, maxPaddingWidth=30,
+outline=false, charset=UTF-8, escapeMode=base, syntax=html`——这是 legado 书源规则引擎唯一
+会用到的组合，规则引擎本身不提供任何修改 `OutputSettings` 的接口，因此代码里没有做成可配置的，
+而是直接把这些默认值内联进各分支判断（已在每处注释标注对应省略了 jsoup 源码里哪个恒为
+`false`/默认值的分支，例如全文省略了 `out.outline()` 分支，因为固定为 `false`）。
+
+调用点替换：
+- `AnalyzeByJSoup+Elements.swift` 的 `getResultLast`（`html`/`all` 两种 lastRule）：
+  `elements.outerHtml()` → `JsoupCompatSerializer.elementsOuterHtml(elements.array())`
+- `XPathEvaluator.swift` 的 `JXNode.asString()`（元素节点场景）：
+  `e.outerHtml()` → `JsoupCompatSerializer.outerHtml(e)`
+- `SwiftSoupXPathParser.swift` 的 XPath 终端函数 `html()`/`outerHtml()`：
+  分别改用 `JsoupCompatSerializer.innerHtml(e)` / `.outerHtml(e)`
+
+### 删除的字符串后处理
+
+- `SwiftSoupVoidElementFix.swift` 整个文件已删除（含其中的 `SwiftSoupVoidElementFix`、
+  `SwiftSoupBrIndentFix`、组合入口 `SwiftSoupHtmlFix`）。void 元素自闭合格式和 `<br>` 后
+  缩进现在都由 `JsoupCompatSerializer` 直接按 jsoup 算法保证正确，不再需要任何后处理补丁。
+- `SwiftSoupTextNormalizeFix`（nbsp 规整）**被拆到独立文件** `SwiftSoupTextNormalizeFix.swift`
+  保留，因为它服务的是另一条完全不同的路径：
+
+**职责边界**（写明以避免未来误删或误用）：
+- `JsoupCompatSerializer`：负责"HTML 结构序列化"路径——CSS 规则的 `@html`/`@all`，XPath 的
+  `html()`/`outerHtml()`/元素节点 `asString()`。这些路径自己遍历 DOM 树，内部已经复刻了 jsoup
+  `Entities.escape()` 的空白折叠规则（含 nbsp），**不依赖** `SwiftSoupTextNormalizeFix`。
+- `SwiftSoupTextNormalizeFix`：负责"纯文本提取"路径——`text()`/`ownText()`/`allText()`、XPath
+  的 `text()`/`funcText`/`funcAllText`。这些路径调用的是 SwiftSoup 原生 `Element.text()`/
+  `TextNode.text()`/`Element.ownText()`，其内部空白折叠用的是 SwiftSoup 自己的
+  `StringUtil.isWhitespace`（没有被 `JsoupCompatSerializer` 取代，因为这条路径根本不经过
+  本项目的 DOM 遍历），因此仍需要这个文件对结果再做一次 nbsp 等价规整。
+
+### golden 测试：knownDivergences 已清零
+
+`Tests/LegadoHTMLEngineTests/GoldenComparisonTests.swift` 里原先登记的全部 9 项
+`knownDivergences`（`realBookList`、`brSeparatedContent_html`、`brSeparatedContent_outerHtml`、
+`consecutiveBr_bodyOuterHtml` 等）已全部删除，`knownDivergences` 现在是空集合。golden 比较
+对所有用例（含新增的序列化场景）做逐字节严格比较，不允许任何形式的豁免。
+
+### 新增 golden 用例：`scripts/golden/cases/serializer_synthetic.json`
+
+Step4-A 新增 66 个合成（synthetic）HTML 样本，覆盖：块级嵌套内联/内联嵌套块级、多层无序/
+有序列表嵌套、表格（含 thead/tbody/tfoot/colgroup/嵌套表格）、pre/textarea 空白保留、连续多个
+`<br>`、`<br>` 夹在文本中间、`<img>` 混排图文、空元素、HTML 注释、实体
+（`&amp;`/`&lt;`/`&nbsp;`/`&copy;`/`&quot;`）、emoji/非 BMP 字符（含代理对）、属性值含引号和
+换行、布尔属性（`disabled`/`checked`/`multiple`）、深层嵌套（14 层 `<div>`）、超长单行文本、
+`<script>`/`<style>` 内容、未闭合标签（`<p>`/`<li>`/`<span>` 缺少闭合经 jsoup 容错修复）、纯文本
+片段等。每个 HTML 样本同时产出 4 条用例：CSS `@html`、CSS `@all`、XPath `html()`、XPath
+`outerHtml()`，共 264 条用例（66 × 4），全部标注 `_SAMPLE_KIND: "合成样本（synthetic）"`
+与既有 `css_basic.json`/`xpath_basic.json` 的标注风格一致。
+
+### 验证方式与影响面评估（legado `HtmlFormatter.formatKeepImg`）
+
+legado 原生对**正文内容**会调用 `HtmlFormatter.formatKeepImg`（见
+`app/src/main/java/io/legado/app/model/BookContent.kt` 第 244 行附近）做空白折叠后再显示，
+所以即使序列化结果在缩进/换行上有差异，对最终阅读正文的影响也很小——这也是 Step3 阶段能暂时
+容忍已知差异、不影响发版质量判断的原因。但**书籍简介、目录标题**等字段如果书源规则直接用
+`@html`/`@all` 取整块 HTML 字符串（不经过 `formatKeepImg` 这层后处理），格式差异会直接暴露给
+用户（例如多一个换行、缩进空格数不对，显示到详情页时肉眼可见）。
+
+因此 Step4-A 的目标被定为"golden 逐字节完全一致"，**不因为"反正正文会被 formatKeepImg 后处理
+掉"而放松标准**——验证方式是：
+1. 本地：`python3 scripts/verify_functions.py` / `scripts/verify_fields.py` 做字段与函数覆盖
+   的静态核对（不能跑 Swift 编译器，见"环境限制"）。
+2. 真正验证：push 后由 CI 的 `golden` job（Maven + jsoup 1.16.2 + JsoupXpath 2.5.3，真实运行
+   产出对照 JSON）+ `test-macos`/`test-ios-simulator` 两个 job（下载 golden 产物，跑
+   `GoldenComparisonTests` 做逐字段严格比较）确认。截至本次提交，CI 结果见
+   `STEP4A_HANDOFF.md`（如实记录，不在本文承诺"已全绿"）。
+
+### 环境限制说明
+
+本项目开发环境（iSH / Alpine Linux aarch64）**没有 Swift 工具链**，无法本地 `swift build`/
+`swift test` 做编译期验证，只能：
+1. 读 jsoup 1.16.2 官方源码（GitHub raw，非凭记忆）逐行核对算法；
+2. 读 SwiftSoup 2.9.6 源码确认其公开 API 的真实签名与行为（`Node`/`Element`/`TextNode`/
+   `Tag`/`Attributes` 等）；
+3. 用 Python 脚本（`verify_functions.py`/`verify_fields.py`）做字段/函数覆盖的静态核对；
+4. 手工逐行 trace 新代码对已知样例（如 `brSeparatedContent`/`consecutiveBr`）的输出，
+   在纸面上模拟 jsoup 算法确认一致；
+5. 最终依赖 push 后的 GitHub Actions CI 三个 job 做真正的编译 + golden 比对验证。
 
 ### 开发中定位并修复的一个自身实现 bug（非 SwiftSoup / Kotlin 差异，记录备查）
 
@@ -412,12 +528,12 @@ Element 序号命中，不受中间文本节点干扰。
 | 10 | `not(...)` 与 `and`/`or` 组合 | 不支持，解析通过但恒不匹配（不是语法错误） | 对齐：遇到该组合返回恒不匹配的谓词，不抛错 | `testNotFunctionCombinedWithAndIsUnsupported` |
 | 11 | `getString`/`getStringList` 对 XPath 解析失败的处理 | Kotlin 原始签名 `getResult(rule)?.let{}`/`?.map{}` 的 `?.` 只处理 null，**不捕获异常**——解析失败会直接向上传播 | 已修正：早期版本误用 `try?` 吞掉异常（行为不对齐），现改为 `try` 直接传播，与 Kotlin 真实语义一致 | `testStringFunctionOnElementIsUnsupported`（断言 `XCTAssertThrowsError`）等 |
 | 12 | `getString` 对 XPath 的 `%%` 组合符 | Kotlin 原始签名里 `getString` 只识别 `&&`/`||`，不识别 `%%`；传入含字面 `%%` 的规则时，JsoupXpath 的 ANTLR 解析器有自己的容错路径返回 `""` | **已修正对齐**：`AnalyzeByXPath.getString` 在侦测到规则含字面 `%%` 且解析失败时，专门把结果降级为 `""`（而不是抛错/返回 nil），与真实库一致 | `testXPathGetStringWithPercentReturnsEmptyString`，golden `xpath_basic/xpathPercentInterleave` 已不再需要跳过 |
-| 13 | void 元素 `outerHtml()` 自闭合格式 | `<img src="...">`（无斜杠）——已读 jsoup `Element.java:1737-1744` 源码确认：HTML 语法下 `isEmpty` 标签只输出 `>` | SwiftSoup 2.9.6 源码 `Element.swift` 的 `outerHtmlHead` 把 if/else 两个分支都错写成了自闭合 `" />"`（库自身的移植缺陷，两分支本该一个输出 `>`、一个输出 `" />"`） | **已修正**：新增 `SwiftSoupVoidElementFix`，对 `outerHtml()`/`html()` 结果做受控字符串后处理，把 void 标签（`meta/link/base/frame/img/br/wbr/embed/hr/input/keygen/col/command/device/area/basefont/bgsound/menuitem/param/source/track`，抄自 SwiftSoup `Tag.swift` 的 `emptyTags` 清单）的自闭合斜杠去掉；应用在 CSS `@html`/`@all`、XPath `html()`/`outerHtml()`/元素节点 `asString()` 全部 5 个输出口 | `VoidElementFixTests.swift`（6 个单测，含直接单测 `fix()` 函数本身、多个 void 元素混排、非 void 标签不误伤） |
-| 14 | `&nbsp;`（U+00A0）在 `text()`/`ownText()`/`allText()` 规整中的处理 | jsoup `StringUtil.isActuallyWhitespace` 特意把 `&nbsp;` 纳入"可折叠空白"（源码注释："Not in the spec but expected"），前导/尾随/连续 nbsp 会被裁剪或折叠成单个空格，等同普通空白 | SwiftSoup 2.9.6 的空白判定只认标准空白（空格/Tab/换行/换页/回车），遗漏了这个 jsoup 特有扩展，导致含 `&nbsp;` 的文本前导空白不会被裁剪 | **已修正**：新增 `SwiftSoupTextNormalizeFix`，复刻 jsoup `appendNormalisedWhitespace(stripLeading:true)` 算法对结果做等价再规整，应用在 CSS `@text`/`@ownText`/`@textNodes`、XPath `text()`/`allText()`/内部字符串函数取值 等全部文本抽取口 | golden `malformed_html/htmlEntities_text`（CSS + XPath 两侧均验证） |
-| 15 | `<br>` 后文本节点在 pretty-print 输出里的换行缩进 | jsoup `TextNode.outerHtmlHead` 有一条专门规则：`siblingIndex > 0 && 前一个兄弟节点是 <br>` 时换行缩进（源码注释 "special case wrap on inline `<br>` - doesn't make sense as a block tag"），缩进深度取决于该文本节点在完整 DOM 树中的真实嵌套深度 | SwiftSoup 的 `TextNode.outerHtmlHead` 移植遗漏了这整条分支（以及同方法里的 trimLeading/trimTrailing/couldSkip 逻辑），`<br>` 后文本永远不换行，紧跟在同一行 | **尝试修复后判定无法用字符串级后处理可靠对齐，已回退**：交叉验证了"`<p>` 被外层容器 `.outerHtml()` 携带渲染"（缩进=父标签缩进+1）与"直接对 `<p>`/`<body>` 调 `.html()`/`.outerHtml()`"（缩进=与同级文本相同，不+1）两种结构，发现同一条"文本紧跟 `<br>`"规则在不同 DOM 位置下的真实缩进深度不同，纯字符串级处理（只能看当前行局部文本）无法正确推算真实树深度——这需要完整复刻 jsoup TextNode 的 depth 传递算法，超出"受控字符串后处理"的范畴。**只影响 `@html`/`@all`/XPath `html()`/`outerHtml()` 这类"整块 HTML 字符串"结果类型的格式**，不影响 `text()`/`textNodes()`/`@attr` 等实际取值（已用 golden 的 `brSeparatedContent_textNodes` 等用例验证文本抽取本身不受影响，仅格式化字符串的换行位置有差异） | golden `malformed_html/brSeparatedContent_html`（CSS 侧用例因容器包裹结构凑巧与当前实现一致，XPath 两个直接调用变体与 `consecutiveBr_bodyOuterHtml`、`xpath_real_caimoge/realBookList` 已在 `GoldenComparisonTests.knownDivergences` 登记，均在失败信息里可查 |
+| 13 | void 元素 `outerHtml()` 自闭合格式 | `<img src="...">`（无斜杠）——已读 jsoup `Element.java:1737-1744` 源码确认：HTML 语法下 `isEmpty` 标签只输出 `>` | SwiftSoup 2.9.6 源码 `Element.swift` 的 `outerHtmlHead` 把 if/else 两个分支都错写成了自闭合 `" />"`（库自身的移植缺陷） | **Step4-A 已彻底修复**：不再依赖字符串后处理（原 `SwiftSoupVoidElementFix` 已删除），`JsoupCompatSerializer` 从零按 jsoup `Tag.java` 的 `emptyTags` 清单重新生成标签输出，void 标签天然不带斜杠；应用在 CSS `@html`/`@all`、XPath `html()`/`outerHtml()`/元素节点 `asString()` 全部输出口 | `VoidElementFixTests.swift`（端到端用例）+ golden `serializer_synthetic.json` 多个 void 元素/图文混排用例 |
+| 14 | `&nbsp;`（U+00A0）在 `text()`/`ownText()`/`allText()` 规整中的处理 | jsoup `StringUtil.isActuallyWhitespace` 特意把 `&nbsp;` 纳入"可折叠空白"（源码注释："Not in the spec but expected"），前导/尾随/连续 nbsp 会被裁剪或折叠成单个空格，等同普通空白 | SwiftSoup 2.9.6 的空白判定只认标准空白（空格/Tab/换行/换页/回车），遗漏了这个 jsoup 特有扩展，导致含 `&nbsp;` 的文本前导空白不会被裁剪 | **已修正**：`SwiftSoupTextNormalizeFix`（纯文本提取路径）+ `JsoupCompatSerializer.escape()`（HTML 序列化路径，各自独立复刻，职责边界见 `SwiftSoupTextNormalizeFix.swift` 顶部注释），应用在 CSS `@text`/`@ownText`/`@textNodes`/`@html`/`@all`、XPath `text()`/`allText()`/`html()`/`outerHtml()` 全部文本与序列化输出口 | golden `malformed_html/htmlEntities_text` + `serializer_synthetic/entityNbsp_*` |
+| 15 | `<br>` 后文本节点在 pretty-print 输出里的换行缩进 | jsoup `TextNode.outerHtmlHead` 有一条专门规则：`siblingIndex > 0 && 前一个兄弟节点是 <br>` 时换行缩进（源码注释 "special case wrap on inline `<br>` - doesn't make sense as a block tag"），缩进深度取决于该文本节点在完整 DOM 树中的真实嵌套深度 | SwiftSoup 的 `TextNode.outerHtmlHead` 移植遗漏了这整条分支（以及同方法里的 trimLeading/trimTrailing/couldSkip 逻辑） | **Step4-A 已彻底修复**：字符串级后处理（原 `SwiftSoupBrIndentFix`）已被证明不可靠并删除。`JsoupCompatSerializer` 改为自己做深度优先遍历，`depth` 参数是遍历时天然维护的真实树深度（不是从字符串猜测），完整复刻 `TextNode.outerHtmlHead` 的该分支及 trimLeading/trimTrailing/couldSkip 逻辑 | golden `malformed_html/brSeparatedContent_html`/`brSeparatedContent_outerHtml`/`consecutiveBr_bodyOuterHtml`、`xpath_real_caimoge/realBookList` 的 `knownDivergences` 豁免已全部删除，改为严格比较；`GoldenComparisonTests.knownDivergences` 现为空集合 |
 
-> 以上 15 条全部来自 golden 真实对照，**不是主观猜测**；除第 15 条（已论证"字符串级后处理无法可靠对齐，需要完整复刻 jsoup 渲染器深度传递算法"）外，
-> 其余均已让 Swift 实现与真实 JsoupXpath 行为完全一致，包括第 12、13、14 条在本轮收尾中新修复的内容。
+> 以上 15 条全部来自 golden 真实对照，**不是主观猜测**；Step4-A 彻底重写 HTML 序列化后，第 13/14/15 条
+> 已从"已知差异/已尝试修复但回退"升级为"彻底修复"，不再需要任何 `knownDivergences` 豁免。
 
 ## golden 对照（CI 自动生成，不需要本地跑任何东西）
 
@@ -438,8 +554,12 @@ Element 序号命中，不受中间文本节点干扰。
   「规则 / 输入(HTML) / Java 结果 / Swift 结果」四项，已知且登记过的差异（`knownDivergences`）除外。
 - 覆盖范围：`cases/css_basic.json`（全部 CSS 语法、全部结果类型、`&&`/`||`/`%%`）、
   `cases/xpath_basic.json`（全部已支持 XPath 语法、`|`/`not()`/字符串函数、多重谓词）、
-  `cases/css_real_xiaoshuo2016.json`/`cases/xpath_real_caimoge.json`（两个真实书源的真实规则）。
-  共 4 个用例文件、138 条用例。
+  `cases/css_real_xiaoshuo2016.json`/`cases/xpath_real_caimoge.json`（两个真实书源的真实规则）、
+  `cases/malformed_html.json`（未闭合标签等 jsoup 容错场景）、
+  `cases/serializer_synthetic.json`（Step4-A 新增：66 个合成 HTML 样本 × 4 种序列化结果类型
+  `@html`/`@all`/XPath `html()`/`outerHtml()` = 264 条用例，专门验证 `JsoupCompatSerializer`
+  与真实 jsoup 逐字节对齐，详见上方「Step4-A：HTML 序列化重写」章节）。
+  共 6 个用例文件、约 400+ 条用例（随用例文件持续增长，以 `scripts/golden/cases/*.json` 实际内容为准）。
 
 ## 真实书源规则扫描清单（测试用例来源）
 
