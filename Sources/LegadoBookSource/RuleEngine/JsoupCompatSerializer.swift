@@ -272,17 +272,32 @@ enum JsoupCompatSerializer {
 
     // MARK: - 属性输出
 
-    /// jsoup Attribute.shouldCollapseAttribute：syntax=html 且 (val 为空 或 val==key 忽略大小写)
-    /// 且 key 是布尔属性时折叠（不输出 `="..."`）。
-    static func shouldCollapseAttribute(key: String, value: String) -> Bool {
+    /// jsoup Attribute.shouldCollapseAttribute（static 版，Attribute.java:206-211）精确复刻：
+    /// ```
+    /// out.syntax()==html && ( val==null || (val.isEmpty || val.equalsIgnoreCase(key)) && isBooleanAttribute(key) )
+    /// ```
+    /// 注意运算优先级：`||` 左侧是单独的 `val==null`，右侧是 `(空或==key) && 布尔属性`。
+    /// 即「无值属性（val==null）无论属性名是否布尔，一律折叠」，这是 jsoup 对
+    /// `<video controls>` 这类无值属性的处理——`controls` 并不在布尔属性清单里，
+    /// 但因为它没有值（val==null），依然折叠成 `controls`（不输出 `=""`）。
+    ///
+    /// SwiftSoup 把「无值属性」表示为 `BooleanAttribute` 子类实例（其 `value` 为空数组），
+    /// 把「有值但为空字符串的属性」表示为普通 `Attribute`（value 为 `[]`）。两者在
+    /// `getValue()` 上都返回 `""`，无法区分，故必须用 `is BooleanAttribute` 判断
+    /// 对应 jsoup 的 `val==null` 分支。
+    /// （SwiftSoup 自带的 `shouldCollapseAttribute` 遗漏了 jsoup 的 `val==null` 分支，
+    /// 是库自身缺陷，与 void 元素 bug 同源；本序列化器不依赖它、在此自行对齐。）
+    static func shouldCollapseAttribute(isNoValue: Bool, key: String, value: String) -> Bool {
+        if isNoValue { return true } // jsoup: val == null
         let isBoolAttr = booleanAttributeNames.contains(key.lowercased())
         guard isBoolAttr else { return false }
         return value.isEmpty || value.caseInsensitiveCompare(key) == .orderedSame
     }
 
     /// 输出单个属性："key" 或 "key=\"value\""（value 按 inAttribute=true 转义）。
-    static func attributeHTML(key: String, value: String) -> String {
-        if shouldCollapseAttribute(key: key, value: value) {
+    /// isNoValue 对应 jsoup 的 `val == null`（SwiftSoup 的 `BooleanAttribute` 实例）。
+    static func attributeHTML(key: String, value: String, isNoValue: Bool) -> String {
+        if shouldCollapseAttribute(isNoValue: isNoValue, key: key, value: value) {
             return key
         }
         let escaped = escape(value, inAttribute: true, normaliseWhite: false, stripLeadingWhite: false, trimTrailing: false)
@@ -296,7 +311,9 @@ enum JsoupCompatSerializer {
         var out = ""
         for attribute in attrs.asList() {
             out.append(" ")
-            out.append(attributeHTML(key: attribute.getKey(), value: attribute.getValue()))
+            // SwiftSoup 用 BooleanAttribute 子类表示「无值属性」（jsoup 里 val==null）。
+            let isNoValue = attribute is BooleanAttribute
+            out.append(attributeHTML(key: attribute.getKey(), value: attribute.getValue(), isNoValue: isNoValue))
         }
         return out
     }
