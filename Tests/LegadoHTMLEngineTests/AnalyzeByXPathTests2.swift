@@ -100,20 +100,27 @@ final class AnalyzeByXPathTests2: XCTestCase {
     // 不解析 string()，遇到时抛不支持语法，由上层吞异常返回空值。
 
     func testStringFunctionOnElementIsUnsupported() throws {
+        // 顶层 string() 解析即失败（抛错），对齐 Kotlin getString 不吞异常的真实行为
+        // （Kotlin `getResult(rule)?.let{}` 的 `?.` 只处理 null，不捕获异常）。
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
-        XCTAssertNil(try x.getString("string(//div[@id='x'])"), "真实 JsoupXpath 不支持 string()，应返回 nil")
+        XCTAssertThrowsError(try x.getString("string(//div[@id='x'])"))
     }
     func testStringFunctionOnAttrIsUnsupported() throws {
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
-        XCTAssertNil(try x.getString("string(//div/@id)"), "真实 JsoupXpath 不支持 string()，应返回 nil")
+        XCTAssertThrowsError(try x.getString("string(//div/@id)"))
     }
     func testStringFunctionInPredicateIsUnsupported() throws {
+        // 真实 JsoupXpath 对谓词内 string() 比较是硬性解析失败（而非"解析通过但不命中"），
+        // 本项目对齐：抛 RuleEngineError.invalidXPath。
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
-        let r = try x.getStringList("//div[string(@id)='x']/text()")
-        XCTAssertEqual(r, [], "真实 JsoupXpath 谓词内 string() 比较不生效，应返回空")
+        XCTAssertThrowsError(try x.getStringList("//div[string(@id)='x']/text()")) { error in
+            guard case RuleEngineError.invalidXPath = error else {
+                return XCTFail("应抛 RuleEngineError.invalidXPath，实际：\(error)")
+            }
+        }
     }
 
     // MARK: - 四、count()
@@ -163,10 +170,13 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let x = try AnalyzeByXPath(html)
         XCTAssertEqual(try x.getString("substring(//p/text(),1,5)"), "Hello")
     }
-    func testSubstringNoLength() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // 两参数形式 substring(s, start)（不给长度）不被真实 JsoupXpath 支持，返回 nil；
+    // 只有三参数形式可用。本移植对齐该行为。
+    func testSubstringNoLengthIsUnsupported() throws {
         let html = "<p>HelloWorld</p>"
         let x = try AnalyzeByXPath(html)
-        XCTAssertEqual(try x.getString("substring(//p/text(),6)"), "World")
+        XCTAssertThrowsError(try x.getString("substring(//p/text(),6)"), "真实 JsoupXpath 不支持两参数 substring()")
     }
     func testSubstringInPredicate() throws {
         let html = "<p>HelloWorld</p>"
@@ -182,11 +192,13 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let x = try AnalyzeByXPath(html)
         XCTAssertEqual(try x.getString("substring-before(//p/text(),'-01-')"), "2024")
     }
-    func testSubstringBeforeNoMatch() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // W3C XPath 1.0 规范里分隔符不存在时应返回空串，但真实 JsoupXpath 返回原字符串
+    // （非规范行为，是其自身实现偏差）。本移植复刻真实行为。
+    func testSubstringBeforeNoMatchReturnsOriginal() throws {
         let html = "<p>2024-01-15</p>"
         let x = try AnalyzeByXPath(html)
-        // XPath 规范：分隔符不存在时返回空串
-        XCTAssertEqual(try x.getString("substring-before(//p/text(),'ZZZ')"), "")
+        XCTAssertEqual(try x.getString("substring-before(//p/text(),'ZZZ')"), "2024-01-15")
     }
     func testSubstringAfterBasic() throws {
         let html = "<p>2024-01-15</p>"
@@ -217,11 +229,13 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let x = try AnalyzeByXPath(html)
         XCTAssertEqual(try x.getString("string-length(//nonexist)"), "0")
     }
-    func testStringLengthInPredicate() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // string-length() 顶层调用可用（上面两个用例），但谓词内比较不生效。
+    func testStringLengthInPredicateIsUnsupported() throws {
         let html = "<p>12345</p>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//p[string-length(text())=5]/text()")
-        XCTAssertEqual(r, ["12345"])
+        XCTAssertEqual(r, [], "真实 JsoupXpath 谓词内 string-length() 比较不生效，应返回空")
     }
 
     // MARK: - 九、contains()/starts-with() 的 text() / . 参数形式

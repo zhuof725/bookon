@@ -119,12 +119,11 @@ public final class AnalyzeByXPath {
 
         if rules.count == 1 {
             // Kotlin: getResult(xPath)?.map { result.add(it.asString()) }
-            if let nodes = try? self.getResult(xPath) {
-                for n in nodes { result.append(n.asString()) }
-            } else {
-                // 求值失败被吞：记诊断（对齐 Kotlin 里 selN 内部异常不抛的容错）。
-                diagnostics?.record(source: "AnalyzeByXPath.getStringList", rule: xPath, message: "XPath 求值失败")
-            }
+            // 注意：Kotlin 的 `?.`（安全调用）只处理 null，不捕获异常——如果 getResult
+            // 内部抛异常（如 JsoupXpath 解析失败），它会直接向上传播，不会被这里吞掉。
+            // 之前误用 `try?` 吞掉了异常，与 Kotlin 真实行为不符，这里改为 `try` 传播。
+            let nodes = try self.getResult(xPath)
+            for n in nodes { result.append(n.asString()) }
             return result
         } else {
             var results: [[String]] = []
@@ -158,11 +157,10 @@ public final class AnalyzeByXPath {
         let rules = try ruleAnalyzes.splitRule("&&", "||")
         if rules.count == 1 {
             // Kotlin: getResult(rule)?.let { return TextUtils.join("\n", it) }
-            if let nodes = try? self.getResult(rule) {
-                return nodes.map { $0.toStringValue() }.joined(separator: "\n")
-            }
-            diagnostics?.record(source: "AnalyzeByXPath.getString", rule: rule, message: "XPath 求值失败")
-            return nil
+            // 注意：`?.let` 只处理 null，不捕获异常；之前误用 `try?` 吞掉异常，
+            // 与 Kotlin 真实行为不符，这里改为 `try` 传播（见上面 getStringList 的同类修正）。
+            let nodes = try self.getResult(rule)
+            return nodes.map { $0.toStringValue() }.joined(separator: "\n")
         } else {
             var textList: [String] = []
             for rl in rules {

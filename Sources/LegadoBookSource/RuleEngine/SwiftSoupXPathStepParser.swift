@@ -317,9 +317,16 @@ extension SwiftSoupXPathEvaluator {
                     return Predicate(kind: .textCompare(op: .ne, value: val))
                 }
             }
+            // string(...)='x' 专门判定为硬性语法错误（抛错），不是"能解析但不命中"：
+            // 经 golden 验证真实 JsoupXpath 对谓词内 string() 比较是解析失败（Java 侧
+            // elementsCount=-1、getString=nil，等价于异常传播），与 count()/string-length()
+            // 的"解析通过但恒不匹配"（Java 侧 elementsCount=0）不同，需要分别处理。
+            if t.hasPrefix("string(") {
+                throw RuleEngineError.invalidXPath("谓词内 string() 比较不受真实 JsoupXpath 支持 in \(whole)")
+            }
             // 形如 "xxx(...)=value" 的函数比较，但函数名不在本项目支持列表里
-            // （如 count()/string()——经 golden 验证真实 JsoupXpath 对这些函数在谓词内的比较
-            // 同样"解析通过但永不命中"，而不是语法错误）。识别出这种形状就返回恒不匹配，
+            // （如 count()/string-length()——经 golden 验证真实 JsoupXpath 对这些函数在谓词内
+            // 的比较表现为"解析通过但永不命中"，而不是语法错误）。识别出这种形状就返回恒不匹配，
             // 不识别（真正语法有问题）才抛错。
             if looksLikeFunctionCallCompare(t) {
                 return Predicate(kind: .neverMatches)
@@ -329,13 +336,27 @@ extension SwiftSoupXPathEvaluator {
         }
 
         /// 粗略判断是否形如 `名字(参数) 运算符 值`（用于识别"看起来是函数比较但函数名不受支持"的情形）。
+        /// 用括号配平找「真正匹配」的右括号（参数里可能还有嵌套括号，如 `string-length(text())`），
+        /// 不能简单取第一个 `)`。
         private static func looksLikeFunctionCallCompare(_ t: String) -> Bool {
-            guard let openParen = t.firstIndex(of: "("), let closeParen = t.firstIndex(of: ")"), openParen < closeParen else {
-                return false
-            }
+            guard let openParen = t.firstIndex(of: "(") else { return false }
             let fnName = String(t[t.startIndex..<openParen])
             // 函数名只能是字母/连字符（如 string-length），避免误判其它结构。
             guard !fnName.isEmpty, fnName.allSatisfy({ $0.isLetter || $0 == "-" }) else { return false }
+
+            // 从 openParen 开始配平括号，找到与之匹配的 ")"。
+            var depth = 0
+            var i = openParen
+            var matchedClose: String.Index? = nil
+            while i < t.endIndex {
+                if t[i] == "(" { depth += 1 }
+                else if t[i] == ")" {
+                    depth -= 1
+                    if depth == 0 { matchedClose = i; break }
+                }
+                i = t.index(after: i)
+            }
+            guard let closeParen = matchedClose else { return false }
             let rest = t[t.index(after: closeParen)...].trimmingCharacters(in: .whitespaces)
             return rest.hasPrefix("=") || rest.hasPrefix("!=")
         }
