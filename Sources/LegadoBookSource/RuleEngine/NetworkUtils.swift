@@ -51,12 +51,12 @@ public enum NetworkUtils {
         // Kotlin: URL(baseURL.substringBefore(","))
         let base = substringBefore(baseURL!, ",")
         let absoluteUrl = JavaURL.parse(base)   // 解析失败 -> nil（对齐 catch）
-        return getAbsoluteURL(absoluteUrl, relativePath)
+        return getAbsoluteURL(parsedBase: absoluteUrl, relativePath)
     }
 
     /// 对应 Kotlin: fun getAbsoluteURL(baseURL: URL?, relativePath): String
-    /// Swift 用 JavaURL? 表达 java.net.URL?。
-    static func getAbsoluteURL(_ baseURL: JavaURL?, _ relativePath: String) -> String {
+    /// Swift 用 JavaURL? 表达 java.net.URL?。（命名区分 String 重载，避免 nil 实参歧义。）
+    static func getAbsoluteURL(parsedBase baseURL: JavaURL?, _ relativePath: String) -> String {
         let relativePathTrim = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let baseURL = baseURL else { return relativePathTrim }
         if LegadoStringUtils.isAbsUrl(relativePathTrim) { return relativePathTrim }

@@ -628,3 +628,142 @@ CSS 选择器解析失败、XPath 语法不支持（硬性失败类，见上表�
 
 源码中以 `TODO(后续步骤)` 标注：BaseSource/BaseBook 运行时方法、Book/BookChapter/SearchBook 业务方法、变量存取、`ReadConfig.startDate` 的 LocalDate 强类型化、SwiftData/GRDB 持久化接入。
 第 3 步之后仍未做：`AnalyzeRule` 总调度（把 Regex/JSONPath/JSoup/XPath 四个后端按 Mode 统一调度）、JS 引擎、网络、UI。
+
+
+# 第 4 步 B：AnalyzeRule 总调度 + JS 引擎
+
+本节记录 Step4-B 的移植：`AnalyzeRule`（规则总调度）、JS 引擎（JavaScriptCore）、
+`NetworkUtils`、`unescapeHtml4`、`replaceRegex`、依赖注入协议。对应 Kotlin
+`model/analyzeRule/AnalyzeRule.kt`（973 行）及其工具依赖。
+
+## 已实现内容
+
+- **AnalyzeRule 主体**：`getString`（3 重载）、`getStringList`（2 重载）、`getElement`、
+  `getElements`、`splitSourceRule` / `SourceRule`（Mode 判定：XPath/Json/Default/Js/Regex/WebJs；
+  前缀 `@CSS:`/`@@`/`@XPath:`/`@Json:` 大小写不敏感；`$.`/`$[` 判 JSON；`/` 判 XPath；
+  allInOne 下 `:` 前缀判 Regex；`{{ }}` 内联、`@get:{}`、`@put:{}`、`$1~$99` 组反向引用、
+  `##`/`###` 切分 replaceRegex/replacement/replaceFirst）、`putRule`/`splitPutRule`、
+  `replaceRegex`、`compileRegexCache`、缓存（stringRuleCache、regexCache 容量 16、
+  scriptCache 容量 16）、`setContent`（含 `isJSON` 判定）、`setBaseUrl`、`setRedirectUrl`、
+  `getAnalyzeByXPath/JSoup/JSonPath`（`o != content` 新建、否则缓存复用）、put/get 四层
+  回退链（chapter→book→ruleData→source）、`setChapter/setNextChapterUrl/setRuleData` 等 setter。
+- **JS 引擎（JavaScriptCore）**：`evalJS` 绑定键名与 Kotlin 完全一致（java、cookie、cache、
+  source、book、result、baseUrl、chapter、title、src、nextChapterUrl、rssArticle、fromBookInfo）。
+  `java` 对象用 **Proxy 包裹**：AnalyzeRule 自有方法（put/get/getString/getStringList/
+  getElement/getElements/ajax/log/getSource/getTag）直通；JsExtensions 的 67 个方法
+  （见 `JsExtensionsCatalog.swift`，正则自动提取）调用时**抛明确 JS 错误
+  「java.xxx 尚未实现（JsExtensions，第 5 步）」并记 diagnostics**，不静默返回 undefined。
+- **NetworkUtils**：`getAbsoluteURL`（String base / JavaURL base 两重载）、`isAbsUrl`、
+  `isDataUrl`、`getBaseUrl`。URL 相对解析按 **java.net.URL 算法自实现**（`JavaURLResolver.swift`），
+  不用 Swift Foundation URL 拼接（见下「与 Kotlin 已知差异」）。
+- **unescapeHtml4**：自实现，含 252 条 HTML4 命名实体表（`HtmlEntities.swift`，源自 CPython
+  `html.entities.name2codepoint`）、十进制 `&#123;`、十六进制 `&#xAB;`，无分号实体不还原
+  （对齐 commons-text LookupTranslator）。
+- **依赖注入协议 + 内存默认实现**：`RuleDataStore`（含 >=10000 字符走 big variable 分支）、
+  `BookData`、`ChapterData`、`SourceVariableStore`、`AjaxProvider`（默认返回错误串）、
+  `WebJSProvider`（默认抛 `.unsupported`）、`CookieStoreProtocol`、`CacheManagerProtocol`。
+
+## RuleValue：Kotlin `Any?` → Swift 动态类型映射表
+
+AnalyzeRule 调度过程中的中间值（Kotlin 的 `Any?`）用 `RuleValue` 枚举表达：
+
+| Kotlin 类型 | RuleValue case |
+|---|---|
+| `String` | `.string` |
+| `List<String>` / `ArrayList<String>` | `.stringList` |
+| org.jsoup `Element` | `.element` |
+| org.jsoup `Elements` / `List<Node>` | `.elements` |
+| JsoupXpath `JXNode` / `List<JXNode>` | `.xpathNodes` |
+| Jayway JSON 读取结果（对象/数组/标量） | `.json`（`JSONValue`） |
+| Rhino `NativeObject` / JS 对象 | `.jsObject`（键值 map） |
+| Gson `LinkedTreeMap<*,*>` | `.jsonObject`（键值 map，直接按键取值） |
+| JS 数字 / 布尔 | `.number` / `.bool` |
+| `null` | `.null` |
+
+## JS 值 → RuleValue 转换表
+
+| JavaScriptCore JSValue | RuleValue |
+|---|---|
+| string | `.string` |
+| number | `.number`（Double） |
+| boolean | `.bool` |
+| array | `.stringList`（元素逐个字符串化） |
+| object | `.jsObject`（键值浅转换） |
+| null / undefined | `.null` |
+
+## Rhino（Kotlin）vs JavaScriptCore（本移植）已知差异
+
+| 主题 | Rhino（Kotlin） | JavaScriptCore（本移植） | 处理 |
+|---|---|---|---|
+| **Java 互操作** | 支持 `Packages.xxx`、`importClass`、`importPackage`、`org.jsoup.Jsoup.parse`、`java.lang.String`、`JavaImporter` | **不存在**，无法运行 | 预检测这些标记，命中即抛 `RuleEngineError.jsError` + 记 diagnostics；**不假装支持**。真实书源「魔丸小说」「爱丽丝书屋」用到，端到端测试断言抛错 |
+| **整数值 Double→String** | `Double.toString()`：`1.0` → `"1.0"`（Rhino 对整数值 Double 的 `+` 字符串化规则有特例） | `Number→String`：`1` → `"1"` | AnalyzeRule.makeUpRule 对 `{{ }}` 内 JS 结果 `Double%1==0` 用 `String.format("%.0f")` 强制整数输出，**已对齐**（见 `testInline_jsExpr`）。但直接 `evalJS("1+1").stringValue` 本移植返回 `"2.0"`（RuleValue.number 整数带 .0），**与 Rhino 的裸求值字符串化可能不同**，标注差异 |
+| **ES 版本** | Rhino 默认 ES5 + 部分 ES6 | JSC 支持现代 ES（含 ES2020+、Proxy、let/const、箭头函数等） | 现代语法在 JSC 可用而 Rhino 可能不可用；**未验证**是否有真实书源依赖 Rhino 特有的旧行为 |
+| **`result` 复杂对象绑定** | 直接把 Kotlin 对象（Element/NativeObject）绑给 JS | 本移植把复杂 RuleValue 以**字符串化**后绑定 | 简化；JS 里对 `result` 做 DOM 操作的规则无法工作（属 Java 互操作范畴，同上抛错） |
+
+## NetworkUtils：java.net.URL vs Swift URL 已知差异（本步骤待 C 部分 golden 验证）
+
+Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** Swift
+`URL(string:relativeTo:)`（二者在 `../`、`//host`、`?`/`#` 开头相对、空相对、含空格/中文
+未转义字符上行为不同），改为按 java.net.URL / RFC 3986 的算法自实现（`JavaURLResolver.swift`）：
+
+- 空 relative → 结果 = base（保留 ref）
+- `#frag` 开头 → 仅换 ref
+- `//host` 开头 → 换 authority
+- `/path` 开头 → 绝对路径（保留 base authority）
+- `?query` 开头 → 保留 base path，换 query
+- 相对路径 → 基于 base 目录拼接 + `.`/`..` 规范化（`remove_dot_segments`）
+- 同协议 `scheme:rel` → 去 scheme 当相对处理；异协议 → 作为独立绝对 URL
+- java **不**对 path 做百分号编码，原样保留空格/中文
+
+> ⚠️ **本步骤为「按理解实现」**，最终正确性由 **C 部分 golden（真实 java.net.URL 对照，
+> 至少 60 例）** 验证。可能的边角差异：含未转义空格/中文时 java 的具体输出、`file:`/无
+> authority scheme、连续 `//` 的 path、越过根的 `..` 处理细节。这些在 C 部分核对修正。
+
+## replaceRegex：Java/Kotlin 正则 vs ICU（NSRegularExpression）已知差异
+
+替换模板转换见 `RegexTemplate.javaToICU`：`$1..$9` 组引用保留；`\$` 字面 $；`\\` 字面 \；
+`$` 后非数字转义为 `\$`。匹配侧（NSRegularExpression 用 ICU 正则）与 Java 正则的已知差异：
+
+| 特性 | Java 正则 | ICU（NSRegularExpression） |
+|---|---|---|
+| 占有量词 `X++` `X*+` `X?+` | 支持 | **不支持**（会报错或语义不同） |
+| `\h` `\v`（水平/垂直空白） | 支持 | 支持（ICU 也有，但语义可能略异） |
+| `\Z`（输入末尾，允许最终换行） | 支持 | ICU 用 `\Z`/`\z`，语义基本一致 |
+| 命名组 `(?<name>...)` / `\k<name>` | 支持 | 支持（语法一致） |
+| 内嵌标志作用域 `(?i)` | 影响其后 | ICU 行为基本一致 |
+| 替换模板 `${name}` | 支持命名组引用 | **不支持 ${name}**，只支持 `$n` |
+
+> ⚠️ 最终由 **C 部分 golden（至少 50 例）** 验证。
+
+## unescapeHtml4：commons-text vs 本移植已知差异（待 C 部分 golden 验证）
+
+- 命名实体表来自 CPython `html.entities.name2codepoint`（252 条，HTML4 命名实体集）。
+  commons-text 1.13.1 的 `EntityArrays` 并集理论上与之一致，但**个别冷门实体或大小写变体
+  可能有出入**，待 golden 核对。
+- 无分号命名实体（`&amp` 不带 `;`）**不还原**（对齐 commons-text LookupTranslator 键带分号）。
+- 数字实体要求分号（`&#65;` 可，`&#65` 不还原），对齐 commons-text NumericEntityUnescaper 默认。
+- 超出 Unicode 范围 / 无效 scalar 的数字实体：本移植**原样保留**；commons-text 行为待核对。
+
+> ⚠️ 最终由 **C 部分 golden（至少 40 例）** 验证。
+
+## 本步骤明确排除（后续 TODO）
+
+- `reGetBook` / `refreshTocUrl`：依赖 WebBook，**留桩抛 `.unsupported`**（第 6 步）。
+- JsExtensions 的 67 个方法体（见 `JsExtensionsCatalog.swift` 与 `JS_EXTENSIONS_USAGE.md`）：第 5 步。
+- 真实网络（AnalyzeUrl / ajax 真实请求）：第 6 步。
+- 真实 WebView（WebJs / BackstageWebView / `java.webView`）：第 5/6 步。
+- WebBook/BookList/BookInfo/BookChapterList/BookContent 流程、AnalyzeUrl：后续步骤。
+- Kotlin 协程上下文（`setCoroutineContext`）：Swift 无对应协程模型，排除。
+
+## 样本诚实标注（第 4 步 B）
+
+- 合成样本：`Tests/LegadoAnalyzeRuleTests/` 内除标注「真实规则」外，所有 HTML/JSON/规则文本
+  均为合成（测试注释标「合成样本，非真实数据」）。
+- 真实规则 + 合成数据：端到端测试（`AnalyzeRuleEndToEndTests`）用 `配置文件_7个.json` 里的
+  **真实书源规则文本**，输入响应为合成数据，每个用例注释标「规则真实、数据合成」及来源书源名
+  （淘小说书城/速读谷/得奇小说网/笔趣阁345/得间小说/魔丸小说/爱丽丝书屋）。
+
+## java.xxx 使用情况表
+
+见 `JS_EXTENSIONS_USAGE.md`（7 个真实书源实际调用的 `java.xxx` 方法 + 次数 + 已/未实现状态 +
+Java 互操作标记 + 第 5 步实现优先级）。

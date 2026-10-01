@@ -75,7 +75,7 @@ extension AnalyzeRule {
             if str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return baseUrlValue ?? ""
             }
-            return NetworkUtils.getAbsoluteURL(redirectUrlValue, str)
+            return NetworkUtils.getAbsoluteURL(parsedBase: redirectUrlValue, str)
         }
         return str
     }
@@ -168,7 +168,7 @@ extension AnalyzeRule {
         if isUrl {
             var urlList: [String] = []
             for u in list {
-                let abs = NetworkUtils.getAbsoluteURL(redirectUrlValue, u)
+                let abs = NetworkUtils.getAbsoluteURL(parsedBase: redirectUrlValue, u)
                 if !abs.isEmpty && !urlList.contains(abs) { urlList.append(abs) }
             }
             return urlList
