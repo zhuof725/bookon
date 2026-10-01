@@ -112,7 +112,8 @@ enum PathParser {
         var name = ""
         while i < s.count {
             let c = s[i]
-            if c == "." || c == "[" { break }
+            // 在 . [ ( 处停止：`(` 用于识别函数调用（如 length()），否则会把 "length()" 整体当成字段名。
+            if c == "." || c == "[" || c == "(" { break }
             name.append(c)
             i += 1
         }

@@ -130,6 +130,67 @@ public enum JSONValue: Equatable {
         }
     }
 
+    /// Jayway(JsonPath 2.10.0, json-smart provider) 读取结果经 `Object.toString()` 的真实表示：
+    ///  - 对象（Map）用 Java `Map.toString()` 格式：`{key=value, key=value}`（`=` 分隔、`, ` 连接、
+    ///    键值不加引号），其中 **值若是数组则渲染成 JSON**（json-smart JSONArray.toString），
+    ///    **值若是对象则继续用 Map 格式**（递归）。
+    ///  - 数组（List）本身作为「值」出现在对象里时渲染成 JSON；但 Jayway 返回的顶层结果列表由
+    ///    AnalyzeByJSonPath 逐元素 join，不走这里的数组分支。standalone 数组值用 JSON。
+    ///  - 标量：同 stringValue（字符串原样、数字/布尔字面量、null="null"）。
+    /// golden 对照（第 4 步 C）确认此格式与真实 Jayway 一致。
+    var jaywayStringValue: String {
+        switch self {
+        case .object:
+            return JSONValue.javaMapString(self)
+        case .array:
+            // standalone 数组值：JSON（json-smart JSONArray.toString）。
+            return JSONValue.compactJSONString(self)
+        default:
+            return stringValue
+        }
+    }
+
+    /// Java Map.toString() 风格：`{k=v, k=v}`；值为数组 -> JSON，值为对象 -> 递归 Map 格式。
+    static func javaMapString(_ v: JSONValue) -> String {
+        switch v {
+        case .object(let o):
+            let body = o.orderedPairs.map { (k, val) -> String in
+                return "\(k)=\(javaMapValueString(val))"
+            }.joined(separator: ", ")
+            return "{" + body + "}"
+        case .array:
+            // 数组本身（非对象的值位置）：json-smart JSONArray.toString -> JSON
+            return compactJSONString(v)
+        default:
+            return scalarString(v)
+        }
+    }
+
+    /// 对象里「值」位置的渲染：数组 -> JSON；对象 -> Map 格式；标量 -> 标量串。
+    private static func javaMapValueString(_ v: JSONValue) -> String {
+        switch v {
+        case .array:
+            return compactJSONString(v)   // 值为数组 -> JSON
+        case .object:
+            return javaMapString(v)       // 值为对象 -> Map 格式（递归）
+        default:
+            return scalarString(v)
+        }
+    }
+
+    /// 标量的 Java toString（字符串不加引号）。
+    private static func scalarString(_ v: JSONValue) -> String {
+        switch v {
+        case .string(let s): return s
+        case .bool(let b): return b ? "true" : "false"
+        case .int(let i): return String(i)
+        case .bigInteger(let s): return s
+        case .double(let d): return formatDouble(d)
+        case .null: return "null"
+        default: return v.stringValue
+        }
+    }
+
     /// 浮点格式化，对齐 Java Double.toString 的常见情形：整数值的浮点输出带 ".0"
     /// （如 1.0 -> "1.0"，1000.0 -> "1000.0"），非整数输出其十进制表示（如 1.5 -> "1.5"）。
     static func formatDouble(_ d: Double) -> String {

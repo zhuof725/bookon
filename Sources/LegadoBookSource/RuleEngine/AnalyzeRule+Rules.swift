@@ -80,7 +80,7 @@ extension AnalyzeRule {
                     let g0 = ns.substring(with: m.range)
                     // Kotlin: matcher.group(0)!!.replaceFirst(regex, replacement)
                     let g0ns = g0 as NSString
-                    let template = RegexTemplate.javaToICU(replacement)
+                    let template = RegexTemplate.javaToICU(replacement, pattern: replaceRegexStr)
                     if let m2 = regex.firstMatch(in: g0, range: NSRange(location: 0, length: g0ns.length)) {
                         let replaced = regex.replacementString(for: m2, in: g0, offset: 0, template: template)
                         let full = (g0ns.replacingCharacters(in: m2.range, with: replaced))
@@ -96,7 +96,7 @@ extension AnalyzeRule {
             // ##match##replace 全部替换
             if let regex = regex {
                 let ns = result as NSString
-                let template = RegexTemplate.javaToICU(replacement)
+                let template = RegexTemplate.javaToICU(replacement, pattern: replaceRegexStr)
                 return regex.stringByReplacingMatches(in: result, range: NSRange(location: 0, length: ns.length), withTemplate: template)
             }
             // regex 为 nil：Kotlin 退回字面量替换 result.replace(replaceRegex, replacement)

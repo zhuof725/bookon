@@ -65,6 +65,10 @@ extension JavaURL {
     }
 
     /// java.net.URL(base, spec) 的相对解析。
+    /// 精确移植 java.net.URLStreamHandler.parseURL（http/https handler 继承该逻辑）：
+    ///  - 规范化（/./ 与 /../ 消解、尾部 /.. /. 处理）**仅对「相对路径」生效**（isRelPath=true），
+    ///    对「绝对路径 /...」和「协议相对 //...」路径**不规范化**（保留字面 /../、//）。
+    ///  - "?query" only：path = base path 截到最后一个 '/' 之前 + "/"（丢掉文件名段）。
     static func resolve(base: JavaURL, relative spec0: String) -> JavaURL? {
         // java 会先 trim spec 两端空白
         var spec = spec0.trimmingCharacters(in: .whitespaces)
@@ -81,40 +85,36 @@ extension JavaURL {
             }
         }
 
-        var scheme = base.scheme
+        let scheme = base.scheme
         var authority = base.authority
-        var path = base.path
+        var path: String? = base.path
         var query = base.query
         var ref = base.ref
 
-        // 2. 空 spec -> 结果 = base（含 ref）。java 规定空 spec 保留一切（含 ref）。
+        // 2. 空 spec -> 结果 = base（含 ref）。
         if spec.isEmpty {
-            return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
+            return JavaURL(scheme: scheme, authority: authority, path: path ?? "", query: query, ref: ref)
         }
 
-        // 分离 ref（# 之后）
+        // 分离 ref（# 之后）。spec 带 # -> 用 spec 的 ref；不带 # -> 清除 base ref。
         var work = spec
         if let h = work.firstIndex(of: "#") {
             ref = String(work[work.index(after: h)...])
             work = String(work[work.startIndex..<h])
         } else {
-            // spec 不带 #：java 清除 base 的 ref（除非是纯 # 开头，上面已处理）
             ref = nil
         }
 
-        // 3. 纯 # 开头（work 为空而 spec 非空且以 # 开头）：只换 ref，其余保留。
+        // 3. work 为空（纯 # 开头）：只换 ref，其余保留。
         if work.isEmpty {
-            if spec.hasPrefix("#") {
-                return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
-            }
-            // work 为空但非 # 开头（极少见）
-            return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
+            return JavaURL(scheme: scheme, authority: authority, path: path ?? "", query: query, ref: ref)
         }
 
-        // 4. "//" 开头 -> 换 authority
+        var isRelPath = false
+
+        // 4. "//" 开头 -> 换 authority（此后 path 为绝对，不作相对规范化）。
         if work.hasPrefix("//") {
             var r = String(work.dropFirst(2))
-            // authority 到 / ? 结束（# 已剥离）
             let e = r.firstIndex(where: { $0 == "/" || $0 == "?" })
             if let e = e {
                 authority = String(r[r.startIndex..<e])
@@ -123,42 +123,124 @@ extension JavaURL {
                 authority = r
                 r = ""
             }
-            // 解析 r 的 path?query
-            (path, query) = splitPathQuery(r)
-            path = normalizePath(path)
-            return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
-        }
-
-        // 5. "?" 开头 -> 保留 base path，换 query
-        if work.hasPrefix("?") {
-            query = String(work.dropFirst())
-            return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
-        }
-
-        // 6. "/" 开头 -> 绝对路径
-        if work.hasPrefix("/") {
-            let (p, q) = splitPathQuery(work)
-            path = normalizePath(p)
+            let (p, q) = splitPathQuery(r)
+            path = p.isEmpty ? nil : p
             query = q
-            return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
+            // 不规范化
+            return JavaURL(scheme: scheme, authority: authority, path: path ?? "", query: query, ref: ref)
         }
 
-        // 7. 相对路径：基于 base path 的目录。
-        let (relPath, relQuery) = splitPathQuery(work)
-        // base 目录 = base.path 最后一个 "/" 之前（含 "/"）
-        let basePath = path
-        var dir: String
-        if let lastSlash = basePath.lastIndex(of: "/") {
-            dir = String(basePath[basePath.startIndex...lastSlash])
+        // 分离 work 的 query
+        let (workPath, workQuery) = splitPathQuery(work)
+
+        if !workPath.isEmpty {
+            if workPath.hasPrefix("/") {
+                // 5. 绝对路径：直接取，不规范化（java isRelPath=false）
+                path = workPath
+                query = workQuery
+            } else {
+                // 6. 相对路径：基于 base path 目录拼接，之后规范化
+                isRelPath = true
+                let basePath = path ?? ""
+                if let ind = basePath.lastIndex(of: "/") {
+                    // path.substring(0, ind+1) + spec
+                    let dir = String(basePath[basePath.startIndex...ind])
+                    path = dir + workPath
+                } else {
+                    // ind == -1：若有 authority，用 "/" 作分隔
+                    let separator = (authority != nil) ? "/" : ""
+                    path = separator + workPath
+                }
+                query = workQuery
+            }
         } else {
-            dir = "/"
+            // workPath 为空（work 全是 query，如 "?new=2"）
+            if workQuery != nil, let bp = path {
+                // java: "?query" only -> path = base path 截到最后 '/'（不含文件名）+ "/"
+                var ind = bp.range(of: "/", options: .backwards)?.lowerBound
+                if ind == nil { ind = bp.startIndex }
+                let head = String(bp[bp.startIndex..<ind!])
+                path = head + "/"
+                query = workQuery
+            } else {
+                query = workQuery
+            }
         }
-        if !dir.hasPrefix("/") { dir = "/" + dir }
-        let merged = dir + relPath
-        path = normalizePath(merged)
-        query = relQuery
-        scheme = base.scheme
-        return JavaURL(scheme: scheme, authority: authority, path: path, query: query, ref: ref)
+
+        // 7. 规范化（仅相对路径）：移植 java.net.URLStreamHandler.parseURL 的消解循环。
+        if isRelPath, var p = path {
+            p = javaNormalizeRelPath(p)
+            path = p
+        }
+
+        return JavaURL(scheme: scheme, authority: authority, path: path ?? "", query: query, ref: ref)
+    }
+
+    /// 精确移植 java.net.URLStreamHandler.parseURL 中 `if (isRelPath) { ... }` 的路径消解。
+    /// 注意：对越过根的 "/../" 保留字面（不裁剪），与 RFC remove_dot_segments 不同。
+    static func javaNormalizeRelPath(_ input: String) -> String {
+        var path = input
+        // 移除内嵌 "/./"
+        while let r = path.range(of: "/./") {
+            path = String(path[path.startIndex..<r.lowerBound]) + String(path[r.lowerBound...].dropFirst(2))
+        }
+        // 移除内嵌 "/../"（可消解时）
+        var searchStart = path.startIndex
+        while let r = path.range(of: "/../", range: searchStart..<path.endIndex) {
+            let i = r.lowerBound
+            // limit = path.lastIndexOf('/', i-1)
+            if i > path.startIndex {
+                let beforeI = path.index(before: i)
+                if let limitRange = path.range(of: "/", options: .backwards, range: path.startIndex..<path.index(after: beforeI)) {
+                    let limit = limitRange.lowerBound
+                    // path.indexOf("/../", limit) != 0  —— 即从 limit 起的第一个 "/../" 不在字符串最开头
+                    let firstFromLimit = path.range(of: "/../", range: limit..<path.endIndex)?.lowerBound
+                    if firstFromLimit != path.startIndex {
+                        // path = substring(0, limit) + substring(i+3)
+                        let head = String(path[path.startIndex..<limit])
+                        let tail = String(path[path.index(i, offsetBy: 3)...])
+                        path = head + tail
+                        searchStart = path.startIndex
+                        continue
+                    } else {
+                        searchStart = path.index(i, offsetBy: 3)
+                        continue
+                    }
+                } else {
+                    searchStart = path.index(i, offsetBy: 3)
+                    continue
+                }
+            } else {
+                // i == start：无法消解，向后跳
+                searchStart = path.index(i, offsetBy: 3)
+                continue
+            }
+        }
+        // 移除尾部 "/.."（可消解时）
+        while path.hasSuffix("/..") {
+            // i = indexOf("/..")（第一个），limit = lastIndexOf('/', i-1)
+            if let iRange = path.range(of: "/..") {
+                let i = iRange.lowerBound
+                if i > path.startIndex {
+                    let beforeI = path.index(before: i)
+                    if let limitRange = path.range(of: "/", options: .backwards, range: path.startIndex..<path.index(after: beforeI)) {
+                        let limit = limitRange.lowerBound
+                        path = String(path[path.startIndex...limit])
+                    } else {
+                        break
+                    }
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        // 移除尾部 "/."
+        if path.hasSuffix("/.") {
+            path = String(path.dropLast())
+        }
+        return path
     }
 
     // MARK: - helpers

@@ -92,14 +92,14 @@ public final class AnalyzeByJSonPath {
                     let ob = try ctx.read(rule)
                     switch ob {
                     case .list(let list):
-                        result = list.map { $0.stringValue }.joined(separator: "\n")
+                        result = list.map { $0.jaywayStringValue }.joined(separator: "\n")
                     case .single(let v):
                         switch v {
                         case .array(let a):
                             // Jayway definite 也可能命中一个数组值；对齐 "is List -> joinToString"
-                            result = a.map { $0.stringValue }.joined(separator: "\n")
+                            result = a.map { $0.jaywayStringValue }.joined(separator: "\n")
                         default:
-                            result = v.stringValue
+                            result = v.jaywayStringValue
                         }
                     }
                 } catch {
@@ -141,13 +141,13 @@ public final class AnalyzeByJSonPath {
                     let obj = try ctx.read(rule)
                     switch obj {
                     case .list(let list):
-                        for o in list { result.append(o.stringValue) }
+                        for o in list { result.append(o.jaywayStringValue) }
                     case .single(let v):
                         switch v {
                         case .array(let a):
-                            for o in a { result.append(o.stringValue) }
+                            for o in a { result.append(o.jaywayStringValue) }
                         default:
-                            result.append(v.stringValue)
+                            result.append(v.jaywayStringValue)
                         }
                     }
                 } catch {
