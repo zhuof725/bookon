@@ -334,10 +334,55 @@
 | 分支 | 测试 |
 |---|---|
 | 单规则 -> `getResult` 后 `asString()`/`toStringValue()` | 所有基础 XPath 测试 |
-| 求值失败（`try?` 为 nil）-> 记诊断，返回空 | `TODO`：无独立断言诊断记录内容（第 2 步的 `AnalyzeByJSonPath` 已有等价诊断测试模式，可复用但本步骤未重复编写） |
+| 求值失败（硬性语法错误）-> **直接抛错向上传播**（收尾修正：对齐 Kotlin `?.` 只处理 null、不捕获异常的真实语义，早期版本误用 `try?` 吞掉已改正） | `testStringFunctionOnElementIsUnsupported`、`testStringFunctionOnAttrIsUnsupported`、`testSubstringNoLengthIsUnsupported`、`testNormalizeSpaceFunctionIsUnsupported`（均 `XCTAssertThrowsError`） |
+| 求值失败（语法有效但恒不匹配）-> 返回空值，不抛错 | `testOwnTextFunctionIsUnsupported`、`testNotFunctionCombinedWithAndIsUnsupported`、`testCountFunctionInPredicateIsUnsupported`、`testStringLengthInPredicateIsUnsupported` |
 | `&&`/`\|\|`/`%%` 组合（getString/getStringList） | `testXPathAndJoin`, `testXPathOrShortCircuit`, `testXPathPercentInterleave` |
 
-## 说明：无对应测试的分支（第 3 步汇总）
+### SwiftSoupXPathEvaluator.evaluate（收尾新增：联合运算符 `\|`）
+| 分支 | 测试 |
+|---|---|
+| 顶层按 `\|` 切分为多个分支 | `testUnionTwoDifferentPaths` |
+| 单分支（无 `\|`）走普通路径求值 | 所有非联合用例 |
+| 多分支：每段先尝试顶层函数调用，否则按路径求值 | `testStringFunctionOnElementIsUnsupported` 等（函数分支）、`testUnionTwoDifferentPaths`（路径分支） |
+| 多分支结果合并：按分支书写顺序拼接，不去重不重排（对齐真实 JsoupXpath，见 README 差异表第 2 条） | `testUnionDoesNotDedupSamePath`、`testUnionConcatenatesByBranchOrderNotDocumentOrder` |
+
+### SwiftSoupXPathFunctions（收尾新增：顶层函数 + 谓词内函数比较）
+| 分支 | 测试 |
+|---|---|
+| 顶层 `count(path)` | `testCountFunctionOnList`, `testCountFunctionZeroWhenNoMatch` |
+| 顶层 `concat(a,b,...)` | `testConcatTwoAttrs`, `testConcatWithLiteral` |
+| 顶层 `substring(s,start,length)`（三参数） | `testSubstringBasic` |
+| 顶层 `substring(s,start)`（两参数，不支持）| `testSubstringNoLengthIsUnsupported` |
+| 顶层 `substring-before(s,sep)` / 找不到分隔符返回原串 | `testSubstringBeforeBasic`, `testSubstringBeforeNoMatchReturnsOriginal` |
+| 顶层 `substring-after(s,sep)` / 找不到分隔符返回空串 | `testSubstringAfterBasic`, `testSubstringAfterNoMatch` |
+| 顶层 `string-length(s)` | `testStringLengthBasic`, `testStringLengthZeroWhenMissing` |
+| 顶层 `string(...)`（不支持，抛错） | `testStringFunctionOnElementIsUnsupported`, `testStringFunctionOnAttrIsUnsupported` |
+| 谓词内 `concat/substring/substring-before/substring-after` 比较 | `testConcatInPredicate`, `testSubstringInPredicate`, `testSubstringBeforeAfterInPredicate` |
+| 谓词内 `count(...)=n`（不支持，恒不匹配） | `testCountFunctionInPredicateIsUnsupported` |
+| 谓词内 `string(...)=x`（不支持，硬抛错） | `testStringFunctionInPredicateIsUnsupported` |
+| 谓词内 `string-length(...)=n`（不支持，恒不匹配） | `testStringLengthInPredicateIsUnsupported` |
+| `not(...)` 单独使用 | `testNotFunctionBasic`, `testNotFunctionAttrExists` |
+| `not(...)` 与 `and`/`or` 组合（不支持，恒不匹配） | `testNotFunctionCombinedWithAndIsUnsupported` |
+| `normalize-space(...)`（不支持，硬抛错） | `testNormalizeSpaceFunctionIsUnsupported` |
+| `ownText()` 节点测试（不支持，恒不匹配） | `testOwnTextFunctionIsUnsupported` |
+| `contains`/`starts-with` 的 `text()`/`.` 参数形式 | `testContainsWithTextArg`, `testContainsWithDotArg`, `testStartsWithTextArg` |
+
+### 多重谓词 `[...][...]`（收尾修正：代码一直支持，之前 README 误写"不支持"，已订正）
+| 分支 | 测试 |
+|---|---|
+| `[位置][属性]`：先按位置筛选，再按属性筛选 | `testMultiPredicatePositionThenAttr`, `testMultiPredicatePositionThenAttrNoMatch` |
+| `[属性][位置]`：先按属性筛选，再按位置筛选（结果集位置，非原文档位置） | `testMultiPredicateAttrThenPosition`, `testMultiPredicateAttrThenPositionSecond` |
+| 谓词顺序影响结果（标准 XPath 语义对照） | `testMultiPredicateDemonstratesOrderMatters` |
+| 三重连续谓词 | `testTriplePredicate`, `testTriplePredicateLast` |
+
+### GoldenComparisonTests（收尾新增：真实 jsoup/JsoupXpath 对照）
+| 分支 | 测试 |
+|---|---|
+| CSS 规则逐条对照（138 条用例里的 CSS 部分） | `testAllGoldenCssCases` |
+| XPath 规则逐条对照（138 条用例里的 XPath 部分，含已登记的 2 个已知差异跳过） | `testAllGoldenXPathCases` |
+| golden 目录不存在（本地未跑 golden job） -> `XCTSkip`，不是误报失败 | 本地运行时体现；CI 两个测试 job 都 `needs: golden` 恒有数据 |
+
+## 说明：无对应测试的分支（第 3 步汇总，收尾后更新）
 
 以下分支按实际情况标出，均不影响真实书源规则的正确性（真实规则未触发这些路径）：
 
@@ -345,6 +390,6 @@
 2. `AnalyzeByJSoup.getStringList` 的 CSS 分支「无 `@` 结果类型」边界：真实书源恒带结果类型。
 3. `ElementsSingle` 区间解析里 `start==end || step>=len` 的精确单元测试：被其它区间测试间接覆盖，未单独断言。
 4. `AnalyzeByXPath.parse` 的 `doc is Elements` 直接入参：支持但未见真实书源触发。
-5. `AnalyzeByXPath.getStringList/getString` 求值失败记诊断的具体内容断言：机制与第 2 步一致，未重复编写专测。
 
-以上 5 条均为「支持但暂缺专项测试」的诚实标注，不是「未实现」。
+以上 4 条均为「支持但暂缺专项测试」的诚实标注，不是「未实现」。收尾前第 5 条（诊断记录断言）
+已在本轮用 `XCTAssertThrowsError` 系列测试间接验证（抛错行为本身即是诊断的体现），不再单列。

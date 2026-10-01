@@ -289,18 +289,21 @@ Swift 无等价库，评估两个方案：
 
 ## SwiftSoup 与 jsoup 1.16.2 已知差异
 
+**本表已用 `scripts/golden`（真实 jsoup 1.16.2 + JsoupXpath 2.5.3，见下方「golden 对照」章节）逐条验证。**
+
 | 方法 / 行为 | jsoup 1.16.2 | SwiftSoup 2.9.6 | 影响与应对 |
 |---|---|---|---|
-| `Elements.addAll(Collection)` / `clear()` | `clear()` 只清空集合，不碰 DOM | **无 `addAll`/`clear`**；`empty()` 存在但语义是"清空每个元素的子节点"（会改 DOM，完全不是"清空集合"！） | 本移植用内部扩展 `addElements(_:)` 包装批量添加；**不提供、也不使用**任何"clear 集合"包装——开发中一度错误地用 `empty()` 模拟 `clear()` 导致真实 bug（见下方专门记录），现已改为直接用新 `Elements()` 替换变量，`SwiftSoupElementsCompat.swift` 里保留了该教训的说明注释 |
+| `Elements.addAll(Collection)` / `clear()` | `clear()` 只清空集合，不碰 DOM | **无 `addAll`/`clear`**；`empty()` 存在但语义是"清空每个元素的子节点"（会改 DOM，完全不是"清空集合"！） | 本移植用内部扩展 `addElements(_:)` 包装批量添加；**不提供、也不使用**任何"clear 集合"包装——开发中一度错误地用 `empty()` 模拟 `clear()` 导致真实 bug（见下方专门记录），现已改为直接用新 `Elements()` 替换变量 |
 | `getElementsContainingOwnText(text)` | 存在，匹配元素自身直接文本包含 text | 存在，签名一致（`throws`） | 无差异 |
 | `textNodes()` | 返回直接子 `TextNode` 列表 | 同 | 无差异 |
 | `ownText()` | 返回元素自身文本（不含子元素），非 throwing | 同，非 throwing | 无差异 |
-| `outerHtml()` / `html()` | 抛检查异常（Java 少见但 Kotlin 侧不特殊处理） | `throws`（Swift 强制处理） | 本移植统一用 `try?` 吞掉转空字符串，不影响正常路径结果 |
-| `text()` 的空白规整 | 默认 `trimAndNormaliseWhitespace = true`，合并连续空白为单个空格 | 同样默认 `true`（`text(trimAndNormaliseWhitespace: Bool = true)`） | 无差异（本移植未显式传 false，行为一致） |
+| `outerHtml()` / `html()` | 返回 String，不抛检查异常 | Swift 签名 `throws`（Swift 语言层面的强制，非行为差异） | 本移植统一用 `try?` 吞掉（理论上不会真的失败），不影响正常路径结果 |
+| `text()` 的空白规整 | 默认 `trimAndNormaliseWhitespace = true`，合并连续空白为单个空格 | 同样默认 `true` | 无差异（golden 验证一致） |
 | `Collector.collect(Evaluator.Id(id), el)` | 存在 | 存在，API 形态一致 | 无差异 |
 | 中文 / emoji 解析 | 按 UTF-16 处理属性/选择器字符串（JVM String） | Swift `Character`/`UInt16` 混用；本移植所有下标逻辑改在 UTF-16 code unit 上处理 | 已通过含中文/emoji 的测试验证一致 |
+| void 元素（如 `<img>`）的 `outerHtml()` 渲染 | 渲染为 `<img src="...">`（无自闭合斜杠） | 渲染为 `<img src="..." />`（自闭合） | **发现差异**：仅影响"直接取整个元素字符串表示"的场景（如 XPath 命中纯元素节点时 `asString()`=outerHtml、CSS 的 `@html`/`@all` 结果类型），不影响 `text()`/`@attr` 等常规取值；已在 golden 对照里记录为已知差异（`GoldenComparisonTests.knownDivergences` 里的 `realBookList` 两条），未改代码（SwiftSoup 的 void 元素渲染策略是其内部实现细节，非本项目可控） |
 
-> 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充；**目前测试覆盖范围内未发现差异**。
+> 若后续实测发现与 jsoup 1.16.2 的其它差异，会在此表继续补充。
 
 ### 开发中定位并修复的一个自身实现 bug（非 SwiftSoup / Kotlin 差异，记录备查）
 
@@ -328,21 +331,26 @@ SwiftSoup 的 `Elements.empty()`——但 `empty()` 的真实语义是 **"清空
 
 ## XPath 已支持 / 不支持语法表
 
+**本表已用 `scripts/golden`（真实 jsoup 1.16.2 + JsoupXpath 2.5.3）逐条验证**，不是凭文档猜测。
+部分条目标注了"与 Kotlin 已知差异"，详见下一节对照表。
+
 | 语法 / 函数 | 示例 | 支持 |
 |---|---|---|
 | 绝对/任意深度路径 | `//div`、`/html/body` | ✅ |
 | 相对路径 / 当前节点 | `.//a`、`.` | ✅ |
 | 属性取值 | `@href`、`//a/@href` | ✅ |
 | `text()` | `//p/text()` | ✅（作用于上下文节点自身的直接子文本） |
+| **多重谓词 `[...][...]`（连续多个）** | `//li[1][@id]`、`//li[@class='x'][@id][last()]` | ✅（依次连续过滤，语义与标准 XPath 一致：先执行的谓词在前一个谓词筛选后的集合上继续筛选，谓词顺序影响结果，已用 `testMultiPredicate*`/`testTriplePredicate*` 等 6+ 测试验证，含 golden 对照） |
+| 联合运算符 `\|` | `//h1\|//p` | ✅（**与 Kotlin 已知差异**，见下表：真实结果既不去重也不按文档顺序排列） |
 | 位置谓词 `[n]` | `//li[1]` | ✅ |
 | `[last()]` / `[last()-n]` | `//li[last()]` | ✅ |
 | `[position()>n]` 等比较 | `//li[position()>1]` | ✅（`>` `<` `>=` `<=` `=`） |
-| `contains(@attr,'v')` / `contains(text(),'v')` | `//p[contains(@class,'x')]` | ✅ |
-| `starts-with(...)` | `//p[starts-with(@class,'x')]` | ✅ |
-| `normalize-space(...)` | `//p[normalize-space(text())='x']` | ✅ |
+| `contains(@attr,'v')` / `contains(text(),'v')` / `contains(.,'v')` | `//p[contains(@class,'x')]` | ✅ |
+| `starts-with(...)` 同上参数形式 | `//p[starts-with(text(),'x')]` | ✅ |
 | 属性存在 / 比较 | `[@id]`、`[@id='x']`、`[@id!='x']` | ✅ |
 | `text()='v'` / `!='v'` | `//a[text()='阅读']` | ✅ |
-| 多条件 `and` / `or` | `[@a='1' and @b='2']` | ✅（简单顶层拆分，不支持带括号的复杂嵌套分组） |
+| 简单多条件 `and` / `or`（左右都是属性/文本比较） | `[@a='1' and @b='2']` | ✅（简单顶层拆分，不支持带括号的复杂嵌套分组） |
+| `not(...)`（单独使用） | `//li[not(@class='skip')]` | ✅ |
 | `following-sibling::` | `//li[@id='x']/following-sibling::li` | ✅ |
 | `preceding-sibling::` | 同上反向 | ✅ |
 | `parent::` / `..` | `//p/parent::div`、`//p/..` | ✅ |
@@ -350,23 +358,79 @@ SwiftSoup 的 `Elements.empty()`——但 `empty()` 的真实语义是 **"清空
 | `descendant::` / `ancestor::` | `//div/descendant::p` | ✅ |
 | `following::` / `preceding::` | 文档顺序前后（非祖先/后代） | ✅ |
 | `self::` | `//div/self::div` | ✅ |
-| 通配符 `*` | `//div/*` | ✅ |
+| 通配符 `*` | `//div/*` | ✅（结果是元素节点，`asString()`=outerHtml，见「与 Kotlin 已知差异」） |
 | `node()` | `//div/node()` | ✅（子节点，不做类型区分） |
-| JsoupXpath 扩展 `allText()` | `//div/allText()` | ✅（对齐 Jsoup `text()` 语义：所有后代文本拼接） |
-| JsoupXpath 扩展 `ownText()` | `//div/ownText()` | ✅ |
+| JsoupXpath 扩展 `allText()` | `//div/allText()` | ✅（所有后代文本拼接） |
 | JsoupXpath 扩展 `html()` | `//div/html()` | ✅（innerHtml） |
 | JsoupXpath 扩展 `outerHtml()` | `//div/outerHtml()` | ✅ |
+| `count(node-set)`（**仅顶层调用**） | `count(//li)` | ✅ |
+| `concat(s1,s2,...)`（顶层与谓词内均可） | `concat(//div/@a,//div/@b)`、`[concat(@a,@b)='x']` | ✅ |
+| `substring(s,start,length)`（**仅三参数形式**） | `substring(//p/text(),1,5)` | ✅ |
+| `substring-before(s,sep)` / `substring-after(s,sep)`（顶层与谓词内均可） | `substring-before(//p/text(),'-')` | ✅ |
+| `string-length(s?)`（**仅顶层调用**） | `string-length(//p/text())` | ✅ |
 | `</td>`/`</tr>`/`</tbody>` 片段自动补全 | 输入以这些结尾时自动包一层 | ✅（对齐 Kotlin `strToJXDocument`） |
 | `<?xml` 输入走 XML 解析器 | | ✅ |
-| **命名空间轴 `namespace::`** | | ❌ **不支持**（Jsoup DOM 无命名空间概念，JsoupXpath 文档也标注不支持） |
+| **`ownText()` 作为 XPath 函数** | `//div/ownText()` | ❌ **不支持**（golden 验证：JsoupXpath 官方 NodeTest 列表没有此函数，真实结果恒为空） |
+| **`normalize-space(...)`** | `//p[normalize-space(text())='x']` | ❌ **不支持**（golden 验证：真实结果是解析失败，本项目对齐为抛 `RuleEngineError.invalidXPath`） |
+| **`string(...)`（顶层与谓词内）** | `string(//div)`、`[string(@id)='x']` | ❌ **不支持**（golden 验证：真实结果是解析失败，本项目对齐为抛错） |
+| **`count(...)`/`string-length(...)` 用于谓词内比较** | `[count(li)=3]`、`[string-length(text())=5]` | ❌ **不支持**（顶层调用可用，但谓词内比较真实结果恒不匹配，不是语法错误；本项目对齐为"恒不匹配"而非抛错） |
+| **`substring(s,start)` 两参数形式** | `substring(//p/text(),6)` | ❌ **不支持**（golden 验证：真实只认三参数形式，两参数返回 nil/解析失败） |
+| **`not(...)` 与 `and`/`or` 组合** | `[not(@a='1') and position()=2]` | ❌ **不支持**（golden 验证：真实结果恒不匹配，不是语法错误；本项目对齐为"恒不匹配"） |
+| **命名空间轴 `namespace::`** | | ❌ **不支持**（Jsoup DOM 无命名空间概念） |
 | **`[@a='1' and (@b='2' or @c='3')]` 带括号的复杂逻辑分组** | | ❌ **不支持**（仅支持顶层单层 `and`/`or` 拆分，不解析括号分组） |
-| **数值/字符串函数**（`concat()`、`substring()`、`string-length()`、`count()`、`sum()` 等） | | ❌ **不支持** |
-| **多重谓词的复合轴表达式**（如 `//a[1][@href]` 连续多个 `[]`） | | ❌ **不支持**（本实现每个 step 只解析一组 `[...]`，多个方括号会被当成单个谓词文本解析失败） |
+| **`sum()`/`num()`/`format-date()`** | | ❌ **不支持**（JsoupXpath 文档列出但本项目未实现，书源规则中未见实际使用，如需可后续补充） |
 | **变量引用 `$var`** | | ❌ **不支持** |
 | `//*[@id="x"]/*[position()>1]` 这类真实规则里出现的写法 | 采墨阁 `nextTocUrl` 规则 | ✅（`*` 通配 + position 谓词组合，已用真实规则测试验证） |
 
-> 不支持的语法在解析阶段抛 `RuleEngineError.invalidXPath`，`AnalyzeByXPath` 按 Kotlin 吞异常的语义
-> 捕获后返回空值，并记入可选的 `RuleEngineDiagnostics`。
+> 不支持的语法分两类：**(a) 硬性解析失败**（`normalize-space`/`string()`/两参数 `substring`）—
+> 抛 `RuleEngineError.invalidXPath`，`AnalyzeByXPath` 按 Kotlin 吞异常的语义捕获后返回空值；
+> **(b) 语法有效但恒不匹配**（`count`/`string-length` 谓词内比较、`not()+and/or`）—直接返回空结果，
+> 不抛错，这是用 golden 实测真实 JsoupXpath 行为后得出的精确区分，而非主观假设。
+
+## XPath 引擎与 Kotlin（真实 JsoupXpath）已知差异汇总
+
+**以下全部用 `scripts/golden` 实测验证，每条都有对应的 golden 用例和 Swift 测试。**
+
+| # | 点 | 真实 JsoupXpath 2.5.3 行为 | 本移植行为 | 测试 |
+|---|---|---|---|---|
+| 1 | 元素节点 `asString()`/`toString()` | 对纯元素节点（非 `text()` 等函数产出的文本）返回其 **outerHtml**（pretty-print 多行缩进），不是纯文本 | 完全对齐：`XPathNode.asString()`/`toStringValue()` 对 `.element` 情形返回 `outerHtml()`（已去读 JsoupXpath 源码 `JXNode.asString()` 确认：`e.toString()` 对非 `JX_TEXT` 标签元素即 outerHtml） | 所有 golden CSS/XPath 对照用例间接验证；`testRealRule_Caimoge_BookList` 等 |
+| 2 | `\|` 联合运算符 | **不去重、不按文档顺序重排**：直接按"分支书写顺序 + 分支内命中顺序"拼接（不是标准 XPath 1.0 的集合并集语义） | 完全对齐，复刻这一"不完全合规范"的真实行为 | `testUnionDoesNotDedupSamePath`、`testUnionConcatenatesByBranchOrderNotDocumentOrder`、golden `unionDedup`/`unionOrderPreserved`/`unionTwoPaths` |
+| 3 | `ownText()` 作为 XPath 函数 | 不存在该函数，真实结果恒为空 | 对齐：不解析为已知函数，匹配恒为空集合 | `testOwnTextFunctionIsUnsupported` |
+| 4 | `normalize-space(...)` | 完全不支持，真实结果是解析失败（elementsCount=-1, getString=nil） | 对齐：抛 `RuleEngineError.invalidXPath` | `testNormalizeSpaceFunctionIsUnsupported` |
+| 5 | `string(...)`（顶层/谓词内） | 完全不支持，真实结果是解析失败 | 对齐：抛 `RuleEngineError.invalidXPath` | `testStringFunctionOnElementIsUnsupported`、`testStringFunctionOnAttrIsUnsupported`、`testStringFunctionInPredicateIsUnsupported` |
+| 6 | `count(...)` 顶层 vs 谓词内 | 顶层调用可用（返回正确计数）；谓词内比较 `[count(...)=n]` 不生效（解析通过但恒不匹配，不是语法错误） | 完全对齐这一"顶层可用、谓词内不可用"的精确区分 | `testCountFunctionOnList`、`testCountFunctionZeroWhenNoMatch`、`testCountFunctionInPredicateIsUnsupported` |
+| 7 | `string-length(...)` 顶层 vs 谓词内 | 同上：顶层可用，谓词内比较不生效 | 完全对齐 | `testStringLengthBasic`、`testStringLengthZeroWhenMissing`、`testStringLengthInPredicateIsUnsupported` |
+| 8 | `substring(s,start)` 两参数形式 | 不支持，只认三参数形式，两参数返回 nil | 对齐：两参数时抛 `RuleEngineError.invalidXPath` | `testSubstringNoLengthIsUnsupported` |
+| 9 | `substring-before(s,sep)` 分隔符不存在 | 返回**原字符串**（不是 W3C 规范要求的空串，是 JsoupXpath 自身实现偏差） | 完全对齐，复刻这一偏差行为 | `testSubstringBeforeNoMatchReturnsOriginal` |
+| 10 | `not(...)` 与 `and`/`or` 组合 | 不支持，解析通过但恒不匹配（不是语法错误） | 对齐：遇到该组合返回恒不匹配的谓词，不抛错 | `testNotFunctionCombinedWithAndIsUnsupported` |
+| 11 | `getString`/`getStringList` 对 XPath 解析失败的处理 | Kotlin 原始签名 `getResult(rule)?.let{}`/`?.map{}` 的 `?.` 只处理 null，**不捕获异常**——解析失败会直接向上传播 | 已修正：早期版本误用 `try?` 吞掉异常（行为不对齐），现改为 `try` 直接传播，与 Kotlin 真实语义一致 | `testStringFunctionOnElementIsUnsupported`（断言 `XCTAssertThrowsError`）等 |
+| 12 | `getString` 对 XPath 的 `%%` 组合符 | Kotlin 原始签名里 `getString` 只识别 `&&`/`||`，不识别 `%%`；传入含字面 `%%` 的规则时，JsoupXpath 的 ANTLR 解析器有自己的容错路径返回 `""` | 本项目的解析器判定整体语法无效返回 `nil`。两者都不是"正确"用法（`%%` 本就不是 `getString` 支持的组合符），**无法进一步对齐、也无必要**（真实书源不会这样写） | golden `xpath_basic/xpathPercentInterleave`，已在 `GoldenComparisonTests.knownDivergences` 里登记跳过，不隐藏 |
+| 13 | void 元素 outerHtml 自闭合格式 | `<img src="...">` | `<img src="..." />`（SwiftSoup 库本身差异，见上表） | golden `xpath_real_caimoge/realBookList`，已登记跳过 |
+
+> 以上 13 条全部来自 golden 真实对照，**不是主观猜测**；除 12、13 两条（已论证"无法/无需进一步对齐"）外，
+> 其余均已让 Swift 实现与真实 JsoupXpath 行为完全一致。
+
+## golden 对照（CI 自动生成，不需要本地跑任何东西）
+
+`scripts/golden/` 是一个独立的 Maven 项目：
+- 依赖 `org.jsoup:jsoup:1.16.2`（用 `dependencyManagement` 强制锁定，与 legado 的 `libs.versions.toml`
+  一致）和 `cn.wanghaomiao:JsoupXpath:2.5.3`（legado 实际使用的版本）。
+- `src/main/java/golden/`：`RuleAnalyzer.java`/`AnalyzeByJSoup.java`/`AnalyzeByXPath.java` 是
+  对应 Kotlin 源文件的逐函数 Java 移植（调用真实 jsoup/JsoupXpath API，不是另一套实现），
+  `Main.java` 读取 `cases/*.json` 用例清单，对每条 CSS/XPath 规则在对应 HTML 上跑出真实结果，
+  写到 `golden/*.json`（含用到的 HTML 全文，避免 Swift 侧还要读取其它路径）。
+- CI `.github/workflows/test.yml` 的 `golden` job（`ubuntu-latest`）：`setup-java` + `mvn package` 编译、
+  运行生成 `*.json`，若 Maven 下载失败、Java 运行失败、或一条用例都没生成，job 直接失败（不允许跳过）；
+  产物作为 artifact 上传。`test-macos`/`test-ios-simulator` 两个 job 都 `needs: golden`，
+  会先下载 artifact 到 `Tests/LegadoHTMLEngineTests/Resources/golden/` 再跑 `swift build`/`xcodebuild test`。
+- `Tests/LegadoHTMLEngineTests/GoldenComparisonTests.swift`：`testAllGoldenCssCases`/`testAllGoldenXPathCases`
+  两个测试方法，读取 golden 目录下所有 `*.json`，对每条用例的 `elementsCount`/`getString`/`getStringList`/
+  `getString0` 逐项比较 Java 与 Swift 的结果；**不一致时不静默放过**，`XCTFail` 的信息包含
+  「规则 / 输入(HTML) / Java 结果 / Swift 结果」四项，已知且登记过的差异（`knownDivergences`）除外。
+- 覆盖范围：`cases/css_basic.json`（全部 CSS 语法、全部结果类型、`&&`/`||`/`%%`）、
+  `cases/xpath_basic.json`（全部已支持 XPath 语法、`|`/`not()`/字符串函数、多重谓词）、
+  `cases/css_real_xiaoshuo2016.json`/`cases/xpath_real_caimoge.json`（两个真实书源的真实规则）。
+  共 4 个用例文件、138 条用例。
 
 ## 真实书源规则扫描清单（测试用例来源）
 
@@ -405,23 +469,31 @@ rg -n "fatalError|try!|\bas!" Sources/LegadoBookSource/RuleEngine/AnalyzeByJSoup
 # 结果：无命中
 ```
 新增错误类型 `RuleEngineError.invalidSelector` / `.invalidXPath` / `.invalidHTML`，
-CSS 选择器解析失败、XPath 语法不支持、HTML 解析失败均抛这些错误，public 方法标 `throws`；
-`AnalyzeByXPath.getString/getStringList` 里 `getResult` 失败（对齐 Kotlin `getResult(xPath)?.let{}` 的
-`null` 分支）保持返回空值/nil，同时记入可选的 `RuleEngineDiagnostics`。
+CSS 选择器解析失败、XPath 语法不支持（硬性失败类，见上表分类 a）均抛这些错误，public 方法标 `throws`；
+`AnalyzeByXPath.getString`/`getStringList` 对 `getResult` 失败**直接传播异常**（对齐 Kotlin
+`getResult(xPath)?.let{}`/`?.map{}` 的 `?.` 只处理 null、不捕获异常的真实语义——开发中一度误用
+`try?` 吞掉异常，已改正，见上方「XPath 引擎已知差异」表第 11 条）；"语法有效但恒不匹配"类
+（见上表分类 b）返回空结果，不抛错。
 
 ## 第 3 步 + 累计测试规模与 CI（最新，含实测输出）
 
 - AnalyzeByJSoup：`AnalyzeByJSoupTests.swift`（34）+ `AnalyzeByJSoupTests2.swift`（33，含真实规则用例与
-  两个 SwiftSoup Elements bug 的回归测试）；AnalyzeByXPath：`AnalyzeByXPathTests.swift`（52）；
-  `HTMLEnginePublicAPITests.swift`（4）。第 3 步小计 123，连同第 1、2 步共 **252 个测试**。
-- CI（`.github/workflows/test.yml`）两个 job，均含 `verify_fields.py` + `verify_functions.py`：
-  - **test-macos**：`swift build` + `swift test`（macOS，swift 5.10）。
-  - **test-ios-simulator**：`xcodebuild test`，脚本 `scripts/ios_sim_test.sh` 固定 scheme
-    `LegadoBookSource`、自动挑可用 iPhone 模拟器、统计并打印实际执行的测试总数（为 0 则失败）。
+  SwiftSoup Elements bug 的回归测试）；AnalyzeByXPath：`AnalyzeByXPathTests.swift`（52）+
+  `AnalyzeByXPathTests2.swift`（39，`|`/`not()`/字符串函数/多重谓词）；`HTMLEnginePublicAPITests.swift`（4）；
+  `GoldenComparisonTests.swift`（2，内部逐条比较 138 条 golden 用例）。
+  第 3 步小计 164，连同第 1、2 步共 **293 个测试**。
+- CI（`.github/workflows/test.yml`）三个 job：
+  - **golden**（`ubuntu-latest`）：Maven 编译 + 运行，生成真实 jsoup/JsoupXpath 对照数据，失败则整体失败。
+  - **test-macos**（`needs: golden`）：下载 golden artifact，`verify_fields.py`/`verify_functions.py`，
+    `swift build` + `swift test`（macOS，swift 5.10）。
+  - **test-ios-simulator**（`needs: golden`）：同样下载 golden artifact 后，`xcodebuild test`，
+    脚本 `scripts/ios_sim_test.sh` 固定 scheme `LegadoBookSource`、自动挑可用 iPhone 模拟器、
+    统计并打印实际执行的测试总数（为 0 则失败）。
   - 已去掉 Linux job（SwiftSoup/XPath 目标平台仅 iOS 15+ / macOS 本地开发）。
-- **最近一次绿色运行**（commit `61fcb77`，run 36758479905）：
-  - macOS job：`Executed 252 tests, with 0 failures (0 unexpected)`。
-  - iOS 模拟器 job：`conclusion: success`（同样跑全部 252 个测试，`ios_sim_test.sh` 统计通过）。
+- **最近一次绿色运行**（commit `c7a67e1`，run 36796820710，三个 job 均 success）：
+  - golden job：生成 4 个用例文件，共 138 条用例。
+  - macOS job：`Test Suite 'All tests' passed`，`Executed 293 tests, with 0 failures (0 unexpected)`。
+  - iOS 模拟器 job：`** TEST SUCCEEDED **`，`ios_sim_test.sh` 统计「实际执行的测试总数: 293」，`xcodebuild` 退出码 0。
 
 ## 后续步骤（TODO）
 
