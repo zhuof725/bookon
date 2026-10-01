@@ -194,6 +194,13 @@ final class AnalyzeByXPathTests: XCTestCase {
         let r = try x.getStringList("//a/text()%%//b/text()")
         XCTAssertEqual(r, ["A1", "B1", "A2"])
     }
+    // getString 的 Kotlin 原始签名只识别 &&/||，不识别 %%；规则里混入字面 %% 时，
+    // 真实 JsoupXpath 返回空字符串（已用 golden 验证），本项目对齐该行为。
+    func testXPathGetStringWithPercentReturnsEmptyString() throws {
+        let html = "<div><a>甲</a><b>乙</b></div>"
+        let x = try AnalyzeByXPath(html)
+        XCTAssertEqual(try x.getString("//a/text()%%//b/text()"), "")
+    }
 
     // MARK: - 九、</td> / </tr> / </tbody> 补全逻辑
 

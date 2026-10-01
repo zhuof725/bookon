@@ -323,11 +323,16 @@ SwiftSoup 的 `Elements.empty()`——但 `empty()` 的真实语义是 **"清空
 
 调试上面那个 bug 时，一度误以为 CSS `p:eq(2)` 表示"匹配到的所有 `<p>` 里的第 3 个"，
 但 jsoup/SwiftSoup 的 `Evaluator.IndexEquals` 实际用 `element.elementSiblingIndex() == index`
-判断——**`:eq(n)` 匹配的是"该元素在其父节点所有子节点（不分标签）中的兄弟序号"**，
-而不是"在同标签匹配集合里的第 n 个"。这不是 SwiftSoup 与 jsoup 的差异（两者行为一致，
+判断，而 `elementSiblingIndex()` 内部用 `parent().children()`（jsoup: `childElementsList()`）
+取同级节点列表——**该列表只包含同级的 Element（元素）节点，不含文本节点**。
+故准确表述为：**`:eq(n)` 匹配的是"该元素在其同级 Element（不分标签，但不含文本节点）中的
+序号"**，而不是"在同标签匹配集合里的第 n 个"。这不是 SwiftSoup 与 jsoup 的差异（两者行为一致，
 都是标准 CSS 选择器语义），纯粹是移植过程中构造测试用合成 HTML 时的认知错误，已按正确语义
 重新设计 `Tests/LegadoHTMLEngineTests/AnalyzeByJSoupTests2.swift` 里 `xiaoshuo2016SearchHTML`
 的 DOM 结构（让 `<li>` 的直接子节点顺序与真实规则 `p:eq(2)>a`/`p:eq(3)`/`p:eq(4)` 期望的兄弟位置一致）。
+「不含文本节点」这一点已用 golden 用例 `eqExcludesTextNodesCss`/`eqExcludesTextNodesCssSecond`
+（`Resources` 里含纯文本节点穿插在两个 `<p>` 之间的 HTML）验证：`p:eq(0)`/`p:eq(1)` 按
+Element 序号命中，不受中间文本节点干扰。
 
 ## XPath 已支持 / 不支持语法表
 

@@ -73,12 +73,40 @@ final class GoldenComparisonTests: XCTestCase {
         return files.filter { $0.pathExtension == "json" }
     }
 
+    /// 是否在 CI 环境中运行。GitHub Actions 对所有 job 都会设置 `CI=true` 和 `GITHUB_ACTIONS=true`。
+    /// CI 环境下 golden 数据缺失/为空必须判为测试失败，不允许用 XCTSkip 静默跳过——
+    /// 因为 CI 的 test-macos/test-ios-simulator 两个 job 都 `needs: golden`，正常情况下
+    /// golden 数据必然存在；如果缺失，说明 artifact 下载/打包环节出了问题，必须暴露出来，
+    /// 而不是被 XCTSkip 掩盖成"看起来绿色"的假通过。只有在本地开发环境（没跑 golden job）
+    /// 时才允许跳过。
+    private func isRunningInCI() -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        // 多个信号任一命中即判定为 CI：GitHub Actions 对所有 job（含 xcodebuild 在
+        // iOS 模拟器里启动的测试进程）通常会设置这些变量，但环境变量透传到模拟器
+        // 测试进程在不同 Xcode/模拟器版本上可能有差异，这里用多个变量兜底提高可靠性。
+        let ciSignals = ["CI", "GITHUB_ACTIONS", "GITHUB_WORKFLOW", "GITHUB_RUN_ID", "RUNNER_OS"]
+        for key in ciSignals {
+            if let v = env[key], !v.isEmpty { return true }
+        }
+        return false
+    }
+
+    /// 统一处理"没有可比较用例"的情况：CI 下必须 XCTFail（不允许跳过），本地允许 XCTSkip。
+    private func failOrSkipWhenNoGoldenData(_ reason: String) throws {
+        if isRunningInCI() {
+            XCTFail("CI 环境下 golden 对照数据缺失或为空，视为失败（不允许静默跳过）：\(reason)")
+            return
+        }
+        throw XCTSkip("\(reason)（本地未跑 golden job，CI 的 test-macos/test-ios-simulator 均 needs: golden，会真正执行此比较）。")
+    }
+
     // MARK: - 主测试：逐个 golden 文件、逐条用例比较
 
     func testAllGoldenCssCases() throws {
         let files = goldenFiles()
         if files.isEmpty {
-            throw XCTSkip("未找到 golden 目录（本地未跑 golden job）；CI 的 test-macos/test-ios-simulator 均 needs: golden，会真正执行此比较。")
+            try failOrSkipWhenNoGoldenData("未找到 golden 目录")
+            return
         }
         var comparedAny = false
         var failures: [String] = []
@@ -150,7 +178,8 @@ final class GoldenComparisonTests: XCTestCase {
         }
 
         if !comparedAny {
-            throw XCTSkip("golden 目录存在但没有可比较的 CSS 用例。")
+            try failOrSkipWhenNoGoldenData("golden 目录存在但没有可比较的 CSS 用例")
+            return
         }
         if !failures.isEmpty {
             XCTFail("发现 \(failures.count) 处 CSS golden 不一致：\n\n" + failures.joined(separator: "\n\n"))
@@ -160,25 +189,17 @@ final class GoldenComparisonTests: XCTestCase {
     /// 已知、已在 README「与 Kotlin 已知差异」表逐条记录、确认无法对齐的用例
     /// （标记为 `name/field` 跳过，仍会跑 Swift 代码，只是不拿这条的结果做强一致性断言）。
     /// 不是"隐藏失败"：每一条都有 README 对应条目可查，且仍计入下方「已知差异清单」打印。
-    private let knownDivergences: Set<String> = [
-        // 真实 JsoupXpath：`getString` 对 XPath 原生不支持的 `%%` 分隔符（Kotlin 原始签名里
-        // `getString` 只识别 && / ||，不识别 %%）处理方式与本项目不同：JsoupXpath 的 ANTLR
-        // 解析器对残留的 "%%" 文本有自己的容错路径，返回 ""；本项目的解析器判定整体语法无效，
-        // 返回 nil。两者都不是"正确"用法（%% 本就不是 XPath getString 支持的组合符），
-        // 已记录为已知差异，不是真实需求场景。
-        "xpath_basic/xpathPercentInterleave/getString",
-        // SwiftSoup 对 void 元素（如 <img>）outerHtml 渲染为自闭合 `<img ... />`，
-        // 而 jsoup/JsoupXpath 渲染为 `<img ...>`（无斜杠）。这是 SwiftSoup 与 jsoup 在
-        // HTML 序列化细节上的差异，已记录在 README「SwiftSoup 与 jsoup 已知差异」表，
-        // 不影响任何实际取值逻辑（text()/@attr 等常规用法不受影响）。
-        "xpath_real_caimoge/realBookList/getString",
-        "xpath_real_caimoge/realBookList/getStringList",
-    ]
+    /// 已修复，当前为空：此前这里登记过 `xpathPercentInterleave`（getString 对 %% 的处理）
+    /// 与 `xpath_real_caimoge/realBookList`（void 元素 outerHtml 自闭合格式）两组差异，
+    /// 现均已修复（见 README「XPath 引擎已知差异」表与 `SwiftSoupVoidElementFix`），
+    /// golden 对照不再需要跳过任何用例。
+    private let knownDivergences: Set<String> = []
 
     func testAllGoldenXPathCases() throws {
         let files = goldenFiles()
         if files.isEmpty {
-            throw XCTSkip("未找到 golden 目录（本地未跑 golden job）；CI 的 test-macos/test-ios-simulator 均 needs: golden，会真正执行此比较。")
+            try failOrSkipWhenNoGoldenData("未找到 golden 目录")
+            return
         }
         var comparedAny = false
         var failures: [String] = []
@@ -271,7 +292,8 @@ final class GoldenComparisonTests: XCTestCase {
         }
 
         if !comparedAny {
-            throw XCTSkip("golden 目录存在但没有可比较的 XPath 用例。")
+            try failOrSkipWhenNoGoldenData("golden 目录存在但没有可比较的 XPath 用例")
+            return
         }
         if !failures.isEmpty {
             XCTFail("发现 \(failures.count) 处 XPath golden 不一致：\n\n" + failures.joined(separator: "\n\n"))

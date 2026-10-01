@@ -159,8 +159,26 @@ public final class AnalyzeByXPath {
             // Kotlin: getResult(rule)?.let { return TextUtils.join("\n", it) }
             // 注意：`?.let` 只处理 null，不捕获异常；之前误用 `try?` 吞掉异常，
             // 与 Kotlin 真实行为不符，这里改为 `try` 传播（见上面 getStringList 的同类修正）。
-            let nodes = try self.getResult(rule)
-            return nodes.map { $0.toStringValue() }.joined(separator: "\n")
+            do {
+                let nodes = try self.getResult(rule)
+                return nodes.map { $0.toStringValue() }.joined(separator: "\n")
+            } catch {
+                // ⚠️ 与 Kotlin 已知差异的精确对齐（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+                // `getString` 的 Kotlin 原始签名只识别 `&&`/`||` 两种组合符，不识别 `%%`；
+                // 若规则里混入字面 `%%`（本不该出现在 XPath 的 getString 调用场景），
+                // 残留文本会被当作一段无法识别的路径文本交给 XPath 引擎。真实 JsoupXpath
+                // 的 ANTLR 解析器对此有自己的容错路径，最终返回空字符串 `""`，而不是
+                // 抛异常。本项目的解析器会在这类"路径文本含无法识别字符"的情况下抛
+                // `invalidXPath`；这里只在"确实是 %% 导致的遗留文本"这一具体场景下，
+                // 把错误降级为空字符串，对齐真实库的观测结果，不扩大到其它真正的语法错误
+                // （如 string()/normalize-space() 等——那些场景不含 %%，不会走这个分支）。
+                if rule.contains("%%"), case RuleEngineError.invalidXPath = error {
+                    diagnostics?.record(source: "AnalyzeByXPath.getString", rule: rule,
+                                        message: "规则含 %% 导致 XPath 解析残留文本，对齐真实库返回空串")
+                    return ""
+                }
+                throw error
+            }
         } else {
             var textList: [String] = []
             for rl in rules {

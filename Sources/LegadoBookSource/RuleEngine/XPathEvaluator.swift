@@ -44,7 +44,7 @@ public final class XPathNode {
     ///  - 文本（对应 JX_TEXT 伪元素）-> 文本内容
     public func asString() -> String {
         switch kind {
-        case .element(let e): return (try? e.outerHtml()) ?? ""
+        case .element(let e): return SwiftSoupVoidElementFix.fix((try? e.outerHtml()) ?? "")
         case .attribute(_, let v): return v
         case .text(let t): return t
         }
