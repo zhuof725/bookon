@@ -38,6 +38,66 @@ MAPPING = {
     "AnalyzeByXPath.kt": [
         "Sources/LegadoBookSource/RuleEngine/AnalyzeByXPath.swift",
     ],
+    # 第 4 步 B：AnalyzeRule 总调度 + JS 引擎。函数分散到多个 Swift 文件。
+    "AnalyzeRule.kt": [
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeRule.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeRule+Dispatch.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeRule+Rules.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeRule+JS.swift",
+        "Sources/LegadoBookSource/RuleEngine/SourceRule.swift",
+    ],
+    "NetworkUtils.kt": [
+        "Sources/LegadoBookSource/RuleEngine/NetworkUtils.swift",
+    ],
+}
+
+# 明确排除的 Kotlin 函数（本步骤范围外 / Swift 以不同形态实现），每项必须给理由。
+# 校验时从「未覆盖」集合里剔除，并打印理由，不静默漏。
+EXCLUDED = {
+    "AnalyzeRule.kt": {
+        # —— Swift 以不同形态/名字实现（映射说明）——
+        "getWebJsResult": "Swift 实现为 webJSResult（WebJSProvider 注入），行为对应",
+        "compileScriptCache": "Swift 的脚本缓存在 JSEngine.rememberScript（容量 16），不在 AnalyzeRule",
+        "splitSourceRuleCacheString": "Swift 同名在 AnalyzeRule+Rules（internal），正则匹配到",
+        # —— 本步骤明确排除（见 README 后续 TODO）——
+        # （reGetBook/refreshTocUrl 已以桩实现，故不在此排除）
+        # —— companion / Kotlin 扩展 setter，Swift 以实例方法 setXxx 提供 ——
+        "setCoroutineContext": "Kotlin 协程上下文；Swift 无协程模型，本步骤不需要（排除）",
+        "setRuleData": "Swift 提供 setRuleData 实例方法（正则应匹配到）",
+        "setNextChapterUrl": "Swift 提供 setNextChapterUrl 实例方法",
+        "setChapter": "Swift 提供 setChapter 实例方法",
+    },
+    "NetworkUtils.kt": {
+        # NetworkUtils.kt 含大量非本步骤范围的网络工具函数（编码/IP/域名/OkHttp 等）。
+        # 本步骤只移植 AnalyzeRule 依赖的 getAbsoluteURL(x2)/getBaseUrl/isAbsUrl/isDataUrl。
+        "add": "URL 编码辅助（notNeedEncoding），非本步骤范围",
+        "isDigit": "编码辅助，非本步骤范围",
+        "getSubDomain": "域名解析（PublicSuffix），非本步骤范围（第 5/6 步）",
+        "getSubDomainOrNull": "同上，非本步骤范围",
+        "getDomain": "同上，非本步骤范围",
+        "getLocalIPAddress": "本机 IP，非本步骤范围",
+        "getLocalIPAddressList": "本机 IP，非本步骤范围",
+        "isIPAddress": "IP 判定，非本步骤范围",
+        "isIPv4Address": "IP 判定，非本步骤范围",
+        "isIPv6Address": "IP 判定，非本步骤范围",
+        "isIPv6StdAddress": "IP 判定，非本步骤范围",
+        "isIPv6HexCompressedAddress": "IP 判定，非本步骤范围",
+        "hasIpAddress": "IP 判定，非本步骤范围",
+        "getMimeType": "MIME 判定，非本步骤范围",
+        "getUrl": "OkHttp Response 扩展，非本步骤范围",
+        "getCookies": "Cookie 解析，非本步骤范围（第 5 步）",
+        "parseCookies": "Cookie 解析，非本步骤范围",
+        "cookieToString": "Cookie 解析，非本步骤范围",
+        "getBaseUrlFromCookie": "Cookie 解析，非本步骤范围",
+        "encode": "URL 编码，非本步骤范围",
+        "encodeQuery": "URL 编码，非本步骤范围",
+        "decode": "URL 解码，非本步骤范围",
+        "hexToByte": "编码辅助，非本步骤范围",
+        "encodedForm": "表单编码，非本步骤范围",
+        "encodedQuery": "query 编码，非本步骤范围",
+        "isAvailable": "网络可用性探测，非本步骤范围",
+        "isDigit16Char": "16 进制字符判定（编码辅助），非本步骤范围",
+    },
 }
 
 # 提取 Kotlin 函数名：匹配 `fun name(` / `fun <T> name(` / `tailrec fun name(` 等。
@@ -77,8 +137,15 @@ def main():
         swift_text = ""
         for rel in swift_rels:
             swift_text += "\n" + open(os.path.join(REPO, rel)).read()
-        miss = sorted(n for n in knames if not swift_has_func(swift_text, n))
+        excluded = EXCLUDED.get(kfile, {})
+        miss = sorted(n for n in knames
+                      if not swift_has_func(swift_text, n) and n not in excluded)
         details[kfile] = sorted(knames)
+        if excluded:
+            print(f"[排除] {kfile}: {len(excluded)} 个函数明确排除（理由见脚本 EXCLUDED）")
+            for n, reason in sorted(excluded.items()):
+                if n in knames:
+                    print(f"    - {n}: {reason}")
         if miss:
             missing[kfile] = miss
 

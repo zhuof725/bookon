@@ -77,6 +77,21 @@ let package = Package(
             name: "LegadoHTMLEnginePublicAPITests",
             dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoHTMLEnginePublicAPITests"
+        ),
+        // 第 4 步 B：AnalyzeRule 总调度 + JS 引擎的 @testable 单元测试。
+        .testTarget(
+            name: "LegadoAnalyzeRuleTests",
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
+            path: "Tests/LegadoAnalyzeRuleTests",
+            resources: [
+                .copy("Resources/配置文件_7个.json")
+            ]
+        ),
+        // 第 4 步 B：AnalyzeRule 的纯 public 接口测试（普通 import，非 @testable）。
+        .testTarget(
+            name: "LegadoAnalyzeRulePublicAPITests",
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
+            path: "Tests/LegadoAnalyzeRulePublicAPITests"
         )
     ]
 )

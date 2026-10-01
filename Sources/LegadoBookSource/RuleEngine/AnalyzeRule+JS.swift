@@ -65,6 +65,11 @@ extension AnalyzeRule {
         return sourceStore?.getTag() ?? ruleNameValue
     }
 
+    /// 对应 Kotlin override fun getSource(): BaseSource? —— 返回注入的书源变量存取器。
+    public func getSource() -> SourceVariableStore? {
+        return sourceStore
+    }
+
     /// 对应 Kotlin override fun ajax(url): String? —— 失败返回错误串（getOrElse { stackTraceStr }）。
     @discardableResult
     public func ajax(_ url: String) -> String? {
