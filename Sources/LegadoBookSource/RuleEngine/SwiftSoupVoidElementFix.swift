@@ -16,6 +16,53 @@
 
 import Foundation
 
+/// 修正 SwiftSoup 2.9.6 自身另一个真实 bug：空白规整（`text()`/`ownText()` 用的
+/// `StringUtil.isWhitespace`）只认标准空白字符（空格/Tab/换行/换页/回车），**遗漏了
+/// jsoup 自己特意扩展的 `&nbsp;`（U+00A0，不在 HTML 规范里，但 jsoup 明确按"预期行为"
+/// 处理为可折叠空白——已读 jsoup 源码 `StringUtil.isActuallyWhitespace` 确认，
+/// 注释原文："160 is &nbsp;(non-breaking space). Not in the spec but expected."）。
+/// 结果是 SwiftSoup 对含 `&nbsp;` 的文本，开头/结尾的不换行空格不会被裁剪、
+/// 连续空白也不会把 nbsp 与普通空格一起折叠成一个空格，与真实 jsoup 不一致。
+///
+/// 本函数复刻 jsoup `StringUtil.appendNormalisedWhitespace(_, _, stripLeading:true)`
+/// 的算法（把 nbsp 并入"可折叠空白"集合），对 SwiftSoup 产出的 text()/ownText() 结果
+/// 做一次等价的再规整，使最终结果与真实 jsoup 完全一致。
+enum SwiftSoupTextNormalizeFix {
+    /// 与 jsoup `StringUtil.isActuallyWhitespace` 等价的字符判定：普通空白 + U+00A0(nbsp)。
+    private static func isActuallyWhitespace(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x20, 0x09, 0x0A, 0x0C, 0x0D, 0xA0: return true  // ' ', \t, \n, \f, \r, nbsp
+        default: return false
+        }
+    }
+
+    /// 复刻 jsoup `appendNormalisedWhitespace(sb, string, stripLeading: true)`：
+    /// 连续空白（含 nbsp）折叠为单个普通空格；若折叠发生在"尚未出现非空白字符"之前，
+    /// 直接跳过（即裁剪前导空白，含前导 nbsp）。不做尾部单独裁剪——与 jsoup 一致，
+    /// 尾部如果是空白会被折叠成一个尾随空格（这是 jsoup 的真实行为，不是裁掉）。
+    static func normalize(_ s: String) -> String {
+        guard !s.isEmpty else { return s }
+        // 快路径：不含 nbsp 时，SwiftSoup 自身的普通空白折叠已经正确，无需重算。
+        guard s.unicodeScalars.contains(where: { $0.value == 0xA0 }) else { return s }
+
+        var out = String.UnicodeScalarView()
+        var lastWasWhite = false
+        var reachedNonWhite = false
+        for scalar in s.unicodeScalars {
+            if isActuallyWhitespace(scalar) {
+                if !reachedNonWhite || lastWasWhite { continue }
+                out.append(" ")
+                lastWasWhite = true
+            } else {
+                out.append(scalar)
+                lastWasWhite = false
+                reachedNonWhite = true
+            }
+        }
+        return String(out)
+    }
+}
+
 enum SwiftSoupVoidElementFix {
 
     /// jsoup Tag.swift 里 emptyTags 的权威清单（原样抄自 SwiftSoup 2.9.6 源码，

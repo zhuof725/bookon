@@ -110,7 +110,7 @@ extension AnalyzeByJSoup {
         switch lastRule {
         case "text":
             for element in elements.array() {
-                let text = (try? element.text()) ?? ""
+                let text = SwiftSoupTextNormalizeFix.normalize((try? element.text()) ?? "")
                 if !text.isEmpty { textS.append(text) }
             }
         case "textNodes":
@@ -125,7 +125,7 @@ extension AnalyzeByJSoup {
             }
         case "ownText":
             for element in elements.array() {
-                let text = element.ownText()  // SwiftSoup: 非 throwing
+                let text = SwiftSoupTextNormalizeFix.normalize(element.ownText())  // SwiftSoup: 非 throwing
                 if !text.isEmpty { textS.append(text) }
             }
         case "html":

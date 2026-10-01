@@ -131,7 +131,7 @@ public struct SwiftSoupXPathEvaluator: XPathEvaluator {
         /// 取字符串值（对齐 XPath string() 转换：元素取其文本，属性取值，文本节点取自身）。
         func stringValue() -> String {
             switch self {
-            case .element(let e): return (try? e.text()) ?? ""
+            case .element(let e): return SwiftSoupTextNormalizeFix.normalize((try? e.text()) ?? "")
             case .attribute(_, let v, _): return v
             case .text(let t): return t
             }

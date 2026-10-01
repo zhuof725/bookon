@@ -120,7 +120,7 @@ extension SwiftSoupXPathEvaluator {
                         if !t.isEmpty { out.append(.text(t)) }
                     }
                 case .funcAllText:
-                    out.append(.text((try? e.text()) ?? ""))
+                    out.append(.text(SwiftSoupTextNormalizeFix.normalize((try? e.text()) ?? "")))
                 case .funcHtml:
                     out.append(.text(SwiftSoupVoidElementFix.fix((try? e.html()) ?? "")))
                 case .funcOuterHtml:
