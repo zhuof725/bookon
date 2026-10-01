@@ -133,10 +133,10 @@ extension AnalyzeByJSoup {
             // 先移除 script/style，再取 outerHtml
             _ = try? elements.select("script").remove()
             _ = try? elements.select("style").remove()
-            let html = SwiftSoupHtmlFix.fix((try? elements.outerHtml()) ?? "")
+            let html = JsoupCompatSerializer.elementsOuterHtml(elements.array())
             if !html.isEmpty { textS.append(html) }
         case "all":
-            let html = SwiftSoupHtmlFix.fix((try? elements.outerHtml()) ?? "")
+            let html = JsoupCompatSerializer.elementsOuterHtml(elements.array())
             textS.append(html)
         default:
             for element in elements.array() {

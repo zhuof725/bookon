@@ -122,9 +122,9 @@ extension SwiftSoupXPathEvaluator {
                 case .funcAllText:
                     out.append(.text(SwiftSoupTextNormalizeFix.normalize((try? e.text()) ?? "")))
                 case .funcHtml:
-                    out.append(.text(SwiftSoupHtmlFix.fix((try? e.html()) ?? "")))
+                    out.append(.text(JsoupCompatSerializer.innerHtml(e)))
                 case .funcOuterHtml:
-                    out.append(.text(SwiftSoupHtmlFix.fix((try? e.outerHtml()) ?? "")))
+                    out.append(.text(JsoupCompatSerializer.outerHtml(e)))
                 }
             }
         } else {
