@@ -1,0 +1,29 @@
+{
+  "_comment": "AnalyzeByRegex.getElement/getElements 对照用例。res/regs 均为合成测试数据（synthetic），对照真实 Java 正则（java.util.regex）。regs 为规则数组（多级）。",
+  "regexAnalyzeCases": [
+    {"name": "synthetic_single_group", "res": "name: Alice", "regs": ["name: (\\w+)"]},
+    {"name": "synthetic_no_match", "res": "nothing", "regs": ["foo(\\d+)"]},
+    {"name": "synthetic_multi_matches", "res": "a1 a2 a3", "regs": ["a(\\d)"]},
+    {"name": "synthetic_two_groups", "res": "key=val", "regs": ["(\\w+)=(\\w+)"]},
+    {"name": "synthetic_group0_only", "res": "hello world", "regs": ["\\w+"]},
+    {"name": "synthetic_two_level", "res": "<li>A</li><li>B</li>", "regs": ["<li>.*?</li>", "<li>(.*?)</li>"]},
+    {"name": "synthetic_three_groups", "res": "2024-01-15", "regs": ["(\\d{4})-(\\d{2})-(\\d{2})"]},
+    {"name": "synthetic_optional_group", "res": "abc", "regs": ["a(x)?bc"]},
+    {"name": "synthetic_repeated_rows", "res": "row1|row2|row3", "regs": ["row(\\d)"]},
+    {"name": "synthetic_cn_chapters", "res": "第1章 第2章 第3章", "regs": ["第(\\d)章"]},
+    {"name": "synthetic_nested_level2", "res": "x[1]y[2]z[3]", "regs": ["\\[\\d\\]", "\\[(\\d)\\]"]},
+    {"name": "synthetic_empty_matches", "res": "abc", "regs": ["x*"]},
+    {"name": "synthetic_full_match_no_group", "res": "single", "regs": ["single"]},
+    {"name": "synthetic_alternation", "res": "cat dog cat", "regs": ["(cat|dog)"]},
+    {"name": "synthetic_href_extract", "res": "<a href='p1'>1</a><a href='p2'>2</a>", "regs": ["href='(.*?)'"]},
+    {"name": "synthetic_multiline", "res": "line1\nline2\nline3", "regs": ["(?m)^line(\\d)$"]},
+    {"name": "synthetic_three_level", "res": "AAbbCCddEE", "regs": ["[A-Z]+..", "[A-Z]+", "([A-Z])([A-Z])"]},
+    {"name": "synthetic_unicode", "res": "价格：100元 价格：200元", "regs": ["价格：(\\d+)元"]},
+    {"name": "synthetic_nested_groups", "res": "abc", "regs": ["((a)(b)(c))"]},
+    {"name": "synthetic_no_match_level2", "res": "abc def", "regs": ["\\w+", "(\\d+)"]},
+    {"name": "synthetic_whitespace_split", "res": "a b c", "regs": ["(\\S+)"]},
+    {"name": "synthetic_overlap_candidate", "res": "aaa", "regs": ["a"]},
+    {"name": "synthetic_case_insensitive", "res": "FOO foo Foo", "regs": ["(?i)(foo)"]},
+    {"name": "synthetic_dotall", "res": "start\nmiddle\nend", "regs": ["(?s)start(.*)end"]}
+  ]
+}
