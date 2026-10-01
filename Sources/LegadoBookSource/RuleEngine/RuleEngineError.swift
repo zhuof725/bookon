@@ -32,6 +32,11 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
     case invalidXPath(String)
     /// HTML 无法解析。
     case invalidHTML(String)
+    /// 功能未实现 / 不支持（如 WebJs、Java 互操作、JsExtensions 方法、reGetBook/refreshTocUrl）。
+    /// 对应 Kotlin 里会抛异常或依赖 WebView/WebBook 的分支，本移植明确抛出而非静默。
+    case unsupported(String)
+    /// JavaScript 执行失败（JavaScriptCore 求值异常 / Java 互操作不可用等）。
+    case jsError(String)
 
     public var errorDescription: String? {
         switch self {
@@ -43,6 +48,8 @@ public enum RuleEngineError: Error, Equatable, LocalizedError {
         case .invalidSelector(let s): return "无效的选择器: \(s)"
         case .invalidXPath(let s): return "无效或不支持的 XPath: \(s)"
         case .invalidHTML(let s): return "无法解析的 HTML: \(s)"
+        case .unsupported(let s): return "未实现 / 不支持: \(s)"
+        case .jsError(let s): return "JavaScript 执行失败: \(s)"
         }
     }
 }
