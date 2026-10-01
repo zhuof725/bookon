@@ -414,3 +414,58 @@
 
 以上 4 条均为「支持但暂缺专项测试」的诚实标注，不是「未实现」。收尾前第 5 条（诊断记录断言）
 已在本轮用 `XCTAssertThrowsError` 系列测试间接验证（抛错行为本身即是诊断的体现），不再单列。
+
+
+## 第 4 步 B：AnalyzeRule.kt + NetworkUtils.kt（分支 → 测试）
+
+验证脚本 `scripts/verify_functions.py` 已扩展提取 `AnalyzeRule.kt`（32 fun）与
+`NetworkUtils.kt`（本步骤范围子集）；排除项在脚本 `EXCLUDED` 显式列理由。结果：
+「Kotlin 有但 Swift 没实现」清单为空。
+
+| 函数 / 分支 | Swift 位置 | 对应测试 |
+|---|---|---|
+| splitSourceRule — @CSS:/@@/@XPath:/@Json: 前缀 | SourceRule.init | testMode_* 系列（13 例） |
+| splitSourceRule — $./$[ 判 JSON、/ 判 XPath | SourceRule.init | testMode_jsonDollarDot/Bracket/xpathSlash |
+| splitSourceRule — allInOne `:` 判 Regex | splitSourceRule | testMode_allInOneRegexColon |
+| splitSourceRule — <js>/@js:/@webjs: | splitSourceRule | testMode_jsBlock/atJs/webJs/webJsTooShort/testSplit_textThenJs |
+| SourceRule — {{ }} 内联 JS | makeUpRule | testInline_jsExpr/jsStringConcat/multipleBraces |
+| SourceRule — @get:{} | makeUpRule | testAtGet_inline |
+| SourceRule — $1~$n 组引用 | splitRegex/makeUpRule | testReplaceRegex_groupRef |
+| SourceRule — ##/### 切分 | makeUpRule | testReplaceRegex_simple/removeMatch/replaceFirst |
+| splitPutRule — @put:{} | splitPutRule | testAtPut_storesVariable |
+| getString(CSS/Default) | +Dispatch | testGetString_cssTitle/cssAuthor |
+| getString(XPath) | +Dispatch | testGetString_xpathTitle |
+| getString(JSON) | +Dispatch | testGetString_jsonName/jsonAuthor |
+| getString — 空规则/无内容 | +Dispatch | testGetString_emptyRuleReturnsEmpty/noContent |
+| getString — isUrl 绝对拼接 | +Dispatch | testGetString_isUrlAbsolute/isUrlBlankReturnsBaseUrl |
+| getString — unescape 开关 | +Dispatch | testGetString_unescapeHtml4/noUnescapeWhenFlagOff |
+| getStringList(CSS/JSON) | +Dispatch | testGetStringList_cssChapters/jsonTags |
+| getStringList — 空规则 nil、String 按 \n 切 | +Dispatch | testGetStringList_emptyRuleNil/stringSplitByNewline |
+| getStringList — isUrl | +Dispatch | testGetStringList_isUrlAbsolute |
+| getElement / getElements | +Dispatch | testGetElement_css/testGetElements_cssList/empty |
+| setContent — isJSON 判定 | AnalyzeRule | testSetContent_htmlNotJson/jsonAutoDetect/nilThrows/emptyStringIsNotJSON |
+| put/get 四层回退 | +Rules | testPutGet_sourceLevel/bookPreferredOverSource/chapterPreferred/testGet_bookName/chapterTitle/missingReturnsEmpty |
+| evalJS 基本求值 | +JS / JSEngine | testEvalJS_arithmetic/stringConcat/resultVariable/boolean/array |
+| java Proxy 未实现方法抛错 | JSJavaBridge | testJava_unimplementedThrows |
+| java 自有方法 put/get | JSJavaBridge | testJava_implementedGetPut |
+| Java 互操作检测抛错 | JSEngine | testJavaInterop_packagesThrows/jsoupParseThrows/importClassThrows |
+| replaceRegex（## / ### / $n / 删除） | +Rules | testReplaceRegex_* |
+| compileRegexCache / scriptCache 容量 | +Rules / JSEngine | testScriptRuleCache_reuse（缓存复用；容量 16 为常量） |
+| WebJs 默认 unsupported | +JS | testWebJs_unsupportedThrows |
+| reGetBook / refreshTocUrl 桩 | +JS | testReGetBook_unsupported/testRefreshTocUrl_unsupported |
+| NetworkUtils.getAbsoluteURL（各分支） | NetworkUtils/JavaURLResolver | NetworkUtilsTests testAbs_*（11 例） |
+| NetworkUtils.getBaseUrl/isAbsUrl/isDataUrl | NetworkUtils | testGetBaseUrl/testIsAbsUrl/testIsDataUrl |
+| JavaURL.parse | JavaURLResolver | testParse_basic/invalidReturnsNil |
+| unescapeHtml4（命名/十进/十六/无分号/未知） | HtmlUnescape | testUnescape_*（8 例） |
+| RegexTemplate Java→ICU | RegexTemplate | testTemplate_groupRef/literalDollar/bareDollarEscaped |
+| splitNotBlank | LegadoStringUtils | testSplitNotBlank |
+| 端到端真实规则（7 书源） | AnalyzeRuleEndToEndTests | testTaoxiaoshuo_*/testShudugu_*/testDeqi_*/testBiquge345_*/testAlice_*/testMowan_*/testDejian_* |
+
+### 未直接单测到的分支（标注）
+- `NativeObject` / `LinkedTreeMap` 分支（RuleValue 的 `.jsObject` / `.jsonObject`）：已实现，
+  但无专用单测（真实书源未直接命中；evalJS 返回对象经 toRuleValue 覆盖了 .jsObject 路径）。
+  **待补**：直接构造 `.jsObject`/`.jsonObject` content 的 getString/getStringList 用例。
+- `getWebJsResult` 成功路径：默认 WebJSProvider 抛 unsupported，只测了抛错分支；真实 WebView
+  第 5/6 步接入后补成功路径。
+- NetworkUtils 相对解析的含空格/中文、`file:`、越根 `..` 等边角：待 C 部分 golden（真实
+  java.net.URL 对照）验证。
