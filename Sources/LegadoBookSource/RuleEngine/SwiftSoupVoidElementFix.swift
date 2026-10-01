@@ -63,6 +63,65 @@ enum SwiftSoupTextNormalizeFix {
     }
 }
 
+/// 修正 SwiftSoup 2.9.6 另一个真实 bug：pretty-print 输出里，紧跟在 `<br>` 后面的文本节点
+/// 应该换行缩进（已读 jsoup 源码 `TextNode.outerHtmlHead` 确认：`(siblingIndex > 0 &&
+/// isNode(prev, "br"))` 是一条专门的特殊规则，注释原文 "special case wrap on inline <br> -
+/// doesn't make sense as a block tag"），但 SwiftSoup 的 `TextNode.outerHtmlHead` 移植
+/// 遗漏了这整条分支（以及 jsoup 同一方法里的 trimLeading/trimTrailing/couldSkip 逻辑），
+/// 导致 `<br>` 后的文本紧跟在同一行，不会像真实 jsoup 那样换行并带上与上下文一致的缩进。
+///
+/// 本函数对 SwiftSoup 产出的 pretty-print HTML 字符串做一次结构保守的后处理：
+/// 找到每个 `<br>`（后面紧跟的不是 `<` 开头的标签、也不是换行，即其后直接跟着文本）的位置，
+/// 在其后插入 "\n" + 与当前行相同的缩进（取当前行开头的空白前缀，与 jsoup
+/// "同一深度" 的缩进结果一致）。只处理这一种结构，不触碰其它格式。
+enum SwiftSoupBrIndentFix {
+    static func fix(_ html: String) -> String {
+        guard html.contains("<br>") else { return html }
+
+        let lines = html.components(separatedBy: "\n")
+        var outLines: [String] = []
+        for line in lines {
+            outLines.append(contentsOf: fixLine(line))
+        }
+        return outLines.joined(separator: "\n")
+    }
+
+    /// 处理单行：该行里每出现一次 "<br>" 后面紧跟非 '<' 字符（即后面是文本，不是下一个标签
+    /// 或行尾），就在该处断行，新行带上与本行相同的前导空白缩进。
+    private static func fixLine(_ line: String) -> [String] {
+        guard line.contains("<br>") else { return [line] }
+
+        // jsoup 对 "<br>" 后文本节点用的缩进深度，是该文本节点自身的树深度——即它所在
+        // 父元素（如 <p>）的"内容深度"，比父元素标签本身的缩进深度多一层（默认
+        // indentAmount=1，即多一个空格）。本行（含 "<br>" 的这一行）开头的空白就是父元素
+        // 标签自己的缩进，所以这里要在其基础上再加一层（一个空格）。
+        let lineIndent = String(line.prefix(while: { $0 == " " || $0 == "\t" }))
+        let indent = lineIndent + " "
+
+        var lines: [String] = []
+        var current = ""
+        var remainder = Substring(line)
+
+        while let range = remainder.range(of: "<br>") {
+            let afterBr = range.upperBound
+            // 把 "...<br>" 这一段追加到当前行。
+            current += String(remainder[remainder.startIndex..<afterBr])
+            remainder = remainder[afterBr...]
+
+            // 如果 "<br>" 后面紧跟的是另一个标签（'<'）或已经是行尾，不需要插入换行。
+            if remainder.isEmpty || remainder.first == "<" {
+                continue
+            }
+            // "<br>" 后面是文本：在此处断行，开始新的一行（带缩进）。
+            lines.append(current)
+            current = indent
+        }
+        current += String(remainder)
+        lines.append(current)
+        return lines
+    }
+}
+
 enum SwiftSoupVoidElementFix {
 
     /// jsoup Tag.swift 里 emptyTags 的权威清单（原样抄自 SwiftSoup 2.9.6 源码，
@@ -146,5 +205,14 @@ enum SwiftSoupVoidElementFix {
             }
         }
         return result
+    }
+}
+
+
+/// 组合入口：依次应用 void 元素自闭合修正 + br 后文本缩进修正。
+/// 所有对外输出 outerHtml()/html() 的地方都应使用这个函数，而不是分别调用。
+enum SwiftSoupHtmlFix {
+    static func fix(_ html: String) -> String {
+        SwiftSoupBrIndentFix.fix(SwiftSoupVoidElementFix.fix(html))
     }
 }
