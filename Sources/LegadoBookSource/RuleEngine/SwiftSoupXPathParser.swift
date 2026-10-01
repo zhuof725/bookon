@@ -22,6 +22,8 @@ extension SwiftSoupXPathEvaluator {
             case wildcard         // *
             case text             // text()
             case node             // node()
+            /// 恒不匹配：形如 "xxx()" 但不是已知函数（如 ownText()），见 golden 对照记录。
+            case none
         }
         var axis: Axis
         var nodeTest: NodeTest
@@ -98,6 +100,8 @@ extension SwiftSoupXPathEvaluator {
             return
         case .node:
             break
+        case .none:
+            return  // 恒不匹配：直接不产出任何结果。
         }
 
         // 谓词过滤（对元素集合）。

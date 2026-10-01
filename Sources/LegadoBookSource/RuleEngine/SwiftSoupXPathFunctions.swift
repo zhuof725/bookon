@@ -71,7 +71,13 @@ extension SwiftSoupXPathEvaluator {
             for a in args { out += try resolveToFirstString(a, roots: roots) }
             return .text(out)
         case "substring":
-            guard args.count == 2 || args.count == 3 else { throw RuleEngineError.invalidXPath("substring() 需 2 或 3 个参数 in \(expr)") }
+            // ⚠️ 经 golden（真实 JsoupXpath 2.5.3）验证：两参数形式 `substring(s, start)`
+            // （不给长度，表示"取到字符串末尾"）不被支持，真实结果为 nil；
+            // 只有三参数形式 `substring(s, start, length)` 可用。本项目对齐该行为：
+            // 两参数时直接判定为不支持（返回 nil 让调用方当作普通路径解析失败处理）。
+            guard args.count == 3 else {
+                throw RuleEngineError.invalidXPath("substring() 二参数形式不受真实 JsoupXpath 支持，需 3 个参数 in \(expr)")
+            }
             let s = try resolveToFirstString(args[0], roots: roots)
             let result = try applySubstring(s, args: Array(args.dropFirst()), whole: expr)
             return .text(result)
@@ -106,7 +112,9 @@ extension SwiftSoupXPathEvaluator {
         guard let (fn, argsStr) = matchFunctionCall(lhs) else { return nil }
         // ⚠️ count()/string() 经 golden 验证不被 JsoupXpath 支持（见上方 topLevelFuncNames 注释），
         // 谓词内比较同样不支持，已从此列表移除，保持与真实行为一致。
-        let funcNames = ["concat", "substring-before", "substring-after", "substring", "string-length"]
+        // ⚠️ 不含 string-length：经 golden 验证谓词内 `[string-length(...)=n]` 比较不生效
+        // （真实结果恒为不匹配），虽然 string-length() 顶层调用可用。
+        let funcNames = ["concat", "substring-before", "substring-after", "substring"]
         guard funcNames.contains(fn) else { return nil }
         let args = splitArgsTopLevelComma(argsStr)
         let rhsValue = stripQuotesPublic(rhsRaw)
@@ -246,7 +254,11 @@ extension SwiftSoupXPathEvaluator {
     }
 
     static func substringBefore(_ s: String, _ sep: String) -> String {
-        guard !sep.isEmpty, let r = s.range(of: sep) else { return "" }
+        // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+        // W3C XPath 1.0 规范里分隔符不存在时 substring-before 应返回空串 ""，
+        // 但真实 JsoupXpath 的实现在找不到分隔符时返回**原字符串**（不是规范行为，
+        // 是它自身实现的偏差）。本移植复刻这一真实行为，见 README「与 Kotlin 已知差异」表。
+        guard !sep.isEmpty, let r = s.range(of: sep) else { return s }
         return String(s[s.startIndex..<r.lowerBound])
     }
 

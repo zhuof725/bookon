@@ -166,6 +166,11 @@ extension SwiftSoupXPathEvaluator {
                 nodeTest = .node
             } else if isValidNameTest(t) {
                 nodeTest = .name(t)
+            } else if isFunctionLikeCall(t) {
+                // 形如 "xxx()" 但不是已识别的函数（text/allText/html/outerHtml/node），
+                // 例如 ownText()——经 golden 验证真实 JsoupXpath 并无此函数，表现为
+                // "能解析、但永不命中任何节点"，而不是语法错误，这里同样返回恒空结果。
+                nodeTest = .none
             } else {
                 throw RuleEngineError.invalidXPath("无法解析的节点测试 '\(t)' in \(whole)")
             }
@@ -176,6 +181,13 @@ extension SwiftSoupXPathEvaluator {
         private static func isValidNameTest(_ t: String) -> Bool {
             // 标签名：字母/数字/下划线/连字符/冒号（命名空间）
             return !t.isEmpty && t.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" || $0 == ":" }
+        }
+
+        /// 形如 "名字()" 的调用形状（不含参数），用于识别"看起来像函数调用但不是已知函数"的情形。
+        private static func isFunctionLikeCall(_ t: String) -> Bool {
+            guard t.hasSuffix("()") else { return false }
+            let name = String(t.dropLast(2))
+            return !name.isEmpty && name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
         }
 
         // MARK: 谓词解析
@@ -215,12 +227,12 @@ extension SwiftSoupXPathEvaluator {
             // and / or（顶层，简单按小写关键字切；不处理括号嵌套的逻辑分组）
             if let parts = splitLogical(inner, keyword: " or ") {
                 let preds = try parts.map { try parseOnePredicate($0, whole: whole) }
-                try rejectFunctionPredicateInLogicalCombo(preds, whole: whole)
+                if containsFunctionPredicate(preds) { return Predicate(kind: .neverMatches) }
                 return Predicate(kind: .or(preds))
             }
             if let parts = splitLogical(inner, keyword: " and ") {
                 let preds = try parts.map { try parseOnePredicate($0, whole: whole) }
-                try rejectFunctionPredicateInLogicalCombo(preds, whole: whole)
+                if containsFunctionPredicate(preds) { return Predicate(kind: .neverMatches) }
                 return Predicate(kind: .and(preds))
             }
 
@@ -305,23 +317,43 @@ extension SwiftSoupXPathEvaluator {
                     return Predicate(kind: .textCompare(op: .ne, value: val))
                 }
             }
+            // 形如 "xxx(...)=value" 的函数比较，但函数名不在本项目支持列表里
+            // （如 count()/string()——经 golden 验证真实 JsoupXpath 对这些函数在谓词内的比较
+            // 同样"解析通过但永不命中"，而不是语法错误）。识别出这种形状就返回恒不匹配，
+            // 不识别（真正语法有问题）才抛错。
+            if looksLikeFunctionCallCompare(t) {
+                return Predicate(kind: .neverMatches)
+            }
+
             throw RuleEngineError.invalidXPath("不支持的谓词 '\(inner)' in \(whole)")
+        }
+
+        /// 粗略判断是否形如 `名字(参数) 运算符 值`（用于识别"看起来是函数比较但函数名不受支持"的情形）。
+        private static func looksLikeFunctionCallCompare(_ t: String) -> Bool {
+            guard let openParen = t.firstIndex(of: "("), let closeParen = t.firstIndex(of: ")"), openParen < closeParen else {
+                return false
+            }
+            let fnName = String(t[t.startIndex..<openParen])
+            // 函数名只能是字母/连字符（如 string-length），避免误判其它结构。
+            guard !fnName.isEmpty, fnName.allSatisfy({ $0.isLetter || $0 == "-" }) else { return false }
+            let rest = t[t.index(after: closeParen)...].trimmingCharacters(in: .whitespaces)
+            return rest.hasPrefix("=") || rest.hasPrefix("!=")
         }
 
         /// ⚠️ 经 golden（真实 JsoupXpath 2.5.3）验证：`not(...)` 或函数比较
         /// （`count(...)=n`/`string(...)='x'` 等）与 `and`/`or` 组合在同一层谓词里时，
-        /// 真实结果为空（不生效），即 JsoupXpath 的语法不支持这种组合。
-        /// 为忠实对齐该行为（而非静默给出不同结果），这里检测到就抛出不支持，
-        /// 由上层按吞异常的语义处理（返回空值）。
-        private static func rejectFunctionPredicateInLogicalCombo(_ preds: [Predicate], whole: String) throws {
+        /// 真实结果是「能正常解析、但永远不命中任何元素」（返回空集合，不是抛语法错误）。
+        /// 为忠实对齐该观测行为，这里把整个 and/or 谓词替换成一个恒不匹配的谓词
+        /// （而不是抛错——抛错会被上层吞掉变成"求值失败"，与真实情况"语法有效但空结果"
+        /// 在语义上不同，虽然对 getString/getStringList 的返回值表现相同，但更贴近真实行为）。
+        private static func containsFunctionPredicate(_ preds: [Predicate]) -> Bool {
             for p in preds {
                 switch p.kind {
-                case .not, .funcCompare:
-                    throw RuleEngineError.invalidXPath("not()/函数比较 与 and/or 组合不受 JsoupXpath 支持 in \(whole)")
-                default:
-                    continue
+                case .not, .funcCompare: return true
+                default: continue
                 }
             }
+            return false
         }
 
         // 拆 and/or（大小写不敏感），忽略引号内的关键字。返回 nil 表示没有该关键字。

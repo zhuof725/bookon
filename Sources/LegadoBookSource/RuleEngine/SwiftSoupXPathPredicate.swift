@@ -46,6 +46,9 @@ extension SwiftSoupXPathEvaluator {
             case or([Predicate])
             indirect case not(Predicate)                                 // not(...)
             case funcCompare(PredicateFuncCall, CompareOp, String)        // count(...)=3 / string(...)='x' 等
+            /// 恒不匹配：对应真实 JsoupXpath 里"语法能解析、但组合方式实际上永远不命中"的观测行为
+            /// （如 not()/函数比较 与 and/or 组合），见 golden 对照记录。
+            case neverMatches
         }
         enum CompareOp { case eq, ne }
         struct FuncPred {
@@ -104,6 +107,8 @@ extension SwiftSoupXPathEvaluator {
                     let lhs = (try? call.evaluate(context: e)) ?? ""
                     return op == .eq ? (lhs == rhs) : (lhs != rhs)
                 }
+            case .neverMatches:
+                return []
             }
         }
 
