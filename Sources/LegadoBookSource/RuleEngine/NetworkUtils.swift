@@ -19,7 +19,7 @@
 import Foundation
 
 /// java.net.URL 的解析结果（scheme://authority/path?query#ref 的最小分解）。
-struct JavaURL {
+public struct JavaURL {
     var scheme: String          // 不含 ":"，如 "http"
     var authority: String?      // host[:port]（可含 userinfo），可为 nil（如 file:）
     var path: String            // 以 "/" 开头或相对

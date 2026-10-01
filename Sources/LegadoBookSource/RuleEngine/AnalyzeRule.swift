@@ -177,7 +177,7 @@ public final class AnalyzeRule {
         return c.stringValue == v.stringValue
     }
 
-    private func getAnalyzeByXPath(_ o: RuleValue) throws -> AnalyzeByXPath {
+    func getAnalyzeByXPath(_ o: RuleValue) throws -> AnalyzeByXPath {
         if !contentEquals(o) {
             return try AnalyzeByXPath(ruleValueToDoc(o))
         }
@@ -187,7 +187,7 @@ public final class AnalyzeRule {
         return analyzeByXPath!
     }
 
-    private func getAnalyzeByJSoup(_ o: RuleValue) throws -> AnalyzeByJSoup {
+    func getAnalyzeByJSoup(_ o: RuleValue) throws -> AnalyzeByJSoup {
         if !contentEquals(o) {
             return try AnalyzeByJSoup(ruleValueToDoc(o))
         }
@@ -197,7 +197,7 @@ public final class AnalyzeRule {
         return analyzeByJSoup!
     }
 
-    private func getAnalyzeByJSonPath(_ o: RuleValue) throws -> AnalyzeByJSonPath {
+    func getAnalyzeByJSonPath(_ o: RuleValue) throws -> AnalyzeByJSonPath {
         if !contentEquals(o) {
             return AnalyzeByJSonPath(ruleValueToJSON(o), diagnostics: diagnostics)
         }
