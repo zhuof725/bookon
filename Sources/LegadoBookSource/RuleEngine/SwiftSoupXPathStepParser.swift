@@ -317,12 +317,13 @@ extension SwiftSoupXPathEvaluator {
                     return Predicate(kind: .textCompare(op: .ne, value: val))
                 }
             }
-            // string(...)='x' 专门判定为硬性语法错误（抛错），不是"能解析但不命中"：
-            // 经 golden 验证真实 JsoupXpath 对谓词内 string() 比较是解析失败（Java 侧
-            // elementsCount=-1、getString=nil，等价于异常传播），与 count()/string-length()
-            // 的"解析通过但恒不匹配"（Java 侧 elementsCount=0）不同，需要分别处理。
-            if t.hasPrefix("string(") {
-                throw RuleEngineError.invalidXPath("谓词内 string() 比较不受真实 JsoupXpath 支持 in \(whole)")
+            // string(...)='x' 与 normalize-space(...)='x' 专门判定为硬性语法错误（抛错），
+            // 不是"能解析但不命中"：经 golden 验证真实 JsoupXpath 对谓词内这两个函数的比较是
+            // 解析失败（Java 侧 elementsCount=-1、getString=nil，等价于异常传播），
+            // 与 count()/string-length() 的"解析通过但恒不匹配"（Java 侧 elementsCount=0）不同，
+            // 需要分别处理。
+            if t.hasPrefix("string(") || t.hasPrefix("normalize-space(") {
+                throw RuleEngineError.invalidXPath("谓词内此函数比较不受真实 JsoupXpath 支持 in \(whole)")
             }
             // 形如 "xxx(...)=value" 的函数比较，但函数名不在本项目支持列表里
             // （如 count()/string-length()——经 golden 验证真实 JsoupXpath 对这些函数在谓词内

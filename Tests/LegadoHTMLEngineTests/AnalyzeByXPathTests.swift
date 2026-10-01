@@ -127,10 +127,15 @@ final class AnalyzeByXPathTests: XCTestCase {
     // normalize-space() 完全不被真实 JsoupXpath 支持（无论顶层还是谓词内），
     // 本移植对齐该行为：不解析此函数，遇到时抛不支持语法，上层吞异常返回空值。
     func testNormalizeSpaceFunctionIsUnsupported() throws {
+        // 真实 JsoupXpath 对谓词内 normalize-space() 比较是硬性解析失败（Java 侧 elementsCount=-1、
+        // getString=nil，等价于异常传播），本项目对齐：抛 RuleEngineError.invalidXPath。
         let html = "<p>  多余   空白  </p>"
         let x = try AnalyzeByXPath(html)
-        let r = try x.getStringList("//p[normalize-space(text())='多余 空白']/text()")
-        XCTAssertEqual(r.count, 0, "真实 JsoupXpath 不支持 normalize-space()，应返回空")
+        XCTAssertThrowsError(try x.getStringList("//p[normalize-space(text())='多余 空白']/text()")) { error in
+            guard case RuleEngineError.invalidXPath = error else {
+                return XCTFail("应抛 RuleEngineError.invalidXPath，实际：\(error)")
+            }
+        }
     }
 
     // MARK: - 六、多条件 and/or
