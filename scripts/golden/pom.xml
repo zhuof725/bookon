@@ -25,6 +25,14 @@
         <artifactId>jsoup</artifactId>
         <version>${jsoup.version}</version>
       </dependency>
+      <!-- commons-text 1.13.1 需要 commons-lang3 >= 3.18（NumericEntityEscaper 用到
+           Range.of(Comparable,Comparable)）；JsoupXpath/jsoup 间接引入的旧版 lang3 会导致
+           运行期 NoSuchMethodError，这里强制收敛到 3.18.0。 -->
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>3.18.0</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
