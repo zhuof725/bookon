@@ -49,12 +49,13 @@ extension SwiftSoupXPathEvaluator {
         }
         enum CompareOp { case eq, ne }
         struct FuncPred {
-            enum Name { case contains, startsWith, normalizeSpaceEq }
+            // ⚠️ 不含 normalizeSpaceEq：经 golden 验证 normalize-space() 不被真实 JsoupXpath 支持，已移除。
+            enum Name { case contains, startsWith }
             let name: Name
             // 作用目标：@attr / text() / .（当前元素文本）
             enum Target { case attr(String); case text; case current }
             let target: Target
-            let value: String     // 比较/包含的值（normalizeSpaceEq 用作等值）
+            let value: String     // 比较/包含的值
         }
         var kind: Kind
 
@@ -115,10 +116,6 @@ extension SwiftSoupXPathEvaluator {
             switch f.name {
             case .contains: return subject.contains(f.value)
             case .startsWith: return subject.hasPrefix(f.value)
-            case .normalizeSpaceEq:
-                let normalized = subject.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
-                    .joined(separator: " ")
-                return normalized == f.value
             }
         }
     }

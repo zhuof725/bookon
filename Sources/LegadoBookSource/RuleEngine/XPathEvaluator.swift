@@ -35,28 +35,25 @@ public final class XPathNode {
         return nil
     }
 
-    /// 对应 JXNode.asString()：
-    ///  - 元素 -> 其 text()（JsoupXpath 对元素节点 asString 返回可见文本）
+    /// 对应真实 JsoupXpath 源码 JXNode.asString()（已去 JsoupXpath 源码核对，见 README）：
+    ///   若 value 是元素：若其标签是内部专用的 "JX_TEXT"（即 text()/allText() 等函数结果，
+    ///   本移植用 `.text` case 表达这一形态）返回 ownText()；否则（普通元素，如 `//div` 直接
+    ///   命中的节点）返回 `element.toString()` == outerHtml（含元素自身标签）。
+    ///  - 元素 -> outerHtml（不是纯文本！这是容易搞错的一点，已用 golden 对照修正）
     ///  - 属性 -> 属性值
-    ///  - 文本 -> 文本内容
+    ///  - 文本（对应 JX_TEXT 伪元素）-> 文本内容
     public func asString() -> String {
-        switch kind {
-        case .element(let e): return (try? e.text()) ?? ""
-        case .attribute(_, let v): return v
-        case .text(let t): return t
-        }
-    }
-
-    /// 对应 JXNode.toString()（getString 用 TextUtils.join 拼接的即为此）：
-    ///  - 元素 -> outerHtml
-    ///  - 属性 -> 属性值
-    ///  - 文本 -> 文本内容
-    public func toStringValue() -> String {
         switch kind {
         case .element(let e): return (try? e.outerHtml()) ?? ""
         case .attribute(_, let v): return v
         case .text(let t): return t
         }
+    }
+
+    /// 对应 JXNode.toString()（JsoupXpath 源码：`toString() { return asString() }`，
+    /// 与 asString() 完全相同，getString 用 TextUtils.join 拼接的即为此）。
+    public func toStringValue() -> String {
+        asString()
     }
 
     /// 供上层把 XPath 结果再喂给别的解析器时使用（AnalyzeByJSoup.parse 会调用）。

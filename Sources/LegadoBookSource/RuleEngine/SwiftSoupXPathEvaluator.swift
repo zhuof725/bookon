@@ -45,50 +45,20 @@ public struct SwiftSoupXPathEvaluator: XPathEvaluator {
             return try evaluateSingle(branches[0]).map { $0.toXPathNode() }
         }
 
-        // 多个分支：分别求值，合并后按「文档顺序」排序（对齐 XPath `|` 标准语义：
-        // 联合运算的结果按文档顺序排列，与哪个分支命中无关），元素/属性去重，文本保留全部。
+        // 多个分支：分别求值，按「分支书写顺序 + 分支内命中顺序」直接拼接。
+        //
+        // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证，见 README）：
+        // 标准 XPath 1.0 规范里 `|` 是「节点集合的并集」，结果应按文档顺序排列且天然去重
+        // （集合语义）。但真实 JsoupXpath 的实现**不按文档顺序重排、也不去重**——
+        // 例如 `//p|//p` 会得到两份重复结果拼接，`//liB|//liA` 结果是先所有 B 分支命中、
+        // 再所有 A 分支命中，而不是按 HTML 文本里的先后顺序。本移植为与 Kotlin 实际运行
+        // 结果一致，选择原样复刻这个"不完全合规范"的行为：直接拼接，不去重、不重排。
         var merged: [Node] = []
         for branch in branches {
             let nodes = try evaluateSingle(branch)
             merged.append(contentsOf: nodes)
         }
-        let deduped = dedup(merged)
-        return sortByDocumentOrder(deduped).map { $0.toXPathNode() }
-    }
-
-    /// 按文档顺序排序（用于 `|` 联合运算符）。
-    /// - 元素：按其在文档树里的前序遍历位置排序。
-    /// - 属性：按其归属元素的文档位置排序（同一元素的多个属性保持合并时的相对顺序）。
-    /// - 纯文本节点（如 `text()` 的结果）：没有独立的文档位置可归属，保持合并时的原始相对顺序
-    ///   （已知限制，见 README「与 Kotlin 已知差异」）。
-    private func sortByDocumentOrder(_ nodes: [Node]) -> [Node] {
-        guard let anyRoot = roots.first, let top = topRoot(anyRoot) else { return nodes }
-        var order: [ObjectIdentifier: Int] = [:]
-        var idx = 0
-        func visit(_ e: Element) {
-            order[ObjectIdentifier(e)] = idx
-            idx += 1
-            for c in e.children().array() { visit(c) }
-        }
-        visit(top)
-
-        // 用稳定排序：先按 (是否可定位, 文档位置) 排序，不能定位的（纯文本）保持原始相对顺序。
-        let indexed = nodes.enumerated().map { (offset, node) -> (Int, Int, Node) in
-            switch node {
-            case .element(let e):
-                return (0, order[ObjectIdentifier(e)] ?? Int.max, node)
-            case .attribute(_, _, let owner):
-                let ownerIdx = owner.flatMap { order[ObjectIdentifier($0)] } ?? Int.max
-                return (0, ownerIdx, node)
-            case .text:
-                // 文本节点排最后一组，组内保持原始合并顺序（用 offset 保序）。
-                return (1, offset, node)
-            }
-        }
-        return indexed.sorted { a, b in
-            if a.0 != b.0 { return a.0 < b.0 }
-            return a.1 < b.1
-        }.map { $0.2 }
+        return merged.map { $0.toXPathNode() }
     }
 
     /// 求值「不含顶层 `|`」的单个表达式：可能是函数调用，也可能是普通路径。

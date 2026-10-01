@@ -89,7 +89,6 @@
     { "name": "unionOrderPreserved", "html": "unionOrderSample", "rule": "//li[@class='b']|//li[@class='a']" },
     { "name": "unionWithAndCombo", "html": "unionSample", "rule": "//h1/text()&&//h1/text()|//p/text()" },
     { "name": "unionWithOrCombo", "html": "unionSample", "rule": "//nonexist/text()||//h1/text()|//p/text()" },
-    { "name": "unionWithPercentCombo", "html": "unionOrderSample", "rule": "//li[@class='a']/text()%%//li[@class='b']/text()|//li[@class='b']/text()" },
 
     { "name": "notFunctionBasic", "html": "notSample", "rule": "//li[not(@class='skip')]/text()" },
     { "name": "notFunctionAttrExists", "html": "attrExists", "rule": "//a[not(@href)]/text()" },

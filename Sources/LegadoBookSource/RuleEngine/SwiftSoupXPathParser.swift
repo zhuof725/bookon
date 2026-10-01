@@ -26,7 +26,10 @@ extension SwiftSoupXPathEvaluator {
         var axis: Axis
         var nodeTest: NodeTest
         var predicates: [Predicate]
-        /// 末尾扩展：@attr 或 函数（text/allText/html/outerHtml/ownText）
+        /// 末尾扩展：@attr 或 函数（text/allText/html/outerHtml）。
+        /// ⚠️ 不含 ownText()：经 golden（真实 JsoupXpath 2.5.3）验证它不是真实存在的
+        /// NodeTest（JsoupXpath 官方文档 NodeTest 列表只有 allText()/html()/outerHtml()/
+        /// num()/text()/node()，没有 ownText()），已移除，见 README 已知差异表。
         var terminal: Terminal?
 
         enum Terminal {
@@ -35,7 +38,6 @@ extension SwiftSoupXPathEvaluator {
             case funcAllText           // allText()
             case funcHtml              // html() = innerHtml
             case funcOuterHtml         // outerHtml()
-            case funcOwnText           // ownText()
         }
     }
 
@@ -119,8 +121,6 @@ extension SwiftSoupXPathEvaluator {
                     out.append(.text((try? e.html()) ?? ""))
                 case .funcOuterHtml:
                     out.append(.text((try? e.outerHtml()) ?? ""))
-                case .funcOwnText:
-                    out.append(.text(e.ownText()))  // SwiftSoup ownText 非 throwing
                 }
             }
         } else {

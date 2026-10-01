@@ -46,19 +46,21 @@ extension SwiftSoupXPathEvaluator {
     // MARK: - 顶层函数调用识别与求值
 
     /// 已知的顶层字符串/数值函数名。
-    private static let topLevelFuncNames = ["string", "count", "concat", "substring-before", "substring-after", "substring", "string-length"]
+    /// ⚠️ 经 golden（真实 JsoupXpath 2.5.3）对照验证：
+    ///  - `string()` 完全不被支持（顶层调用与谓词内比较均返回空/未命中），本项目不支持。
+    ///  - `count()` **顶层调用可用**（如 `count(//li)`），但**谓词内比较不可用**
+    ///    （如 `//ul[count(li)=3]` 不生效），两处分别处理，见下方与
+    ///    `tryParsePredicateFunctionCompare` 的 `funcNames` 列表。
+    /// `concat/substring/substring-before/substring-after/string-length` 经 golden 验证顶层与谓词内均可用，保留。
+    private static let topLevelFuncNames = ["count", "concat", "substring-before", "substring-after", "substring", "string-length"]
 
-    /// 若整个表达式是一次顶层函数调用（如 `string(//div/@id)`），求值并返回结果节点；否则返回 nil。
+    /// 若整个表达式是一次顶层函数调用（如 `substring(//div/text(),1,5)`），求值并返回结果节点；否则返回 nil。
     static func tryEvalTopLevelFunction(_ expr: String, roots: [Element], evaluator: SwiftSoupXPathEvaluator) throws -> Node? {
         guard let (fn, argsStr) = matchFunctionCall(expr) else { return nil }
         guard topLevelFuncNames.contains(fn) else { return nil }
         let args = splitArgsTopLevelComma(argsStr)
 
         switch fn {
-        case "string":
-            guard args.count == 1 else { throw RuleEngineError.invalidXPath("string() 需 1 个参数 in \(expr)") }
-            let s = try resolveToFirstString(args[0], roots: roots)
-            return .text(s)
         case "count":
             guard args.count == 1 else { throw RuleEngineError.invalidXPath("count() 需 1 个参数 in \(expr)") }
             let nodes = try resolveToNodes(args[0], roots: roots)
@@ -102,19 +104,15 @@ extension SwiftSoupXPathEvaluator {
         let rhsRaw = String(inner[opRange.upperBound...]).trimmingCharacters(in: .whitespaces)
 
         guard let (fn, argsStr) = matchFunctionCall(lhs) else { return nil }
-        let funcNames = ["count", "string", "concat", "substring-before", "substring-after", "substring", "string-length"]
+        // ⚠️ count()/string() 经 golden 验证不被 JsoupXpath 支持（见上方 topLevelFuncNames 注释），
+        // 谓词内比较同样不支持，已从此列表移除，保持与真实行为一致。
+        let funcNames = ["concat", "substring-before", "substring-after", "substring", "string-length"]
         guard funcNames.contains(fn) else { return nil }
         let args = splitArgsTopLevelComma(argsStr)
         let rhsValue = stripQuotesPublic(rhsRaw)
 
         let call: PredicateFuncCall
         switch fn {
-        case "count":
-            guard args.count == 1 else { throw RuleEngineError.invalidXPath("count() 需 1 个参数 in \(whole)") }
-            call = .count(path: args[0])
-        case "string":
-            guard args.count == 1 else { throw RuleEngineError.invalidXPath("string() 需 1 个参数 in \(whole)") }
-            call = .string(arg: args[0])
         case "concat":
             guard args.count >= 2 else { throw RuleEngineError.invalidXPath("concat() 至少需 2 个参数 in \(whole)") }
             call = .concat(args: args)
@@ -259,9 +257,8 @@ extension SwiftSoupXPathEvaluator {
 }
 
 /// 谓词内函数调用（用于与字面量比较，如 `[count(li)=3]`）。
+/// ⚠️ 不含 count()/string()：经 golden（真实 JsoupXpath 2.5.3）验证两者均不受支持，已移除。
 enum PredicateFuncCall {
-    case count(path: String)
-    case string(arg: String)
     case concat(args: [String])
     case substring(arg: String, rest: [String])
     case substringBefore(arg: String, sep: String)
@@ -272,11 +269,6 @@ enum PredicateFuncCall {
     func evaluate(context: Element) throws -> String {
         let roots = [context]
         switch self {
-        case .count(let path):
-            let nodes = try SwiftSoupXPathEvaluator.resolveToNodes(path, roots: roots)
-            return String(nodes.count)
-        case .string(let arg):
-            return try SwiftSoupXPathEvaluator.resolveToFirstString(arg, roots: roots)
         case .concat(let args):
             var out = ""
             for a in args { out += try SwiftSoupXPathEvaluator.resolveToFirstString(a, roots: roots) }

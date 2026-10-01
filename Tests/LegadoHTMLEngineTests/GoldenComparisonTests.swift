@@ -176,10 +176,37 @@ final class GoldenComparisonTests: XCTestCase {
                 let html = result.html
                 do {
                     let x = try AnalyzeByXPath(html)
-                    let swiftElements = try x.getElements(result.rule)
-                    let swiftElementsCount = swiftElements?.count ?? -1
-                    let swiftGetString = try x.getString(result.rule)
-                    let swiftGetStringList = try x.getStringList(result.rule)
+                    // 注意：golden 生成器（Java）里 getElements 对 XPath 解析失败的情况统一吞异常返回
+                    // null（约定 elementsCount=-1），用来表达"这条语法不受 JsoupXpath 支持"。
+                    // Swift 侧 getElements 按 Kotlin 原始签名是 throws 的（语法错误会向上传播，
+                    // 对齐 Kotlin AnalyzeByXPath.getResult 不吞异常的真实行为）。
+                    // 两者在"语法不支持"这件事上结论一致，只是表达方式不同（-1 哨兵值 vs 抛错），
+                    // 这里统一按 "Swift 抛错 == Java 返回 -1" 处理，不算不一致。
+                    var swiftElementsCount = -1
+                    var swiftThrew = false
+                    do {
+                        let swiftElements = try x.getElements(result.rule)
+                        swiftElementsCount = swiftElements?.count ?? -1
+                    } catch {
+                        swiftThrew = true
+                    }
+                    let swiftGetString = try? x.getString(result.rule)
+                    let swiftGetStringList = (try? x.getStringList(result.rule)) ?? []
+
+                    if swiftThrew {
+                        // Swift 抛错，视为与 Java 的 -1/nil/[] 等价，仅当 Java 结果看起来「成功」
+                        // （elementsCount 不是 -1 或为 nil 以外的正常值）时才算不一致。
+                        if let javaCount = result.elementsCount, javaCount >= 0 {
+                            failures.append("""
+                            [XPath:\(baseName)/\(result.name)] Swift 抛错但 Java 有效（count=\(javaCount)）
+                              规则: \(result.rule)
+                              输入(HTML key=\(result.htmlKey)): \(html)
+                              Java 结果: elementsCount=\(javaCount)
+                              Swift 结果: 抛出异常（不支持该语法）
+                            """)
+                        }
+                        continue
+                    }
 
                     if let javaCount = result.elementsCount, javaCount != swiftElementsCount {
                         failures.append("""

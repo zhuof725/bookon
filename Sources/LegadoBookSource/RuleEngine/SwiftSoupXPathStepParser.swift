@@ -155,9 +155,6 @@ extension SwiftSoupXPathEvaluator {
             } else if lower == "outerhtml()" {
                 terminal = .funcOuterHtml
                 if isPlainChildDefault { axis = .selfAxis }
-            } else if lower == "owntext()" {
-                terminal = .funcOwnText
-                if isPlainChildDefault { axis = .selfAxis }
             } else if lower == "node()" {
                 nodeTest = .node
             } else if t == "*" {
@@ -217,10 +214,14 @@ extension SwiftSoupXPathEvaluator {
         static func parseOnePredicate(_ inner: String, whole: String) throws -> Predicate {
             // and / or（顶层，简单按小写关键字切；不处理括号嵌套的逻辑分组）
             if let parts = splitLogical(inner, keyword: " or ") {
-                return Predicate(kind: .or(try parts.map { try parseOnePredicate($0, whole: whole) }))
+                let preds = try parts.map { try parseOnePredicate($0, whole: whole) }
+                try rejectFunctionPredicateInLogicalCombo(preds, whole: whole)
+                return Predicate(kind: .or(preds))
             }
             if let parts = splitLogical(inner, keyword: " and ") {
-                return Predicate(kind: .and(try parts.map { try parseOnePredicate($0, whole: whole) }))
+                let preds = try parts.map { try parseOnePredicate($0, whole: whole) }
+                try rejectFunctionPredicateInLogicalCombo(preds, whole: whole)
+                return Predicate(kind: .and(preds))
             }
 
             let t = inner.trimmingCharacters(in: .whitespaces)
@@ -264,7 +265,9 @@ extension SwiftSoupXPathEvaluator {
                 }
                 throw RuleEngineError.invalidXPath("position() 谓词无法解析 '\(t)' in \(whole)")
             }
-            // 函数：contains / starts-with / normalize-space
+            // 函数：contains / starts-with
+            // ⚠️ 不含 normalize-space()：经 golden（真实 JsoupXpath 2.5.3）验证它不被支持
+            // （谓词内 `normalize-space(text())='x'` 真实结果为空/未命中），已移除，见 README。
             if t.hasPrefix("contains(") {
                 let (target, value) = try parseFuncArgs(t, fn: "contains", whole: whole)
                 return Predicate(kind: .function(.init(name: .contains, target: target, value: value)))
@@ -272,17 +275,6 @@ extension SwiftSoupXPathEvaluator {
             if t.hasPrefix("starts-with(") {
                 let (target, value) = try parseFuncArgs(t, fn: "starts-with", whole: whole)
                 return Predicate(kind: .function(.init(name: .startsWith, target: target, value: value)))
-            }
-            if t.hasPrefix("normalize-space(") {
-                // 形如 normalize-space(@x)='v' 或 normalize-space(text())='v'
-                guard let eq = t.range(of: "=") else {
-                    throw RuleEngineError.invalidXPath("normalize-space 需比较 in \(whole)")
-                }
-                let fnPart = String(t[t.startIndex..<eq.lowerBound]).trimmingCharacters(in: .whitespaces)
-                let valPart = String(t[eq.upperBound...]).trimmingCharacters(in: .whitespaces)
-                let target = try parseTargetFromFuncCall(fnPart, fn: "normalize-space", whole: whole)
-                let value = stripQuotes(valPart)
-                return Predicate(kind: .function(.init(name: .normalizeSpaceEq, target: target, value: value)))
             }
             // @attr 存在 / 比较
             if t.hasPrefix("@") {
@@ -314,6 +306,22 @@ extension SwiftSoupXPathEvaluator {
                 }
             }
             throw RuleEngineError.invalidXPath("不支持的谓词 '\(inner)' in \(whole)")
+        }
+
+        /// ⚠️ 经 golden（真实 JsoupXpath 2.5.3）验证：`not(...)` 或函数比较
+        /// （`count(...)=n`/`string(...)='x'` 等）与 `and`/`or` 组合在同一层谓词里时，
+        /// 真实结果为空（不生效），即 JsoupXpath 的语法不支持这种组合。
+        /// 为忠实对齐该行为（而非静默给出不同结果），这里检测到就抛出不支持，
+        /// 由上层按吞异常的语义处理（返回空值）。
+        private static func rejectFunctionPredicateInLogicalCombo(_ preds: [Predicate], whole: String) throws {
+            for p in preds {
+                switch p.kind {
+                case .not, .funcCompare:
+                    throw RuleEngineError.invalidXPath("not()/函数比较 与 and/or 组合不受 JsoupXpath 支持 in \(whole)")
+                default:
+                    continue
+                }
+            }
         }
 
         // 拆 and/or（大小写不敏感），忽略引号内的关键字。返回 nil 表示没有该关键字。
@@ -367,13 +375,6 @@ extension SwiftSoupXPathEvaluator {
             throw RuleEngineError.invalidXPath("不支持的函数目标 '\(a)' in \(whole)")
         }
 
-        private static func parseTargetFromFuncCall(_ fnPart: String, fn: String, whole: String) throws -> Predicate.FuncPred.Target {
-            guard fnPart.hasPrefix(fn + "("), fnPart.hasSuffix(")") else {
-                throw RuleEngineError.invalidXPath("\(fn) 语法错误 in \(whole)")
-            }
-            let inner = String(fnPart.dropFirst(fn.count + 1).dropLast())
-            return try parseTargetArg(inner.trimmingCharacters(in: .whitespaces), whole: whole)
-        }
 
         private static func splitTopLevelComma(_ s: String) -> [String] {
             var parts: [String] = []; var cur = ""; var inS = false; var inD = false; var depth = 0

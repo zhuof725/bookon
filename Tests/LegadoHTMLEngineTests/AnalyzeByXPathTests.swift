@@ -123,11 +123,14 @@ final class AnalyzeByXPathTests: XCTestCase {
         let r = try x.getStringList("//p[starts-with(@class,'item')]/text()")
         XCTAssertEqual(r, ["甲"])
     }
-    func testNormalizeSpaceFunction() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // normalize-space() 完全不被真实 JsoupXpath 支持（无论顶层还是谓词内），
+    // 本移植对齐该行为：不解析此函数，遇到时抛不支持语法，上层吞异常返回空值。
+    func testNormalizeSpaceFunctionIsUnsupported() throws {
         let html = "<p>  多余   空白  </p>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//p[normalize-space(text())='多余 空白']/text()")
-        XCTAssertEqual(r.count, 1)
+        XCTAssertEqual(r.count, 0, "真实 JsoupXpath 不支持 normalize-space()，应返回空")
     }
 
     // MARK: - 六、多条件 and/or
@@ -255,11 +258,15 @@ final class AnalyzeByXPathTests: XCTestCase {
         let r = try x.getStringList("//div/allText()")
         XCTAssertEqual(r, ["外层内层"])
     }
-    func testOwnTextFunction() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // JsoupXpath 官方 NodeTest 列表（allText()/html()/outerHtml()/num()/text()/node()）里
+    // 并没有 ownText()，经实测它确实不是一个真实存在的函数（真实结果为空），
+    // 本移植已移除对它的解析（当未知节点测试处理，抛不支持语法，上层吞异常返回空）。
+    func testOwnTextFunctionIsUnsupported() throws {
         let html = "<div>外层<span>内层</span></div>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//div/ownText()")
-        XCTAssertEqual(r, ["外层"])
+        XCTAssertEqual(r, [], "真实 JsoupXpath 没有 ownText()，应返回空")
     }
     func testHtmlFunction() throws {
         let html = "<div><p>内容</p></div>"

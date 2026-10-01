@@ -22,20 +22,24 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let r = try x.getStringList("//h1/text()|//p/text()")
         XCTAssertEqual(r, ["标题", "段落一", "段落二"])
     }
-    func testUnionDedupSamePath() throws {
-        // 同一路径 | 自己：应去重（元素级去重）
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：标准 XPath `|`
+    // 应该去重+按文档顺序排列，但真实 JsoupXpath 的实现既不去重也不按文档顺序重排，
+    // 而是"分支书写顺序 + 分支内命中顺序"直接拼接。本移植复刻这一真实行为（而非标准规范），
+    // 详见 README「与 Kotlin 已知差异」表。
+    func testUnionDoesNotDedupSamePath() throws {
+        // 同一路径 | 自己：真实 JsoupXpath 不去重，结果翻倍
         let html = "<div><p>甲</p><p>乙</p></div>"
         let x = try AnalyzeByXPath(html)
         let els = try x.getElements("//p|//p")
-        XCTAssertEqual(els?.count, 2)
+        XCTAssertEqual(els?.count, 4)
     }
-    func testUnionPreservesDocumentOrder() throws {
-        // 联合结果按文档顺序，不按分支书写顺序
+    func testUnionConcatenatesByBranchOrderNotDocumentOrder() throws {
+        // 联合结果按「分支书写顺序」拼接，不按文档顺序重排（真实 JsoupXpath 行为）
         let html = "<ul><li class='a'>1</li><li class='b'>2</li><li class='a'>3</li></ul>"
         let x = try AnalyzeByXPath(html)
-        // 先写 class=b 分支，再写 class=a 分支；结果应仍按文档顺序 1,2,3
+        // 先写 class=b 分支，再写 class=a 分支；结果是 b 分支命中(2) 后跟 a 分支命中(1,3)
         let r = try x.getStringList("//li[@class='b']/text()|//li[@class='a']/text()")
-        XCTAssertEqual(r, ["1", "2", "3"])
+        XCTAssertEqual(r, ["2", "1", "3"])
     }
     func testUnionWithAndCombo() throws {
         // `|` 与规则引擎的 && 组合：|` 在切分后的单个子规则内部生效
@@ -51,12 +55,15 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let r = try x.getStringList("//nonexist/text()||//h1/text()|//p/text()")
         XCTAssertEqual(r, ["标题", "段落一", "段落二"])
     }
-    func testUnionWithPercentCombo() throws {
+    // 说明：getString/getStringList 的 && / || 由 RuleAnalyzer 在 AnalyzeByXPath 层面切分，
+    // 但 %% 只在 getStringList/getElements 里支持（getString 对应 Kotlin 原版只识别 &&/||，
+    // 这是 Kotlin 原始签名的设计，不是本移植遗漏，故不测 getString 对 %% 的组合，只测 getStringList）。
+    func testUnionWithPercentComboViaGetStringList() throws {
         let html = "<ul><li class='a'>1</li><li class='b'>2</li><li class='a'>3</li></ul>"
         let x = try AnalyzeByXPath(html)
-        let r = try x.getStringList("//li[@class='a']/text()%%//li[@class='b']/text()|//li[@class='b']/text()")
-        // 左规则: [1,3]；右规则: [2,2]（|自己去重后仍是原有元素集合，但文本节点不去重）
+        // 左规则: [1,3]；右规则(含 | 联合，真实 JsoupXpath 不去重): [2,2]
         // %% 交错：左[0]=1,右[0]=2, 左[1]=3,右[1]=2
+        let r = try x.getStringList("//li[@class='a']/text()%%//li[@class='b']/text()|//li[@class='b']/text()")
         XCTAssertEqual(r, ["1", "2", "3", "2"])
     }
 
@@ -74,30 +81,39 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let r = try x.getStringList("//a[not(@href)]/text()")
         XCTAssertEqual(r, ["无"])
     }
-    func testNotFunctionCombinedWithAnd() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // `not(...)` 或函数比较与 `and`/`or` 组合在真实 JsoupXpath 里不生效（返回空），
+    // 本移植对齐这一行为：遇到该组合抛 RuleEngineError.invalidXPath（不支持），
+    // 经 AnalyzeByXPath 吞异常后返回空值，结果与 Java 一致（而不是按标准 XPath 语义算出结果）。
+    func testNotFunctionCombinedWithAndIsUnsupported() throws {
         let html = "<ul><li class='skip'>跳过</li><li>保留一</li><li>保留二</li></ul>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//li[not(@class='skip') and position()=2]/text()")
-        XCTAssertEqual(r, ["保留一"])
+        XCTAssertEqual(r, [], "真实 JsoupXpath 不支持 not()+and 组合，应返回空")
     }
 
     // MARK: - 三、string()
+    //
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // 尽管 JsoupXpath 官方文档未明确排除 string()，但实测它完全不被支持
+    // （顶层调用与谓词内比较均不生效，真实结果为空/未命中）。本移植对齐该行为：
+    // 不解析 string()，遇到时抛不支持语法，由上层吞异常返回空值。
 
-    func testStringFunctionOnElement() throws {
+    func testStringFunctionOnElementIsUnsupported() throws {
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
-        XCTAssertEqual(try x.getString("string(//div[@id='x'])"), "纯文本值")
+        XCTAssertNil(try x.getString("string(//div[@id='x'])"), "真实 JsoupXpath 不支持 string()，应返回 nil")
     }
-    func testStringFunctionOnAttr() throws {
+    func testStringFunctionOnAttrIsUnsupported() throws {
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
-        XCTAssertEqual(try x.getString("string(//div/@id)"), "x")
+        XCTAssertNil(try x.getString("string(//div/@id)"), "真实 JsoupXpath 不支持 string()，应返回 nil")
     }
-    func testStringFunctionInPredicate() throws {
+    func testStringFunctionInPredicateIsUnsupported() throws {
         let html = "<div id='x'>纯文本值</div>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//div[string(@id)='x']/text()")
-        XCTAssertEqual(r, ["纯文本值"])
+        XCTAssertEqual(r, [], "真实 JsoupXpath 谓词内 string() 比较不生效，应返回空")
     }
 
     // MARK: - 四、count()
@@ -112,11 +128,13 @@ final class AnalyzeByXPathTests2: XCTestCase {
         let x = try AnalyzeByXPath(html)
         XCTAssertEqual(try x.getString("count(//nonexist)"), "0")
     }
-    func testCountFunctionInPredicate() throws {
+    // ⚠️ 与 Kotlin 已知差异（已用 golden 对照真实 JsoupXpath 2.5.3 验证）：
+    // count() 顶层调用可用（上面两个用例），但谓词内比较 `[count(...)=n]` 不生效。
+    func testCountFunctionInPredicateIsUnsupported() throws {
         let html = "<ul id='u'><li>1</li><li>2</li><li>3</li></ul>"
         let x = try AnalyzeByXPath(html)
         let r = try x.getStringList("//ul[count(li)=3]/@id")
-        XCTAssertEqual(r, ["u"])
+        XCTAssertEqual(r, [], "真实 JsoupXpath 谓词内 count() 比较不生效，应返回空")
     }
 
     // MARK: - 五、concat()
