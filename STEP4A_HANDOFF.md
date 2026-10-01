@@ -39,13 +39,23 @@
   `BooleanAttribute.swift` 与 jsoup 1.16.2 `Attribute.java` 源码确认语义一致。
 - 布尔属性清单（30 个，jsoup 1.16.2 `Attribute.java` 权威数组）已核对逐字一致。
 
-## 待验证 / 剩余 TODO
-- `f24dc78` 推送后的 CI 结果需确认三个 job（golden / test-macos / test-ios-simulator）
-  是否全绿。预期修复后 golden 8 处不一致清零。**若仍有残留不一致，在此继续记录并修复
-  或登记进 README 已知差异表（不得用 knownDivergences 跳过机制掩盖）。**
-- 本地无 Swift 工具链，无法本地 swift build/test，只能靠 CI 验证。
-- `SwiftSoupVoidElementFix.swift` 是否已完全删除、`SwiftSoupTextNormalizeFix` 职责边界是否
-  已在 README 说明——交接时请复核（grep 确认无遗留调用）。
+## 验证结果：三个 job 全绿 ✅（CI run 36813221057）
+- **golden**（ubuntu）：✓ 16s。6 个用例文件，共 **448 条用例**
+  （第 3 步为 184 条；新增 `serializer_synthetic.json` 等序列化器合成用例）。
+- **test-macos**：✓ 37s。`Executed 299 tests, with 0 failures (0 unexpected)`。
+- **test-ios-simulator**：✓ 1m43s。`** TEST SUCCEEDED **`，实际执行 299 测试。
+- 布尔/无值属性修复（`f24dc78`）使首轮 8 处 golden 不一致全部清零。
+- `knownDivergences` 已为空数组，golden 逐字节严格比较全部通过，无任何跳过。
+- 日志归档：`ci_logs/step4a_all_green_36813221057.log`（全绿）、
+  `ci_logs/step4a_test-macos_36811878008.log`（首轮失败，留作修复前后对照）。
+- 测试数 300→299：删除旧字符串后处理相关测试、重组序列化测试所致，属正常。
+
+## 复核确认（已核对）
+- `SwiftSoupVoidElementFix.swift` 已删除（仅注释里保留历史说明文字），无代码遗留调用。
+- `SwiftSoupTextNormalizeFix.swift` 保留，服务于纯文本提取路径（text()/ownText()/
+  allText()），非 HTML 序列化路径，职责边界已在文件头注释说明。
+- `VoidElementFixTests.swift` 保留，内容已改为验证新序列化器的 void 行为（5 测试全过）。
+- 本地无 Swift 工具链，全部验证经 CI 完成。
 
 ## 下一步（Step 4-B / 4-C）
 A 部分验证全绿后，才按任务书推进 B（AnalyzeRule 总调度 + JS 引擎）、C（golden 验证
