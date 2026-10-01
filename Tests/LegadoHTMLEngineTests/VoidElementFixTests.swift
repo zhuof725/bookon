@@ -2,9 +2,11 @@
 //  VoidElementFixTests.swift
 //  LegadoHTMLEngineTests
 //
-//  测试 SwiftSoupVoidElementFix：修正 SwiftSoup 2.9.6 自身把 HTML 语法下的 void 元素
-//  （<img>/<br>/<hr> 等）outerHtml 错误渲染为自闭合 `<img ... />` 的 bug，
-//  对齐真实 jsoup 的 `<img ...>`（无斜杠）输出。
+//  Step4-A 更新：原先的字符串级后处理 `SwiftSoupVoidElementFix` 已被删除，void 元素
+//  （<img>/<br>/<hr> 等）的自闭合格式问题现在由 `JsoupCompatSerializer` 从零按 jsoup
+//  真实算法重新生成 HTML 字符串直接保证正确，不再需要任何后处理补丁。
+//  本文件保留的端到端用例（经由 AnalyzeByXPath / AnalyzeByJSoup 走完整规则引擎）继续验证
+//  这一行为；原先针对 `SwiftSoupVoidElementFix.fix()` 的直接单元测试已随该类型一起删除。
 //
 //  ⚠️ 本文件全部 HTML 均为合成样本，非真实数据。
 //
@@ -60,26 +62,5 @@ final class VoidElementFixTests: XCTestCase {
         let x = try AnalyzeByXPath(html)
         let r = try x.getString("//div")
         XCTAssertEqual(r, "<div>\n <a href=\"/x\">链接</a>\n</div>")
-    }
-
-    func testVoidElementFixDirectUnitTest() {
-        // 直接测试 SwiftSoupVoidElementFix.fix 的字符串处理逻辑
-        XCTAssertEqual(
-            SwiftSoupVoidElementFix.fix("<img src=\"x.jpg\" />"),
-            "<img src=\"x.jpg\">"
-        )
-        XCTAssertEqual(
-            SwiftSoupVoidElementFix.fix("<br />"),
-            "<br>"
-        )
-        XCTAssertEqual(
-            SwiftSoupVoidElementFix.fix("<a href=\"x\" />"),
-            // 非 void 标签原样保留（这个输入本不会由 SwiftSoup 产生，仅测试函数自身不误伤）
-            "<a href=\"x\" />"
-        )
-        XCTAssertEqual(
-            SwiftSoupVoidElementFix.fix("<div>没有自闭合标签的普通文本</div>"),
-            "<div>没有自闭合标签的普通文本</div>"
-        )
     }
 }

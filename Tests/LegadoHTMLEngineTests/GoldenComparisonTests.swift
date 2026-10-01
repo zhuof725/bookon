@@ -190,30 +190,13 @@ final class GoldenComparisonTests: XCTestCase {
         }
     }
 
-    /// 已知、已在 README「与 Kotlin 已知差异」表逐条记录、确认无法对齐的用例
-    /// （标记为 `name/field` 跳过，仍会跑 Swift 代码，只是不拿这条的结果做强一致性断言）。
-    /// 不是"隐藏失败"：每一条都有 README 对应条目可查，且仍计入下方「已知差异清单」打印。
-    /// `xpathPercentInterleave`（getString 对 %% 的处理）与 void 元素自闭合格式两组差异
-    /// 已修复。以下仍登记的是 jsoup pretty-print 缩进算法本身的深层差异——已确认不是
-    /// void 元素问题，而是 `<br>` 后文本节点、以及行内标签（如 `<span>`/`<img>`）前是否
-    /// 换行的缩进深度计算依赖该节点在完整 DOM 树里的真实嵌套深度与渲染起点
-    /// （`.html()` 从自身开始渲染 vs 被外层 `.outerHtml()` 携带渲染，深度基准不同），
-    /// 纯字符串级后处理无法在所有结构下正确推算，且两次尝试性修正都在更换的
-    /// golden 场景下被证伪（修好一种结构就打破另一种）。只影响 `@html`/`@all`/XPath
-    /// `html()`/`outerHtml()` 这类"整块 HTML 字符串"结果类型的**格式**（不影响
-    /// `text()`/`textNodes()`/`@attr` 等实际取值），已在 README「与 Kotlin 已知差异」表
-    /// 详细记录，不做进一步的字符串级修补。
-    private let knownDivergences: Set<String> = [
-        "xpath_real_caimoge/realBookList/getString",
-        "xpath_real_caimoge/realBookList/getStringList",
-        "malformed_html/brSeparatedContent_html/getString",
-        "malformed_html/brSeparatedContent_html/getStringList",
-        "malformed_html/brSeparatedContent_html/getString0",
-        "malformed_html/brSeparatedContent_outerHtml/getString",
-        "malformed_html/brSeparatedContent_outerHtml/getStringList",
-        "malformed_html/consecutiveBr_bodyOuterHtml/getString",
-        "malformed_html/consecutiveBr_bodyOuterHtml/getStringList",
-    ]
+    /// Step4-A：`JsoupCompatSerializer` 彻底重写 HTML 序列化后，原先登记在这里的全部 9 项
+    /// pretty-print 缩进差异（`<br>` 后文本换行深度等）均已通过从零按 jsoup 真实算法
+    /// 重新遍历 DOM 树解决，不再需要任何"已知差异"豁免——golden 比较现在逐字节严格对齐。
+    /// 如果未来发现新的真实差异，**不允许**重新往这个集合里加字符串绕过失败；按任务规范，
+    /// 应如实让测试失败，并在 README「与 Kotlin 已知差异」表记录差异的最小复现 HTML、
+    /// jsoup 真实输出、Swift 实际输出。
+    private let knownDivergences: Set<String> = []
 
     func testAllGoldenXPathCases() throws {
         let files = goldenFiles()
