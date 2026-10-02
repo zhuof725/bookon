@@ -58,11 +58,25 @@ jobs:
       - name: Build
         run: swift build -v
       - name: Run tests (macOS, swift test)
-        run: swift test -v
+        run: |
+          set -o pipefail
+          swift test -v 2>&1 | tee macos_test_output.log
+      - name: Extract macOS test count
+        run: |
+          set -e
+          COUNT=$(python3 scripts/extract_macos_count.py macos_test_output.log)
+          echo "macOS 测试总数: $COUNT"
+          echo "$COUNT" > macos_test_count.txt
+      - name: Upload macOS test count
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-count
+          path: macos_test_count.txt
+          if-no-files-found: error
 
   test-ios-simulator:
     runs-on: macos-14
-    needs: golden
+    needs: [golden, test-macos]
     steps:
       - uses: actions/checkout@v4
       - name: Download golden artifact
@@ -70,8 +84,15 @@ jobs:
         with:
           name: golden-data
           path: Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: Download macOS test count artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-test-count
+          path: macos-test-count
       - name: List golden files
         run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: Show macOS test count (for iOS==macOS parity check)
+        run: cat macos-test-count/macos_test_count.txt
       - name: Show Swift / Xcode version
         run: |
           swift --version
