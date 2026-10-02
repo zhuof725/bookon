@@ -820,11 +820,11 @@ filter，保证 fat jar 可运行。jsoup 1.16.2 / JsoupXpath 2.5.3 不变。
 
 | 类别 | 用例数 | 对照的真实库 | 状态 |
 |---|---|---|---|
-| getAbsoluteURL（url_absolute.json） | 67 | `java.net.URL(base, rel)`（经 Kotlin NetworkUtils 调度，手工移植 Java） | ✅ 全绿 |
-| unescapeHtml4（unescape_html4.json） | 52 | `commons-text StringEscapeUtils.unescapeHtml4` | ✅ 全绿 |
-| replaceRegex（regex_replace.json） | 51 | Kotlin AnalyzeRule.replaceRegex 语义（真实 `java.util.regex`） | ✅ 全绿 |
-| AnalyzeByRegex（regex_analyze.json） | 24 | 真实 Java 正则 getElement/getElements | ✅ 全绿 |
-| JSONPath（jsonpath_cases.json） | 63 | 真实 Jayway JsonPath 2.10.0（json-smart） | ✅ 49 对齐 / 14 登记已知差异（见下） |
+| getAbsoluteURL（url_absolute.json） | **66** | `java.net.URL(base, rel)`（经 Kotlin NetworkUtils 调度，手工移植 Java） | ✅ 全绿 |
+| unescapeHtml4（unescape_html4.json） | **52** | `commons-text StringEscapeUtils.unescapeHtml4` | ✅ 全绿 |
+| replaceRegex（regex_replace.json） | **51** | Kotlin AnalyzeRule.replaceRegex 语义（真实 `java.util.regex`） | ✅ 全绿 |
+| AnalyzeByRegex（regex_analyze.json） | **24** | 真实 Java 正则 getElement/getElements | ✅ 全绿 |
+| JSONPath（jsonpath_cases.json） | **62** | 真实 Jayway JsonPath 2.10.0（json-smart） | ✅ 47 对齐 / **15** 登记已知差异（见下） |
 
 > 调度逻辑（Kotlin NetworkUtils.getAbsoluteURL / AnalyzeRule.replaceRegex / AnalyzeByJSonPath
 > 单规则路径）是为生成 golden 手工移植到 Java 的，**内部调用的是真实库**（java.net.URL /
