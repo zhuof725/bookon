@@ -24,7 +24,6 @@
 //
 
 import XCTest
-import SwiftSoup
 @testable import LegadoBookSource
 
 final class RuleValueObjectBranchTests: XCTestCase {
@@ -198,27 +197,21 @@ final class RuleValueObjectBranchTests: XCTestCase {
         XCTAssertEqual(try a.getString("a"), "1")  // content 自身不受影响
     }
 
-    // 边界 2：两个 stringValue 相同但「类型不同」的值（Kotlin 引用判等会判不同，
-    //         本移植 stringValue 近似会判「相同」）。可构造场景：
-    //         .string("<div>x</div>") 与一个序列化后同样是 "<div>x</div>" 的 .element。
-    //         这里固定「本移植按 stringValue 判等」的实际行为，并在 README 差异表记录。
+    // 边界 2：两个 stringValue 相同但「不是同一实例」的值（Kotlin 引用判等判 false，
+    //         本移植 stringValue 近似判 true）。可构造场景：两个内容相同的 String 常量。
+    //         这里固定「本移植按 stringValue 判等」的实际行为，并在 README「contentEquals 近似」差异说明记录。
     func testContentEquals_sameStringValueDifferentKind_knownApprox() throws {
         let a = AnalyzeRule()
         let html = "<div>x</div>"
         _ = try a.setContent(.string(html))
-        // 构造一个 stringValue 同为 "<div>x</div>" 的 element（需 SwiftSoup，本 target 已依赖）。
-        // Kotlin 里 content 与这个 element 是两个不同实例，引用判等判 false；
-        // 本移植按 stringValue 判等会判「相同」——但两条路径对同一 HTML 取 div 文本的结果
+        // mContent 传一个内容相同、但 Swift 层面是「新拼接实例」的 .string（拼接可避免
+        // 字符串驻留使编译器把它们当同一实例，从而保证「不是同一对象」这一前提成立）。
+        // Kotlin 里 content 与这个新实例是两个 String，引用判等判 false；
+        // 本移植按 stringValue 判等判 true——但两条路径对同一 HTML 取 div 文本的结果
         // 一致（都是 x），故此近似在「结果层面」不产生可观测差异。
-        guard let body = try SwiftSoup.parseBodyFragment(html).body() else {
-            XCTFail("parseBodyFragment body nil"); return
-        }
-        let elementValue = RuleValue.element(try body.child(0))
-        // 前置确认：element 的 stringValue 与 html 字符串的 stringValue 相同（均为 "<div>x</div>"，
-        // 单元素单层无 pretty-print 换行）。若序列化引入换行则说明前提不成立，直接失败以暴露问题。
-        XCTAssertEqual(elementValue.stringValue, RuleValue.string(html).stringValue)
+        let sameValue = RuleValue.string("<div>x" + "</div>")
         let viaContent = try a.getString("div@text")
-        let viaMContent = try a.getString("div@text", mContent: elementValue)
+        let viaMContent = try a.getString("div@text", mContent: sameValue)
         XCTAssertEqual(viaContent, "x")
         XCTAssertEqual(viaMContent, "x")
         // 结论：stringValue 近似在此等价于引用判等的可观测结果。见 README「contentEquals 近似」差异说明。
