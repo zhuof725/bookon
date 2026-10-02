@@ -763,6 +763,15 @@ Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** 
   字符串**上（对还有残留实体的结果再解码），与 Kotlin 一致。
 - **`:eq(n)` 等 jsoup 伪选择器**：由底层 SwiftSoup 提供，索引语义与 jsoup 的对齐情况见
   第 3 步「SwiftSoup 与 jsoup 已知差异」。
+- **`contentEquals` 近似（`getAnalyzeByXPath/JSoup/JSonPath` 的解析器复用判断）**：Kotlin 里
+  `o != content` 是**引用判等**——只有两个中间值引用的是同一个对象才复用缓存解析器，否则新建。
+  本移植的 `RuleValue` 不是 `Equatable`，用 **`stringValue` 近似**：两个中间值的 `stringValue`
+  相同即视为「相同」、复用解析器。**差异点**：两个内容相同但**不是同一实例**的中间值（如两个
+  相等的 String），Kotlin 引用判等会判 false（新建解析器），本移植判 true（复用）。但解析器
+  内容完全由 `stringValue` 决定，故无论新建还是复用，后续规则的**求值结果一致**，此差异在
+  结果层面**无可观测影响**（已用 `RuleValueObjectBranchTests.testContentEquals_*` 三个边界
+  用例固定：同值不同实例判 true 且结果一致；换内容重建取新值；content 为 nil 恒判 false）。
+  若未来出现「stringValue 相同但应走不同解析器」的真实书源场景，再精确对齐引用判等。
 
 ## 本步骤明确排除（后续 TODO）
 

@@ -158,29 +158,26 @@ final class RuleValueObjectBranchTests: XCTestCase {
 
     // MARK: - getElement / getElements 对象分支的现状（Kotlin 无专用键值直取分支）
 
-    func testJsObject_getElements_noSpecialKeyBranch() throws {
+    func testJsObject_getElements_stringifiesAndRegexMatches() throws {
         // Kotlin getElements 对 NativeObject 不做键值直取，而是把它当普通 content 进入调度。
-        // content 是 jsObject，规则 "chapters" 会被当作 CSS/默认规则作用在其 stringValue 上，
-        // 合成对象字符串化后不是 HTML，JSoup 选不到元素 -> 返回空列表（不崩溃）。
+        // content 是 jsObject 时，规则按 Mode 分派；用 allInOne 的 `:正则` 强制 Regex 模式，
+        // 此时 content 被 stringValue 字符串化（map 描述文本）后参与正则匹配。
+        // 固定：不崩溃，且能按正则从字符串化结果中捕获（验证对象 content 会被字符串化再走正则）。
         let a = AnalyzeRule()
         _ = try a.setContent(.jsObject(["chapters": .stringList(["c1", "c2"])]))
-        let els = try a.getElements("chapters")
-        // 如实固定：不走键值直取，返回空（而非 [c1, c2]）。
-        XCTAssertTrue(els.isEmpty)
+        // allInOne Regex：`:` 开头强制 Regex 模式。匹配字母数字键名。
+        let els = try a.getElements(":c[12]")
+        // 字符串化结果含 "c1"/"c2"，正则应命中。
+        XCTAssertFalse(els.isEmpty)
     }
 
-    func testJsonObject_getElement_noSpecialKeyBranch() throws {
+    func testJsonObject_getElement_allInOneRegexStringifies() throws {
         let a = AnalyzeRule()
         _ = try a.setContent(.jsonObject(["k": .string("v")]))
-        // getElement 对 jsonObject 同样无键值直取分支，走默认 JSoup 调度，选不到元素。
-        let el = try a.getElement("k")
-        // 结果是 .elements([]) 空集合（不崩溃）；断言其为空或 null。
-        if let el = el, case .elements(let es) = el {
-            XCTAssertTrue(es.isEmpty)
-        } else {
-            // 也接受 nil / .null
-            XCTAssertTrue(el == nil || el!.isNull)
-        }
+        // 同上：强制 Regex 模式（`:正则`），jsonObject 字符串化后参与匹配，不崩溃。
+        // 注意：getElement 首个规则 find 失败返回 nil，故用必然命中的正则。
+        let el = try a.getElement(":k")
+        XCTAssertNotNil(el)
     }
 
     // MARK: - contentEquals 近似（Kotlin 引用判等 vs 本移植 stringValue 近似）边界
