@@ -138,6 +138,34 @@ public final class UnsupportedWebJSProvider: WebJSProvider {
     }
 }
 
+// MARK: - Step 5 UI / system JsExtensions dependency
+
+/// toast/browser/verification 等 iOS 系统能力。真实 App 可注入实现；默认明确 unsupported。
+public protocol JsUIProvider: AnyObject {
+    func invoke(method: String, arguments: [String]) throws -> String?
+}
+
+public final class UnsupportedJsUIProvider: JsUIProvider {
+    public init() {}
+    public func invoke(method: String, arguments: [String]) throws -> String? {
+        throw RuleEngineError.unsupported("java.\(method) 需要 UI/系统能力（第 5 步仅协议注入）")
+    }
+}
+
+// MARK: - Step 5 network/file JsExtensions dependency
+
+/// get/post/head/ajaxAll/connect/cacheFile/downloadFile。真实网络/文件实现留第 6 步。
+public protocol JsNetworkExtensionsProvider: AnyObject {
+    func invoke(method: String, arguments: [String]) throws -> String?
+}
+
+public final class UnsupportedJsNetworkExtensionsProvider: JsNetworkExtensionsProvider {
+    public init() {}
+    public func invoke(method: String, arguments: [String]) throws -> String? {
+        throw RuleEngineError.unsupported("java.\(method) 需要真实网络/文件能力（第 6 步）")
+    }
+}
+
 // MARK: - CookieStore / CacheManager 最小协议（仅为 JS 绑定对象服务）
 
 /// 对应 Kotlin CookieStore（JS 里 `cookie` 对象）。默认内存实现。

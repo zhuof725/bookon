@@ -21,7 +21,11 @@ let package = Package(
         .target(
             name: "LegadoBookSource",
             dependencies: ["SwiftSoup"],
-            path: "Sources/LegadoBookSource"
+            path: "Sources/LegadoBookSource",
+            resources: [
+                // Step 5: quick-chinese-transfer 0.2.17 原始简繁词典（见 Resources/Chinese/PROVENANCE.md）。
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "LegadoBookSourceTests",

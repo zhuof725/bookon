@@ -43,6 +43,8 @@ public final class AnalyzeRule {
     private let cacheManager: CacheManagerProtocol
     private let ajaxProvider: AjaxProvider
     private let webJSProvider: WebJSProvider
+    private let jsUIProvider: JsUIProvider
+    private let jsNetworkProvider: JsNetworkExtensionsProvider
     public let diagnostics: RuleEngineDiagnostics?
 
     // MARK: - 运行时状态
@@ -67,6 +69,8 @@ public final class AnalyzeRule {
     var cacheManagerValue: CacheManagerProtocol { cacheManager }
     var ajaxProviderValue: AjaxProvider { ajaxProvider }
     var webJSProviderValue: WebJSProvider { webJSProvider }
+    var jsUIProviderValue: JsUIProvider { jsUIProvider }
+    var jsNetworkProviderValue: JsNetworkExtensionsProvider { jsNetworkProvider }
     var ruleNameValue: String? { ruleName }
     private var isJSON: Bool = false
     private var isRegex: Bool = false
@@ -96,6 +100,8 @@ public final class AnalyzeRule {
         cacheManager: CacheManagerProtocol = InMemoryCacheManager(),
         ajaxProvider: AjaxProvider = UnsupportedAjaxProvider(),
         webJSProvider: WebJSProvider = UnsupportedWebJSProvider(),
+        jsUIProvider: JsUIProvider = UnsupportedJsUIProvider(),
+        jsNetworkProvider: JsNetworkExtensionsProvider = UnsupportedJsNetworkExtensionsProvider(),
         diagnostics: RuleEngineDiagnostics? = nil
     ) {
         self.ruleData = ruleData
@@ -108,6 +114,8 @@ public final class AnalyzeRule {
         self.cacheManager = cacheManager
         self.ajaxProvider = ajaxProvider
         self.webJSProvider = webJSProvider
+        self.jsUIProvider = jsUIProvider
+        self.jsNetworkProvider = jsNetworkProvider
         self.diagnostics = diagnostics
     }
 
