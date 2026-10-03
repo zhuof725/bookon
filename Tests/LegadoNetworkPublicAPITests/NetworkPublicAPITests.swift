@@ -51,7 +51,7 @@ final class NetworkPublicAPITests: XCTestCase {
     func testGetQueryEncoding() {
         let a = AnalyzeUrl("https://www.example.com/search?key=中文 x")
         let req = a.buildRequest()
-        XCTAssertEqual(req.url, "https://www.example.com/search?key=%E4%B8%AD%E6%96%87+x")
+        XCTAssertEqual(req.url, "https://www.example.com/search?key=%E4%B8%AD%E6%96%87%20x")
         XCTAssertEqual(req.method, .get)
         XCTAssertNil(req.body)
     }

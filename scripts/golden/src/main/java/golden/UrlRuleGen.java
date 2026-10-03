@@ -457,7 +457,7 @@ public final class UrlRuleGen {
             int end = src.indexOf("}}", pos);
             if (end == -1) break;
             String inner = src.substring(posPre, end);
-            String frv = evalJs(inner, "", baseUrl, page);
+            String frv = evalJsInnerRule(inner, baseUrl, page);
             st.append(src, startX, posPre - startU).append(frv);
             pos = end + endU;
             startX = pos;
@@ -467,15 +467,47 @@ public final class UrlRuleGen {
         return st.toString();
     }
 
+    /** Kotlin replaceKeyPageJs 里 `{{}}` 的取值：null -> ""；整数 Double -> "%.0f"；其余 toString。 */
+    static String evalJsInnerRule(String js, String baseUrl, Integer page) {
+        Object v = evalJsValue(js, "", baseUrl, page);
+        if (v == null || v == Undefined.instance) return "";
+        if (v instanceof Double && ((Double) v) % 1.0 == 0.0) {
+            return String.format(java.util.Locale.ROOT, "%.0f", (Double) v);
+        }
+        return v.toString();
+    }
+
     /** 用真实 Rhino 1.8.1 求值一段 JS（绑定 result），返回 toString（null -> "null"）。 */
-    static String evalJs(String js, String result, String baseUrl, Integer page) {
+    static Object evalJsValue(String js, String result, String baseUrl, Integer page) {
         try (Context cx = Context.enter()) {
             cx.setLanguageVersion(Context.VERSION_ES6);
             cx.setInterpretedMode(true);
             Scriptable scope = cx.initStandardObjects();
             ScriptableObject.putProperty(scope, "result", result);
             ScriptableObject.putProperty(scope, "baseUrl", baseUrl);
-            if (page != null) ScriptableObject.putProperty(scope, "page", page);
+            ScriptableObject.putProperty(scope, "page", page == null ? null : page);
+            Object r = cx.evaluateString(scope, js, "analyzeUrlJs", 1, null);
+            if (r instanceof Wrapper) r = ((Wrapper) r).unwrap();
+            if (r == Undefined.instance) return null;
+            return r;
+        }
+    }
+
+    static String evalJs(String js, String result, String baseUrl, Integer page) {
+        Object r = evalJsValue(js, result, baseUrl, page);
+        if (r == null) return "null";
+        return r.toString();
+    }
+
+    static String evalJsOld(String js, String result, String baseUrl, Integer page) {
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(Context.VERSION_ES6);
+            cx.setInterpretedMode(true);
+            Scriptable scope = cx.initStandardObjects();
+            ScriptableObject.putProperty(scope, "result", result);
+            ScriptableObject.putProperty(scope, "baseUrl", baseUrl);
+            // Kotlin AnalyzeUrl.evalJS 无条件绑定 page（缺省为 null），这里对齐
+            ScriptableObject.putProperty(scope, "page", page == null ? null : page);
             Object r = cx.evaluateString(scope, js, "analyzeUrlJs", 1, null);
             if (r instanceof Wrapper) r = ((Wrapper) r).unwrap();
             if (r == null || r == Undefined.instance) return "null";
@@ -551,6 +583,7 @@ public final class UrlRuleGen {
         out.addProperty("name", name);
         out.addProperty("op", op);
         if (c.has("cookies")) out.add("cookies", c.get("cookies"));
+        if (c.has("pairs")) out.add("pairs", c.get("pairs"));
         if (c.has("cookie")) out.addProperty("cookie", c.get("cookie").getAsString());
         try {
             String result;

@@ -512,6 +512,17 @@ public final class AnalyzeUrl {
         return AnalyzeUrl.jsToString(evalJS(jsStr, result: result))
     }
 
+    /// Kotlin `replaceKeyPageJs` 里 `{{}}` 的取值规则：null -> ""；整数 Double -> "%.0f"；其余 toString。
+    static func innerRuleString(_ v: RuleValue) -> String {
+        switch v {
+        case .null: return ""
+        case .number(let d):
+            if d.truncatingRemainder(dividingBy: 1) == 0 { return String(format: "%.0f", d) }
+            return v.stringValue
+        default: return v.stringValue
+        }
+    }
+
     static func jsToString(_ v: RuleValue) -> String {
         if case .null = v { return "null" }
         return v.stringValue
@@ -725,13 +736,14 @@ public extension AnalyzeUrl {
         return t.hasPrefix("<") && t.hasSuffix(">")
     }
 
-    /// 对应 Kotlin `EncoderUtils.escape`（%XX 百分号编码，非 ASCII 用 %uXXXX）。
+    /// 对应 Kotlin `EncoderUtils.escape`：遍历的是 Kotlin 的 `Char`（UTF-16 单元），
+    /// 所以 emoji 会拆成两个 %uXXXX（与 Java 一致）。
     static func escape(_ src: String) -> String {
         var out = ""
-        for scalar in src.unicodeScalars {
-            let code = scalar.value
+        for unit in src.utf16 {
+            let code = Int(unit)
             if (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) {
-                out.unicodeScalars.append(scalar)
+                out.append(Character(UnicodeScalar(unit) ?? " "))
                 continue
             }
             let prefix: String
@@ -784,17 +796,8 @@ public enum AnalyzeUrlQueryEncoder {
     }()
 
     public static func encode(_ input: String, charset: AnalyzeUrlCharset) -> String {
-        let bytes: [UInt8]
-        switch charset {
-        case .utf8, .usAscii, .iso88591:
-            bytes = charset == .iso88591
-                ? input.unicodeScalars.map { $0.value <= 0xFF ? UInt8($0.value) : 0x3F }
-                : Array(input.utf8)
-        case .gbk, .gb2312, .gb18030:
-            bytes = GBKBytes.encode(input)
-        }
         var out = ""
-        for b in bytes {
+        for b in CharsetBytes.encodePerScalar(input, charset: charset) {
             if safe.contains(b) {
                 out.append(Character(UnicodeScalar(b)))
             } else {
@@ -808,17 +811,8 @@ public enum AnalyzeUrlQueryEncoder {
 /// 复刻 java.net.URLEncoder.encode(value, charset)：a-zA-Z0-9 与 ".-*_" 保留，空格 -> '+'，其余 %XX。
 public enum AnalyzeUrlURLEncoder {
     public static func encode(_ input: String, charset: AnalyzeUrlCharset) -> String {
-        let bytes: [UInt8]
-        switch charset {
-        case .utf8, .usAscii, .iso88591:
-            bytes = charset == .iso88591
-                ? input.unicodeScalars.map { $0.value <= 0xFF ? UInt8($0.value) : 0x3F }
-                : Array(input.utf8)
-        case .gbk, .gb2312, .gb18030:
-            bytes = GBKBytes.encode(input)
-        }
         var out = ""
-        for b in bytes {
+        for b in CharsetBytes.encodePerScalar(input, charset: charset) {
             switch b {
             case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2E, 0x2D, 0x2A, 0x5F:
                 out.append(Character(UnicodeScalar(b)))
@@ -904,6 +898,35 @@ public final class NSRegularExpressionCache: @unchecked Sendable {
         guard let regex = regex else { return nil }
         return regex.firstMatch(in: string, options: [],
                                 range: NSRange(location: 0, length: (string as NSString).length))
+    }
+}
+
+/// 逐标量编码（对齐 Java `String.getBytes(charset)` / URLEncoder 的 REPLACE 语义：
+/// 目标字符集里**不可表示**的字符 -> 单个 '?'(0x3F)）。GBK/GB2312 只认 GB18030 的 1-2 字节形式
+/// （4 字节形式属 GB18030 扩展，Java 的 GBK 编码器对它同样给出 '?'）。
+public enum CharsetBytes {
+    public static func encodePerScalar(_ input: String, charset: AnalyzeUrlCharset) -> [UInt8] {
+        var out: [UInt8] = []
+        for scalar in input.unicodeScalars {
+            out.append(contentsOf: encodeScalar(scalar, charset: charset))
+        }
+        return out
+    }
+
+    static func encodeScalar(_ scalar: Unicode.Scalar, charset: AnalyzeUrlCharset) -> [UInt8] {
+        switch charset {
+        case .utf8:
+            return Array(String(scalar).utf8)
+        case .usAscii:
+            return scalar.value <= 0x7F ? [UInt8(scalar.value)] : [0x3F]
+        case .iso88591:
+            return scalar.value <= 0xFF ? [UInt8(scalar.value)] : [0x3F]
+        case .gbk, .gb2312, .gb18030:
+            let bytes = GBKBytes.encode(String(scalar))
+            if bytes.isEmpty { return [0x3F] }
+            if charset != .gb18030 && bytes.count > 2 { return [0x3F] }
+            return bytes
+        }
     }
 }
 

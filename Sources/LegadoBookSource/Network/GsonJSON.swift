@@ -266,9 +266,19 @@ public enum GsonJSON {
             case 0x4E where lenient: return try parseKeyword() // NaN
             case 0x49 where lenient: return try parseKeyword() // Infinity
             default:
-                if lenient {
-                    return try parseUnquoted()
+                // 数字字面量（严格模式也要接受）；宽松模式才把其余内容当未加引号的字符串
+                let start = pos
+                while pos < units.count {
+                    let ch = units[pos]
+                    if ch == 0x2C || ch == 0x5D || ch == 0x7D || ch == 0x3A || ch == 0x20
+                        || ch == 0x09 || ch == 0x0A || ch == 0x0D { break }
+                    pos += 1
                 }
+                guard pos > start else { throw GsonJSONError.syntax("unexpected value") }
+                let raw = String(decoding: units[start..<pos], as: UTF16.self)
+                if let num = GsonJSON.parseNumber(raw) { return .number(num) }
+                pos = start
+                if lenient { return try parseUnquoted() }
                 throw GsonJSONError.syntax("unexpected value")
             }
         }
