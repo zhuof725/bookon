@@ -490,6 +490,7 @@ public final class UrlRuleGen {
             ScriptableObject.putProperty(scope, "result", result);
             ScriptableObject.putProperty(scope, "baseUrl", baseUrl);
             ScriptableObject.putProperty(scope, "page", page == null ? null : page);
+            ScriptableObject.putProperty(scope, "key", null);
             Object r = cx.evaluateString(scope, js, "analyzeUrlJs", 1, null);
             if (r instanceof Wrapper) r = ((Wrapper) r).unwrap();
             if (r == Undefined.instance) return null;
@@ -512,6 +513,7 @@ public final class UrlRuleGen {
             ScriptableObject.putProperty(scope, "baseUrl", baseUrl);
             // Kotlin AnalyzeUrl.evalJS 无条件绑定 page（缺省为 null），这里对齐
             ScriptableObject.putProperty(scope, "page", page == null ? null : page);
+            ScriptableObject.putProperty(scope, "key", null);
             Object r = cx.evaluateString(scope, js, "analyzeUrlJs", 1, null);
             if (r instanceof Wrapper) r = ((Wrapper) r).unwrap();
             if (r == null || r == Undefined.instance) return "null";

@@ -798,10 +798,14 @@ public enum AnalyzeUrlQueryEncoder {
 
     public static func encode(_ input: String, charset: AnalyzeUrlCharset) -> String {
         var out = ""
-        for b in CharsetBytes.encodePerScalar(input, charset: charset) {
-            if safe.contains(b) {
-                out.append(Character(UnicodeScalar(b)))
-            } else {
+        for scalar in input.unicodeScalars {
+            // 只有「标量本身」在安全集里才原样输出；否则该标量的**全部字节**都转义
+            // （对齐 hutool PercentCodec / Java URLEncoder：多字节编码里的 ASCII 字节同样转义）。
+            if scalar.value < 128 && safe.contains(UInt8(scalar.value)) {
+                out.unicodeScalars.append(scalar)
+                continue
+            }
+            for b in CharsetBytes.encodeScalar(scalar, charset: charset) {
                 out += String(format: "%%%02X", b)
             }
         }
@@ -813,13 +817,15 @@ public enum AnalyzeUrlQueryEncoder {
 public enum AnalyzeUrlURLEncoder {
     public static func encode(_ input: String, charset: AnalyzeUrlCharset) -> String {
         var out = ""
-        for b in CharsetBytes.encodePerScalar(input, charset: charset) {
-            switch b {
-            case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2E, 0x2D, 0x2A, 0x5F:
-                out.append(Character(UnicodeScalar(b)))
-            case 0x20:
-                out.append("+")
-            default:
+        for scalar in input.unicodeScalars {
+            let v = scalar.value
+            if (v >= 0x41 && v <= 0x5A) || (v >= 0x61 && v <= 0x7A) || (v >= 0x30 && v <= 0x39)
+                || v == 0x2E || v == 0x2D || v == 0x2A || v == 0x5F {
+                out.unicodeScalars.append(scalar)
+                continue
+            }
+            if v == 0x20 { out.append("+"); continue }
+            for b in CharsetBytes.encodeScalar(scalar, charset: charset) {
                 out += String(format: "%%%02X", b)
             }
         }

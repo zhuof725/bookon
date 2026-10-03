@@ -32,7 +32,9 @@ public enum GsonNumber: Equatable {
 
     public var intValue: Int {
         switch self {
-        case .long(let v): return Int(truncatingIfNeeded: v)
+        case .long(let v):
+            // 对齐 Java Long.intValue()：截断到 32 位（不是 Swift 的 64 位 Int）
+            return Int(Int32(truncatingIfNeeded: v))
         case .double(let v):
             if v.isNaN || v.isInfinite { return 0 }
             if v > 2147483647.0 { return 2147483647 }
