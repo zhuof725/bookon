@@ -123,6 +123,25 @@ indirect public enum GsonValue: Equatable {
         }
     }
 
+    /// 手写 Equatable（对象分支是有序元组数组，Swift 不会自动合成）。
+    public static func == (lhs: GsonValue, rhs: GsonValue) -> Bool {
+        switch (lhs, rhs) {
+        case (.null, .null): return true
+        case (.bool(let a), .bool(let b)): return a == b
+        case (.string(let a), .string(let b)): return a == b
+        case (.number(let a), .number(let b)): return a == b
+        case (.array(let a), .array(let b)):
+            if a.count != b.count { return false }
+            for (x, y) in zip(a, b) where x != y { return false }
+            return true
+        case (.object(let a), .object(let b)):
+            if a.count != b.count { return false }
+            for (x, y) in zip(a, b) where x.0 != y.0 || x.1 != y.1 { return false }
+            return true
+        default: return false
+        }
+    }
+
     /// 取对象成员（键重复时 Gson 的 LinkedTreeMap 是后者覆盖，这里以最后一次为准）。
     public func member(_ key: String) -> GsonValue? {
         guard case .object(let entries) = self else { return nil }

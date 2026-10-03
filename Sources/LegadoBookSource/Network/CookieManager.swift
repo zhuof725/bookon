@@ -73,7 +73,7 @@ public final class CookieManager {
             cache.putMemory("\(domain)_session_cookie", cookies)
             return
         }
-        guard let merged = mergeCookies(sessionCookie, cookies) else { return }
+        guard let merged = CookieMerge.mergeCookies([sessionCookie, cookies]) else { return }
         cache.putMemory("\(domain)_session_cookie", merged)
     }
 

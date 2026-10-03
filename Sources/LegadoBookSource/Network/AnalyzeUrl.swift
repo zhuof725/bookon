@@ -141,7 +141,7 @@ public final class AnalyzeUrl {
     private let readTimeout: Int64?
     private let callTimeout: Int64?
     private let infoMap: [String: String]?
-    private let getHeaderMapFn: ((Bool) -> [String: String])?
+    private let getHeaderMapFn: ((Bool) -> [(String, String)])?
 
     // 对外只读状态
     public private(set) var ruleUrl = ""
@@ -454,10 +454,10 @@ public final class AnalyzeUrl {
                 key = AnalyzeUrl.substring(params, pos, eqOffset)
                 value = AnalyzeUrl.substring(params, eqOffset + 1, ampOffset)
             }
-            sb += appendEncoded(key, checkEncoded: checkEncoded, charset: resolved)
+            sb += AnalyzeUrl.appendEncoded(key, checkEncoded: checkEncoded, charset: resolved)
             if let value = value {
                 sb += "="
-                sb += appendEncoded(value, checkEncoded: checkEncoded, charset: resolved)
+                sb += AnalyzeUrl.appendEncoded(value, checkEncoded: checkEncoded, charset: resolved)
             }
             pos = ampOffset + 1
         }
@@ -465,8 +465,8 @@ public final class AnalyzeUrl {
     }
 
     /// 对应 Kotlin `StringBuilder.appendEncoded(value, checkEncoded, charset)`。
-    private func appendEncoded(_ value: String, checkEncoded: Bool,
-                               charset: AnalyzeUrlCharsetResult) -> String {
+    private static func appendEncoded(_ value: String, checkEncoded: Bool,
+                                      charset: AnalyzeUrlCharsetResult) -> String {
         if checkEncoded && NetworkUtils.encodedForm(value) {
             return value
         }
@@ -547,7 +547,7 @@ public final class AnalyzeUrl {
     public func setCookie() {
         let cookie = environment.cookie.getCookie(domain)
         if !cookie.isEmpty {
-            if let merged = CookieMerge.mergeCookies(cookie, headerValue("Cookie")), let merged = merged {
+            if let merged = CookieMerge.mergeCookies([cookie, headerValue("Cookie")]) {
                 setHeader("Cookie", merged)
             }
         }
@@ -873,7 +873,7 @@ public enum CookieMerge {
     }
 
     /// 对应 Kotlin `CookieManager.mergeCookies(vararg)`：后面的覆盖前面的（键相同）。
-    public static func mergeCookies(_ cookies: String?...) -> String? {
+    public static func mergeCookies(_ cookies: [String?]) -> String? {
         var merged: [(String, String)] = []
         for c in cookies {
             guard let c = c else { continue }

@@ -210,7 +210,7 @@ public final class CacheManager: CacheManagerProtocol, @unchecked Sendable {
         if !onlyDisk, let cached = try? memory.get(key: key) {
             return cached
         }
-        guard let entry = try? storage.getEntry(key: key), let entry = entry else { return nil }
+        guard let wrapped = try? storage.getEntry(key: key), let entry = wrapped else { return nil }
         // 存储命中条件：deadline == 0（永不过期）或未过期（对应 Kotlin
         // `cache.deadline == 0L || cache.deadline > System.currentTimeMillis()`）
         guard entry.deadline == 0 || entry.deadline > now() else { return nil }

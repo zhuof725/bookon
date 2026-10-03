@@ -115,8 +115,8 @@ final class NetworkPublicAPITests: XCTestCase {
 
     // 13. Cookie 合并工具
     func testCookieMerge() {
-        XCTAssertEqual(CookieMerge.mergeCookies("a=1; b=2", "b=3") ?? "", "a=1; b=3")
-        XCTAssertNil(CookieMerge.mergeCookies(nil, nil))
+        XCTAssertEqual(CookieMerge.mergeCookies(["a=1; b=2", "b=3"]) ?? "", "a=1; b=3")
+        XCTAssertNil(CookieMerge.mergeCookies([nil, nil]))
         XCTAssertEqual(CookieMerge.mapToCookie([("a", "1")]), "a=1")
     }
 
