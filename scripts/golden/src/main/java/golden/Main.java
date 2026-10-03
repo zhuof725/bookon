@@ -161,6 +161,44 @@ public class Main {
                     System.out.println("Java MessageDigest: " + outArr.size() + " 条");
                 }
 
+                // ---- 第 6 步 6A：AnalyzeUrl 规则解析 / 编码 / UrlOption / Cookie ----
+                if (input.has("codecCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("codecCases")) {
+                        outArr.add(UrlRuleGen.runCodec(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("codecResults", outArr);
+                    System.out.println("URL 编码: " + outArr.size() + " 条（真实 hutool/URLEncoder）");
+                }
+                if (input.has("urlOptionCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("urlOptionCases")) {
+                        outArr.add(UrlRuleGen.runUrlOption(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("urlOptionResults", outArr);
+                    System.out.println("UrlOption 解析: " + outArr.size() + " 条（真实 Gson + legado 定制适配器）");
+                }
+                if (input.has("analyzeUrlCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("analyzeUrlCases")) {
+                        outArr.add(UrlRuleGen.runAnalyzeUrl(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("analyzeUrlResults", outArr);
+                    System.out.println("AnalyzeUrl 规则解析: " + outArr.size() + " 条（手工移植调度 + 真实 Rhino）");
+                }
+                if (input.has("cookieCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("cookieCases")) {
+                        outArr.add(UrlRuleGen.runCookie(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("cookieResults", outArr);
+                    System.out.println("Cookie 纯函数: " + outArr.size() + " 条（手工移植 CookieStore/CookieManager）");
+                }
+
                 if (input.has("jsCases")) {
                     JsonArray outArr = new JsonArray();
                     for (JsonElement el : input.getAsJsonArray("jsCases")) {

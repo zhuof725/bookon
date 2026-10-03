@@ -1,0 +1,494 @@
+{
+ "_comment": "⚠️ 合成样本，非真实数据。第 6 步 6A golden 用例：输入均为手工构造（编码/JSON/URL 规则/Cookie），Java 侧用真实 hutool(RFC3986/PercentCodec/URLEncoder)、真实 Gson(legado 定制适配器)、真实 Rhino 1.8.1、java.net.URL 生成对照；AnalyzeUrl 的调度逻辑（encodeParams/analyzeJs/replaceKeyPageJs/analyzeUrl）是 AnalyzeUrl.kt 的**手工 Java 移植**（README 标明）。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "analyzeUrlCases": [
+  {
+   "name": "plain_00",
+   "ruleUrl": "https://www.example.com/",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_01",
+   "ruleUrl": "https://www.example.com/a/b.html",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_02",
+   "ruleUrl": "https://www.example.com/a/b.html?x=1&y=2",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_03",
+   "ruleUrl": "https://www.example.com/a/b.html?k=中文 x",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_04",
+   "ruleUrl": "https://www.example.com/a%20b",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_05",
+   "ruleUrl": "https://www.example.com/a?",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_06",
+   "ruleUrl": "https://www.example.com/?",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_07",
+   "ruleUrl": "https://www.example.com/a#f",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_08",
+   "ruleUrl": "https://www.example.com:8080/a?b=c",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_09",
+   "ruleUrl": "http://www.example.com/a?x=%41",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_10",
+   "ruleUrl": "https://www.example.com/a?x=1&x=2",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_11",
+   "ruleUrl": "https://www.example.com/a?x=",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_12",
+   "ruleUrl": "https://www.example.com/search?q=emoji😀",
+   "baseUrl": ""
+  },
+  {
+   "name": "plain_13",
+   "ruleUrl": "https://www.example.com/search?q=a+b",
+   "baseUrl": ""
+  },
+  {
+   "name": "rel_00",
+   "ruleUrl": "/a/b.html",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_01",
+   "ruleUrl": "./a.html",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_02",
+   "ruleUrl": "../a.html",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_03",
+   "ruleUrl": "a.html",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_04",
+   "ruleUrl": "//other.com/x",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_05",
+   "ruleUrl": "?x=1",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_06",
+   "ruleUrl": "",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_07",
+   "ruleUrl": "/a?b=c",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "rel_08",
+   "ruleUrl": "a/b/c?d=e",
+   "baseUrl": "https://www.example.com/dir/sub/"
+  },
+  {
+   "name": "relroot_00",
+   "ruleUrl": "/a/b.html",
+   "baseUrl": "https://www.example.com/"
+  },
+  {
+   "name": "relroot_01",
+   "ruleUrl": "../x",
+   "baseUrl": "https://www.example.com/"
+  },
+  {
+   "name": "relroot_02",
+   "ruleUrl": "a.html",
+   "baseUrl": "https://www.example.com/"
+  },
+  {
+   "name": "relroot_03",
+   "ruleUrl": "//o.com/y",
+   "baseUrl": "https://www.example.com/"
+  },
+  {
+   "name": "opt_00",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"POST\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_01",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"post\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_02",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"HEAD\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_03",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"GET\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_04",
+   "ruleUrl": "https://www.example.com/api, {\"method\":123}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_05",
+   "ruleUrl": "https://www.example.com/api, {\"headers\":{\"X-A\":\"1\",\"X-B\":\"2\"}}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_06",
+   "ruleUrl": "https://www.example.com/api, {\"headers\":\"{\\\"X-A\\\":\\\"1\\\"}\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_07",
+   "ruleUrl": "https://www.example.com/api, {\"body\":\"a=1&b=2\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_08",
+   "ruleUrl": "https://www.example.com/api, {\"body\":\"{\\\"k\\\":\\\"v\\\"}\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_09",
+   "ruleUrl": "https://www.example.com/api, {\"body\":[1,2]}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_10",
+   "ruleUrl": "https://www.example.com/api, {\"retry\":3}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_11",
+   "ruleUrl": "https://www.example.com/api, {\"charset\":\"GBK\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_12",
+   "ruleUrl": "https://www.example.com/api, {\"charset\":\"escape\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_13",
+   "ruleUrl": "https://www.example.com/api, {\"js\":\"result+\\\"?ok\\\"\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_14",
+   "ruleUrl": "https://www.example.com/api, {\"type\":\"data\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_15",
+   "ruleUrl": "https://www.example.com/api, {\"serverID\":7}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_16",
+   "ruleUrl": "https://www.example.com/api, {\"webView\":1}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_17",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"POST\",\"body\":\"中=文\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_18",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"POST\",\"body\":\"a=1\",\"charset\":\"GBK\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_19",
+   "ruleUrl": "https://www.example.com/api,{ \"method\" : \"POST\" }",
+   "baseUrl": ""
+  },
+  {
+   "name": "opt_20",
+   "ruleUrl": "https://www.example.com/api, {\"method\":\"POST\",\"headers\":{\"Content-Type\":\"application/json\"},\"body\":\"a=1\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_00",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"method\":\"POST\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_01",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"method\":\"post\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_02",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"method\":\"HEAD\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_03",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"method\":\"GET\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_04",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"method\":123}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_05",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"headers\":{\"X-A\":\"1\",\"X-B\":\"2\"}}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_06",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"headers\":\"{\\\"X-A\\\":\\\"1\\\"}\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "optq_07",
+   "ruleUrl": "https://www.example.com/api?q=1, {\"body\":\"a=1&b=2\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "js_js01",
+   "ruleUrl": "https://www.example.com/{{1+1}}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js02",
+   "ruleUrl": "https://www.example.com/{{page}}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js03",
+   "ruleUrl": "{{baseUrl}}/x",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js04",
+   "ruleUrl": "https://www.example.com/a{{1+1}}b{{2*3}}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js05",
+   "ruleUrl": "@js:\"https://www.example.com/js\"+result",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js06",
+   "ruleUrl": "https://www.example.com/{{result}}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js07",
+   "ruleUrl": "@js:result+\"?a=1\"",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js08",
+   "ruleUrl": "https://www.example.com/@js:result",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js09",
+   "ruleUrl": "<js>\"https://www.example.com/\"+ (1+2)</js>",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js10",
+   "ruleUrl": "a<js>1</js>b",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js11",
+   "ruleUrl": "https://www.example.com/{{1}}{{2}}{{3}}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js12",
+   "ruleUrl": "{{3-1}}/x",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js13",
+   "ruleUrl": "@js:baseUrl+\"/b\"",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "js_js14",
+   "ruleUrl": "https://www.example.com/{{ 1 + 1 }}",
+   "baseUrl": "https://base.example.com/"
+  },
+  {
+   "name": "page_1_70",
+   "ruleUrl": "https://www.example.com/<1,2,3>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 1
+  },
+  {
+   "name": "page_1_71",
+   "ruleUrl": "https://www.example.com/<a>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 1
+  },
+  {
+   "name": "page_1_72",
+   "ruleUrl": "<1,2>",
+   "baseUrl": "https://www.example.com/",
+   "page": 1
+  },
+  {
+   "name": "page_1_73",
+   "ruleUrl": "/p/<1,2,3>/x",
+   "baseUrl": "https://www.example.com/",
+   "page": 1
+  },
+  {
+   "name": "page_2_74",
+   "ruleUrl": "https://www.example.com/<1,2,3>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 2
+  },
+  {
+   "name": "page_2_75",
+   "ruleUrl": "https://www.example.com/<a>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 2
+  },
+  {
+   "name": "page_2_76",
+   "ruleUrl": "<1,2>",
+   "baseUrl": "https://www.example.com/",
+   "page": 2
+  },
+  {
+   "name": "page_2_77",
+   "ruleUrl": "/p/<1,2,3>/x",
+   "baseUrl": "https://www.example.com/",
+   "page": 2
+  },
+  {
+   "name": "page_3_78",
+   "ruleUrl": "https://www.example.com/<1,2,3>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 3
+  },
+  {
+   "name": "page_3_79",
+   "ruleUrl": "https://www.example.com/<a>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 3
+  },
+  {
+   "name": "page_3_80",
+   "ruleUrl": "<1,2>",
+   "baseUrl": "https://www.example.com/",
+   "page": 3
+  },
+  {
+   "name": "page_3_81",
+   "ruleUrl": "/p/<1,2,3>/x",
+   "baseUrl": "https://www.example.com/",
+   "page": 3
+  },
+  {
+   "name": "page_5_82",
+   "ruleUrl": "https://www.example.com/<1,2,3>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 5
+  },
+  {
+   "name": "page_5_83",
+   "ruleUrl": "https://www.example.com/<a>.html",
+   "baseUrl": "https://www.example.com/",
+   "page": 5
+  },
+  {
+   "name": "page_5_84",
+   "ruleUrl": "<1,2>",
+   "baseUrl": "https://www.example.com/",
+   "page": 5
+  },
+  {
+   "name": "page_5_85",
+   "ruleUrl": "/p/<1,2,3>/x",
+   "baseUrl": "https://www.example.com/",
+   "page": 5
+  },
+  {
+   "name": "page_none",
+   "ruleUrl": "https://www.example.com/<1,2>.html",
+   "baseUrl": ""
+  },
+  {
+   "name": "key_bind",
+   "ruleUrl": "https://www.example.com/{{key}}",
+   "baseUrl": "",
+   "key": "斗罗"
+  },
+  {
+   "name": "mixed_01",
+   "ruleUrl": "https://www.example.com/<1,2>/{{page}}, {\"method\":\"POST\",\"body\":\"k=v\"}",
+   "baseUrl": "https://www.example.com/",
+   "page": 2
+  },
+  {
+   "name": "mixed_02",
+   "ruleUrl": "{{baseUrl}}/search?q={{1+1}}, {\"method\":\"HEAD\"}",
+   "baseUrl": "https://s.example.com/"
+  },
+  {
+   "name": "mixed_03",
+   "ruleUrl": "@js:\"https://www.example.com/j\"+result, {\"method\":\"POST\"}",
+   "baseUrl": ""
+  },
+  {
+   "name": "empty_rule",
+   "ruleUrl": "",
+   "baseUrl": ""
+  },
+  {
+   "name": "comma_only",
+   "ruleUrl": "https://www.example.com/a, not-json",
+   "baseUrl": ""
+  },
+  {
+   "name": "brace_only",
+   "ruleUrl": "https://www.example.com/a {}",
+   "baseUrl": ""
+  }
+ ]
+}
