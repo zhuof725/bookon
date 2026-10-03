@@ -48,12 +48,23 @@ MAPPING = {
     ],
     "NetworkUtils.kt": [
         "Sources/LegadoBookSource/RuleEngine/NetworkUtils.swift",
+        "Sources/LegadoBookSource/Network/NetworkUtilsEncoding.swift",
     ],
     # 第 5 步：JsExtensions + 父接口 JsEncodeUtils（纯算法实现 + 运行时分发）。
     "JsExtensions.kt": [
         "Sources/LegadoBookSource/RuleEngine/JsExtensionsCore.swift",
         "Sources/LegadoBookSource/RuleEngine/JsExtensionsRuntime.swift",
         "Sources/LegadoBookSource/RuleEngine/AnalyzeRule+JS.swift",
+    ],
+    # 第 6 步 6A：AnalyzeUrl 规则解析 + 限速 + cookie/cache。
+    "AnalyzeUrl.kt": [
+        "Sources/LegadoBookSource/Network/AnalyzeUrl.swift",
+        "Sources/LegadoBookSource/Network/UrlOption.swift",
+        "Sources/LegadoBookSource/Network/ConcurrentRateLimiter.swift",
+        "Sources/LegadoBookSource/Network/HTTPTypes.swift",
+    ],
+    "ConcurrentRateLimiter.kt": [
+        "Sources/LegadoBookSource/Network/ConcurrentRateLimiter.swift",
     ],
     "JsEncodeUtils.kt": [
         "Sources/LegadoBookSource/RuleEngine/JsExtensionsCore.swift",
@@ -77,19 +88,50 @@ EXCLUDED = {
         "setNextChapterUrl": "Swift 提供 setNextChapterUrl 实例方法",
         "setChapter": "Swift 提供 setChapter 实例方法",
     },
+    "AnalyzeUrl.kt": {
+        # —— 6B（真实网络）实现：6A 只做规则解析 + 请求构造 ——
+        "executeStrRequest": "6B：真实发送请求（URLSessionHTTPClient）",
+        "getStrResponseAwait": "6B：真实发送请求",
+        "getStrResponse": "6B：真实发送请求（runBlocking 包装）",
+        "getResponseAwait": "6B：返回 OkHttp Response（本移植在 6B 用 HTTPResponse）",
+        "getResponse": "6B：同步包装",
+        "getByteArrayAwait": "6B：真实请求取字节数组",
+        "getByteArray": "6B：同步包装",
+        "getInputStreamAwait": "6B：真实请求取流",
+        "getInputStream": "6B：同步包装",
+        "getClient": "6B：OkHttpClient 配置（超时/代理/dnsIp）在 URLSessionHTTPClient 里实现",
+        "getErrResponse": "6B：错误响应构造",
+        "getErrStrResponse": "6B：错误响应构造",
+        "saveCookie": "6B：cookieJar 落库（与 CookieStore/CookieManager 一起）",
+        "getGlideUrl": "不适用：Android Glide 图片加载",
+        "extractHostFromUrl": "Kotlin 里已无调用方（未被使用的私有函数），Swift 不移植",
+        "upload": "6B：multipart 上传",
+        # —— UrlOption 的 setter：Gson 直接写字段，不经过 setter，故不参与解析语义 ——
+        "setMethod": "Gson 反射直接写字段，setter 不参与解析（Swift 用属性赋值）",
+        "setCharset": "同上",
+        "setOrigin": "同上",
+        "setRetry": "同上",
+        "setType": "同上",
+        "setHeaders": "同上",
+        "setBody": "同上",
+        "setWebJs": "同上",
+        "setDnsIp": "同上",
+        "setJs": "同上",
+        "setBodyJs": "同上",
+        "setServerID": "同上",
+        "setWebViewDelayTime": "同上",
+    },
+    "ConcurrentRateLimiter.kt": {
+        "getConcurrentRecordBlocking": "Android 同步阻塞版（Thread.sleep）；Swift 只有 async 版（不做阻塞 API）",
+        "withLimitBlocking": "同上",
+    },
     "NetworkUtils.kt": {
         # NetworkUtils.kt 含大量非本步骤范围的网络工具函数（编码/IP/域名/OkHttp 等）。
         # 本步骤只移植 AnalyzeRule 依赖的 getAbsoluteURL(x2)/getBaseUrl/isAbsUrl/isDataUrl。
         "add": "URL 编码辅助（notNeedEncoding），非本步骤范围",
         "isDigit": "编码辅助，非本步骤范围",
-        "getSubDomain": "域名解析（PublicSuffix），非本步骤范围（第 5/6 步）",
-        "getSubDomainOrNull": "同上，非本步骤范围",
-        "getDomain": "同上，非本步骤范围",
         "getLocalIPAddress": "本机 IP，非本步骤范围",
         "getLocalIPAddressList": "本机 IP，非本步骤范围",
-        "isIPAddress": "IP 判定，非本步骤范围",
-        "isIPv4Address": "IP 判定，非本步骤范围",
-        "isIPv6Address": "IP 判定，非本步骤范围",
         "isIPv6StdAddress": "IP 判定，非本步骤范围",
         "isIPv6HexCompressedAddress": "IP 判定，非本步骤范围",
         "hasIpAddress": "IP 判定，非本步骤范围",
@@ -103,10 +145,8 @@ EXCLUDED = {
         "encodeQuery": "URL 编码，非本步骤范围",
         "decode": "URL 解码，非本步骤范围",
         "hexToByte": "编码辅助，非本步骤范围",
-        "encodedForm": "表单编码，非本步骤范围",
-        "encodedQuery": "query 编码，非本步骤范围",
         "isAvailable": "网络可用性探测，非本步骤范围",
-        "isDigit16Char": "16 进制字符判定（编码辅助），非本步骤范围",
+        "getSubDomainOrNull": "可空变体，调用方（AnalyzeUrl）只用非空版本 getSubDomain",
     },
     # —— 第 5 步：JsExtensions / JsEncodeUtils ——
     # Swift 侧通过 JsExtensionsRuntime 按方法名字符串分发（switch），并非每个方法都有

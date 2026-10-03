@@ -51,6 +51,8 @@ jobs:
         run: |
           mkdir -p Tests/LegadoAnalyzeRuleTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
+          mkdir -p Tests/LegadoNetworkTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
       - name: List golden files
         run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift version
@@ -92,6 +94,8 @@ jobs:
         run: |
           mkdir -p Tests/LegadoAnalyzeRuleTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
+          mkdir -p Tests/LegadoNetworkTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
       - name: Download macOS test count artifact
         uses: actions/download-artifact@v4
         with:

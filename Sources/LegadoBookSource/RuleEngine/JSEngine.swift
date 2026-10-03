@@ -76,6 +76,9 @@ final class JSEngine {
         var src: String?
         var nextChapterUrl: String?
         var fromBookInfo: Bool
+        /// 第 6 步：AnalyzeUrl.evalJS 需要的额外绑定（page/key/speakText/speakSpeed/infoMap 等）。
+        /// 默认空——不影响既有调用方的绑定集合。
+        var extraBindings: [String: Any] = [:]
     }
 
     /// 执行 JS，返回结果（已转 RuleValue）。对应 Kotlin evalJS。
@@ -165,6 +168,12 @@ final class JSEngine {
         context.setObject(bindings.nextChapterUrl, forKeyedSubscript: "nextChapterUrl" as NSString)
         context.setObject(NSNull(), forKeyedSubscript: "rssArticle" as NSString)
         context.setObject(bindings.fromBookInfo, forKeyedSubscript: "fromBookInfo" as NSString)
+
+        // 第 6 步：AnalyzeUrl 的额外绑定（Kotlin AnalyzeUrl.evalJS 绑的是 page/key/speakText/
+        // speakSpeed/book/source/infoMap，值为 null 时也要显式绑定，否则 JS 取变量会 ReferenceError）。
+        for (key, value) in bindings.extraBindings {
+            context.setObject(value, forKeyedSubscript: key as NSString)
+        }
     }
 
     // MARK: - 值转换

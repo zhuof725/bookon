@@ -95,6 +95,21 @@ let package = Package(
                 .copy("Resources/golden")
             ]
         ),
+        // 第 6 步 6A：AnalyzeUrl / 网络层的 @testable 单元测试。
+        .testTarget(
+            name: "LegadoNetworkTests",
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
+            path: "Tests/LegadoNetworkTests",
+            resources: [
+                .copy("Resources/golden")
+            ]
+        ),
+        // 第 6 步 6A：网络层的纯 public 接口测试（普通 import，非 @testable）。
+        .testTarget(
+            name: "LegadoNetworkPublicAPITests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoNetworkPublicAPITests"
+        ),
         // 第 4 步 B：AnalyzeRule 的纯 public 接口测试（普通 import，非 @testable）。
         .testTarget(
             name: "LegadoAnalyzeRulePublicAPITests",
