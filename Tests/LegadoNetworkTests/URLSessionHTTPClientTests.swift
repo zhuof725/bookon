@@ -684,8 +684,10 @@ final class URLSessionHTTPClientTests: XCTestCase {
 
     // MARK: - 15. 超过 20 跳上限：返回最后一跳响应（不崩溃）+ diagnostics
 
-    func testRedirectOverLimitReturnsLastResponseWithDiagnostics() async throws {
+    func testRedirectOverLimitThrowsTooManyRedirectsAndRecordsDiagnostics() async throws {
         // 路径每跳自增（/loop/0 → /loop/1 → ...），避开同一 URL 的循环检测干扰。
+        // 对齐 OkHttp：超过 20 次 follow-up 时抛 ProtocolException("Too many follow-up requests")，
+        // 而不是把最后一跳响应返回（Kotlin 侧同样会抛，由上层 isTest/错误分支处理）。
         let server = try startServer(handlers: [:], defaultHandler: { request in
             let step = Int(request.path.dropFirst("/loop/".count)) ?? 0
             return LocalScriptedServer.Response(status: 301, reason: "Moved Permanently",
@@ -695,12 +697,21 @@ final class URLSessionHTTPClientTests: XCTestCase {
         let diag = RuleEngineDiagnostics()
         let (client, _, _) = makeClient(diagnostics: diag)
 
-        let response = try await client.execute(HTTPRequest(url: url("/loop/0", server)))
-
-        XCTAssertEqual(response.status, 301, "超过 20 跳后应把最后一跳 3xx 响应作为最终响应返回（不崩溃）")
-        XCTAssertEqual(response.url, url("/loop/20", server))
-        XCTAssertEqual(server.requests.count, 21, "初始请求 + 20 次 follow = 服务器共收到 21 次")
-        XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("重定向过多") },
+        var thrown: HTTPError?
+        do {
+            _ = try await client.execute(HTTPRequest(url: url("/loop/0", server)))
+            XCTFail("超过 20 跳应当抛 HTTPError（对齐 OkHttp 的 Too many follow-up requests）")
+        } catch let e as HTTPError {
+            thrown = e
+        } catch {
+            XCTFail("应当是 HTTPError，实际：\(error)")
+        }
+        XCTAssertNotNil(thrown)
+        XCTAssertTrue((thrown?.message.lowercased().contains("redirect") ?? false)
+                      || (thrown?.message.contains("重定向") ?? false),
+                      "错误信息应说明重定向过多；实际：\(thrown?.message ?? "<nil>")")
+        XCTAssertEqual(server.requests.count, 22, "初始请求 + 21 次 follow = 服务器共收到 22 次（第 21 跳前判定超限）")
+        XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("重定向") || $0.message.lowercased().contains("redirect") },
                       "应记录 diagnostics；实际：\(diag.diagnostics.map { $0.message })")
     }
 
