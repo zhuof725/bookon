@@ -304,7 +304,9 @@ public final class JsExtGen {
                 case "bytesToStr": {
                     String hex = c.has("hex") ? c.get("hex").getAsString() : "";
                     String charset = c.has("charset") ? c.get("charset").getAsString() : "UTF-8";
-                    byte[] bytes = HexUtil.decodeHex(hex);
+                    // hutool HexUtil.decodeHex("") 返回 null（与 decodeHexStr("") 返回 "" 不同），
+                    // 空 hex 应按「零字节」处理：new String(new byte[0], charset) == ""。
+                    byte[] bytes = hex.isEmpty() ? new byte[0] : HexUtil.decodeHex(hex);
                     // Java new String(bytes, charset)：非法字节按 CharsetDecoder 的 REPLACE 语义替换为 U+FFFD。
                     out.addProperty("result", new String(bytes, java.nio.charset.Charset.forName(charset)));
                     break;
@@ -338,6 +340,9 @@ public final class JsExtGen {
         out.addProperty("js", js);
         out.addProperty("html", html);
         if (c.has("source")) out.addProperty("source", c.get("source").getAsString());
+        // 已登记到 README 差异表的用例：golden 必须原样带出标记，Swift 侧才能按登记处理
+        // （不能悄悄丢掉，否则会变成"未登记的不一致"）。
+        if (c.has("knownDivergence")) out.addProperty("knownDivergence", c.get("knownDivergence").getAsString());
         try (Context cx = Context.enter()) {
             cx.setLanguageVersion(Context.VERSION_ES6);
             cx.setInterpretedMode(true);

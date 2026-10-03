@@ -710,6 +710,8 @@ AnalyzeRule 调度过程中的中间值（Kotlin 的 `Any?`）用 `RuleValue` �
 | **inline `{{}}` 嵌套 `}}`** | legado 的 `\{\{[\w\W]*?\}\}` 同样会在片段内部首个连续 `}}` 提前结束 | Swift 逐行移植相同正则 | `JSON.stringify({a:{b:[1,2]}})` 只在 evalJS/getString 路径严格比较；inline case 登记为共同解析器限制 |
 | **ES 版本** | legado 明确 `VERSION_ES6 + setInterpretedMode(true)` | JSC 支持现代 ES | 本轮 74 条片段覆盖常用 ES6；超出样本的现代语法仍不能声称完全一致 |
 | **`result` 复杂对象绑定** | 直接把 Kotlin 对象（Element/NativeObject）绑给 JS | 本移植把复杂 RuleValue 以**字符串化**后绑定 | 简化；JS 里对 `result` 做 DOM 操作的规则无法工作（属 Java 互操作范畴，同上抛错） |
+| **Java String 返回值的包装（第 5 步收尾新增）** | `WrapFactory.javaPrimitiveWrap` 默认 `true`（`WrapFactory.java:163`），Java 方法返回的 String 会被包成 `NativeJavaObject`（`getPrototype()` 再挂到 JS String 原型上，`NativeJavaObject.java:154`）。于是 `.length` 命中 Java 的 `length()` 方法（`typeof` 为 `"function"`），`.match()`/`.split()` 才落到 JS String 原型/Java 成员 | `JsoupJSBridge` 的方法直接返回 JS 字符串，`.length` 是长度（`typeof` 为 `"number"`） | **已知差异**：golden `divergence_java_string_length_type` 钉住两侧实际值（`"function"` vs `"number"`，测试断言差异必须存在）。影响面：爱丽丝书屋真实规则里的 `content.length < 50` 在 legado 里恒为 `false`（函数与数字比较），本移植会按真实长度判断。书源若要"长度"应显式写 `String(content).length`（golden `alice_content_len` 即按该写法对照） |
+| **最小次正规数的最短十进制表示（第 5 步收尾新增）** | Rhino 1.8.1 `DoubleFormatter` 给出 `"4.9e-324"`（2 位有效数字） | JSC/V8 与原样复刻 ECMAScript `Number::toString` 的 `JsNumberFormat` 都给出 `"5e-324"`（1 位） | **已知差异**：golden `numarg_md5_5eneg324` 钉住 `4.9e-324` / `5e-324` 两侧实际值。两者解析回同一个 double，仅字符串形式不同；书源不会把次正规数传给 String 参数（`RhinoNumberArgGoldenTests` 对这条按已登记差异处理） |
 
 ### Rhino 1.8.1 返回值 golden（第 4 步最终收尾）
 
@@ -955,7 +957,7 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 | `encodeURI` | `URLEncoder.encode(UTF-8)`：空格→`+`、保留 `. - * _`、异常→`""` | Java URLEncoder |
 | `randomUUID` | 小写 UUID 字符串 | Java UUID |
 | `toNumChapter` | `(第)(.+?)(章)` + fullToHalf + parseInt/中文数字 | legado StringUtils 逐行复刻 |
-| `strToBytes` / `bytesToStr` | UTF-8（bytesToStr 对齐 Java `new String` 的 U+FFFD 替换语义） | Java 标准库 |
+| `strToBytes` / `bytesToStr` | UTF-8；`bytesToStr` 另支持 ISO-8859-1（256 字节 1:1 映射）与 GBK（合法双字节用 GB18030-2000 逐对解码，非法字节按 JDK `DoubleByte.Decoder#crMalformedOrUnmappable` 的消费规则逐个替换为 U+FFFD） | Java 标准库（UTF-8 / ISO-8859-1 / GBK） |
 
 ## 注入类方法（协议 + 默认实现）
 
@@ -977,23 +979,69 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 
 ## golden 对照（真实的 Java 库）
 
-`scripts/golden` 新增 `JsExtGen.java` 与 `cases/js_ext_cases.json`（约 96 条），对
-hutool 5.8.22（MD5/Base64/Hex）、quick-transfer-core 0.2.17（t2s/s2t）、Java 标准库
-（URLEncoder/SimpleDateFormat/SimpleTimeZone/UUID）逐条生成真实结果：
-- 覆盖空串/中文/emoji/超长/非法输入与数字入参（JS 数字 → 字符串按 JS ToString 语义：整数无 `.0`）；
+第 5 步收尾后，`scripts/golden` 里有三个生成器覆盖第 5 步全部语义：
+
+| 生成器 / 用例文件 | 真实依赖 | 条数 | 覆盖 |
+|---|---|---|---|
+| `JsExtGen.java` → `cases/js_ext_cases.json` | hutool 5.8.22（MD5/Base64/Hex）、quick-transfer-core 0.2.17（t2s/s2t）、Java 标准库（URLEncoder / SimpleDateFormat / SimpleTimeZone / Charset） | **321** | 全部 15 个纯算法方法；14 个方法各 ≥15 条、`t2s`/`s2t` 各 38 条；`bytesToStr` 覆盖 UTF-8 / ISO-8859-1 / GBK 的合法与非法字节；`argsJs` 表达 JSON 装不下的字面量（NaN/Infinity/-0） |
+| `JsExtGen.runJsoup` → `cases/jsoup_cases.json` | jsoup 1.16.2 + Rhino 1.8.1 | **91** | 同一 JS 表达式两边跑：Java 侧 Rhino + 真实 jsoup，Swift 侧 JSC + `JsoupJSBridge` 替身 |
+| `NumberArgGen.java` → `cases/js_number_args.json` | Rhino 1.8.1 | **42** | JS number → Java String 参数的真实转换（25 个字面量 × 多方法） |
+| `JsExtGen.runJavaDigest`（`javaDigestCases`，写在 js_ext_cases 里） | `java.security.MessageDigest` | 2 | 端到端测试的期望值（淘小说吧签名链），不用 Swift 自己的 md5 反推 |
+
 - 非法输入以「抛错 <-> 抛错」三态比较（值必须相等、null 必须同为 null、异常必须同为异常）；
-- 失败信息含 name/输入/Java 结果/Swift 结果；CI 缺失 golden 必 fail。
+- 失败信息含 name/输入/Java 结果/Swift 结果；CI 缺失 golden 必 fail；
+- CI 的 `golden` job 一次跑完 15 个用例文件共 **1231 条**用例（收尾前为 869 条）。
 
-### JsExtensions 数字入参差异（第 4 步结论的延续）
+### jsoup 替身 golden（91 条）
 
-Rhino 把 JS number 传给 Java String 参数时用 JS ToString（`123` 无 `.0`；`1.5` 保留小数）。
-本移植在 `JsExtensionsRuntime.stringify` 与 golden harness 中对 NSNumber 应用同一规则；
-`NaN`/`Infinity` 等常规值不进入该路径。与第 4 步「Rhino Integer 包装类型」差异互补，
-两者均被 golden 或既有文档覆盖。
+- **用例来源**：`scripts/extract_jsoup_chains.py` 从仓库内真实书源配置（`配置文件_7个.json` 的 7 个书源 +
+  `taiwan_real_source.json` 的台湾小说网）提取全部 `org.jsoup.Jsoup` 链，并打印方法使用统计：
+  `select 28 / attr 5 / size 5 / text 5 / get 4 / html 1 / remove 1`。
+  两个用到 jsoup 的书源（爱丽丝书屋、台湾小说网）都在扫描集合内；替身对外承诺的
+  `first`/`eq`/`outerHtml` 另用合成用例覆盖。`--check` 会校验每条用例的 `source` 标签都能命中真实规则。
+  （第 4/5 步期间还出现过 `配置文件_14个.json`，该文件未随仓库保存——工作区被系统清空过；
+  本脚本以仓库内实际存在的真实配置为准。）
+- **执行方式**：每条用例 = 一条 JS 表达式 + 一份 HTML。Java 侧用真实 Rhino 1.8.1 求值
+  （classpath 上是真实 jsoup 1.16.2），Swift 侧用 JavaScriptCore + `JsoupJSBridge` 求值**同一条 JS**，
+  比较「结果字符串 / null / 抛错」。测试：`JsoupBridgeGoldenComparisonTests`。
+- **HTML 输入 14 份**（全部合成、结构模仿真实书源页面），其中 4 份不规范：未闭合 `<p>`/`<li>`、
+  没有 `<tbody>` 的表格、大写标签 `<DIV CLASS="...">`、实体字符（`&nbsp;`/`&amp;`/`&lt;`/`&copy;`）。
+- **替身因此先修的 5 处语义偏差**：`text()` 走 `SwiftSoupTextNormalizeFix`；
+  `html()`/`outerHtml()` 走 `JsoupCompatSerializer`（不再用 SwiftSoup 自带的 pretty-print）；
+  `Elements.attr` 取「第一个**拥有**该属性的元素」（不是"第一个元素的属性"）；
+  `eq(越界)` 返回空集合；`get(越界)` 抛错（对齐 `IndexOutOfBoundsException`）。
+- **端到端**：`alice_e2e_text` / `alice_e2e_html` / `taiwan_e2e_content`（后者是**真实规则原文**，
+  含 `java.t2s` 与 `Packages.org.jsoup`）。`AnalyzeRuleEndToEndTests` 里爱丽丝/台湾两条断言的
+  期望值改为从 golden 读取（不再写死、不用"非空"弱断言）；淘小说吧签名链的期望值改为 golden 里
+  `java.security.MessageDigest` 直算的结果。
+
+### JS 数字入参：真实 Rhino 验证（不再有任何手写规则）
+
+旧实现在 `JsExtGen.numberToString` 与 Swift harness 里各写了一套「整数无 `.0`」的假设——已**全部删除**。
+
+- 原理（已读 Rhino 1.8.1 源码确认，非凭记忆）：legado 把 JsExtensions 实例绑成脚本里的 `java`
+  （NativeJavaObject），JS 调 `java.md5Encode(1e21)` 时 Rhino 走 `NativeJavaObject.coerceTypeImpl`
+  （`JSTYPE_NUMBER && type == STRING` → `ScriptRuntime.toString(value)`）→
+  `org.mozilla.javascript.dtoa.DoubleFormatter.toString(double)`，其源码注释原文：
+  *"Convert a double to String as defined in the "Number::toString" operation in ECMAScript."*
+- `NumberArgGen.java` 把与 JsExtensions 同名同签名的探针绑成 `java`，执行 `java.<method>(<字面量>)`，
+  记录 Rhino **实际传进 String 参数的那一串**（`javaReceived`，42 条）。
+- Java 侧 harness 的数字参数一律取同一份 Rhino 结果（写进 `js_ext_cases` 的 `argStrings`），
+  Swift 侧测试直接读 `argStrings` 使用；运行时 `JsExtensionsRuntime.stringify` 改用
+  `JsNumberFormat`（ECMAScript Number::toString 复刻）。
+- 三层逐条比较（`RhinoNumberArgGoldenTests`）：① JSC 的 `String(x)` == Rhino 的转换结果；
+  ② `JsNumberFormat.toString(Double(literal))` == Rhino；③ 走完整 `AnalyzeRule` 的
+  `<js>java.xxx(字面量)</js>` == Rhino 的 `callResult`。
+- 覆盖：`0 / -0 / 1 / -1 / 42 / 123 / 1.5 / -1.5 / 0.5 / 1e21 / 1e-7 / 1e-6 / 1e20 /
+  12345678901234567890 / 9007199254740993 / 1.7976931348623157e308 / 5e-324 / NaN / ±Infinity /
+  3.141592653589793 / 100.0 / -0.5 / 1700000000000 / 2.5e-8`。
 
 ## 样本诚实标注（第 5 步）
 
-- `cases/js_ext_cases.json` 全部输入为**合成样本**（文件名/`_comment` 字段标注）。
+- `cases/js_ext_cases.json` / `cases/jsoup_cases.json` / `cases/js_number_args.json` 全部输入为**合成样本**
+  （文件名/`_comment`/`_SAMPLE_KIND` 字段标注）。其中 jsoup 用例的 JS 链取自真实书源规则的同类写法，
+  `source` 字段标注来源书源与规则路径（可用 `scripts/extract_jsoup_chains.py --check` 复核），
+  HTML 全部手工构造。
 - 端到端测试使用 14 书源**真实规则文本** + 合成响应（规则真实、数据合成），来源书源名在用例注释标出。
 - `Sources/LegadoBookSource/Resources/Chinese/*.txt` 为 quick-chinese-transfer 0.2.17 原样资源
   （含 `PROVENANCE.md`），非本项目编写。

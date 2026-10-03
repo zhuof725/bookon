@@ -110,6 +110,7 @@ public final class NumberArgGen {
         out.addProperty("name", name);
         out.addProperty("method", method);
         out.addProperty("literal", literal);
+        if (c.has("knownDivergence")) out.addProperty("knownDivergence", c.get("knownDivergence").getAsString());
         try {
             String received = receivedForLiteral(literal);
             if (received == null) {

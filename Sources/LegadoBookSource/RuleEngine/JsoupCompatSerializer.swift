@@ -313,7 +313,13 @@ enum JsoupCompatSerializer {
             out.append(" ")
             // SwiftSoup 用 BooleanAttribute 子类表示「无值属性」（jsoup 里 val==null）。
             let isNoValue = attribute is BooleanAttribute
-            out.append(attributeHTML(key: attribute.getKey(), value: attribute.getValue(), isNoValue: isNoValue))
+            // 属性名小写化：jsoup 的 HTML 解析在 tokenizer 阶段就把属性名规整为小写
+            // （ParserSettings.normalizeAttribute），SwiftSoup 2.9.6 保留了原始大小写
+            // （`<IMG SRC=...>` 输出成 `<img SRC=...>`，与 jsoup 不一致；golden
+            //  upper_tag_* 用例暴露）。这里在输出口对齐（只影响 HTML 语法；本序列化器
+            // 仅用于 HTML，SVG 的 camelCase 属性调整未实现——真实书源不涉及）。
+            let key = attribute.getKey().lowercased()
+            out.append(attributeHTML(key: key, value: attribute.getValue(), isNoValue: isNoValue))
         }
         return out
     }
@@ -321,8 +327,19 @@ enum JsoupCompatSerializer {
     // MARK: - 主入口：对节点做 outerHtml() / html()
 
     /// 等价于 jsoup `Node.outerHtml()`：从该节点自身开始（depth=0），按深度优先遍历输出。
+    ///
+    /// **Document 特例（Step5 收尾）**：jsoup 的 `Document` 节点 tag 是 `#root`，但
+    /// `Document.outerHtml()` 不会输出 `<#root>` 包裹标签——它就是「doctype + <html>」的串联，
+    /// 且子节点从 depth 0 开始编号（与 `Element.html()` 的深度口径一致）。
+    /// SwiftSoup 的 Document 也是 `#root` 标签节点，这里显式跳过包裹并保持同样深度。
     static func outerHtml(_ node: Node) -> String {
         var accum = ""
+        if let document = node as? Document {
+            for child in document.getChildNodes() {
+                traverse(child, depth: 0, accum: &accum)
+            }
+            return accum
+        }
         traverse(node, depth: 0, accum: &accum)
         return accum
     }
