@@ -63,6 +63,15 @@ MAPPING = {
         "Sources/LegadoBookSource/Network/ConcurrentRateLimiter.swift",
         "Sources/LegadoBookSource/Network/HTTPTypes.swift",
     ],
+    "CookieStore.kt": [
+        "Sources/LegadoBookSource/Network/CookieStore.swift",
+    ],
+    "CookieManager.kt": [
+        "Sources/LegadoBookSource/Network/CookieManager.swift",
+    ],
+    "CacheManager.kt": [
+        "Sources/LegadoBookSource/Network/CacheManager.swift",
+    ],
     "ConcurrentRateLimiter.kt": [
         "Sources/LegadoBookSource/Network/ConcurrentRateLimiter.swift",
     ],
@@ -120,6 +129,27 @@ EXCLUDED = {
         "setBodyJs": "同上",
         "setServerID": "同上",
         "setWebViewDelayTime": "同上",
+    },
+    "CookieStore.kt": {
+        "setWebCookie": "Android WebView CookieManager 相关，无 WebView（README 登记）",
+    },
+    "CookieManager.kt": {
+        "applyToWebView": "Android WebView CookieManager 相关，无 WebView（README 登记）",
+        "getSessionCookieMap": "私有辅助（session cookie -> map），Swift 在 getCookie/getKey 内直接合并",
+        "loadRequest": "Swift 实现为 cookieHeaderFor(url:existingHeader:store:cache:)（语义一致，不做 OkHttp Request 不可变重建）",
+        "saveResponse": "Swift 实现为 saveCookiesFromHeaders(url:setCookieHeaders:store:cache:)（含持久化/会话分流）",
+    },
+    "CacheManager.kt": {
+        "getByteArray": "字节缓存变体（第 5 步 JsExtensions 未用到），非本步骤范围",
+        "getDouble": "类型化读取变体，非本步骤范围",
+        "getFloat": "类型化读取变体，非本步骤范围",
+        "getFile": "文件缓存变体（ACache），非本步骤范围",
+        "putFile": "文件缓存变体（ACache），非本步骤范围",
+        "sizeOf": "LruCache 内部回调，Swift 用 utf8 字节数近似（README 登记）",
+        "put": "CacheManager.put(key,value,saveTime) 已实现；同文件 AppCacheManager.put(key,queryTTF) 属字体缓存（第 5/6 步范围外），正则同名会误判为已覆盖",
+        "getQueryTTF": "字体查询缓存（TTF），非本步骤范围",
+        "clearSourceVariables": "AppCacheManager 的诊断用清理函数，非本步骤范围",
+        "delete": "delete(keys) 批量删除：Swift 以 delete(_ key:) + 调用方循环实现",
     },
     "ConcurrentRateLimiter.kt": {
         "getConcurrentRecordBlocking": "Android 同步阻塞版（Thread.sleep）；Swift 只有 async 版（不做阻塞 API）",
