@@ -107,6 +107,7 @@ public struct HttpUrl: Equatable {
         if let c = at(pos), c == 0x23 { // '#'
             pos += 1
             fragment = HttpUrl.canonicalize(HttpUrl.substring(input, pos, chars.count), encodeSet: HttpUrl.fragmentEncodeSet)
+            pos = chars.count   // fragment 一直吃到结尾，必须推进 pos（否则会被当成有剩余字符）
         }
         if pos != chars.count { return nil }
 
