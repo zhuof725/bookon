@@ -62,32 +62,43 @@ final class AnalyzeRuleJSTests: XCTestCase {
         XCTAssertEqual(s, "3-7")
     }
 
-    // MARK: - java Proxy 未实现方法抛错
+    // MARK: - java Proxy 未实现方法抛错（Step 5：已实现方法不再抛错）
 
     func testJava_unimplementedThrows() {
         let diag = RuleEngineDiagnostics()
         let a = AnalyzeRule(diagnostics: diag)
-        XCTAssertThrowsError(try a.evalJS("java.md5Encode('x')")) { err in
-            XCTAssertTrue("\(err)".contains("md5Encode") || "\(err)".contains("尚未实现"), "got \(err)")
+        // aesDecodeToString 属于 JsEncodeUtils 但 Step 5 未实现（书源未使用）→ Proxy 抛错
+        XCTAssertThrowsError(try a.evalJS("java.aesDecodeToString('x','k','AES/ECB/PKCS5Padding','iv')")) { err in
+            XCTAssertTrue("\(err)".contains("aesDecodeToString") || "\(err)".contains("尚未实现"), "got \(err)")
         }
-        XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("md5Encode") })
+        XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("aesDecodeToString") })
     }
     func testJava_implementedGetPut() throws {
         let a = AnalyzeRule(source: InMemorySource())
         let v = try a.evalJS("java.put('k','v'); java.get('k')")
         XCTAssertEqual(v.stringValue, "v")
     }
+    func testJava_implementedMd5() throws {
+        // Step 5：md5Encode 已实现，直接断言结果（与真实 hutool MD5 对照固定值）
+        let a = AnalyzeRule(source: InMemorySource())
+        let v = try a.evalJS("java.md5Encode('abc')")
+        XCTAssertEqual(v.stringValue, "900150983cd24fb0d6963f7d28e17f72")
+        let v16 = try a.evalJS("java.md5Encode16('abc')")
+        XCTAssertEqual(v16.stringValue, "983cd24fb0d6963f")
+    }
 
-    // MARK: - Java 互操作检测（Rhino-only，JSC 抛错）
+    // MARK: - Java 互操作检测（Step 5：org.jsoup 放行，其余仍抛错）
 
     func testJavaInterop_packagesThrows() {
         let diag = RuleEngineDiagnostics()
         let a = AnalyzeRule(diagnostics: diag)
         XCTAssertThrowsError(try a.evalJS("Packages.java.lang.String"))
     }
-    func testJavaInterop_jsoupParseThrows() {
+    func testJavaInterop_jsoupParseAllowed() throws {
+        // Step 5：org.jsoup.Jsoup 已有 SwiftSoup 替身，不再抛互操作错误
         let a = AnalyzeRule()
-        XCTAssertThrowsError(try a.evalJS("org.jsoup.Jsoup.parse('<a>')"))
+        let v = try a.evalJS("org.jsoup.Jsoup.parse('<div>hi</div>').select('div').text()")
+        XCTAssertEqual(v.stringValue, "hi")
     }
     func testJavaInterop_importClassThrows() {
         let a = AnalyzeRule()

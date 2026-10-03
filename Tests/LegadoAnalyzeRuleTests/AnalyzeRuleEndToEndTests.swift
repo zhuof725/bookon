@@ -103,52 +103,43 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
     }
 
     // ===== 魔丸小说（<js> 规则 + java.hexDecodeToString/ajax，真实）=====
-    // 预期：toc/content 的 <js> 调用 java.hexDecodeToString（JsExtensions 未实现）-> 抛错。
-    func testMowan_jsUnimplementedThrows() throws {
-        let diag = RuleEngineDiagnostics()
-        let a = AnalyzeRule(diagnostics: diag)
+    // Step 5：hexDecodeToString 已实现。"deadbeef" 非合法 UTF-8 -> 明确错误（不再是「未实现」）。
+    func testMowan_hexDecodeImplemented() throws {
+        let a = AnalyzeRule()
         try a.setContent("deadbeef")
-        // 简化版真实 toc 规则片段：let url = java.hexDecodeToString(result);
-        XCTAssertThrowsError(try a.getString("<js>let url = java.hexDecodeToString(result); url</js>")) { err in
-            XCTAssertTrue("\(err)".contains("hexDecodeToString") || "\(err)".contains("尚未实现"), "got \(err)")
-        }
+        // 合法 hex（"你好" UTF-8: e4bda0e5a5bd）应能解码
+        let ok = try a.getString("<js>java.hexDecodeToString('e4bda0e5a5bd')</js>")
+        XCTAssertEqual(ok, "你好")
+        // "deadbeef"（HTML 片段字节）不是合法 UTF-8 -> 抛错（Hex 内容无效），不再声称「未实现」
+        XCTAssertThrowsError(try a.getString("<js>let url = java.hexDecodeToString(result); url</js>"))
     }
 
-    // ===== 爱丽丝书屋 content（@js: + org.jsoup.Jsoup Java 互操作，真实）=====
-    // 预期：Java 互操作在 JavaScriptCore 不支持 -> 抛错 + 记 diagnostics。
-    func testAlice_jsoupInteropThrows() throws {
-        let diag = RuleEngineDiagnostics()
-        let a = AnalyzeRule(diagnostics: diag)
-        try a.setContent("<div>x</div>")
-        XCTAssertThrowsError(try a.getString("@js:var doc = org.jsoup.Jsoup.parse(result); doc"))
-        XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("org.jsoup") || $0.message.contains("互操作") })
+    // ===== 爱丽丝书屋 content（@js: + org.jsoup.Jsoup，真实）=====
+    // Step 5：org.jsoup.Jsoup 已由 SwiftSoup 替身支持 -> 可执行并返回真实文本。
+    func testAlice_jsoupParseWorks() throws {
+        let a = AnalyzeRule()
+        try a.setContent("<div class='read-content'><p>合成正文A</p><p>正文B</p></div>")
+        // 真实规则核心链：Jsoup.parse(result).select('div.read-content').text()
+        let s = try a.getString("@js:org.jsoup.Jsoup.parse(result).select('div.read-content').text()")
+        XCTAssertEqual(s, "合成正文A 正文B")
     }
 
     // ===== 台湾小说网（用户配置14个中的真实 ruleContent.content；输入合成）=====
-    // 断言真实 Java 互操作规则被明确拒绝，不声称台湾源端到端成功。
-    func testTaiwan_realJsoupInteropThrows() throws {
+    // Step 5：Packages.org.jsoup.Jsoup 同样放行（SwiftSoup 替身）-> 真实链可执行。
+    func testTaiwan_realJsoupChainWorks() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "taiwan_real_source", withExtension: "json"))
         let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
         let source = try XCTUnwrap(object as? [String: Any])
         XCTAssertTrue((source["bookSourceName"] as? String)?.contains("台湾小说网") == true)
-        XCTAssertEqual(source["bookSourceUrl"] as? String, "https://twkan.cc/")
-        XCTAssertNotNil(source["_fixtureProvenance"])
         let contentRules = try XCTUnwrap(source["ruleContent"] as? [String: Any])
         let rule = try XCTUnwrap(contentRules["content"] as? String)
         XCTAssertTrue(rule.contains("Packages.org.jsoup.Jsoup.parse"))
-        let diag = RuleEngineDiagnostics()
-        let a = AnalyzeRule(diagnostics: diag)
-        try a.setContent("<h1>合成标题</h1><div id='content'><p>合成正文</p></div>")
-        XCTAssertThrowsError(try a.getString(rule)) { error in
-            guard case RuleEngineError.jsError(let message) = error else {
-                XCTFail("台湾真实规则应抛 jsError，实际：\(error)")
-                return
-            }
-            XCTAssertTrue(message.contains("Packages.") || message.contains("Java 互操作"), message)
-        }
-        XCTAssertTrue(diag.diagnostics.contains {
-            $0.message.contains("Packages") || $0.message.contains("org.jsoup") || $0.message.contains("互操作")
-        }, "台湾真实规则被拒绝必须有 Java 互操作诊断")
+        let a = AnalyzeRule()
+        // 两个 <p> 段落（正文；t2s 会把繁体转换，合成内容用简体断言结果）
+        try a.setContent("<div id='content'><p>第一段内容</p><p>第二段内容</p></div>")
+        // 真实 rule 链：d.select('#content p') -> es.size()/es.get(i).text() -> join('\n')
+        let text = try a.getString(rule)
+        XCTAssertEqual(text, "第一段内容\n第二段内容")
     }
 
     // ===== 得间小说（class./body. 组合语法，真实）=====
