@@ -61,7 +61,9 @@ public struct HttpUrl: Equatable {
     // MARK: - 解析（对应 HttpUrl.Builder.parse）
 
     /// 解析失败返回 nil（对齐 `"…".toHttpUrlOrNull()` 的 null 结果）。
-    public static func parse(_ input: String) -> HttpUrl? {
+    public static func parse(_ rawInput: String) -> HttpUrl? {
+        // 对齐 OkHttp：解析前 trim（黄金样例 `https://x.com/ ` -> `https://x.com/`）
+        let input = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
         var pos = 0
         let chars = Array(input.utf16)
         func at(_ i: Int) -> UInt16? { i < chars.count ? chars[i] : nil }
@@ -76,9 +78,10 @@ public struct HttpUrl: Equatable {
             return nil
         }
 
-        // 2) "//"
-        guard matches(input, pos, "//") else { return nil }
-        pos += 2
+        // 2) 前导斜杠：OkHttp 会跳过所有 '/'（至少 2 个），如 "https:///x" -> "https://x/"
+        var slashCount = 0
+        while let c = at(pos), c == 0x2F { slashCount += 1; pos += 1 }
+        if slashCount < 2 { return nil }
 
         // 3) authority = 到第一个 '/', '?', '#' 之前
         let authorityStart = pos
@@ -205,7 +208,7 @@ public struct HttpUrl: Equatable {
 
     /// 路径规范化：先做 `%xx` 的规范化编码，再去掉 `.` / `..` 段。
     static func canonicalizePath(_ raw: String) -> String {
-        let encoded = canonicalize(raw, encodeSet: pathEncodeSet)
+        let encoded = canonicalize(raw, encodeSet: pathEncodeSet, backslashIsSlash: true)
         return removeDotSegments(encoded)
     }
 
@@ -213,24 +216,28 @@ public struct HttpUrl: Equatable {
     static func removeDotSegments(_ path: String) -> String {
         var out: [String] = []
         let segments = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-        for (i, seg) in segments.enumerated() {
-            if seg == "." {
+        for (i, rawSeg) in segments.enumerated() {
+            let isLast = (i == segments.count - 1)
+            // OkHttp 把 %2E 也当作 '.'（大小写不敏感）
+            let seg = rawSeg.caseInsensitiveCompare("%2e") == .orderedSame ? "." : rawSeg
+            let seg2 = rawSeg.caseInsensitiveCompare("%2e%2e") == .orderedSame ? ".." : seg
+            if seg2 == "." {
+                if isLast { out.append("") }   // "/a/." -> "/a/"
                 continue
-            } else if seg == ".." {
+            } else if seg2 == ".." {
                 if out.count > 0 { out.removeLast() }
+                if isLast { out.append("") }   // "/a/b/.." -> "/a/"
                 continue
-            } else if i == segments.count - 1 && seg.isEmpty {
-                out.append("")   // 尾随空段（路径以 / 结尾）
+            } else if isLast && seg2.isEmpty {
+                out.append("")                 // 尾随空段（路径以 / 结尾）
                 continue
             } else {
-                out.append(seg)
+                out.append(rawSeg)
             }
         }
         var result = out.joined(separator: "/")
         if !result.hasPrefix("/") { result = "/" + result }
         if result.isEmpty { result = "/" }
-        // OkHttp: "/a/.." -> "/"；"/a/." -> "/a/"
-        if result.count > 1 && !result.hasSuffix("/") && path.hasSuffix("/.") { result += "/" }
         return result
     }
 
@@ -252,19 +259,44 @@ public struct HttpUrl: Equatable {
     }
 
     /// OkHttp `canonicalize`：保留已有的合法 `%xx`（大小写原样），其余按 encodeSet 转义。
-    static func canonicalize(_ input: String, encodeSet: Set<UInt16>) -> String {
+    static func canonicalize(_ input: String, encodeSet: Set<UInt16>, backslashIsSlash: Bool = false) -> String {
+        var out = ""
+        // 控制字符（< 0x20、0x7F）直接丢弃（对齐 OkHttp canonicalize 的 skip 分支）；
+        // 非 ASCII 按「标量」处理（emoji 是代理对，按 UTF-16 单元会丢字符）。
+        for scalar in input.unicodeScalars {
+            if scalar.value < 0x20 || scalar.value == 0x7F { continue }
+            if backslashIsSlash && scalar.value == 0x5C {
+                out += "/"
+                continue
+            }
+            if scalar.value == 0x25 { // '%'
+                out += "%"
+                continue
+            }
+            if scalar.value < 0x80 {
+                let c = UInt16(scalar.value)
+                if encodeSet.contains(c) {
+                    out += String(format: "%%%02X", c)
+                } else {
+                    out.unicodeScalars.append(scalar)
+                }
+                continue
+            }
+            for b in String(scalar).utf8 { out += String(format: "%%%02X", b) }
+        }
+        return out
+    }
+
+    /// 旧的逐 UTF-16 单元实现（保留作对照，未被使用）。
+    static func canonicalizeUnits(_ input: String, encodeSet: Set<UInt16>) -> String {
         var out = ""
         let units = Array(input.utf16)
         var i = 0
         while i < units.count {
             let c = units[i]
             if c == 0x25 { // '%'
-                if i + 2 < units.count, isHex(units[i + 1]), isHex(units[i + 2]) {
-                    out += String(decoding: units[i..<(i + 3)], as: UTF16.self)
-                    i += 3
-                    continue
-                }
-                out += "%25"
+                // 对齐 OkHttp：非法的 % 转义**原样保留**（不重编码成 %25），只做控制字符与字符集处理
+                out += "%"
                 i += 1
                 continue
             }
@@ -355,17 +387,19 @@ public struct HttpUrl: Equatable {
                 continue
             }
             var basic = ""
-            var nonBasic: [UInt32] = []
+            var allPoints: [UInt32] = []
             for scalar in label.lowercased().unicodeScalars {
-                if scalar.value < 0x80 { basic.append(Character(scalar)) } else { nonBasic.append(scalar.value) }
+                if scalar.value < 0x80 { basic.append(Character(scalar)) }
+                allPoints.append(scalar.value)
             }
-            let encoded = punycodeEncode(nonBasic)
+            // RFC 3492：编码循环遍历**完整**码点序列（基本码点参与 delta 计数），h 从基本码点数 b 开始
+            let encoded = punycodeEncode(allPoints)
             out.append("xn--" + basic + encoded)
         }
         return out.joined(separator: ".")
     }
 
-    /// RFC 3492 §6.3 编码（规范实现；输入为标签里的非基本码点，基本码点由调用方拼在 "xn--" 之后）。
+    /// RFC 3492 §6.3 编码（规范实现；输入是标签的**全部**码点，基本码点由调用方拼在 "xn--" 之后）。
     static func punycodeEncode(_ input: [UInt32]) -> String {
         let base: UInt32 = 36, tmin: UInt32 = 1, tmax: UInt32 = 26, skew: UInt32 = 38
         let damp: UInt32 = 700, initialBias: UInt32 = 72, initialN: UInt32 = 128
@@ -389,7 +423,8 @@ public struct HttpUrl: Equatable {
             return String(UnicodeScalar(22 &+ d) ?? "0")
         }
 
-        var h = 0
+        let basicCount = input.filter { $0 < initialN }.count
+        var h = basicCount
         while h < input.count {
             guard let m = input.filter({ $0 >= n }).min() else { break }
             delta = delta &+ (m &- n) &* UInt32(h + 1)
@@ -408,7 +443,7 @@ public struct HttpUrl: Equatable {
                         k = k &+ base
                     }
                     output += digit(q)
-                    bias = adapt(delta, UInt32(h + 1), h == 0)
+                    bias = adapt(delta, UInt32(h + 1), h == basicCount)
                     delta = 0
                     h &+= 1
                 }
