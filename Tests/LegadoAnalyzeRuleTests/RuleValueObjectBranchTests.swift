@@ -158,14 +158,11 @@ final class RuleValueObjectBranchTests: XCTestCase {
 
     func testJsObject_getElements_stringifiesAndRegexMatches() throws {
         // Kotlin getElements 对 NativeObject 不做键值直取，而是把它当普通 content 进入调度。
-        // content 是 jsObject 时，规则按 Mode 分派；用 allInOne 的 `:正则` 强制 Regex 模式，
-        // 此时 content 被 stringValue 字符串化（map 描述文本）后参与正则匹配。
-        // 固定：不崩溃，且能按正则从字符串化结果中捕获（验证对象 content 会被字符串化再走正则）。
+        // NativeObject 的 Java toString 为固定前缀 `[object Object]`；用 allInOne 的 `:正则`
+        // 强制 Regex 模式，验证对象 content 按这一真实 Rhino 字符串化结果参与匹配。
         let a = AnalyzeRule()
         _ = try a.setContent(.jsObject(["chapters": .stringList(["c1", "c2"])]))
-        // allInOne Regex：`:` 开头强制 Regex 模式。匹配字母数字键名。
-        let els = try a.getElements(":c[12]")
-        // 字符串化结果含 "c1"/"c2"，正则应命中。
+        let els = try a.getElements(":object")
         XCTAssertFalse(els.isEmpty)
     }
 
@@ -180,8 +177,9 @@ final class RuleValueObjectBranchTests: XCTestCase {
 
     // MARK: - contentEquals 近似（Kotlin 引用判等 vs 本移植 stringValue 近似）边界
 
-    // 边界 1：两个内容不同的 jsObject，stringValue 不同 -> contentEquals 判为不同（与 Kotlin 一致：
-    //         不同实例、不同内容，引用判等也为 false）。通过「换 content 后解析器重建」间接验证。
+    // 边界 1：两个内容不同的 jsObject 仍会共享 Rhino 的 `[object Object]` stringValue，
+    //         因此本移植会近似判为「相同」并复用缓存；但 getString 的 NativeObject 键值直取
+    //         在进入解析器前完成，所以 mContent 仍正确取到新对象的值。
     func testContentEquals_differentJsObjects_rebuild() throws {
         let a = AnalyzeRule()
         _ = try a.setContent(.jsObject(["a": .string("1")]))

@@ -708,8 +708,31 @@ AnalyzeRule 调度过程中的中间值（Kotlin 的 `Any?`）用 `RuleValue` �
 | **Rhino NativeArray raw.toString** | Java `Object.toString()` 结果为 `org.mozilla.javascript.NativeArray@<identity>`，hash 每次运行不同 | JSC 转为稳定元素列表描述 | 根本不可逐字节复现；数组 raw case 显式登记。数组在 JS 内部的稳定字符串化（`join`、`String(array)`、`JSON.stringify`）继续严格对照 |
 | **NativeObject.toString** | 普通对象为 `[object Object]` | `.jsObject.stringValue` 同样返回 `[object Object]` | ✅ 已对齐 |
 | **inline `{{}}` 嵌套 `}}`** | legado 的 `\{\{[\w\W]*?\}\}` 同样会在片段内部首个连续 `}}` 提前结束 | Swift 逐行移植相同正则 | `JSON.stringify({a:{b:[1,2]}})` 只在 evalJS/getString 路径严格比较；inline case 登记为共同解析器限制 |
-| **ES 版本** | legado 明确 `VERSION_ES6 + setInterpretedMode(true)` | JSC 支持现代 ES | 本轮 70 条片段覆盖常用 ES6；超出样本的现代语法仍不能声称完全一致 |
+| **ES 版本** | legado 明确 `VERSION_ES6 + setInterpretedMode(true)` | JSC 支持现代 ES | 本轮 74 条片段覆盖常用 ES6；超出样本的现代语法仍不能声称完全一致 |
 | **`result` 复杂对象绑定** | 直接把 Kotlin 对象（Element/NativeObject）绑给 JS | 本移植把复杂 RuleValue 以**字符串化**后绑定 | 简化；JS 里对 `result` 做 DOM 操作的规则无法工作（属 Java 互操作范畴，同上抛错） |
+
+### Rhino 1.8.1 返回值 golden（第 4 步最终收尾）
+
+`scripts/golden/cases/js_rhino.json` 含 **74 条合成 JS 片段**，真实依赖
+`org.mozilla:rhino:1.8.1`，按 legado `VERSION_ES6 + setInterpretedMode(true)`、
+`unwrapReturnValue`（Wrapper/ConsString 拆箱，Undefined→null）运行。Java 生成器同时输出：
+- `getString` 路径：raw 为 null→`""`，否则 Java `raw.toString()`；
+- inline `{{}}` 路径：null跳过，String原样，整数 Double 用 Locale.ROOT `"%.0f"`，其余 `toString()`。
+
+Swift 测试 `JSRhinoGoldenComparisonTests` 逐条用 JavaScriptCore 跑同一片段并比较两条路径。
+以下是经真实对照后仍不能稳定逐字节对齐的完整清单（其余用例严格相等）：
+
+| 最小复现 | Rhino 1.8.1 | JavaScriptCore/Swift | 原因与处理 |
+|---|---|---|---|
+| `0` / `0.0` | rawType=`Integer`，getString=`"0"` | JSC 统一 Number/Double，`"0.0"` | JVM 包装类型不可从 JSC 公共 API 恢复；登记 `zero_int/zero_float` |
+| `'hello'.length` | rawType=`Integer`，`"5"` | Number/Double，`"5.0"` | 同上；登记 `str_length` |
+| `JSON.parse('{\"k\":7}').k` | rawType=`Integer`，`"7"` | Number/Double，`"7.0"` | 同上；登记 `json_parse_get` |
+| `[1,2,3]`（以及 mixed/nested/JSON.parse array） | `org.mozilla.javascript.NativeArray@<identity>`，每次 hash 不同 | 稳定元素列表描述 | Rhino Java `Object.toString()` 本身非确定输出，无法也不应伪造；golden 用稳定 `<NativeArray identity>` 标记并显式豁免。`join`/`String(array)`/`JSON.stringify` 仍严格比较 |
+| `{{JSON.stringify({a:{b:[1,2]}})}}` | JS 本身可求值 | legado/Swift 相同 lazy `{{...}}` 正则在内部首个连续 `}}` 截断 | 两端共同解析器限制；该片段的 evalJS/getString 路径仍严格比较，inline 单项不比较 |
+
+可修项已全部对齐：`big_number`/`2^53`/`1e21`/`1e-7`、NaN、±Infinity、
+`Date.getTime()`、普通 NativeObject `[object Object]`，以及所有字符串拼接、JSON.stringify、
+parseInt、result*1、String(x)、模板字符串。
 
 ## NetworkUtils：java.net.URL vs Swift URL 已知差异（本步骤待 C 部分 golden 验证）
 

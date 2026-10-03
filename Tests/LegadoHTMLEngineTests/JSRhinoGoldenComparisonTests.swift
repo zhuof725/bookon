@@ -32,7 +32,7 @@ final class JSRhinoGoldenComparisonTests: XCTestCase {
             return []
         }
         let envelope = try JSONDecoder().decode(Envelope.self, from: Data(contentsOf: file))
-        XCTAssertEqual(envelope.jsResults.count, 70, "Rhino golden 应保留全部 70 条合成片段")
+        XCTAssertEqual(envelope.jsResults.count, 74, "Rhino golden 应保留全部 74 条合成片段")
         XCTAssertEqual(Set(envelope.jsResults.map { $0.name }).count, envelope.jsResults.count)
         return envelope.jsResults
     }

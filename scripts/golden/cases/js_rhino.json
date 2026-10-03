@@ -286,6 +286,22 @@
     {
       "name": "literal_two_point_zero",
       "js": "2.0"
+    },
+    {
+      "name": "string_of_array",
+      "js": "String([1,2,3])"
+    },
+    {
+      "name": "string_of_object",
+      "js": "String({a:1})"
+    },
+    {
+      "name": "string_of_null",
+      "js": "String(null)"
+    },
+    {
+      "name": "string_of_undefined",
+      "js": "String(undefined)"
     }
   ]
 }

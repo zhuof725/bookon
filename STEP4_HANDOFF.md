@@ -86,6 +86,11 @@ org.jsoup.Jsoup）→ JSC 无法运行，预检测抛 jsError + 记诊断；@put
 - **补 RuleValue `.jsObject`/`.jsonObject` 分支测试**：`RuleValueObjectBranchTests.swift`（18 例），
   覆盖 getString/getStringList/getElement/getElements 的键值直取、`{{ }}`、嵌套对象、数组、
   null、数字格式 + contentEquals 近似 3 个边界用例（结果无差异，README 已记录）。
+- **Rhino 1.8.1 返回值对照**：golden 新增 74 条合成 JS 片段，严格比较 Kotlin getString
+  raw.toString 与 inline `{{}}` 两条路径。可修的 Double 科学计数/NaN/Infinity/对象字符串化已对齐；
+  Rhino Integer 包装类型、NativeArray identity hash、inline 嵌套 `}}` 共同解析器限制逐条登记于 README。
+- **台湾小说网 Java 互操作回归**：从 `配置文件_14个.json` 提取真实源小资源，端到端测试断言
+  `Packages.org.jsoup.Jsoup.parse` 抛 `RuleEngineError.jsError` 并写入 diagnostics，不声称真实链路成功。
 - **`JS_EXTENSIONS_USAGE.md` 重写**：基于 14 个真实书源（`配置文件_14个.json`）严格扫描，
   更正「魔丸小说用 Java 互操作」的误述（实际未用）；仅**台湾小说网（8 次 `Packages.org.jsoup.Jsoup.parse`）**
   和**爱丽丝书屋（2 次 `org.jsoup.Jsoup.parse`）**用 Rhino 互操作；补 java/cookie/cache 方法清单与频次，
