@@ -76,9 +76,25 @@
 - JS `NaN`/`Infinity` 数字经 `stringify` 输出 Swift 字面量（`nan`/`inf`）与 JS ToString 不同；
   书源未用到把这两个值传给 String 参数的场景，登记为已知边界。
 
-## 最终验证（真实 CI）
+## 最终验证（真实 CI 结果，run 37128840578，HEAD `8d0455f`）
 
-- 本步骤最后 push 的 run 与三 job 结果见文末追加（以 gh 实测为准）。
+三个 job 全绿 ✅：
+
+| job | 状态 | 关键数字 | 日志 |
+|---|---|---|---|
+| golden（ubuntu，真实 java 库） | ✓ success | **869 条用例**（13 个用例文件，含 js_ext_cases.json 约 96 条） | `ci_logs/step5_final_golden.log` |
+| test-macos（swift test） | ✓ success | **Executed 449 tests, 0 failures** | `ci_logs/step5_final_macos.log` |
+| test-ios-simulator（xcodebuild test） | ✓ success | **实际执行 449 个测试**（与 macOS 相等） | `ci_logs/step5_final_ios.log` |
+
+**iOS == macOS 测试总数核对**：iOS 按 8 个 xctest bundle 求和得 449，macOS `swift test` 的
+「All tests」总数也是 449，两者**相等**（`scripts/ios_sim_test.sh` 实测打印
+`✅ iOS 总数与 macOS 总数一致（均为 449）`）。
+
+iOS 各 bundle 明细（来自 `step5_final_ios.log`）：
+`LegadoAnalyzeRuleTests`=129、`LegadoAnalyzeRulePublicAPITests`=13、
+`LegadoBookSourceTests`=14、`LegadoBookSourcePublicAPITests`=3、
+`LegadoHTMLEngineTests`=174、`LegadoHTMLEnginePublicAPITests`=4、
+`LegadoRuleEngineTests`=107、`LegadoRuleEnginePublicAPITests`=5，合计 449。
 
 ## 后续 TODO（第 6 步）
 
