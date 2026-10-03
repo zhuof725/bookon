@@ -365,55 +365,56 @@ public struct HttpUrl: Equatable {
         return out.joined(separator: ".")
     }
 
-    /// RFC 3492 §6.3 编码（只做 δ/β 的插入逻辑，输入为非基本码点数组）。
+    /// RFC 3492 §6.3 编码（规范实现；输入为标签里的非基本码点，基本码点由调用方拼在 "xn--" 之后）。
     static func punycodeEncode(_ input: [UInt32]) -> String {
-        let base: UInt32 = 36, tmin: UInt32 = 1, tmax: UInt32 = 26, skew: UInt32 = 38,
-            damp: UInt32 = 700, initialBias: UInt32 = 72, initialN: UInt32 = 128
-        var n = initialN, delta: UInt32 = 0, bias = initialBias
+        let base: UInt32 = 36, tmin: UInt32 = 1, tmax: UInt32 = 26, skew: UInt32 = 38
+        let damp: UInt32 = 700, initialBias: UInt32 = 72, initialN: UInt32 = 128
         var output = ""
+        var n = initialN
+        var delta: UInt32 = 0
+        var bias = initialBias
+
         func adapt(_ delta: UInt32, _ numPoints: UInt32, _ firstTime: Bool) -> UInt32 {
             var d = firstTime ? delta / damp : delta >> 1
-            d += d / numPoints
+            d &+= d / numPoints
             var k: UInt32 = 0
-            while d > ((base - tmin) * tmax) / 2 {
+            while d > ((base - tmin) &* tmax) / 2 {
                 d /= (base - tmin)
-                k += base
+                k &+= base
             }
-            return k + (base - tmin + 1) * d / (d + skew)
+            return k &+ (base - tmin &+ 1) &* d / (d + skew)
         }
-        func digit(_ d: UInt32) -> Character {
-            return d < 26 ? Character(UnicodeScalar(97 + d)!) : Character(UnicodeScalar(22 + d)!)
+        func digit(_ d: UInt32) -> String {
+            if d < 26 { return String(UnicodeScalar(97 &+ d) ?? "a") }
+            return String(UnicodeScalar(22 &+ d) ?? "0")
         }
-        let h = UInt32(input.count)
-        var sorted = input.sorted()
-        var handled = h
-        while handled > 0 {
-            let m = sorted.first(where: { $0 >= n }) ?? sorted[0]
-            if m < n { return "" }
-            delta += (m - n) * (handled + 1)
+
+        var h = 0
+        while h < input.count {
+            guard let m = input.filter({ $0 >= n }).min() else { break }
+            delta = delta &+ (m &- n) &* UInt32(h + 1)
             n = m
             for cp in input {
                 if cp < n {
-                    delta += 1
+                    delta = delta &+ 1
                 } else if cp == n {
                     var q = delta
                     var k = base
                     while true {
-                        let t: UInt32 = k <= bias ? tmin : (k >= bias + tmax ? tmax : k - bias)
+                        let t: UInt32 = k <= bias ? tmin : (k >= bias &+ tmax ? tmax : k &- bias)
                         if q < t { break }
-                        output.append(digit(t + (q - t) % (base - t)))
-                        q = (q - t) / (base - t)
-                        k += base
+                        output &+= digit(t &+ (q &- t) % (base &- t))
+                        q = (q &- t) / (base &- t)
+                        k = k &+ base
                     }
-                    output.append(digit(q))
-                    bias = adapt(delta, handled + 1, handled == h)
+                    output &+= digit(q)
+                    bias = adapt(delta, UInt32(h + 1), h == 0)
                     delta = 0
-                    handled -= 1
-                    sorted.removeAll { $0 == n }
+                    h &+= 1
                 }
             }
-            delta += 1
-            n += 1
+            delta = delta &+ 1
+            n = n &+ 1
         }
         return output
     }
