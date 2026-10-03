@@ -43,9 +43,14 @@ public final class RhinoGen {
             Object raw = unwrapReturnValue(evaluated);
             out.addProperty("evalType", evaluated == null ? "null" : evaluated.getClass().getName());
             out.addProperty("rawType", raw == null ? "null" : raw.getClass().getName());
-            String getString = raw == null ? "" : raw.toString();
+            // NativeArray 没有稳定的 Java toString（Object identity hash 每次运行都不同）。
+            // golden 对该类型记录稳定标记；Swift 测试把它作为已知不可逐字节对齐项，
+            // 真正的 JS 内部数组字符串化由 String([..]) / join / JSON.stringify 用例验证。
+            boolean unstableArray = raw instanceof org.mozilla.javascript.NativeArray;
+            String getString = raw == null ? "" : (unstableArray ? "<NativeArray identity>" : raw.toString());
             String inlineString;
             if (raw == null) inlineString = "";
+            else if (unstableArray) inlineString = "<NativeArray identity>";
             else if (raw instanceof String) inlineString = (String) raw;
             else if (raw instanceof Double && ((Double) raw) % 1.0 == 0.0)
                 inlineString = String.format(Locale.ROOT, "%.0f", (Double) raw);

@@ -71,10 +71,8 @@ final class RuleValueObjectBranchTests: XCTestCase {
         _ = try a.setContent(.jsObject([
             "info": .jsObject(["name": .string("n")])
         ]))
-        // 嵌套对象键值直取后，其 stringValue 为 map 的 String(describing:)（含 name/n）
-        let s = try a.getString("info")
-        XCTAssertTrue(s.contains("name"))
-        XCTAssertTrue(s.contains("n"))
+        // Kotlin NativeObject 的 Java toString 为固定的 `[object Object]`，不是 Map 描述。
+        XCTAssertEqual(try a.getString("info"), "[object Object]")
     }
 
     // MARK: - .jsObject —— getStringList

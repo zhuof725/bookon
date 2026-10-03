@@ -234,7 +234,7 @@ rg -n '\S!(\s|$|\))' Sources | rg -v '// |/// |!='   # 代码行强制解包：�
 | 5 | `innerRule(start,end)` 回调返回 null | `st.append(前缀 + null)` → 拼接字面量 `"null"` | `frv ?? "null"`，同样拼接 `"null"` | **精确对齐**（易被误写成 `?? ""`，已用测试 `testInnerRuleStartEndReturnsNilAppendsNullLiteral` 固定） |
 | 6 | `innerRule("{$.")` 回调返回 null/空 | `!frv.isNullOrEmpty()` 才拼接，否则跳过 | `if let frv, !frv.isEmpty` 才拼接 | 一致 |
 | 7 | 超过 Int64 的纯整数 | json-smart 用 `BigInteger`，精确 | `JSONValue.bigInteger(String)` **保留原始数字文本**，getString/紧凑输出原样，精确不丢 | ✅ 已对齐（`testBeyondInt64IntegerExact` 等固定）。仅过滤器 `[?(...)]` 大小比较时会转 Double（可能损失精度），已在代码注释标注 |
-| 8 | 浮点 `toString` | Java `Double.toString`（最短往返） | 整数值浮点输出 `"x.0"`，其余用 Swift `String(Double)` | 常见小数一致；极端边界（非常长的尾数）可能与 Java 最短表示有细微差别，如遇到再对齐 |
+| 8 | 浮点 `toString` | Java `Double.toString`（最短往返；NaN/Infinity 大小写、科学计数阈值/`E` 格式） | `JavaDoubleFormat` 用 Swift 最短往返数字重排成 Java 格式 | ✅ Rhino 1.8.1 golden 已验证整数/小数/负数/大数/NaN/Infinity；极端次正规数未覆盖，见第4步 JS 对照说明 |
 | 9 | 无效 JSON 传入 | Jayway `parse` 抛异常 | 容错版记诊断+空根；严格版 `init(validatingJSON:)` 抛 `RuleEngineError.invalidJSON` | 提供两种，默认容错、可选严格 |
 
 > 除以上 9 条，暂无其它已知不一致。第 8 条为如实标注的浮点边界差异；第 7 条超大整数已保精度对齐（仅过滤器比较用 Double）。
@@ -702,9 +702,13 @@ AnalyzeRule 调度过程中的中间值（Kotlin 的 `Any?`）用 `RuleValue` �
 
 | 主题 | Rhino（Kotlin） | JavaScriptCore（本移植） | 处理 |
 |---|---|---|---|
-| **Java 互操作** | 支持 `Packages.xxx`、`importClass`、`importPackage`、`org.jsoup.Jsoup.parse`、`java.lang.String`、`JavaImporter` | **不存在**，无法运行 | 预检测这些标记，命中即抛 `RuleEngineError.jsError` + 记 diagnostics；**不假装支持**。真实书源「魔丸小说」「爱丽丝书屋」用到，端到端测试断言抛错 |
-| **整数值 Double→String** | `Double.toString()`：`1.0` → `"1.0"`（Rhino 对整数值 Double 的 `+` 字符串化规则有特例） | `Number→String`：`1` → `"1"` | AnalyzeRule.makeUpRule 对 `{{ }}` 内 JS 结果 `Double%1==0` 用 `String.format("%.0f")` 强制整数输出，**已对齐**（见 `testInline_jsExpr`）。但直接 `evalJS("1+1").stringValue` 本移植返回 `"2.0"`（RuleValue.number 整数带 .0），**与 Rhino 的裸求值字符串化可能不同**，标注差异 |
-| **ES 版本** | Rhino 默认 ES5 + 部分 ES6 | JSC 支持现代 ES（含 ES2020+、Proxy、let/const、箭头函数等） | 现代语法在 JSC 可用而 Rhino 可能不可用；**未验证**是否有真实书源依赖 Rhino 特有的旧行为 |
+| **Java 互操作** | 支持 `Packages.xxx`、`importClass`、`importPackage`、`org.jsoup.Jsoup.parse`、`java.lang.String`、`JavaImporter` | **不存在**，无法运行 | 预检测命中即抛 `RuleEngineError.jsError` + 记 diagnostics；真实书源仅「台湾小说网」「爱丽丝书屋」命中。端到端测试断言抛错，不假装支持 |
+| **Rhino Double→String** | `evalJS` 返回 raw；`getString` 最终走 Java `toString()`：`2.0`→`"2.0"`、`1e21`→`"1.0E21"`、NaN/Infinity 保留大小写 | `RuleValue.number.stringValue` 用 `JavaDoubleFormat` 重排 JSC Double 最短往返数字 | ✅ 真实 Rhino 1.8.1 golden 对整数/小数/负数/大数/NaN/Infinity 已对齐。inline `{{}}` 仍按 Kotlin 原码仅对整数 Double 用 Locale.ROOT `"%.0f"`（`2.0`→`"2"`） |
+| **Rhino Integer 包装类型** | 少数表达式返回 Java `Integer`（golden 最小复现：`0`/`0.0`、`'hello'.length`、`JSON.parse('{\"k\":7}').k`），`toString()` 无 `.0` | JSC 公共 API 统一暴露 Number/Double，无法恢复 JVM 包装类型，同值输出 `.0` | 已知差异；4 条逐名登记在 `JSRhinoGoldenComparisonTests.integerWrapperDivergences`，inline `{{}}` 路径结果仍一致 |
+| **Rhino NativeArray raw.toString** | Java `Object.toString()` 结果为 `org.mozilla.javascript.NativeArray@<identity>`，hash 每次运行不同 | JSC 转为稳定元素列表描述 | 根本不可逐字节复现；数组 raw case 显式登记。数组在 JS 内部的稳定字符串化（`join`、`String(array)`、`JSON.stringify`）继续严格对照 |
+| **NativeObject.toString** | 普通对象为 `[object Object]` | `.jsObject.stringValue` 同样返回 `[object Object]` | ✅ 已对齐 |
+| **inline `{{}}` 嵌套 `}}`** | legado 的 `\{\{[\w\W]*?\}\}` 同样会在片段内部首个连续 `}}` 提前结束 | Swift 逐行移植相同正则 | `JSON.stringify({a:{b:[1,2]}})` 只在 evalJS/getString 路径严格比较；inline case 登记为共同解析器限制 |
+| **ES 版本** | legado 明确 `VERSION_ES6 + setInterpretedMode(true)` | JSC 支持现代 ES | 本轮 70 条片段覆盖常用 ES6；超出样本的现代语法仍不能声称完全一致 |
 | **`result` 复杂对象绑定** | 直接把 Kotlin 对象（Element/NativeObject）绑给 JS | 本移植把复杂 RuleValue 以**字符串化**后绑定 | 简化；JS 里对 `result` 做 DOM 操作的规则无法工作（属 Java 互操作范畴，同上抛错） |
 
 ## NetworkUtils：java.net.URL vs Swift URL 已知差异（本步骤待 C 部分 golden 验证）

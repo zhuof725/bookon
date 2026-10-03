@@ -54,14 +54,12 @@ public enum RuleValue {
         case .elements(let es): return es.map { (try? $0.outerHtml()) ?? "" }.description
         case .xpathNodes(let ns): return ns.map { $0.asString() }.description
         case .json(let j): return j.stringValue
-        case .jsObject(let m): return String(describing: m)
+        case .jsObject: return "[object Object]" // Rhino NativeObject.toString()
         case .jsonObject(let m): return String(describing: m)
         case .number(let d):
-            // 对齐 Kotlin Double.toString：整数值带 .0（见 README 差异说明）
-            if d.truncatingRemainder(dividingBy: 1) == 0 && d.isFinite {
-                return String(format: "%.1f", d)
-            }
-            return String(d)
+            // 对齐 Rhino 返回 Java Double 后，Kotlin `result.toString()` 的 Java 格式。
+            // inline {{}} 的整数去 .0 由 SourceRule.makeUpRule 的 Locale.ROOT "%.0f" 另行处理。
+            return JavaDoubleFormat.string(d)
         case .bool(let b): return b ? "true" : "false"
         case .null: return "null"
         }
