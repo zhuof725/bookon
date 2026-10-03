@@ -257,8 +257,8 @@ public struct HttpUrl: Equatable {
 
     /// 查询串需要编码的字符（OkHttp QUERY_ENCODE_SET）。
     static let queryEncodeSet: Set<UInt16> = setOf(" \"'<>#")
-    /// 片段需要编码的字符（OkHttp FRAGMENT_ENCODE_SET）。
-    static let fragmentEncodeSet: Set<UInt16> = setOf(" \"<>#")
+    /// 片段需要编码的字符（OkHttp 5 实测：'#' 在片段里**不**编码，如 `a#f#g` 保持原样）。
+    static let fragmentEncodeSet: Set<UInt16> = setOf(" \"<>")
     /// 路径段需要编码的字符（OkHttp PATH_SEGMENT_ENCODE_SET 的最小可用子集）。
     static let pathEncodeSet: Set<UInt16> = setOf(" \"<>^`{}|\\")
     /// userinfo 需要编码的字符。
