@@ -1095,7 +1095,7 @@ callTimeout、useWebView、webJs、bodyJs、dnsIp、proxy、type、serverID。
 | 1 | 公共后缀 | Android `PublicSuffixDatabase` 完整列表 | 内置常见多段后缀 + 默认末两段 | 差异表登记；常见书源域名一致 |
 | 2 | cookie 4096 截断 | 随机删键 | 按插入顺序删第一个 | 结果可复现，语义相同 |
 | 3 | 持久化 | Room/ACache | 协议 + JSON 文件原子写 | 接口一致 |
-| 4 | OkHttp `HttpUrl` 规范化 | 有 | `buildRequest()` 直接拼接，不规范化 | 6B 请求对照时补充自动头/规范化差异表 |
+| 4 | OkHttp `HttpUrl` 规范化 | OkHttp 对 path/query 做规范化（scheme/host 小写、IDN→punycode、默认端口剥离、路径 `%xx` 与 `.`/`..` 段解析等） | **已对齐**：`Sources/.../Network/HttpUrl.swift` 按 OkHttp 5.x 的行为复刻（含：非法 `%` 转义原样保留、控制字符丢弃、路径里 `\` 当 `/`、`%2E`/`%2e%2e` 视作点段、多个前导斜杠折叠、输入 trim、片段里的 `#` 不编码），`AnalyzeUrl.buildRequest()` 产出的 URL **必经它** | 170 条 golden（`cases/http_url_cases.json`，真实 OkHttp 5.3.2 的 `HttpUrl` 生成）逐条相等；`HttpUrlGoldenComparisonTests` 严格比较（含解析失败样例），另有一条断言 buildRequest 产出已规范化 |
 | 5 | WebView 分支 | `BackstageWebView` | 不实现（只记录字段） | 6B/后续 |
 | 6 | 阻塞版限速 API | `getConcurrentRecordBlocking`/`withLimitBlocking` | 只有 async | 调用方用 `withLimit` |
 | 7 | `dnsIp` 自定义解析 | OkHttp `Dns` 直连指定 IP | 只落到 HTTPRequest | 6B 里 URLSession 不支持，如实写「不支持」并记 diagnostics |
