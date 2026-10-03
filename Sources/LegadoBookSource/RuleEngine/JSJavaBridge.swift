@@ -98,3 +98,5 @@ final class JSJavaBridge {
         }
     }
 }
+
+#endif

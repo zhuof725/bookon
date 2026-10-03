@@ -97,7 +97,8 @@ public enum JsExtensionsCore {
 
     /// Kotlin `SimpleTimeZone(sh, "UTC")` 的 sh 是原始偏移毫秒数。
     public static func timeFormatUTC(_ milliseconds: Int64, format pattern: String, offsetMilliseconds: Int) -> String {
-        let zone = TimeZone(secondsFromGMT: offsetMilliseconds / 1000) ?? .gmt
+        let zone = TimeZone(secondsFromGMT: offsetMilliseconds / 1000)
+            ?? TimeZone(identifier: "UTC") ?? TimeZone.current
         return format(milliseconds: milliseconds, pattern: pattern, timeZone: zone)
     }
 
@@ -201,11 +202,12 @@ public enum JsExtensionsCore {
     }
 
     private static func fullToHalf(_ input: String) -> String {
-        String(input.unicodeScalars.map { scalar in
+        let scalars = input.unicodeScalars.map { scalar -> UnicodeScalar in
             if scalar.value == 12288 { return UnicodeScalar(32) ?? scalar }
             if scalar.value >= 65281 && scalar.value <= 65374 { return UnicodeScalar(scalar.value - 65248) ?? scalar }
             return scalar
-        })
+        }
+        return String(String.UnicodeScalarView(scalars))
     }
 
     private static func chineseNumToInt(_ input: String) -> Int {
@@ -242,7 +244,7 @@ private final class ChineseTransfer {
     }
     private lazy var t2sDictionary = load("t2s")
     private lazy var s2tDictionary = load("s2t")
-    private lazy var t2sExclusions: Set<String> = loadLines("t2s_exclude")
+    private lazy var t2sExclusions: Set<String> = Set(loadLines("t2s_exclude"))
 
     func convert(_ input: String, direction: Direction) -> String {
         let dictionary = direction == .traditionalToSimple ? t2sDictionary : s2tDictionary
