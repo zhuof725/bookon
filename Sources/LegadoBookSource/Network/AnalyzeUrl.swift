@@ -312,7 +312,8 @@ public final class AnalyzeUrl {
             let url = (try? analyze.innerRule("{{", "}}") { [weak self] inner -> String? in
                 guard let self = self else { return "" }
                 let jsEval = self.evalJS(inner, result: nil)
-                return AnalyzeUrl.jsToString(jsEval)
+                // Kotlin: `val jsEval = evalJS(it) ?: ""`，再对 Double%1==0 用 "%.0f"，其余 toString
+                return AnalyzeUrl.innerRuleString(jsEval)
             }) ?? nil
             if let url = url, !url.isEmpty {
                 ruleUrl = url

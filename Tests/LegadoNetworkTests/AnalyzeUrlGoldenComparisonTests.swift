@@ -37,6 +37,12 @@ final class AnalyzeUrlGoldenComparisonTests: XCTestCase {
         return false
     }
 
+    /// 失败信息里把 '%' 转成 '%%'：XCTest 会把消息当 printf 格式串处理，不转义时
+    /// "%39" 这类片段会被吞掉，日志里看到的就是失真的值。
+    private func esc(_ s: String) -> String {
+        return s.replacingOccurrences(of: "%", with: "%%")
+    }
+
     private func load<T: Decodable>(_ file: String, as type: T.Type, key: String) throws -> [T]? {
         guard let url = goldenFile(file), let data = try? Data(contentsOf: url) else {
             if isRunningInCI() {
@@ -93,7 +99,7 @@ final class AnalyzeUrlGoldenComparisonTests: XCTestCase {
                 swift = AnalyzeUrl.encodeParams(c.params ?? "", charset: c.charset, isQuery: c.isQuery ?? false)
             }
             if swift != (c.result ?? "") {
-                failures.append("[\(c.name)] kind=\(kind) charset=\(c.charset ?? "-") isQuery=\(c.isQuery.map(String.init) ?? "-")\n  Java: \(c.result ?? "<nil>")\n  Swift: \(swift)")
+                failures.append(esc("[\(c.name)] kind=\(kind) charset=\(c.charset ?? "-") isQuery=\(c.isQuery.map(String.init) ?? "-")\n  Java: \(c.result ?? "<nil>")\n  Swift: \(swift)"))
             }
         }
         if !failures.isEmpty {
@@ -206,13 +212,13 @@ final class AnalyzeUrlGoldenComparisonTests: XCTestCase {
                 continue
             }
             if a.urlNoQuery != (c.urlNoQuery ?? "") {
-                failures.append("[\(c.name)] urlNoQuery 不一致 Java=\(c.urlNoQuery ?? "<nil>") Swift=\(a.urlNoQuery)")
+                failures.append(esc("[\(c.name)] urlNoQuery 不一致 Java=\(c.urlNoQuery ?? "<nil>") Swift=\(a.urlNoQuery)"))
             }
             if a.method.rawValue != (c.method ?? "GET") {
                 failures.append("[\(c.name)] method 不一致 Java=\(c.method ?? "GET") Swift=\(a.method.rawValue)")
             }
             if (a.encodedQuery ?? "") != (c.encodedQuery ?? "") {
-                failures.append("[\(c.name)] encodedQuery 不一致 Java=\(c.encodedQuery ?? "<nil>") Swift=\(a.encodedQuery ?? "<nil>")")
+                failures.append(esc("[\(c.name)] encodedQuery 不一致 Java=\(c.encodedQuery ?? "<nil>") Swift=\(a.encodedQuery ?? "<nil>")"))
             }
             if (a.encodedForm ?? "") != (c.encodedForm ?? "") {
                 failures.append("[\(c.name)] encodedForm 不一致 Java=\(c.encodedForm ?? "<nil>") Swift=\(a.encodedForm ?? "<nil>")")

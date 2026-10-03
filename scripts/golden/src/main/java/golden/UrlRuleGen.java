@@ -397,6 +397,7 @@ public final class UrlRuleGen {
             String body = null;
             String encodedQuery = null;
             String encodedForm = null;
+            boolean hasContentType = false;
             if (urlNoOption.length() != ruleUrl.length()) {
                 String urlOptionStr = ruleUrl.substring(urlMatcher.end());
                 UrlOptionJava option = null;
@@ -419,11 +420,14 @@ public final class UrlRuleGen {
                     charset = option.getCharset();
                     if (option.getJs() != null) url = evalJs(option.getJs(), url, baseUrl, page);
                     body = option.getBody();
+                    java.util.Map<String, Object> hm = option.getHeaderMap();
+                    if (hm != null && hm.containsKey("Content-Type")) hasContentType = true;
                 }
             }
             String urlNoQuery = url;
             if ("POST".equals(method)) {
-                if (body != null && !isJson(body) && !isXml(body)) {
+                // Kotlin: `if (!it.isJson() && !it.isXml() && headerMap["Content-Type"].isNullOrEmpty())`
+                if (body != null && !isJson(body) && !isXml(body) && !hasContentType) {
                     encodedForm = encodeParams(body, charset, false);
                 }
             } else {
