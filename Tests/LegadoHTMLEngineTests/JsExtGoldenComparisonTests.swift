@@ -135,8 +135,9 @@ final class JsExtGoldenComparisonTests: XCTestCase {
     }
 
     private func javaOutcome(_ c: Result) -> Outcome {
+        // Java 侧抛错时 catch 一定写 error 字段；Gson 默认省略 null 成员，
+        // 所以「无 error」= 正常返回；result 缺失或 null 均为「返回 null」。
         if c.error != nil { return .threw }
-        guard c.resultPresent else { return .threw }
         switch c.result {
         case .some(.string(let s)): return .value(s)
         default: return .null
