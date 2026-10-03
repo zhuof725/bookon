@@ -566,7 +566,9 @@ Element 序号命中，不受中间文本节点干扰。
   `cases/serializer_synthetic.json`（Step4-A 新增：66 个合成 HTML 样本 × 4 种序列化结果类型
   `@html`/`@all`/XPath `html()`/`outerHtml()` = 264 条用例，专门验证 `JsoupCompatSerializer`
   与真实 jsoup 逐字节对齐，详见上方「Step4-A：HTML 序列化重写」章节）。
-  共 6 个用例文件、约 400+ 条用例（随用例文件持续增长，以 `scripts/golden/cases/*.json` 实际内容为准）。
+  Step 5 收尾后又新增 `js_ext_cases.json`（321 条）、`jsoup_cases.json`（91 条）、`js_number_args.json`（42 条）
+  与 `javaDigestCases`（2 条），当前共 **15 个用例文件、1233 条用例**（以 `scripts/golden/cases/*.json` 与
+  CI `golden` job 输出为准）。
 
 ## 真实书源规则扫描清单（测试用例来源）
 
@@ -971,9 +973,16 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 - `org.jsoup.Jsoup.parse(...)` 与 `Packages.org.jsoup.Jsoup.parse(...)` 两种写法**放行**，
   用 SwiftSoup 实现真实书源实际用到的链：`parse(html)` → `select(css)` → `text()` / `html()` /
   `attr(name)` / `outerHtml()` / `first()` / `get(i)` / `size()` / `eq(i)` / `remove()`。
+- **与真实 jsoup 1.16.2 逐条对照**（91 条 golden，见下方「jsoup 替身 golden」小节）：同一段 JS
+  在 Java 侧由 Rhino 跑真实 jsoup、在 Swift 侧由 JavaScriptCore 跑本替身，比较结果字符串/null/抛错。
+  对照后先修掉了 5 处语义偏差：`text()` 的 `&nbsp;` 规整、`html()`/`outerHtml()` 改用
+  `JsoupCompatSerializer`（不再用 SwiftSoup 自带的 pretty-print）、`Elements.attr` 取
+  「第一个**拥有**该属性的元素」、`eq(越界)` 返回空集合、`get(越界)` 抛错；
+  另修了 `Document.outerHtml()` 不输出 `<#root>` 包裹、属性名小写化两处。
 - 端到端实证：爱丽丝书屋 `org.jsoup.Jsoup.parse(result).select('div.read-content').text()`、
-  台湾小说网 `d.select('#content p') → es.get(i).text() → join('\n')` 全链执行并断言真实结果
-  （见 `AnalyzeRuleEndToEndTests.testAlice_jsoupParseWorks` / `testTaiwan_realJsoupChainWorks`）。
+  台湾小说网真实规则原文 `d.select('#content p') → es.get(i).text() → join('\n')` 全链执行，
+  断言期望值从 golden 读取（见 `AnalyzeRuleEndToEndTests.testAlice_jsoupParseWorks` /
+  `testTaiwan_realJsoupChainWorks`）。
 - 其余 Rhino 互操作（`importClass`/`importPackage`/`JavaImporter`/`java.lang|util|io|net|math`、
   非 jsoup 的 `Packages.xxx`）仍预检测抛 `RuleEngineError.jsError` + 记 diagnostics。
 
@@ -990,7 +999,7 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 
 - 非法输入以「抛错 <-> 抛错」三态比较（值必须相等、null 必须同为 null、异常必须同为异常）；
 - 失败信息含 name/输入/Java 结果/Swift 结果；CI 缺失 golden 必 fail；
-- CI 的 `golden` job 一次跑完 15 个用例文件共 **1231 条**用例（收尾前为 869 条）。
+- CI 的 `golden` job 一次跑完 15 个用例文件共 **1233 条**用例（收尾前为 13 个文件 869 条，收尾新增 364 条）。
 
 ### jsoup 替身 golden（91 条）
 
