@@ -233,12 +233,9 @@ final class JsExtensionsRuntime {
         guard let value else { return "" }
         if let string = value as? String { return string }
         if let number = value as? NSNumber {
-            // JS 数字→字符串（对齐 Rhino 把 JS number 转 Java String 参数）：整数值无 .0。
-            let d = number.doubleValue
-            if d == d.rounded() && d.isFinite && abs(d) <= 9_007_199_254_740_991 {
-                return String(Int64(d))
-            }
-            return String(d)
+            // JS number → Java String 参数：与真实 Rhino 1.8.1 一致（ECMAScript Number::toString）。
+            // 旧版这里的手写规则（「整数无 .0」）已删除；对照见 golden cases/js_number_args.json。
+            return JsNumberFormat.toString(number.doubleValue)
         }
         if let array = value as? [Any] { return array.map { stringify($0) }.joined(separator: ",") }
         if let dict = value as? [String: Any] { return "\(dict)" }

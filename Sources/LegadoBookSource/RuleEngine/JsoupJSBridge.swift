@@ -4,8 +4,18 @@
 //
 //  Step 5：org.jsoup.Jsoup 替身。真实书源（台湾小说网、爱丽丝书屋）的 JS 规则用
 //  `org.jsoup.Jsoup.parse(html).select(css)...`（台湾版带 `Packages.` 前缀）。
-//  这里用 SwiftSoup 提供 JS 可调用的 parse/select/text/html/attr/outerHtml/first/get/size/eq/remove，
-//  只实现真实书源用到的链；未知方法抛明确 JS 错误 + 记 diagnostics。
+//  这里用 SwiftSoup 提供 JS 可调用的 parse/select/text/html/attr/outerHtml/first/get/size/eq/remove。
+//
+//  Step 5 收尾：本文件全部输出口与**真实 jsoup 1.16.2** 逐条对照过（golden
+//  `cases/jsoup_cases.json`，Java 侧在同一 JS 上用真实 jsoup 求值、Swift 侧用本替身求值）：
+//   - `text()`   ：走 `SwiftSoupTextNormalizeFix`（复刻 jsoup 把 &nbsp; 纳入可折叠空白的扩展）；
+//   - `html()` / `outerHtml()`：走 `JsoupCompatSerializer`（Step4-A 已逐字节对齐 jsoup 的
+//                 pretty-print 序列化），不再使用 SwiftSoup 自带的 html()/outerHtml()；
+//   - `attr()`   ：`Elements.attr` 取**第一个拥有该属性**的元素（jsoup 语义），不是"第一个元素的属性"；
+//   - `eq(i)`    ：越界返回空集合；负数下标与 jsoup 一样抛错（`contents.get(-1)`）；
+//   - `get(i)`   ：越界与 jsoup 一样抛错（IndexOutOfBoundsException 对应 JS 异常）；
+//   - `size()` / `first()` / `remove()`：与 jsoup 语义一致。
+//  未知方法仍抛明确 JS 错误 + 记 diagnostics（不静默返回 undefined）。
 //
 
 import Foundation
@@ -65,10 +75,11 @@ final class JsoupJSBridge {
     }
 
     /// 生成统一包装对象：Document/Element/Elements 都暴露 select/text/html/attr/outerHtml/
-    /// first/get/size/eq/remove（真实书源用到的子集；多余方法不提供，调未知抛错由 JS 侧处理）。
+    /// first/get/size/eq/remove（真实书源用到的子集 + 替身对外承诺的链）。
     private static func makeWrapper(_ wrapped: Wrapped, context: JSContext) -> JSValue {
         let obj = JSValue(newObjectIn: context)
 
+        // 与 jsoup 一致：选择器解析失败（SelectorParseException）直接抛 JS 异常。
         let select: @convention(block) (String) -> JSValue = { css in
             let selected: Elements?
             switch wrapped {
@@ -79,43 +90,58 @@ final class JsoupJSBridge {
                 for e in els.array() { if let sub = try? e.select(css) { all.addElements(sub.array()) } }
                 selected = all
             }
-            if let selected { return makeWrapper(.elements(selected), context: context) }
-            return JSValue(undefinedIn: context)
+            guard let selected else {
+                context.exception = JSValue(newErrorFromMessage: "选择器解析失败: \(css)", in: context)
+                return JSValue(undefinedIn: context)
+            }
+            return makeWrapper(.elements(selected), context: context)
         }
         obj?.setObject(select, forKeyedSubscript: "select" as NSString)
 
+        // jsoup Element.text()/Document.text()：文本节点空白规整（含 &nbsp;）。
+        // jsoup Elements.text()：逐个 elem.text() 再用单个空格拼接。
         let text: @convention(block) () -> String = {
             switch wrapped {
-            case .document(let doc): return (try? doc.text()) ?? ""
-            case .element(let el): return (try? el.text()) ?? ""
-            case .elements(let els): return (try? els.text()) ?? ""
+            case .document(let doc):
+                return SwiftSoupTextNormalizeFix.normalize((try? doc.text()) ?? "")
+            case .element(let el):
+                return SwiftSoupTextNormalizeFix.normalize((try? el.text()) ?? "")
+            case .elements(let els):
+                return els.array()
+                    .map { SwiftSoupTextNormalizeFix.normalize((try? $0.text()) ?? "") }
+                    .joined(separator: " ")
             }
         }
         obj?.setObject(text, forKeyedSubscript: "text" as NSString)
 
+        // jsoup Element.html()/Document.html()：JsoupCompatSerializer 按 jsoup 算法生成 inner HTML。
+        // jsoup Elements.html()：逐个 elem.html() 用 "\n" 拼接。
         let html: @convention(block) () -> String = {
             switch wrapped {
-            case .document(let doc): return (try? doc.html()) ?? ""
-            case .element(let el): return (try? el.html()) ?? ""
-            case .elements(let els): return (try? els.html()) ?? ""
+            case .document(let doc): return JsoupCompatSerializer.innerHtml(doc)
+            case .element(let el): return JsoupCompatSerializer.innerHtml(el)
+            case .elements(let els): return JsoupCompatSerializer.elementsInnerHtml(els.array())
             }
         }
         obj?.setObject(html, forKeyedSubscript: "html" as NSString)
 
+        // Node.outerHtml()：同样走 JsoupCompatSerializer（jsoup 1.16.2 算法）。
         let outerHtml: @convention(block) () -> String = {
             switch wrapped {
-            case .document(let doc): return (try? doc.outerHtml()) ?? ""
-            case .element(let el): return (try? el.outerHtml()) ?? ""
-            case .elements(let els): return els.array().compactMap { try? $0.outerHtml() }.joined(separator: "\n")
+            case .document(let doc): return JsoupCompatSerializer.outerHtml(doc)
+            case .element(let el): return JsoupCompatSerializer.outerHtml(el)
+            case .elements(let els): return JsoupCompatSerializer.elementsOuterHtml(els.array())
             }
         }
         obj?.setObject(outerHtml, forKeyedSubscript: "outerHtml" as NSString)
 
-        let attr: @convention(block) (String) -> String = { name in
+        // jsoup Elements.attr(key)：返回第一个**拥有该属性**的元素的属性值；都没有则空串。
+        // jsoup Element.attr(key)：没有该属性返回空串。
+        let attr: @convention(block) (String) -> String = {
             switch wrapped {
             case .document(let doc): return (try? doc.attr(name)) ?? ""
             case .element(let el): return (try? el.attr(name)) ?? ""
-            case .elements(let els): return els.array().first.flatMap { try? $0.attr(name) } ?? ""
+            case .elements(let els): return (try? els.attr(name)) ?? ""
             }
         }
         obj?.setObject(attr, forKeyedSubscript: "attr" as NSString)
@@ -131,15 +157,17 @@ final class JsoupJSBridge {
         }
         obj?.setObject(first, forKeyedSubscript: "first" as NSString)
 
+        // jsoup Elements.get(i)：越界抛 IndexOutOfBoundsException（这里对应 JS 异常）。
         let get: @convention(block) (Int) -> JSValue = { index in
             switch wrapped {
             case .elements(let els):
                 let arr = els.array()
                 if index >= 0 && index < arr.count { return makeWrapper(.element(arr[index]), context: context) }
+                context.exception = JSValue(newErrorFromMessage: "Index \(index) out of bounds for length \(arr.count)", in: context)
+                return JSValue(undefinedIn: context)
             case .document(let doc): return makeWrapper(.element(doc), context: context)
             case .element(let el): return makeWrapper(.element(el), context: context)
             }
-            return JSValue(undefinedIn: context)
         }
         obj?.setObject(get, forKeyedSubscript: "get" as NSString)
 
@@ -151,15 +179,21 @@ final class JsoupJSBridge {
         }
         obj?.setObject(size, forKeyedSubscript: "size" as NSString)
 
+        // jsoup Elements.eq(i)：size() > i ? new Elements(get(i)) : new Elements()。
+        // 注意负数下标在 jsoup 里同样会走到 contents.get(-1) 抛 IndexOutOfBoundsException。
         let eq: @convention(block) (Int) -> JSValue = { index in
             switch wrapped {
             case .elements(let els):
                 let arr = els.array()
-                if index >= 0 && index < arr.count { return makeWrapper(.element(arr[index]), context: context) }
+                if index < 0 {
+                    context.exception = JSValue(newErrorFromMessage: "Index \(index) out of bounds for length \(arr.count)", in: context)
+                    return JSValue(undefinedIn: context)
+                }
+                if index < arr.count { return makeWrapper(.element(arr[index]), context: context) }
+                return makeWrapper(.elements(Elements()), context: context)
             default:
-                break
+                return makeWrapper(.elements(Elements()), context: context)
             }
-            return JSValue(undefinedIn: context)
         }
         obj?.setObject(eq, forKeyedSubscript: "eq" as NSString)
 

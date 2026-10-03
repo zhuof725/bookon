@@ -47,6 +47,10 @@ jobs:
         with:
           name: golden-data
           path: Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: Mirror golden for AnalyzeRule end-to-end tests
+        run: |
+          mkdir -p Tests/LegadoAnalyzeRuleTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
       - name: List golden files
         run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift version
@@ -84,6 +88,10 @@ jobs:
         with:
           name: golden-data
           path: Tests/LegadoHTMLEngineTests/Resources/golden
+      - name: Mirror golden for AnalyzeRule end-to-end tests
+        run: |
+          mkdir -p Tests/LegadoAnalyzeRuleTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
       - name: Download macOS test count artifact
         uses: actions/download-artifact@v4
         with:

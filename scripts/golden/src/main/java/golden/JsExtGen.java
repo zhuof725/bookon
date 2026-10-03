@@ -7,8 +7,15 @@ import com.github.liuyueyi.quick.transfer.ChineseUtils;
 import com.github.liuyueyi.quick.transfer.constants.TransType;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import org.jsoup.Jsoup;
+import org.mozilla.javascript.ConsString;
+import org.mozilla.javascript.Context;
+import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.ScriptableObject;
+import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.Wrapper;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -33,9 +40,12 @@ import java.util.regex.Pattern;
  *  - encodeURI：java.net.URLEncoder
  *  - toNumChapter：legado AppPattern.titleNumPattern + StringUtils.stringToInt 复刻
  *  - htmlFormat：legado HtmlFormatter.formatKeepImg(null) 复刻
- *  - bytesToStr/strToBytes：UTF-8
- *  - Jsoup.parse 链：jsoup 1.16.2 真实对象
- * Java 侧按 Kotlin 签名处理数值入参（JS 数字 → Java 参数：整数无 .0 的 JS toString 语义）。
+ *  - bytesToStr/strToBytes：UTF-8 / GBK / ISO-8859-1（Java new String(bytes, charset) 语义）
+ *  - Jsoup.parse 链（{@link #runJsoup}）：真实 Rhino 1.8.1 求值同一条 JS，classpath 上是
+ *    真实 jsoup 1.16.2 —— 与 Swift 侧 JsoupJSBridge（SwiftSoup 替身）比较同一表达式结果。
+ *  - Java MessageDigest 直算（{@link #runJavaDigest}）：供端到端测试取真实期望值。
+ * 数字入参不再有手写规则：JS number → Java String 参数的一律取
+ * {@link NumberArgGen#receivedForLiteral}（真实 Rhino 1.8.1 跑出来的结果）。
  */
 public final class JsExtGen {
     private JsExtGen() {}
@@ -62,24 +72,18 @@ public final class JsExtGen {
         ChineseUtils.loadExcludeDict(TransType.TRADITIONAL_TO_SIMPLE, excludes);
     }
 
-    /** JS 数字 → Java 参数：按 Rhino 对 String 参数的转换（JS ToString：整数无 .0）。 */
-    private static String numberToString(double d) {
-        if (d == Math.rint(d) && Math.abs(d) < 1e21) {
-            return Long.toString((long) d);
-        }
-        // 1e21 以上按 JS 科学计数（简化：仅覆盖 golden 实际用到的常规数值）
-        String s = Double.toString(d);
-        return s;
+    /**
+     * JS 数字 → Java String 参数：**不是**手写规则，取真实 Rhino 1.8.1 的转换结果
+     * （见 {@link NumberArgGen}；legado 用同一个 Rhino，走
+     * NativeJavaObject.coerceTypeImpl -> ScriptRuntime.toString -> DoubleFormatter）。
+     * 这里把字面量原文交给 Rhino 求值，取它实际传进 String 参数的那一串。
+     */
+    private static String numberToString(String literal) {
+        return NumberArgGen.receivedForLiteral(literal);
     }
 
-    private static String argAsString(JsonElement e) {
-        if (e == null || e.isJsonNull()) return null;
-        if (e.isJsonPrimitive()) {
-            var p = e.getAsJsonPrimitive();
-            if (p.isNumber()) return numberToString(p.getAsDouble());
-            return p.getAsString();
-        }
-        return e.getAsString();
+    private static String argAt(List<String> args, int index) {
+        return index < args.size() ? args.get(index) : null;
     }
 
     private static final Pattern titleNumPattern = Pattern.compile("(第)(.+?)(章)");
@@ -179,51 +183,76 @@ public final class JsExtGen {
         String method = c.get("method").getAsString();
         out.addProperty("method", method);
         JsonArray argsArr = c.getAsJsonArray("args");
+        JsonArray argsJs = c.has("argsJs") ? c.getAsJsonArray("argsJs") : null;
         out.add("args", argsArr);
+        if (argsJs != null) out.add("argsJs", argsJs);
+        // Swift 侧不再自己推导「JS 数字 → 字符串」：这里逐条给出真实 Rhino 转出的参数串
+        // （字符串参数原样、null 原样、数字走 NumberArgGen），Swift 直接读 argStrings 使用。
+        // argsJs 用于 JSON 表达不了的 JS 字面量（NaN / Infinity / -0 …），直接按 JS 源码求值。
+        List<String> argList = new ArrayList<>();
+        JsonArray argStrings = new JsonArray();
+        for (int i = 0; i < argsArr.size(); i++) {
+            JsonElement e = argsArr.get(i);
+            String s;
+            if (argsJs != null && i < argsJs.size() && !argsJs.get(i).isJsonNull()) {
+                s = numberToString(argsJs.get(i).getAsString());
+            } else if (e == null || e.isJsonNull()) {
+                s = null;
+            } else if (e.isJsonPrimitive()) {
+                var p = e.getAsJsonPrimitive();
+                s = p.isNumber() ? numberToString(p.getAsString()) : p.getAsString();
+            } else {
+                s = e.getAsString();
+            }
+            argList.add(s);
+            if (s == null) argStrings.add(JsonNull.INSTANCE); else argStrings.add(s);
+        }
+        out.add("argStrings", argStrings);
         if (c.has("hex")) out.addProperty("hex", c.get("hex").getAsString());
+        if (c.has("charset")) out.addProperty("charset", c.get("charset").getAsString());
 
         try {
             switch (method) {
                 case "md5Encode": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", DigestUtil.digester("MD5").digestHex(input));
                     break;
                 }
                 case "md5Encode16": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     String full = DigestUtil.digester("MD5").digestHex(input);
                     out.addProperty("result", full.length() >= 24 ? full.substring(8, 24) : full);
                     break;
                 }
                 case "base64Encode": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", Base64.encode(input == null ? "" : input));
                     break;
                 }
                 case "base64Decode": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", Base64.decodeStr(input == null ? "" : input));
                     break;
                 }
                 case "hexEncodeToString": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", HexUtil.encodeHexStr(input == null ? "" : input));
                     break;
                 }
                 case "hexDecodeToString": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     // Kotlin hexDecodeToString = HexUtil.decodeHexStr(hex)：空串原样返回 ""，非法字符抛错
                     out.addProperty("result", HexUtil.decodeHexStr(input == null ? "" : input));
                     break;
                 }
                 case "t2s": {
                     fixT2sDict();
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", ChineseUtils.t2s(input == null ? "" : input));
                     break;
                 }
                 case "s2t": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", ChineseUtils.s2t(input == null ? "" : input));
                     break;
                 }
@@ -236,7 +265,7 @@ public final class JsExtGen {
                 }
                 case "timeFormatUTC": {
                     long ms = argsArr.size() > 0 ? (long) argsArr.get(0).getAsDouble() : 0L;
-                    String format = argAsString(argsArr.get(1));
+                    String format = argAt(argList, 1);
                     int sh = argsArr.size() > 2 ? argsArr.get(2).getAsInt() : 0;
                     SimpleDateFormat f = new SimpleDateFormat(format, Locale.getDefault());
                     f.setTimeZone(new SimpleTimeZone(sh, "UTC"));
@@ -244,13 +273,13 @@ public final class JsExtGen {
                     break;
                 }
                 case "encodeURI": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     try { out.addProperty("result", URLEncoder.encode(input, "UTF-8")); }
                     catch (Exception e) { out.addProperty("result", ""); }
                     break;
                 }
                 case "toNumChapter": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     if (input == null) { out.add("result", com.google.gson.JsonNull.INSTANCE); break; }
                     Matcher m = titleNumPattern.matcher(input);
                     if (m.find()) {
@@ -259,13 +288,14 @@ public final class JsExtGen {
                     break;
                 }
                 case "htmlFormat": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
+                    String input = argAt(argList, 0);
                     out.addProperty("result", htmlFormat(input == null ? "" : input));
                     break;
                 }
                 case "strToBytes": {
-                    String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
-                    byte[] bytes = (input == null ? "" : input).getBytes(StandardCharsets.UTF_8);
+                    String input = argAt(argList, 0);
+                    String charset = c.has("charset") ? c.get("charset").getAsString() : "UTF-8";
+                    byte[] bytes = (input == null ? "" : input).getBytes(java.nio.charset.Charset.forName(charset));
                     StringBuilder hex = new StringBuilder();
                     for (byte b : bytes) hex.append(String.format("%02x", b));
                     out.addProperty("result", hex.toString());
@@ -273,8 +303,10 @@ public final class JsExtGen {
                 }
                 case "bytesToStr": {
                     String hex = c.has("hex") ? c.get("hex").getAsString() : "";
+                    String charset = c.has("charset") ? c.get("charset").getAsString() : "UTF-8";
                     byte[] bytes = HexUtil.decodeHex(hex);
-                    out.addProperty("result", new String(bytes, StandardCharsets.UTF_8));
+                    // Java new String(bytes, charset)：非法字节按 CharsetDecoder 的 REPLACE 语义替换为 U+FFFD。
+                    out.addProperty("result", new String(bytes, java.nio.charset.Charset.forName(charset)));
                     break;
                 }
                 default:
@@ -282,6 +314,75 @@ public final class JsExtGen {
             }
         } catch (Exception e) {
             out.addProperty("error", e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        return out;
+    }
+
+    // ==================== jsoup 替身 golden（真实 jsoup 1.16.2） ====================
+
+    /**
+     * 对**真实 jsoup 1.16.2** 对象执行与 Swift 替身完全相同的一条 JS 链：
+     * 用真实 Rhino 1.8.1 求值 `js`（作用域里绑定 `result` = HTML），classpath 上是真实 jsoup，
+     * 所以 `org.jsoup.Jsoup.parse(result)` / `Packages.org.jsoup.Jsoup.parse(result)` 都会落到
+     * 真实的 org.jsoup 实现上。Swift 侧用 JSC + JsoupJSBridge 求值同一条 JS，两边比较
+     * 「结果字符串 / 抛错」二态。
+     *
+     * 用例 JSON: {name, source, js, html}（Main 会把 htmls 里的 HTML 解析进 html 字段）。
+     */
+    public static JsonObject runJsoup(JsonObject c) {
+        JsonObject out = new JsonObject();
+        String name = c.get("name").getAsString();
+        String js = c.get("js").getAsString();
+        String html = c.get("html").getAsString();
+        out.addProperty("name", name);
+        out.addProperty("js", js);
+        out.addProperty("html", html);
+        if (c.has("source")) out.addProperty("source", c.get("source").getAsString());
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(Context.VERSION_ES6);
+            cx.setInterpretedMode(true);
+            Scriptable scope = cx.initStandardObjects();
+            ScriptableObject.putProperty(scope, "result", html);
+            // 真实书源的 JS 链里还会调 `java.t2s(...)`（台湾小说网 ruleContent.content），
+            // 这里绑一个与 legado 同名同签名的探针（真实 quick-chinese-transfer 实现）。
+            ScriptableObject.putProperty(scope, "java", Context.javaToJS(new NumberArgGen.Probe(), scope));
+            Object r = cx.evaluateString(scope, js, name, 1, null);
+            if (r instanceof Wrapper) r = ((Wrapper) r).unwrap();
+            if (r instanceof ConsString) r = r.toString();
+            if (r == null || r == Undefined.instance) {
+                out.add("result", JsonNull.INSTANCE);
+            } else {
+                out.addProperty("result", r.toString());
+            }
+        } catch (Exception e) {
+            out.addProperty("error", e.getClass().getName() + ": " + e.getMessage());
+        }
+        return out;
+    }
+
+    // ==================== Java MessageDigest 直算（端到端测试的期望值来源） ====================
+
+    /**
+     * 用具名算法（这里只用 MD5）在 golden 里算出真实摘要，供端到端测试取期望值，
+     * 避免用 Swift 自己的 md5Encode 反推期望值（那样只能证明「自洽」，不能证明与 Java 一致）。
+     * 用例 JSON: {name, algorithm, input}。
+     */
+    public static JsonObject runJavaDigest(JsonObject c) {
+        JsonObject out = new JsonObject();
+        String name = c.get("name").getAsString();
+        String algorithm = c.get("algorithm").getAsString();
+        String input = c.get("input").getAsString();
+        out.addProperty("name", name);
+        out.addProperty("algorithm", algorithm);
+        out.addProperty("input", input);
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance(algorithm);
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            out.addProperty("result", hex.toString());
+        } catch (Exception e) {
+            out.addProperty("error", e.getClass().getName() + ": " + e.getMessage());
         }
         return out;
     }

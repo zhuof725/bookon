@@ -1,0 +1,561 @@
+{
+  "_comment": "⚠️ 合成样本，非真实数据。Step5 jsoup 替身（JsoupJSBridge/SwiftSoup）对照真实 jsoup 1.16.2 的 golden 用例。HTML 全部为手工合成（结构模仿真实书源页面，内容为占位文本），JS 链取自真实书源规则的同类写法（source 字段标注来源书源与规则路径，可用 scripts/extract_jsoup_chains.py 复核）。",
+  "_SAMPLE_KIND": "合成样本（synthetic）",
+  "_CHAIN_SOURCE": "scripts/extract_jsoup_chains.py 扫描仓库内真实书源配置（配置文件_7个.json 的 7 个书源 + taiwan_real_source.json 的台湾小说网）；两个使用 org.jsoup.Jsoup 的书源（爱丽丝书屋、台湾小说网）均在扫描集合内。方法使用统计：select 28 / attr 5 / size 5 / text 5 / get 4 / html 1 / remove 1；替身另行承诺支持 first / eq / outerHtml，用合成用例覆盖。",
+  "_RUNNER": "Java 侧用真实 Rhino 1.8.1 求值同一条 JS（classpath 上是真实 jsoup 1.16.2）；Swift 侧用 JavaScriptCore + JsoupJSBridge 求值同一条 JS。两边比较同一表达式的结果字符串或抛错状态。",
+  "htmls": {
+    "aliceContentPage": "<!DOCTYPE html><html><head><title>合成爱丽丝页面</title><style>.ad-block{display:none}</style></head><body><div class=\"header\">导航栏</div><div class=\"read-content\"><p>第一段合成正文。</p><p>第二段合成正文，带有&nbsp;不间断空格。</p><script>var ad=1;</script><div class=\"ad-block\">广告占位</div><p>第三段<br>换行后的内容。</p></div><div class=\"footer\">页脚</div></body></html>",
+    "aliceContentPageMin": "<div class=\"read-content\"><p>甲段</p><p>乙段</p></div>",
+    "taiwanBookInfoPage": "<div class=\"book\"><h1 class=\"booktitle\">合成书名</h1><div class=\"booktag\"><a class=\"red\" href=\"/author/1\">合成作者</a><a class=\"blue\" href=\"/sort/1\">合成分类</a><span class=\"red\">连载中</span><span class=\"blue\">123万字 已完结</span></div><div class=\"bookcover\"><img src=\"/img/cover1.jpg\"></div><div class=\"bookintro\">合成简介第一行。本书由思兔小说整理制作。这里不该出现。</div><a class=\"bookchapter\" href=\"/chapter/abc/1234567890.html\">最新章节标题</a></div>",
+    "taiwanChapterPage": "<div class=\"chapter\"><h1>第一章 合成章节</h1><div id=\"content\"><p>段落一。</p><p>段落二，含&nbsp;实体。</p><p></p><p>段落三。</p></div><div id=\"linkNext\"><a href=\"/chapter/abc/2.html\">下一页</a></div></div>",
+    "taiwanTocPage": "<div id=\"allchapter\"><a href=\"/chapter/abc/1234567890.html\">第一章 起始</a><a href=\"/book/abc.html\">书籍首页</a><a href=\"/chapter/abc/1234567890123.html\">第二章 终章</a><a href=\"/chapter/abc/9.html\">短号</a><a href=\"javascript:void(0)\">目录</a></div>",
+    "taiwanExploreItemPage": "<div class=\"wrap\"><div class=\"item\"><div class=\"image\"><img src=\"/img/a.jpg\"></div><dl><dt><a href=\"/book/aaa.html\">合成书A</a><span>作者：合成甲</span></dt><dd>简介A。</dd></dl></div><div class=\"item\"><div class=\"image\"><img src=\"/img/b.jpg\"></div><dl><dt><a href=\"/book/bbb.html\">合成书B</a><span>作者：合成乙</span></dt><dd>简介B。</dd></dl></div></div>",
+    "taiwanExploreBookboxPage": "<div class=\"bookbox\"><div class=\"author\">作者：合成丙</div><div class=\"author\">字数：88万字</div><div class=\"bookname\"><a href=\"/book/ccc.html\">合成书C</a></div><div class=\"update\" title=\"简介：合成丙的简介\">简介：合成丙的简介</div><div class=\"cat\"><a href=\"/book/ccc.html\">最新章节</a></div></div>",
+    "entitiesPage": "<div id=\"e\"><p>a &amp; b</p><p>&lt;tag&gt; &quot;quoted&quot; &#39;apos&#39;</p><p>&copy; 2026 &hellip; &mdash; x</p></div><div id=\"n\"><p>前&nbsp;中&nbsp;&nbsp;后</p></div>",
+    "malformedUnclosed": "<div class=\"wrap\"><p>第一段未闭合<p>第二段未闭合<ul><li>项目一<li>项目二</ul><div class=\"read-content\"><p>正文段落</div>",
+    "tableNoTbody": "<div class=\"list\"><table class=\"rank\"><tr><td>行1列1</td><td>行1列2</td></tr><tr><td>行2列1</td><td>行2列2</td></tr></table></div>",
+    "upperCaseTags": "<DIV CLASS=\"Wrap\"><P>大写标签段落</P><IMG SRC=\"/img/x.png\" ALT=\"图示\"><BR><SPAN>行内文本</SPAN></DIV>",
+    "emptyPage": "<div class=\"only\"><span>只有一个元素</span></div>",
+    "attrPage": "<div class=\"multi\"><a class=\"link\" data-x=\"x1\" href=\"/a\">A</a><a class=\"link\" href=\"/b\">B</a><a class=\"link\" data-y=\"y3\">C</a></div>",
+    "doctypeWhitespacePage": "<!doctype html>\n<html>\n <head>\n  <meta charset=\"utf-8\">\n  <title>T</title>\n </head>\n <body>\n  <div class=\"read-content\">\n   <p>段落一</p>\n   <p>段落二</p>\n  </div>\n </body>\n</html>\n",
+    "aliceE2EPage": "<div class='read-content'><p>合成正文A</p><p>正文B</p></div>",
+    "taiwanE2EPage": "<div id='content'><p>第一段内容</p><p>第二段内容</p></div>"
+  },
+  "jsoupCases": [
+    {
+      "name": "alice_readcontent_html",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: doc.select('div.read-content'); box.select('script, style, .ad-block').remove(); box.html()",
+      "html": "aliceContentPage",
+      "js": "var doc=org.jsoup.Jsoup.parse(result);var box=doc.select('div.read-content');box.select('script, style, .ad-block').remove();box.html()"
+    },
+    {
+      "name": "alice_readcontent_text",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: box.text()（同类写法，真实规则用 html()）",
+      "html": "aliceContentPage",
+      "js": "var doc=org.jsoup.Jsoup.parse(result);var box=doc.select('div.read-content');box.select('script, style, .ad-block').remove();box.text()"
+    },
+    {
+      "name": "alice_readcontent_html_beforeRemove",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: doc.select('div.read-content').html()",
+      "html": "aliceContentPage",
+      "js": "org.jsoup.Jsoup.parse(result).select('div.read-content').html()"
+    },
+    {
+      "name": "alice_readcontent_outerHtml",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: box.outerHtml()（替身承诺链）",
+      "html": "aliceContentPage",
+      "js": "org.jsoup.Jsoup.parse(result).select('div.read-content').outerHtml()"
+    },
+    {
+      "name": "alice_readcontent_size",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: box.size()（替身承诺链）",
+      "html": "aliceContentPage",
+      "js": "String(org.jsoup.Jsoup.parse(result).select('div.read-content').size())"
+    },
+    {
+      "name": "alice_content_len",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: content.length（显式 String() 归一；真实规则直接写 content.length，差异见 README）",
+      "html": "aliceContentPage",
+      "js": "String(org.jsoup.Jsoup.parse(result).select('div.read-content').html()).length"
+    },
+    {
+      "name": "alice_min_html",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: 极简片段 box.html()",
+      "html": "aliceContentPageMin",
+      "js": "org.jsoup.Jsoup.parse(result).select('div.read-content').html()"
+    },
+    {
+      "name": "alice_min_doc_html",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: doc.html()（解析器自动补 html/head/body）",
+      "html": "aliceContentPageMin",
+      "js": "org.jsoup.Jsoup.parse(result).html()"
+    },
+    {
+      "name": "alice_doctype_doc_outer",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: doc.outerHtml()（含 doctype 与缩进）",
+      "html": "doctypeWhitespacePage",
+      "js": "org.jsoup.Jsoup.parse(result).outerHtml()"
+    },
+    {
+      "name": "alice_doctype_box_html",
+      "source": "🌸爱丽丝书屋(免翻) ruleContent.content: 缩进文档 box.html()",
+      "html": "doctypeWhitespacePage",
+      "js": "org.jsoup.Jsoup.parse(result).select('div.read-content').html()"
+    },
+    {
+      "name": "tw_loginitem_size",
+      "source": "📂台湾小说网 loginUrl: d.select('.item dl dt a[href^=/book/]').size()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));String(d.select('.item dl dt a[href^=/book/]').size())"
+    },
+    {
+      "name": "tw_bookinfo_h1",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('h1.booktitle')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('h1.booktitle').text()"
+    },
+    {
+      "name": "tw_bookinfo_h1_tag",
+      "source": "📂台湾小说网 ruleBookInfo.init: d.select('h1').text()",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('h1').text()"
+    },
+    {
+      "name": "tw_bookinfo_author",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('.booktag a.red')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('.booktag a.red').text()"
+    },
+    {
+      "name": "tw_bookinfo_kind",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('.booktag a.blue')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('.booktag a.blue').text()"
+    },
+    {
+      "name": "tw_bookinfo_status",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('.booktag span.red')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('.booktag span.red').text()"
+    },
+    {
+      "name": "tw_bookinfo_wordcount",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('.booktag span.blue')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('.booktag span.blue').text()"
+    },
+    {
+      "name": "tw_bookinfo_cover",
+      "source": "📂台湾小说网 ruleBookInfo.init: d.select('.bookcover img').attr('src')",
+      "html": "taiwanBookInfoPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.bookcover img').attr('src'))"
+    },
+    {
+      "name": "tw_bookinfo_intro",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('.bookintro')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('.bookintro').text()"
+    },
+    {
+      "name": "tw_bookinfo_lastchapter",
+      "source": "📂台湾小说网 ruleBookInfo.init: t('a.bookchapter')",
+      "html": "taiwanBookInfoPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('a.bookchapter').text()"
+    },
+    {
+      "name": "tw_content_size",
+      "source": "📂台湾小说网 ruleContent.content: es.size()",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');String(es.size())"
+    },
+    {
+      "name": "tw_content_get0",
+      "source": "📂台湾小说网 ruleContent.content: es.get(0).text()",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');es.get(0).text()"
+    },
+    {
+      "name": "tw_content_get1",
+      "source": "📂台湾小说网 ruleContent.content: es.get(1).text()（含 &nbsp;）",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');es.get(1).text()"
+    },
+    {
+      "name": "tw_content_get2_empty",
+      "source": "📂台湾小说网 ruleContent.content: es.get(2).text()（空段落）",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');es.get(2).text()"
+    },
+    {
+      "name": "tw_content_eq1",
+      "source": "📂台湾小说网 ruleContent.content: es.eq(1).text()（替身承诺链）",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');es.eq(1).text()"
+    },
+    {
+      "name": "tw_content_first",
+      "source": "📂台湾小说网 ruleContent.content: es.first().text()（替身承诺链）",
+      "html": "taiwanChapterPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');es.first().text()"
+    },
+    {
+      "name": "tw_content_title",
+      "source": "📂台湾小说网 ruleContent.title: d.select('h1').text()",
+      "html": "taiwanChapterPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('h1').text()"
+    },
+    {
+      "name": "tw_nexttoc_attr",
+      "source": "📂台湾小说网 ruleToc.nextTocUrl: d.select('#linkNext').attr('href')（div 本身无 href）",
+      "html": "taiwanChapterPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('#linkNext').attr('href'))"
+    },
+    {
+      "name": "tw_nexttoc_a_attr",
+      "source": "📂台湾小说网 ruleToc.nextTocUrl: d.select('#linkNext a').attr('href')（同类写法）",
+      "html": "taiwanChapterPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('#linkNext a').attr('href'))"
+    },
+    {
+      "name": "tw_toc_chorlist_size",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.size()",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#allchapter a');String(es.size())"
+    },
+    {
+      "name": "tw_toc_get0_href",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.get(0).attr('href')",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#allchapter a');String(es.get(0).attr('href'))"
+    },
+    {
+      "name": "tw_toc_get0_text",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.get(0).text()",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#allchapter a');es.get(0).text()"
+    },
+    {
+      "name": "tw_toc_get2_text",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.get(2).text()",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#allchapter a');es.get(2).text()"
+    },
+    {
+      "name": "tw_toc_get4_href",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.get(4).attr('href')（javascript: 链接）",
+      "html": "taiwanTocPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('#allchapter a').get(4).attr('href'))"
+    },
+    {
+      "name": "tw_toc_eq2_text",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.eq(2).text()（替身承诺链）",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));d.select('#allchapter a').eq(2).text()"
+    },
+    {
+      "name": "tw_toc_first_text",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.first().text()（替身承诺链）",
+      "html": "taiwanTocPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));d.select('#allchapter a').first().text()"
+    },
+    {
+      "name": "tw_toc_eq_oob_size",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.eq(99).size()（越界应回空集合）",
+      "html": "taiwanTocPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('#allchapter a').eq(99).size())"
+    },
+    {
+      "name": "tw_toc_get_oob_throws",
+      "source": "📂台湾小说网 ruleToc.chapterList: es.get(99)（越界，真实 jsoup 抛 IndexOutOfBoundsException）",
+      "html": "taiwanTocPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#allchapter a').get(99).text()"
+    },
+    {
+      "name": "tw_toc_empty_first_null",
+      "source": "📂台湾小说网 ruleToc.chapterList: 空集合 first() 为 null",
+      "html": "taiwanTocPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.none').first())"
+    },
+    {
+      "name": "tw_toc_empty_size",
+      "source": "📂台湾小说网 ruleToc.chapterList: 空集合 size()",
+      "html": "taiwanTocPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.none').size())"
+    },
+    {
+      "name": "tw_explore_item_size",
+      "source": "📂台湾小说网 ruleExplore.bookList: bs.size()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var bs=d.select('.item');String(bs.size())"
+    },
+    {
+      "name": "tw_explore_item0_name",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('dl dt a[href^=/book/]').text()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var bs=d.select('.item');var b=bs.get(0);b.select('dl dt a[href^=/book/]').text()"
+    },
+    {
+      "name": "tw_explore_item1_name",
+      "source": "📂台湾小说网 ruleExplore.bookList: bs.get(1) 的 b.select('dl dt a[href^=/book/]').text()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(1);b.select('dl dt a[href^=/book/]').text()"
+    },
+    {
+      "name": "tw_explore_item0_author",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('dl dt span').text()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);b.select('dl dt span').text()"
+    },
+    {
+      "name": "tw_explore_item0_intro",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('dl dd').text()",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);b.select('dl dd').text()"
+    },
+    {
+      "name": "tw_explore_item0_cover",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('.image img').attr('src')",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);String(b.select('.image img').attr('src'))"
+    },
+    {
+      "name": "tw_explore_item0_url",
+      "source": "📂台湾小说网 ruleExplore.bookList: n.attr('href')",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);var n=b.select('dl dt a[href^=/book/]');String(n.attr('href'))"
+    },
+    {
+      "name": "tw_explore_item0_au_size",
+      "source": "📂台湾小说网 ruleExplore.bookList: au.size()（.item 里没有 .author，应为 0）",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);var au=b.select('.author');String(au.size())"
+    },
+    {
+      "name": "tw_explore_item0_firstname",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('dl dt a').first().text()（替身承诺链）",
+      "html": "taiwanExploreItemPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.item').get(0);b.select('dl dt a').first().text()"
+    },
+    {
+      "name": "tw_explore_bookbox_size",
+      "source": "📂台湾小说网 ruleExplore.bookList: bs=d.select('.bookbox') 分支 size()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var bs=d.select('.bookbox');String(bs.size())"
+    },
+    {
+      "name": "tw_explore_bookbox_author0",
+      "source": "📂台湾小说网 ruleExplore.bookList: au.get(0).text()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var au=b.select('.author');au.get(0).text()"
+    },
+    {
+      "name": "tw_explore_bookbox_author1",
+      "source": "📂台湾小说网 ruleExplore.bookList: au.get(1).text()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var au=b.select('.author');au.get(1).text()"
+    },
+    {
+      "name": "tw_explore_bookbox_name",
+      "source": "📂台湾小说网 ruleExplore.bookList: n=b.select('.bookname a'); n.text()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var n=b.select('.bookname a');n.text()"
+    },
+    {
+      "name": "tw_explore_bookbox_name_href",
+      "source": "📂台湾小说网 ruleExplore.bookList: String(n.attr('href'))",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var n=b.select('.bookname a');String(n.attr('href'))"
+    },
+    {
+      "name": "tw_explore_bookbox_update_title",
+      "source": "📂台湾小说网 ruleExplore.bookList: up.attr('title')",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var up=b.select('.update');String(up.attr('title'))"
+    },
+    {
+      "name": "tw_explore_bookbox_update_text",
+      "source": "📂台湾小说网 ruleExplore.bookList: up.text()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);var up=b.select('.update');up.text()"
+    },
+    {
+      "name": "tw_explore_bookbox_lastchapter",
+      "source": "📂台湾小说网 ruleExplore.bookList: b.select('.cat a').text()",
+      "html": "taiwanExploreBookboxPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var b=d.select('.bookbox').get(0);b.select('.cat a').text()"
+    },
+    {
+      "name": "attr_skip_missing_first",
+      "source": "替身承诺链: Elements.attr 取第一个「拥有该属性」的元素",
+      "html": "attrPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.link').attr('data-x'))"
+    },
+    {
+      "name": "attr_skip_missing_later",
+      "source": "替身承诺链: Elements.attr 跳过没有该属性的前两个元素",
+      "html": "attrPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.link').attr('data-y'))"
+    },
+    {
+      "name": "attr_missing_all",
+      "source": "替身承诺链: Elements.attr 全都没有时返回空串",
+      "html": "attrPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.link').attr('zzz'))"
+    },
+    {
+      "name": "attr_element_href",
+      "source": "替身承诺链: Element.attr",
+      "html": "attrPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('a').get(1).attr('href'))"
+    },
+    {
+      "name": "malformed_unclosed_p_size",
+      "source": "合成（不规范 HTML）: 未闭合 <p>/<li> 的容错解析",
+      "html": "malformedUnclosed",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('p').size())"
+    },
+    {
+      "name": "malformed_unclosed_p_text",
+      "source": "合成（不规范 HTML）: 未闭合 <p> 的 text()",
+      "html": "malformedUnclosed",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('p').text()"
+    },
+    {
+      "name": "malformed_unclosed_readcontent_html",
+      "source": "合成（不规范 HTML）: 未闭合片段里 box.html()",
+      "html": "malformedUnclosed",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('div.read-content').html()"
+    },
+    {
+      "name": "malformed_unclosed_li_size",
+      "source": "合成（不规范 HTML）: 未闭合 <li> 的容错解析",
+      "html": "malformedUnclosed",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('li').size())"
+    },
+    {
+      "name": "malformed_unclosed_doc_html",
+      "source": "合成（不规范 HTML）: 整文档 html()（自动补 head/body）",
+      "html": "malformedUnclosed",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).html()"
+    },
+    {
+      "name": "table_no_tbody_tr_size",
+      "source": "合成（不规范 HTML）: 缺 <tbody> 的表格 select('table tr').size()",
+      "html": "tableNoTbody",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('table tr').size())"
+    },
+    {
+      "name": "table_no_tbody_inserted",
+      "source": "合成（不规范 HTML）: 解析器自动插入 <tbody>（table > tbody > tr）",
+      "html": "tableNoTbody",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('table > tbody > tr').size())"
+    },
+    {
+      "name": "table_no_tbody_html",
+      "source": "合成（不规范 HTML）: 表格 html() 输出（含自动插入的 tbody 与缩进）",
+      "html": "tableNoTbody",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('table').html()"
+    },
+    {
+      "name": "table_no_tbody_text",
+      "source": "合成（不规范 HTML）: 表格 text()",
+      "html": "tableNoTbody",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('table').text()"
+    },
+    {
+      "name": "upper_tag_div_size",
+      "source": "合成（不规范 HTML）: 大写标签 <DIV CLASS=\"Wrap\"> 选择器 div.Wrap",
+      "html": "upperCaseTags",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('div.Wrap').size())"
+    },
+    {
+      "name": "upper_tag_img_alt",
+      "source": "合成（不规范 HTML）: 大写属性 ALT 归一为小写 alt",
+      "html": "upperCaseTags",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('img').attr('alt'))"
+    },
+    {
+      "name": "upper_tag_div_html",
+      "source": "合成（不规范 HTML）: 大写标签的 html() 输出（应全部小写化）",
+      "html": "upperCaseTags",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('div').html()"
+    },
+    {
+      "name": "upper_tag_outerHtml",
+      "source": "合成（不规范 HTML）: 大写标签的 outerHtml() 输出",
+      "html": "upperCaseTags",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('div').outerHtml()"
+    },
+    {
+      "name": "upper_tag_span_text",
+      "source": "合成（不规范 HTML）: <BR> 后 <SPAN> 的 text()",
+      "html": "upperCaseTags",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('span').text()"
+    },
+    {
+      "name": "entity_text",
+      "source": "合成（实体字符）: 实体解码后的 text()",
+      "html": "entitiesPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#e').text()"
+    },
+    {
+      "name": "entity_html",
+      "source": "合成（实体字符）: 实体在 html() 输出里的再转义",
+      "html": "entitiesPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#e').html()"
+    },
+    {
+      "name": "entity_outer",
+      "source": "合成（实体字符）: 实体在 outerHtml() 输出里的形态",
+      "html": "entitiesPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#e').outerHtml()"
+    },
+    {
+      "name": "entity_nbsp_text",
+      "source": "合成（实体字符）: &nbsp; 在 text() 里的空白规整（jsoup isActuallyWhitespace）",
+      "html": "entitiesPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#n').text()"
+    },
+    {
+      "name": "entity_nbsp_html",
+      "source": "合成（实体字符）: &nbsp; 在 html() 输出里的形态",
+      "html": "entitiesPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('#n').html()"
+    },
+    {
+      "name": "entity_p_size",
+      "source": "合成（实体字符）: 实体页 select('p').size()",
+      "html": "entitiesPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('p').size())"
+    },
+    {
+      "name": "empty_first_null",
+      "source": "合成: 空选择 first() -> null",
+      "html": "emptyPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.none').first())"
+    },
+    {
+      "name": "empty_eq_size",
+      "source": "合成: 空选择 eq(0).size()",
+      "html": "emptyPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(String(result)).select('.none').eq(0).size())"
+    },
+    {
+      "name": "only_span_text",
+      "source": "合成: div.only span text()",
+      "html": "emptyPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('div.only span').text()"
+    },
+    {
+      "name": "only_outerHtml",
+      "source": "合成: div.only outerHtml()",
+      "html": "emptyPage",
+      "js": "Packages.org.jsoup.Jsoup.parse(String(result)).select('div.only').outerHtml()"
+    },
+    {
+      "name": "alice_e2e_text",
+      "source": "合成端到端（爱丽丝书屋 ruleContent.content 的真实核心链简化版：只保留静态抓取分支的 select+text，去掉会走 java.webView 的兜底分支；输入合成）",
+      "html": "aliceE2EPage",
+      "js": "org.jsoup.Jsoup.parse(result).select('div.read-content').text()"
+    },
+    {
+      "name": "alice_e2e_html",
+      "source": "合成端到端（爱丽丝书屋 ruleContent.content 静态分支 box.html()）",
+      "html": "aliceE2EPage",
+      "js": "var doc=org.jsoup.Jsoup.parse(result);var box=doc.select('div.read-content');box.select('script, style, .ad-block').remove();box.html()"
+    },
+    {
+      "name": "taiwan_e2e_content",
+      "source": "合成端到端（台湾小说网 ruleContent.content 真实规则原文：java.t2s + Packages.org.jsoup，输入合成）",
+      "html": "taiwanE2EPage",
+      "js": "var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');var a=[];for(var i=0;i<es.size();i++){var t=String(java.t2s(String(es.get(i).text())));if(t.length>0)a.push(t);}a.join(String.fromCharCode(10));"
+    },
+    {
+      "name": "divergence_java_string_length_type",
+      "source": "已知差异登记（README）: Rhino javaPrimitiveWrap 默认 true，Java String 返回值被包成 Java 对象，.length 解析为 Java 方法；JSC 替身返回 JS 字符串，.length 是数字",
+      "html": "aliceE2EPage",
+      "js": "typeof org.jsoup.Jsoup.parse(result).select('div.read-content').html().length",
+      "knownDivergence": "javaStringWrapping"
+    }
+  ]
+}

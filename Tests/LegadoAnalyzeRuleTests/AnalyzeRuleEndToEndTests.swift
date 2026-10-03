@@ -5,15 +5,73 @@
 //  端到端：用「配置文件_7个.json」里的【真实书源规则文本】跑 AnalyzeRule，
 //  输入响应为【合成数据】（规则真实、数据合成）。来源书源名在每个用例注释标出。
 //
-//  魔丸小说用 JsExtensions（没有 Java 互操作），预期触发未实现错误；
-//  爱丽丝书屋、台湾小说网用 Java 互操作，预期触发不支持错误。
-//  台湾规则来自用户配置14个的小资源；测试断言错误及 diagnostics，不假装端到端成功。
+//  Step 5 收尾：涉及 org.jsoup.Jsoup 的断言改为**与 golden 一致的精确值**——期望值不再写死在
+//  测试里，而是从 golden（真实 jsoup 1.16.2 + 真实 Rhino 1.8.1 跑出来的 jsoupResults /
+//  javaDigestResults）里按用例名读取，杜绝「非空即可」这类弱断言与自证。
+//  对应 golden 用例：alice_e2e_text / taiwan_e2e_content / taoxiaoshuoba_sign_12345。
 //
 
 import XCTest
 @testable import LegadoBookSource
 
 final class AnalyzeRuleEndToEndTests: XCTestCase {
+
+    // MARK: - golden 读取（期望值一律来自真实 Java 库跑出的 golden）
+
+    private struct JsoupGoldenEnvelope: Decodable {
+        struct Entry: Decodable { let name: String; let result: String?; let error: String? }
+        let jsoupResults: [Entry]?
+    }
+    private struct DigestGoldenEnvelope: Decodable {
+        struct Entry: Decodable { let name: String; let result: String?; let error: String? }
+        let javaDigestResults: [Entry]?
+    }
+
+    private func goldenFile(_ name: String) -> URL? {
+        guard let resourceURL = Bundle.module.resourceURL else { return nil }
+        let direct = resourceURL.appendingPathComponent("golden/\(name)")
+        if FileManager.default.fileExists(atPath: direct.path) { return direct }
+        if let en = FileManager.default.enumerator(at: resourceURL, includingPropertiesForKeys: nil) {
+            for case let f as URL in en where f.lastPathComponent == name { return f }
+        }
+        return nil
+    }
+
+    private func isRunningInCI() -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        for key in ["CI", "GITHUB_ACTIONS", "GITHUB_WORKFLOW", "GITHUB_RUN_ID", "RUNNER_OS"] {
+            if let v = env[key], !v.isEmpty { return true }
+        }
+        return false
+    }
+
+    /// 取 golden `jsoup_cases.json` 里某条用例的 Java（真实 jsoup 1.16.2）结果。
+    private func jsoupGoldenValue(_ caseName: String) throws -> String {
+        guard let file = goldenFile("jsoup_cases.json"),
+              let envelope = try? JSONDecoder().decode(JsoupGoldenEnvelope.self, from: Data(contentsOf: file)),
+              let entry = envelope.jsoupResults?.first(where: { $0.name == caseName }),
+              let value = entry.result else {
+            if isRunningInCI() {
+                XCTFail("CI 环境下 golden（jsoup_cases.json/\(caseName)）缺失，不允许静默跳过")
+            }
+            throw XCTSkip("golden jsoup_cases.json 缺失（本地未跑 golden job）。")
+        }
+        return value
+    }
+
+    /// 取 golden `js_ext_cases.json` 里某条 Java MessageDigest 直算的摘要。
+    private func javaDigestGolden(_ caseName: String) throws -> String {
+        guard let file = goldenFile("js_ext_cases.json"),
+              let envelope = try? JSONDecoder().decode(DigestGoldenEnvelope.self, from: Data(contentsOf: file)),
+              let entry = envelope.javaDigestResults?.first(where: { $0.name == caseName }),
+              let value = entry.result else {
+            if isRunningInCI() {
+                XCTFail("CI 环境下 golden（js_ext_cases.json/javaDigestResults/\(caseName)）缺失，不允许静默跳过")
+            }
+            throw XCTSkip("golden js_ext_cases.json 缺失（本地未跑 golden job）。")
+        }
+        return value
+    }
 
     // ===== 淘小说书城（JSON 规则，真实）=====
     // 规则真实：search.bookList=$.data.bookList[*]  name=$.title  info.author=$.data.authorName
@@ -122,7 +180,9 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         try a.setContent("<div class='read-content'><p>合成正文A</p><p>正文B</p></div>")
         // 真实规则核心链：Jsoup.parse(result).select('div.read-content').text()
         let s = try a.getString("@js:org.jsoup.Jsoup.parse(result).select('div.read-content').text()")
-        XCTAssertEqual(s, "合成正文A 正文B")
+        // 期望值 = golden alice_e2e_text（真实 jsoup 1.16.2 跑同一条链的结果），不写死、不允许非空断言。
+        let expected = try jsoupGoldenValue("alice_e2e_text")
+        XCTAssertEqual(s, expected)
     }
 
     // ===== 台湾小说网（用户配置14个中的真实 ruleContent.content；输入合成）=====
@@ -140,7 +200,9 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         try a.setContent("<div id='content'><p>第一段内容</p><p>第二段内容</p></div>")
         // 真实 rule 链：d.select('#content p') -> es.size()/es.get(i).text() -> join('\n')
         let text = try a.getString(rule)
-        XCTAssertEqual(text, "第一段内容\n第二段内容")
+        // 期望值 = golden taiwan_e2e_content（真实 jsoup 1.16.2 + 真实 Rhino 1.8.1 跑同一条真实规则）。
+        let expected = try jsoupGoldenValue("taiwan_e2e_content")
+        XCTAssertEqual(text, expected)
     }
 
     // ===== 淘小说吧（md5 签名链，真实规则）=====
@@ -151,10 +213,11 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         try a.setContent("12345")
         // 从真实 searchUrl 提取的签名片段（合成 bookId=12345）
         let s = try a.getString("<js>var m = java.md5Encode('appid=mibook&bid=' + result + '&brand=HUAWEI'); m</js>")
-        // 用 JsExtensionsCore 直接算期望值（与 hutool MD5 对照）
-        let expected = JsExtensionsCore.md5Encode("appid=mibook&bid=12345&brand=HUAWEI")
-        XCTAssertEqual(s, expected)
+        // 期望值 = golden 里用 Java `java.security.MessageDigest` 直算的 MD5（不是 Swift 自己算的，
+        // 否则只能证明自洽，不能证明与 Java 一致）。
+        let expected = try javaDigestGolden("taoxiaoshuoba_sign_12345")
         XCTAssertEqual(expected.count, 32)
+        XCTAssertEqual(s, expected)
     }
 
     // ===== 得间小说（class./body. 组合语法，真实）=====

@@ -89,7 +89,10 @@ let package = Package(
             path: "Tests/LegadoAnalyzeRuleTests",
             resources: [
                 .copy("Resources/配置文件_7个.json"),
-                .copy("Resources/taiwan_real_source.json")
+                .copy("Resources/taiwan_real_source.json"),
+                // 第 5 步收尾：端到端测试的期望值改为从 golden 读（真实 jsoup 1.16.2 +
+                // 真实 Rhino 1.8.1 / Java MessageDigest 跑出来的结果），不再写死或用 Swift 自算。
+                .copy("Resources/golden")
             ]
         ),
         // 第 4 步 B：AnalyzeRule 的纯 public 接口测试（普通 import，非 @testable）。

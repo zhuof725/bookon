@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CoreFoundation
 import CryptoKit
 
 public enum JsExtensionsCore {
@@ -37,12 +38,69 @@ public enum JsExtensionsCore {
         case "UTF-8", "UTF8":
             // 对齐 Kotlin String(bytes, UTF-8)：非法序列替换为 U+FFFD，不抛错。
             return String(decoding: data, as: UTF8.self)
+        case "ISO-8859-1", "LATIN1", "ISO8859-1", "8859-1":
+            // ISO-8859-1 是 256 字节到 U+0000..U+00FF 的一一映射，任何字节序列都合法，
+            // 与 Java new String(bytes, ISO-8859-1) 逐字符相同。
+            if let s = String(data: data, encoding: .isoLatin1) { return s }
+            return String(bytes.map { Character(UnicodeScalar($0)) })
+        case "GBK", "GB2312", "GB-2312", "CP936", "GB18030":
+            // GBK 非法字节的替换语义按 JDK sun.nio.cs.DoubleByte.Decoder 的
+            // crMalformedOrUnmappable 逐字节复刻（见 decodeGBKLenient）。
+            return decodeGBKLenient(bytes)
         default:
             guard let encoding = stringEncoding(charset), let string = String(data: data, encoding: encoding) else {
                 throw RuleEngineError.unsupported("字节无法按字符集解码：\(charset)")
             }
             return string
         }
+    }
+
+    /// GB18030-2000 的 Foundation 编码（GBK 是其子集，双字节部分映射一致）。
+    private static let gbkEncoding: String.Encoding? = {
+        let cf = CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+        let ns = CFStringConvertEncodingToNSStringEncoding(cf)
+        if ns == 0 || ns == UInt(kCFStringEncodingInvalidId) { return nil }
+        return String.Encoding(rawValue: ns)
+    }()
+
+    /// 对齐 Java `new String(bytes, "GBK")` 的替换语义：
+    /// JDK 的 GBK 解码器（sun.nio.cs.DoubleByte.Decoder#decodeArrayLoop + crMalformedOrUnmappable）在遇到
+    /// 非法/不可映射的双字节时，按下面的规则决定消费 1 个还是 2 个字节，并输出**一个** U+FFFD：
+    ///   - b1 不在 0x81...0xFE（不是前导字节）→ 消费 1
+    ///   - b2 在 0x81...0xFE（自身是前导字节）或 b2 &lt; 0x80（是合法单字节）→ 消费 1
+    ///   - 其余（b1 是前导字节且 b2 ∈ {0x80, 0xFF}）→ 消费 2
+    /// 末尾不足 2 字节时，JDK 走「endOfInput + underflow」→ malformedForLength(剩余) → 同样一个 U+FFFD。
+    private static func decodeGBKLenient(_ bytes: [UInt8]) -> String {
+        var output = ""
+        let count = bytes.count
+        var index = 0
+        func isLead(_ b: UInt8) -> Bool { b >= 0x81 && b <= 0xFE }
+        while index < count {
+            let b1 = bytes[index]
+            if b1 < 0x80 {
+                output.append(Character(UnicodeScalar(b1)))
+                index += 1
+                continue
+            }
+            if index + 1 >= count {
+                output.append("\u{FFFD}")
+                index += 1
+                continue
+            }
+            let pair = Array(bytes[index...index + 1])
+            if let encoding = gbkEncoding,
+               let decoded = String(data: Data(pair), encoding: encoding),
+               decoded.unicodeScalars.count == 1,
+               decoded.unicodeScalars.first?.value != 0xFFFD {
+                output += decoded
+                index += 2
+                continue
+            }
+            let b2 = bytes[index + 1]
+            index += (!isLead(b1) || isLead(b2) || b2 < 0x80) ? 1 : 2
+            output.append("\u{FFFD}")
+        }
+        return output
     }
 
     public static func base64Encode(_ input: String) -> String {

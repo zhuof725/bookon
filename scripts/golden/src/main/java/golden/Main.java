@@ -120,6 +120,45 @@ public class Main {
                         totalCases++;
                     }
                     output.add("jsExtResults", outArr);
+                    System.out.println("JsExtensions 纯算法: " + outArr.size() + " 条用例（真实 hutool/quick-transfer/Java 标准库）");
+                }
+
+                // ---- 第 5 步收尾：jsoup 替身 golden（真实 jsoup 1.16.2 + 真实 Rhino 1.8.1） ----
+                if (input.has("jsoupCases")) {
+                    JsonObject caseHtmls = input.getAsJsonObject("htmls");
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("jsoupCases")) {
+                        JsonObject c = el.getAsJsonObject().deepCopy();
+                        String htmlKey = c.get("html").getAsString();
+                        c.addProperty("html", caseHtmls.get(htmlKey).getAsString());
+                        outArr.add(JsExtGen.runJsoup(c));
+                        totalCases++;
+                    }
+                    output.add("jsoupResults", outArr);
+                    System.out.println("jsoup 替身对照: " + outArr.size()
+                            + " 条用例（同一 JS，真实 jsoup 1.16.2 + Rhino 1.8.1）");
+                }
+
+                // ---- 第 5 步收尾：JS number -> Java String 参数的真实 Rhino 转换 ----
+                if (input.has("numberArgCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("numberArgCases")) {
+                        outArr.add(NumberArgGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("numberArgResults", outArr);
+                    System.out.println("Rhino 数字入参: " + outArr.size() + " 条（真实 Rhino 1.8.1 转换结果）");
+                }
+
+                // ---- 第 5 步收尾：Java MessageDigest 直算（端到端期望值） ----
+                if (input.has("javaDigestCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("javaDigestCases")) {
+                        outArr.add(JsExtGen.runJavaDigest(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("javaDigestResults", outArr);
+                    System.out.println("Java MessageDigest: " + outArr.size() + " 条");
                 }
 
                 if (input.has("jsCases")) {

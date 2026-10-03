@@ -26,19 +26,25 @@ final class JsExtGoldenComparisonTests: XCTestCase {
         let name: String
         let method: String
         let args: [JSONArg]?
+        /// Java 侧给出的「真实 Rhino 转出的参数串」——Swift 一律用这个，不再自己推导
+        /// JS 数字 → 字符串（旧的手写「整数无 .0」规则已删除）。
+        let argStrings: [JSONValueBox]?
         let hex: String?
+        let charset: String?
         let result: JSONValueBox?
         let resultPresent: Bool
         let error: String?
 
-        private enum CodingKeys: String, CodingKey { case name, method, args, hex, result, error }
+        private enum CodingKeys: String, CodingKey { case name, method, args, argStrings, hex, charset, result, error }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             name = try c.decode(String.self, forKey: .name)
             method = try c.decode(String.self, forKey: .method)
             args = try c.decodeIfPresent([JSONArg].self, forKey: .args)
+            argStrings = try c.decodeIfPresent([JSONValueBox].self, forKey: .argStrings)
             hex = try c.decodeIfPresent(String.self, forKey: .hex)
+            charset = try c.decodeIfPresent(String.self, forKey: .charset)
             error = try c.decodeIfPresent(String.self, forKey: .error)
             resultPresent = c.contains(.result)
             if resultPresent, (try? c.decodeNil(forKey: .result)) != true {
@@ -56,22 +62,14 @@ final class JsExtGoldenComparisonTests: XCTestCase {
             let c = try decoder.singleValueContainer()
             if c.decodeNil() { value = nil; isNull = true; return }
             if let n = try? c.decode(Double.self) {
-                // JS 数字 → Java String 参数按 JS ToString：整数无 .0
-                value = JsExtGoldenComparisonTests.jsNumberToString(n)
+                // 仅用于失败信息展示；实际执行一律使用 Java 侧给出的 argStrings。
+                value = String(n)
                 isNull = false
                 return
             }
             if let s = try? c.decode(String.self) { value = s; isNull = false; return }
             value = nil; isNull = true
         }
-    }
-
-    /// JS Number → 字符串（对齐 Rhino 数字转 String 参数的语义：整数无 .0）。
-    private static func jsNumberToString(_ d: Double) -> String {
-        if d == d.rounded() && d.isFinite && abs(d) <= 9_007_199_254_740_991 {
-            return String(Int64(d))
-        }
-        return String(d)
     }
 
     private enum JSONValueBox: Decodable, Equatable {
@@ -113,14 +111,20 @@ final class JsExtGoldenComparisonTests: XCTestCase {
         """
     }
 
+    /// 参数串一律取 golden 里由**真实 Rhino 1.8.1** 得出的 argStrings（含 null）。
     private func stringArg(_ c: Result, _ index: Int) -> String? {
+        if let strings = c.argStrings, index < strings.count {
+            if case .string(let s) = strings[index] { return s }
+            return nil
+        }
         guard let args = c.args, index < args.count else { return nil }
         return args[index].value
     }
 
+    /// 数字参数：从 argStrings 解析（越界/非有限→0，绝不因 Int64(Double) 溢出而崩溃）。
     private func numberArg(_ c: Result, _ index: Int) -> Int64 {
-        guard let args = c.args, index < args.count, let v = args[index].value,
-              let d = Double(v) else { return 0 }
+        guard let v = stringArg(c, index), let d = Double(v), d.isFinite,
+              d >= -9_223_372_036_854_775_808.0, d < 9_223_372_036_854_775_808.0 else { return 0 }
         return Int64(d)
     }
 
@@ -199,7 +203,7 @@ final class JsExtGoldenComparisonTests: XCTestCase {
             case "bytesToStr":
                 swiftOutcome = outcome {
                     let bytes = JsExtensionsCore.hexDecodeToByteArray(c.hex ?? "") ?? []
-                    return try JsExtensionsCore.bytesToStr(bytes)
+                    return try JsExtensionsCore.bytesToStr(bytes, charset: c.charset ?? "UTF-8")
                 }
             default:
                 continue
