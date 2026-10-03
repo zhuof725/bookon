@@ -42,25 +42,22 @@ final class JSEngine {
     }
 
     /// Java 互操作检测：出现这些片段即判定为 Rhino-only，JSC 无法运行。
+    /// 注意 "Packages." 会先剔除合法的 `Packages.org.jsoup`（Step 5 jsoup 替身放行）。
     private static let javaInteropMarkers = [
-        "importClass", "importPackage",
+        "Packages.", "importClass", "importPackage",
         "java.lang", "java.util", "java.net", "java.math", "JavaImporter"
     ]
 
-    /// Step 5：org.jsoup.Jsoup 替身放行。返回 true 表示该 JS 只用了 jsoup 两种写法（可放行）。
+    /// Step 5：org.jsoup.Jsoup 替身放行。true 表示只用了 jsoup 两种写法（可放行）。
     static func isJsoupOnlyInterop(_ js: String) -> Bool {
-        let hasJsoup = js.contains("org.jsoup.Jsoup")
-        guard hasJsoup else { return false }
-        // 除 jsoup 外不得命中其它 Rhino 互操作标记
-        for marker in javaInteropMarkers where js.contains(marker) {
-            return false
-        }
-        return true
+        return js.contains("org.jsoup.Jsoup") && detectJavaInterop(js) == nil
     }
 
-    /// 预检测 Java 互操作。返回命中的标记（若有）；jsoup 写法不算（Step 5 放行）。
+    /// 预检测 Java 互操作。返回命中的标记（若有）；仅 `org.jsoup` 写法不算（Step 5 放行）。
     static func detectJavaInterop(_ js: String) -> String? {
-        for m in javaInteropMarkers where js.contains(m) {
+        // 先把合法的 Packages.org.jsoup 归一成 org.jsoup，其余 Packages. 用法仍视为互操作。
+        let scrubbed = js.replacingOccurrences(of: "Packages.org.jsoup", with: "org.jsoup")
+        for m in javaInteropMarkers where scrubbed.contains(m) {
             return m
         }
         return nil

@@ -110,8 +110,9 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         // 合法 hex（"你好" UTF-8: e4bda0e5a5bd）应能解码
         let ok = try a.getString("<js>java.hexDecodeToString('e4bda0e5a5bd')</js>")
         XCTAssertEqual(ok, "你好")
-        // "deadbeef"（HTML 片段字节）不是合法 UTF-8 -> 抛错（Hex 内容无效），不再声称「未实现」
-        XCTAssertThrowsError(try a.getString("<js>let url = java.hexDecodeToString(result); url</js>"))
+        // "deadbeef" 解码为 4 字节非合法 UTF-8 -> Java/Swift 均按 U+FFFD 替换输出（不抛错、不是 null）
+        let replaced = try a.getString("<js>var x = java.hexDecodeToString(result); x === null ? 'NULL' : (x.indexOf('\\uFFFD') >= 0 ? 'REPLACED' : x)</js>")
+        XCTAssertEqual(replaced, "REPLACED")
     }
 
     // ===== 爱丽丝书屋 content（@js: + org.jsoup.Jsoup，真实）=====
@@ -140,6 +141,20 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         // 真实 rule 链：d.select('#content p') -> es.size()/es.get(i).text() -> join('\n')
         let text = try a.getString(rule)
         XCTAssertEqual(text, "第一段内容\n第二段内容")
+    }
+
+    // ===== 淘小说吧（md5 签名链，真实规则）=====
+    // 真实签名：sign=java.md5Encode("appid=mibook&bid="+result+"&brand=HUAWEI&...")
+    // 输入合成（规则真实、数据合成）；断言 md5 签名可计算。
+    func testTaoxiaoshuoba_md5SignChain() throws {
+        let a = AnalyzeRule()
+        try a.setContent("12345")
+        // 从真实 searchUrl 提取的签名片段（合成 bookId=12345）
+        let s = try a.getString("<js>var m = java.md5Encode('appid=mibook&bid=' + result + '&brand=HUAWEI'); m</js>")
+        // 用 JsExtensionsCore 直接算期望值（与 hutool MD5 对照）
+        let expected = JsExtensionsCore.md5Encode("appid=mibook&bid=12345&brand=HUAWEI")
+        XCTAssertEqual(s, expected)
+        XCTAssertEqual(expected.count, 32)
     }
 
     // ===== 得间小说（class./body. 组合语法，真实）=====

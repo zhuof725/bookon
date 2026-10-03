@@ -83,8 +83,9 @@ final class AnalyzeRuleJSTests: XCTestCase {
         let a = AnalyzeRule(source: InMemorySource())
         let v = try a.evalJS("java.md5Encode('abc')")
         XCTAssertEqual(v.stringValue, "900150983cd24fb0d6963f7d28e17f72")
+        // md5Encode16 = md5 全串 substring(8,24)
         let v16 = try a.evalJS("java.md5Encode16('abc')")
-        XCTAssertEqual(v16.stringValue, "983cd24fb0d6963f")
+        XCTAssertEqual(v16.stringValue, "3cd24fb0d6963f7d")
     }
 
     // MARK: - Java 互操作检测（Step 5：org.jsoup 放行，其余仍抛错）

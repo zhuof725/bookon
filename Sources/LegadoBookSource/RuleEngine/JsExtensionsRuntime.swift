@@ -101,7 +101,7 @@ final class JsExtensionsRuntime {
             case "base64DecodeToByteArray":
                 return ok(JsExtensionsCore.base64DecodeToByteArray(arguments.first as? String) ?? [])
             case "hexDecodeToString":
-                return ok(JsExtensionsCore.hexDecodeToString(stringArg(arguments, 0)))
+                return ok(try JsExtensionsCore.hexDecodeToString(stringArg(arguments, 0)))
             case "hexEncodeToString":
                 return ok(JsExtensionsCore.hexEncodeToString(stringArg(arguments, 0)))
             case "hexDecodeToByteArray":
@@ -194,7 +194,7 @@ final class JsExtensionsRuntime {
     func base64Encode(_ input: String) -> String? { JsExtensionsCore.base64Encode(input) }
     func base64Decode(_ input: String?) -> String { (try? JsExtensionsCore.base64Decode(input)) ?? "" }
     func base64DecodeToByteArray(_ input: String?) -> [UInt8]? { JsExtensionsCore.base64DecodeToByteArray(input) }
-    func hexDecodeToString(_ hex: String) -> String? { JsExtensionsCore.hexDecodeToString(hex) }
+    func hexDecodeToString(_ hex: String) throws -> String? { try JsExtensionsCore.hexDecodeToString(hex) }
     func hexEncodeToString(_ utf8: String) -> String? { JsExtensionsCore.hexEncodeToString(utf8) }
     func hexDecodeToByteArray(_ hex: String) -> [UInt8]? { JsExtensionsCore.hexDecodeToByteArray(hex) }
     func htmlFormat(_ input: String) -> String { JsExtensionsCore.htmlFormat(input) }
@@ -232,7 +232,14 @@ final class JsExtensionsRuntime {
     private func stringify(_ value: Any?) -> String {
         guard let value else { return "" }
         if let string = value as? String { return string }
-        if let number = value as? NSNumber { return "\(number)" }
+        if let number = value as? NSNumber {
+            // JS 数字→字符串（对齐 Rhino 把 JS number 转 Java String 参数）：整数值无 .0。
+            let d = number.doubleValue
+            if d == d.rounded() && d.isFinite && abs(d) <= 9_007_199_254_740_991 {
+                return String(Int64(d))
+            }
+            return String(d)
+        }
         if let array = value as? [Any] { return array.map { stringify($0) }.joined(separator: ",") }
         if let dict = value as? [String: Any] { return "\(dict)" }
         if value is NSNull { return "" }

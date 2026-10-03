@@ -212,9 +212,8 @@ public final class JsExtGen {
                 }
                 case "hexDecodeToString": {
                     String input = argAsString(argsArr.size() > 0 ? argsArr.get(0) : null);
-                    byte[] bytes = HexUtil.decodeHex(input == null ? "" : input);
-                    if (bytes == null) out.add("result", com.google.gson.JsonNull.INSTANCE);
-                    else out.addProperty("result", new String(bytes, StandardCharsets.UTF_8));
+                    // Kotlin hexDecodeToString = HexUtil.decodeHexStr(hex)：空串原样返回 ""，非法字符抛错
+                    out.addProperty("result", HexUtil.decodeHexStr(input == null ? "" : input));
                     break;
                 }
                 case "t2s": {

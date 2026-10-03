@@ -50,11 +50,59 @@ public enum JsExtensionsCore {
     }
 
     public static func base64Decode(_ input: String?, charset: String = "UTF-8") throws -> String {
+        // 对齐 hutool Base64.decodeStr：容错解码（跳过非法字符，'=' 作 padding，4 字符一组），
+        // 不做严格校验、不抛错（与 Data(base64Encoded:) 的严格行为不同）。
         let value = input ?? ""
-        guard let data = Data(base64Encoded: value, options: [.ignoreUnknownCharacters]) else {
-            throw RuleEngineError.unsupported("Base64 解码失败")
+        let bytes = hutoolBase64Decode(Array(value.utf8))
+        return try bytesToStr(bytes, charset: charset)
+    }
+
+    /// hutool Base64Decoder.decode 的逐行移植（5.8.22）。
+    /// 说明：hutool 解码表只覆盖到 'z'（长度 123）；Java 对 { | } ~ DEL 会数组越界抛错，
+    /// 本移植对越界字节按「非 base64 字符跳过」处理（不崩溃，README 有登记）。
+    private static func hutoolBase64Decode(_ input: [UInt8]) -> [UInt8] {
+        guard !input.isEmpty else { return input }
+        let padding: Int = -2
+        var table = [Int](repeating: -1, count: 128)
+        // A-Z -> 0-25
+        for (i, b) in (0x41...0x5A).enumerated() { table[b] = i }
+        // a-z -> 26-51
+        for (i, b) in (0x61...0x7A).enumerated() { table[b] = 26 + i }
+        // 0-9 -> 52-61
+        for (i, b) in (0x30...0x39).enumerated() { table[b] = 52 + i }
+        table[0x2B] = 62 // '+'
+        table[0x2D] = 62 // '-'
+        table[0x2F] = 63 // '/'
+        table[0x5F] = 63 // '_'
+        table[0x3D] = padding // '='
+
+        var offset = 0
+        let maxPos = input.count - 1
+        var octet: [UInt8] = []
+        octet.reserveCapacity(input.count * 3 / 4)
+
+        func nextValid() -> Int {
+            while offset <= maxPos {
+                let base64Byte = input[offset]
+                offset += 1
+                if base64Byte > 0 && base64Byte < 128 {
+                    let decodeByte = table[Int(base64Byte)]
+                    if decodeByte > -1 { return decodeByte }
+                }
+            }
+            return padding
         }
-        return try bytesToStr(Array(data), charset: charset)
+
+        while offset <= maxPos {
+            let s0 = nextValid()
+            let s1 = nextValid()
+            let s2 = nextValid()
+            let s3 = nextValid()
+            if padding != s1 { octet.append(UInt8(truncatingIfNeeded: (s0 << 2) | (s1 >> 4))) }
+            if padding != s2 { octet.append(UInt8(truncatingIfNeeded: ((s1 & 0xF) << 4) | (s2 >> 2))) }
+            if padding != s3 { octet.append(UInt8(truncatingIfNeeded: ((s2 & 3) << 6) | s3)) }
+        }
+        return octet
     }
 
     /// 对齐 Kotlin base64DecodeToByteArray(str, flags=0)：isNullOrBlank() -> null，其余 android Base64.decode。
@@ -67,25 +115,31 @@ public enum JsExtensionsCore {
         input.utf8.map { String(format: "%02x", $0) }.joined()
     }
 
-    public static func hexDecodeToString(_ input: String) -> String? {
-        // 对齐 hutool HexUtil.decodeHexStr：非法输入返回 null。
-        guard let bytes = try? hexDecodeToBytes(input) else { return nil }
+    public static func hexDecodeToString(_ input: String) throws -> String? {
+        // 对齐 hutool HexUtil.decodeHexStr：空串 -> 原样返回 ""；非法字符抛错。
+        if input.isEmpty { return "" }
+        let bytes = try hexDecodeToBytes(input)
         return String(decoding: bytes, as: UTF8.self)
     }
 
-    /// 对齐 Kotlin HexUtil.decodeHex（返回 byte[]）。
+    /// 对齐 Kotlin HexUtil.decodeHex（byte[]）：空串 -> null；奇数长度前补 0；非法字符抛错。
     public static func hexDecodeToByteArray(_ input: String) -> [UInt8]? {
-        try? hexDecodeToBytes(input)
+        if input.isEmpty { return nil }
+        return try? hexDecodeToBytes(input)
     }
 
     public static func hexDecodeToBytes(_ input: String) throws -> [UInt8] {
-        let scalars = Array(input.utf8)
-        guard scalars.count % 2 == 0 else { throw RuleEngineError.unsupported("Hex 长度必须为偶数") }
+        // hutool Base16Codec.decode：cleanBlank + 奇数长度前补 0
+        let cleaned = input.filter { !$0.isWhitespace }
+        var hex = cleaned
+        if hex.utf8.count % 2 != 0 { hex = "0" + hex }
+        let scalars = Array(hex.utf8)
         var result: [UInt8] = []
         result.reserveCapacity(scalars.count / 2)
         var i = 0
         while i < scalars.count {
             guard let high = hexNibble(scalars[i]), let low = hexNibble(scalars[i + 1]) else {
+                // 对齐 hutool toDigit：非法字符抛异常
                 throw RuleEngineError.unsupported("Hex 含非法字符")
             }
             result.append(high << 4 | low)
@@ -124,6 +178,8 @@ public enum JsExtensionsCore {
     }
 
     /// 对齐 HtmlFormatter.formatKeepImg（redirectUrl=null 路径）。
+    /// Java 正则 `\s` 只含 ASCII 空白（不含全角空格 U+3000）；ICU 的 `\s` 含全角空格，
+    /// 因此这里显式写成 ASCII 空白类，避免差异。
     public static func htmlFormat(_ html: String) -> String {
         var output = html
         output = replacing(output, pattern: "(&nbsp;)+", with: " ")
@@ -132,9 +188,12 @@ public enum JsExtensionsCore {
         output = replacing(output, pattern: "</?(?:div|p|br|hr|h\\d|article|dd|dl)[^>]*>", with: "\n")
         output = replacing(output, pattern: "<!--[^>]*-->", with: "")
         output = replacing(output, pattern: "</?(?!img)[a-zA-Z]+(?=[ >])[^<>]*>", with: "")
-        output = replacing(output, pattern: "\\s*\\n+\\s*", with: "\n　　")
-        output = replacing(output, pattern: "^[\\n\\s]+", with: "　　")
-        output = replacing(output, pattern: "[\\n\\s]+$", with: "")
+        output = replacing(output, pattern: "[ \\t\\r\\n\\f]*\\n+[ \\t\\r\\n\\f]*", with: "\n　　")
+        output = replacing(output, pattern: "^[\\n \\t\\r\\f]+", with: "　　")
+        output = replacing(output, pattern: "[\\n \\t\\r\\f]+$", with: "")
+        // formatKeepImg：把 <img ... src="X" ...> 归一为 <img src="X">（redirectUrl=null，
+        // getAbsoluteURL(null, src) 返回 trim 原串）。仅覆盖真实书源用到的双引号无参形式。
+        output = replacing(output, pattern: "<img[^>]*\\ssrc\\s*=\\s*\"([^\">]+)\"[^>]*>", with: "<img src=\"$1\">", caseInsensitive: true)
         return output
     }
 
@@ -187,8 +246,9 @@ public enum JsExtensionsCore {
         }
     }
 
-    private static func replacing(_ input: String, pattern: String, with replacement: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return input }
+    private static func replacing(_ input: String, pattern: String, with replacement: String, caseInsensitive: Bool = false) -> String {
+        let options: NSRegularExpression.Options = caseInsensitive ? [.caseInsensitive] : []
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return input }
         let range = NSRange(location: 0, length: (input as NSString).length)
         return regex.stringByReplacingMatches(in: input, range: range, withTemplate: replacement)
     }
@@ -284,8 +344,24 @@ private final class ChineseTransfer {
     }
 
     private func loadLines(_ name: String) -> [String] {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "txt", subdirectory: "Chinese"),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-        return text.split(whereSeparator: { $0.isNewline }).map(String.init)
+        // 资源加载做健壮化：不同 SwiftPM 资源处理方式（.process/.copy）下目录层级可能不同，
+        // 依次尝试 subdirectory、根目录、枚举三种定位方式。
+        let bundle = Bundle.module
+        var candidates: [URL?] = [
+            bundle.url(forResource: name, withExtension: "txt", subdirectory: "Chinese"),
+            bundle.url(forResource: name, withExtension: "txt")
+        ]
+        if let en = FileManager.default.enumerator(at: bundle.bundleURL, includingPropertiesForKeys: nil) {
+            for case let f as URL in en where f.lastPathComponent == "\(name).txt" {
+                candidates.append(f)
+                break
+            }
+        }
+        for case let url? in candidates {
+            if let text = try? String(contentsOf: url, encoding: .utf8) {
+                return text.split(whereSeparator: { $0.isNewline }).map(String.init)
+            }
+        }
+        return []
     }
 }

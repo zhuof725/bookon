@@ -23,17 +23,13 @@ final class JsoupJSBridge {
 
     func install(into context: JSContext) {
         // 解析入口：parse(html) -> 文档包装
-        let parseBlock: @convention(block) (String) -> JSValue = { [weak context] html in
-            guard let context else { return JSValue(undefinedIn: JSContext()) }
+        let parseBlock: @convention(block) (String) -> JSValue? = { [weak context] html in
+            guard let context else { return nil }
             if let doc = try? SwiftSoup.parse(html) {
                 return JsoupJSBridge.makeWrapper(.document(doc), context: context)
             }
-            return JSValue(undefinedIn: context)
+            return nil
         }
-
-        let jsoup = JSValue(newObjectIn: context)
-        jsoup?.setObject(parseBlock, forKeyedSubscript: "parse" as NSString)
-        context.setObject(jsoup, forKeyedSubscript: "org" as NSString) // 占位，下面搭链
 
         // Packages.org.jsoup.Jsoup 链：Packages -> org -> jsoup -> Jsoup
         let jsoupNode = JSValue(newObjectIn: context)
@@ -48,18 +44,15 @@ final class JsoupJSBridge {
         let packagesObj = JSValue(newObjectIn: context)
         packagesObj?.setObject(orgObj, forKeyedSubscript: "org" as NSString)
 
-        context.setObject(jsoupNode, forKeyedSubscript: "Jsoup" as NSString)
-        context.setObject(jsoupObj, forKeyedSubscript: "jsoup" as NSString)
-        context.setObject(orgObj, forKeyedSubscript: "org" as NSString)
-        context.setObject(packagesObj, forKeyedSubscript: "Packages" as NSString)
-
-        // org.jsoup.Jsoup 顶层路径：org 对象需含 jsoup.Jsoup（与上面 orgObj 冲突时覆盖）
+        // 顶层（爱丽丝写法）：org.jsoup.Jsoup
         let topJsoup = JSValue(newObjectIn: context)
         topJsoup?.setObject(parseBlock, forKeyedSubscript: "parse" as NSString)
         let topJsoupNs = JSValue(newObjectIn: context)
         topJsoupNs?.setObject(topJsoup, forKeyedSubscript: "Jsoup" as NSString)
         let topOrg = JSValue(newObjectIn: context)
         topOrg?.setObject(topJsoupNs, forKeyedSubscript: "jsoup" as NSString)
+
+        context.setObject(packagesObj, forKeyedSubscript: "Packages" as NSString)
         context.setObject(topOrg, forKeyedSubscript: "org" as NSString)
         context.setObject(topJsoupNs, forKeyedSubscript: "jsoup" as NSString)
         context.setObject(topJsoup, forKeyedSubscript: "Jsoup" as NSString)

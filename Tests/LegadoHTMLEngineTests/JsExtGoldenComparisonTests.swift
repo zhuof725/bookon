@@ -3,9 +3,10 @@
 //  LegadoHTMLEngineTests
 //
 //  Step 5 golden：JsExtensions 纯算法对照真实 Java 库（hutool 5.8.22 / quick-chinese-transfer
-//  0.2.17 / jsoup 1.16.2 / Java 标准库）。逐条比较 md5/base64/hex/t2s/s2t/timeFormat/
-//  encodeURI/toNumChapter/htmlFormat/strToBytes/bytesToStr；Jsoup.parse 链另测。
+//  0.2.17 / Java 标准库）。逐条比较 md5/base64/hex/t2s/s2t/timeFormat/encodeURI/toNumChapter/
+//  htmlFormat/strToBytes/bytesToStr。
 //
+//  比较三态：Java 抛错 <-> Swift 抛错；Java null <-> Swift nil；Java 值 == Swift 值。
 //  失败信息含 name/输入/Java结果/Swift结果。CI 下 golden 缺失必须 fail（不许 XCTSkip）。
 //  全部输入为合成样本。
 //
@@ -15,26 +16,64 @@ import XCTest
 
 final class JsExtGoldenComparisonTests: XCTestCase {
 
+    private enum Outcome: Equatable {
+        case threw
+        case null
+        case value(String)
+    }
+
     private struct Result: Decodable {
         let name: String
         let method: String
         let args: [JSONArg]?
         let hex: String?
         let result: JSONValueBox?
+        let resultPresent: Bool
         let error: String?
-    }
-    private struct JSONArg: Decodable {
-        let value: String?
-        let isNumber: Bool?
-        let isNull: Bool?
+
+        private enum CodingKeys: String, CodingKey { case name, method, args, hex, result, error }
+
         init(from decoder: Decoder) throws {
-            let c = try decoder.singleValueContainer()
-            if c.decodeNil() { value = nil; isNumber = false; isNull = true; return }
-            if let n = try? c.decode(Double.self) { value = "\(n)"; isNumber = true; isNull = false; return }
-            if let s = try? c.decode(String.self) { value = s; isNumber = false; isNull = false; return }
-            value = nil; isNumber = false; isNull = true
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decode(String.self, forKey: .name)
+            method = try c.decode(String.self, forKey: .method)
+            args = try c.decodeIfPresent([JSONArg].self, forKey: .args)
+            hex = try c.decodeIfPresent(String.self, forKey: .hex)
+            error = try c.decodeIfPresent(String.self, forKey: .error)
+            resultPresent = c.contains(.result)
+            if resultPresent, (try? c.decodeNil(forKey: .result)) != true {
+                result = try? c.decode(JSONValueBox.self, forKey: .result)
+            } else {
+                result = nil
+            }
         }
     }
+
+    private struct JSONArg: Decodable {
+        let value: String?
+        let isNull: Bool
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if c.decodeNil() { value = nil; isNull = true; return }
+            if let n = try? c.decode(Double.self) {
+                // JS 数字 → Java String 参数按 JS ToString：整数无 .0
+                value = JsExtGoldenComparisonTests.jsNumberToString(n)
+                isNull = false
+                return
+            }
+            if let s = try? c.decode(String.self) { value = s; isNull = false; return }
+            value = nil; isNull = true
+        }
+    }
+
+    /// JS Number → 字符串（对齐 Rhino 数字转 String 参数的语义：整数无 .0）。
+    private static func jsNumberToString(_ d: Double) -> String {
+        if d == d.rounded() && d.isFinite && abs(d) <= 9_007_199_254_740_991 {
+            return String(Int64(d))
+        }
+        return String(d)
+    }
+
     private enum JSONValueBox: Decodable, Equatable {
         case string(String)
         case null
@@ -65,12 +104,12 @@ final class JsExtGoldenComparisonTests: XCTestCase {
         return false
     }
 
-    private func report(_ c: Result, java: String?, swift: String) -> String {
+    private func report(_ c: Result, java: Outcome, swift: Outcome) -> String {
         """
         [JS Ext/\(c.name) \(c.method)]
           args: \(c.args?.map { $0.value ?? "<null>" }.joined(separator: ", ") ?? "[]") hex: \(c.hex ?? "-")
-          Java: \(java.debugDescription) error: \(c.error ?? "<none>")
-          Swift: \(swift.debugDescription)
+          Java: \(java) error: \(c.error ?? "<none>")
+          Swift: \(swift)
         """
     }
 
@@ -83,6 +122,25 @@ final class JsExtGoldenComparisonTests: XCTestCase {
         guard let args = c.args, index < args.count, let v = args[index].value,
               let d = Double(v) else { return 0 }
         return Int64(d)
+    }
+
+    /// 执行 Swift 调用，把「抛错 / nil / 值」映射为三态。
+    private func outcome(_ f: () throws -> String?) -> Outcome {
+        do {
+            if let v = try f() { return .value(v) }
+            return .null
+        } catch {
+            return .threw
+        }
+    }
+
+    private func javaOutcome(_ c: Result) -> Outcome {
+        if c.error != nil { return .threw }
+        guard c.resultPresent else { return .threw }
+        switch c.result {
+        case .some(.string(let s)): return .value(s)
+        default: return .null
+        }
     }
 
     func testGoldenJsExtPureAlgorithms() throws {
@@ -99,59 +157,59 @@ final class JsExtGoldenComparisonTests: XCTestCase {
         var compared = 0
         for c in cases {
             compared += 1
-            let swift: String?
-            let java: String?
+            let swiftOutcome: Outcome
             switch c.method {
             case "md5Encode":
-                java = stringResult(c); swift = JsExtensionsCore.md5Encode(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.md5Encode(stringArg(c, 0) ?? "") }
             case "md5Encode16":
-                java = stringResult(c); swift = JsExtensionsCore.md5Encode16(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.md5Encode16(stringArg(c, 0) ?? "") }
             case "base64Encode":
-                java = stringResult(c); swift = JsExtensionsCore.base64Encode(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.base64Encode(stringArg(c, 0) ?? "") }
             case "base64Decode":
-                java = stringResult(c); swift = (try? JsExtensionsCore.base64Decode(stringArg(c, 0))) ?? ""
+                swiftOutcome = outcome { try JsExtensionsCore.base64Decode(stringArg(c, 0)) }
             case "hexEncodeToString":
-                java = stringResult(c); swift = JsExtensionsCore.hexEncodeToString(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.hexEncodeToString(stringArg(c, 0) ?? "") }
             case "hexDecodeToString":
-                java = stringResult(c); swift = JsExtensionsCore.hexDecodeToString(stringArg(c, 0) ?? "") ?? ""
+                swiftOutcome = outcome { try JsExtensionsCore.hexDecodeToString(stringArg(c, 0) ?? "") }
             case "t2s":
-                java = stringResult(c); swift = JsExtensionsCore.t2s(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.t2s(stringArg(c, 0) ?? "") }
             case "s2t":
-                java = stringResult(c); swift = JsExtensionsCore.s2t(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.s2t(stringArg(c, 0) ?? "") }
             case "timeFormat":
-                java = stringResult(c); swift = JsExtensionsCore.timeFormat(numberArg(c, 0))
+                swiftOutcome = outcome { JsExtensionsCore.timeFormat(numberArg(c, 0)) }
             case "timeFormatUTC":
-                java = stringResult(c)
-                swift = JsExtensionsCore.timeFormatUTC(numberArg(c, 0), format: stringArg(c, 1) ?? "",
-                                                       offsetMilliseconds: Int(numberArg(c, 2)))
+                swiftOutcome = outcome {
+                    JsExtensionsCore.timeFormatUTC(numberArg(c, 0), format: stringArg(c, 1) ?? "",
+                                                   offsetMilliseconds: Int(numberArg(c, 2)))
+                }
             case "encodeURI":
-                java = stringResult(c); swift = JsExtensionsCore.encodeURI(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.encodeURI(stringArg(c, 0) ?? "") }
             case "toNumChapter":
-                java = stringResult(c); swift = JsExtensionsCore.toNumChapter(stringArg(c, 0)) ?? ""
+                swiftOutcome = outcome {
+                    stringArg(c, 0).flatMap { JsExtensionsCore.toNumChapter($0) }
+                }
             case "htmlFormat":
-                java = stringResult(c); swift = JsExtensionsCore.htmlFormat(stringArg(c, 0) ?? "")
+                swiftOutcome = outcome { JsExtensionsCore.htmlFormat(stringArg(c, 0) ?? "") }
             case "strToBytes":
-                java = stringResult(c)
-                let bytes = (try? JsExtensionsCore.strToBytes(stringArg(c, 0) ?? "")) ?? []
-                swift = bytes.map { String(format: "%02x", $0) }.joined()
+                swiftOutcome = outcome {
+                    let bytes = try JsExtensionsCore.strToBytes(stringArg(c, 0) ?? "")
+                    return bytes.map { String(format: "%02x", $0) }.joined()
+                }
             case "bytesToStr":
-                java = stringResult(c)
-                let bytes = JsExtensionsCore.hexDecodeToByteArray(c.hex ?? "") ?? []
-                swift = (try? JsExtensionsCore.bytesToStr(bytes)) ?? ""
+                swiftOutcome = outcome {
+                    let bytes = JsExtensionsCore.hexDecodeToByteArray(c.hex ?? "") ?? []
+                    return try JsExtensionsCore.bytesToStr(bytes)
+                }
             default:
                 continue
             }
-            if let swift, let java, swift != java {
-                failures.append(report(c, java: java, swift: swift))
+            let java = javaOutcome(c)
+            if java != swiftOutcome {
+                failures.append(report(c, java: java, swift: swiftOutcome))
             }
         }
         if compared == 0 { try failWhenNoGolden() }
         if !failures.isEmpty { XCTFail("发现 \(failures.count) 处 JsExtensions golden 不一致：\n\n" + failures.joined(separator: "\n\n")) }
-    }
-
-    private func stringResult(_ c: Result) -> String? {
-        guard let r = c.result else { return nil }
-        switch r { case .string(let s): return s; case .null: return "" }
     }
 
     private func failWhenNoGolden() throws {
