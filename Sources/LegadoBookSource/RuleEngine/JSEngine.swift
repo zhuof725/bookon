@@ -13,11 +13,13 @@
 //
 //  ⚠️ Rhino vs JavaScriptCore 差异（详见 README 差异表）：
 //   - Java 互操作（Packages.xxx / importClass / importPackage / org.jsoup.Jsoup.parse /
-//     java.lang.String）在 JSC 不存在。真实书源（魔丸小说、爱丽丝书屋）用了这类互操作，
+//     java.lang.String）在 JSC 不存在。真实书源（台湾小说网、爱丽丝书屋）用了这类互操作，
 //     本引擎检测到即抛明确错误 + 记 diagnostics，不假装支持。
-//   - 数字→字符串：Rhino 把整数值 Double 输出不带 .0（1.0 -> "1"），JSC Number→String 同样
-//     不带 .0；但 AnalyzeRule.makeUpRule 对 Double%1==0 用 "%.0f" 强制整数输出（已对齐）。
-//   - ES 版本：Rhino 默认 ES5/部分 ES6；JSC 支持现代 ES。差异标注「未验证」。
+//   - 数字→字符串：JS 内部 String(x)/拼接 与 Kotlin raw.toString() 是两条不同路径。
+//     Rhino 返回 Java Double 时 Double.toString 整数带 .0；inline {{}} 仅对
+//     Double%1==0 用 Locale.ROOT "%.0f"。以真实 Rhino 1.8.1 golden 定案，详见 README。
+//   - ES 版本：legado 的 Rhino 设置 VERSION_ES6 + setInterpretedMode(true)；JSC 支持现代 ES。
+//     未覆盖的现代语法仍不能声称与 Rhino 完全一致。
 //
 //  —— 全局规范：绝不崩溃。JS 求值异常 -> throw RuleEngineError.jsError + 记 diagnostics。
 //

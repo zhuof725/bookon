@@ -84,7 +84,8 @@ let package = Package(
             dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoAnalyzeRuleTests",
             resources: [
-                .copy("Resources/配置文件_7个.json")
+                .copy("Resources/配置文件_7个.json"),
+                .copy("Resources/taiwan_real_source.json")
             ]
         ),
         // 第 4 步 B：AnalyzeRule 的纯 public 接口测试（普通 import，非 @testable）。

@@ -1,0 +1,69 @@
+{
+  "bookSourceComment": "2026-09-17：默认文字转简体，URL保持原样。twkan.com此前访问异常，本源使用twkan.cc，不保证旧书ID互通。公开页面匿名可读，未发现账号入口。请求间隔2秒；遇验证或限频停止并提示，需手动验证。搜索/分类列表无封面，详情有封面。 2026-09-17 E兼容修复：搜索、发现、目录返回逐项JSON字符串数组，字段继续JSONPath；并非整数组JSON.stringify。",
+  "bookSourceGroup": "常规",
+  "bookSourceName": "📂台湾小说网",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://twkan.cc/",
+  "bookUrlPattern": "https?://(?:www[.])?twkan[.]cc/book/[A-Za-z0-9]+[.]html",
+  "concurrentRate": "1/2000",
+  "customOrder": 18,
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"热门推荐\",\"url\":\"https://www.twkan.cc/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"玄幻\",\"url\":\"https://www.twkan.cc/library/4ZyXBmkpBKE0CZre8xpWft/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"仙侠\",\"url\":\"https://www.twkan.cc/library/1atwJtoBJ6G7Jyb6FDlPtT/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"都市\",\"url\":\"https://www.twkan.cc/library/2gr4z5Jz9ZNM1NLXrJORkN/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"历史\",\"url\":\"https://www.twkan.cc/library/9WnLjlGrA2WzBYwdH9nRx/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"科幻\",\"url\":\"https://www.twkan.cc/library/7dG222CnytPNTX5EtjGxCC/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"军事\",\"url\":\"https://www.twkan.cc/library/5lIKnscgjyDeHoxgM85ygm/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"言情\",\"url\":\"https://www.twkan.cc/library/UmyEUPcEoKK6p2oAcoUSC/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"轻小说\",\"url\":\"https://www.twkan.cc/library/1nENalPqLsPaObjhtw3Gpf/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"悬疑\",\"url\":\"https://www.twkan.cc/library/4bAvYg9ZmMQ9CuvQqPVcG8/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"奇幻\",\"url\":\"https://www.twkan.cc/library/1MlyhP24PsZBlLfJDFqoqA/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"游戏\",\"url\":\"https://www.twkan.cc/library/4vINQfiwMRl0Kl1fB3ihZt/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"诸天无限\",\"url\":\"https://www.twkan.cc/library/3QhTcsMkxFzF1YDLzO48oc/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"武侠\",\"url\":\"https://www.twkan.cc/library/67Fc3zzuMkZWcG7oH7jF2Z/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"重生\",\"url\":\"https://www.twkan.cc/library/1Ce9LrTxPyHhrQ2gW2F52y/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"体育\",\"url\":\"https://www.twkan.cc/library/1RgQeN9n69lr7osC8JqSbo/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"现实\",\"url\":\"https://www.twkan.cc/library/2Kkc6czsCFOv3Vhy2gfJBJ/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"穿越\",\"url\":\"https://www.twkan.cc/library/24S6D6q7GI2NbHaHpWfWdO/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"未删减\",\"url\":\"https://www.twkan.cc/library/3Wx5Kt8fHBA1qK73EEwpXP/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"人气榜\",\"url\":\"https://www.twkan.cc/ranking/hits/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"全本小说\",\"url\":\"https://www.twkan.cc/full/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+  "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36\",\"Referer\":\"https://www.twkan.cc/\"}",
+  "lastUpdateTime": "1789964647324",
+  "loginCheckJs": "(function(){var b=result.body;if(typeof b==='function')b=b.call(result);b=String(b);var c=result.code;if(typeof c==='function')c=c.call(result);var msg='';if(Number(c)===429||/搜索间隔|搜索間隔|请求过于频繁|請求過於頻繁/.test(b))msg='站点限频，请暂停搜索后再试';else if(/<title>Just a moment|<title>Attention Required/.test(b))msg='站点要求人机验证，请使用书源菜单打开网站手动完成';else if(Number(c)>=400)msg='站点HTTP错误 '+c+'，请稍后重试';if(msg){java.toast(msg);throw new Error(msg);}return result;})()",
+  "loginUi": "<js>JSON.stringify([{name:'检查访问状态',type:'button',action:'checkSite()'},{name:'打开网站',type:'button',action:'openSite()'}])</js>",
+  "loginUrl": "function checkSite(){try{var t=Date.now();var h=String(java.ajax('https://www.twkan.cc/'));var d=Packages.org.jsoup.Jsoup.parse(h);if(d.select('.item dl dt a[href^=/book/]').size()>0){java.toast('站点可直连，当前可匿名阅读；公开页面未发现账号登录入口。耗时 '+(Date.now()-t)+'ms');}else{java.toast('未取得正常书单，可能需要验证或站点暂时不可用');}}catch(e){java.toast('访问失败：'+e);}}function openSite(){java.startBrowser('https://www.twkan.cc/','台湾小说网');}function login(){checkSite();}",
+  "respondTime": 27061,
+  "ruleBookInfo": {
+    "author": "$.a",
+    "coverUrl": "$.c",
+    "init": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));function t(s){return String(java.t2s(String(d.select(s).text())));}var o=t('.bookintro');var at=o.indexOf('本书由思兔小说');if(at>=0)o=o.substring(0,at);JSON.stringify({n:t('h1.booktitle'),a:t('.booktag a.red'),k:t('.booktag a.blue')+','+t('.booktag span.red'),w:t('.booktag span.blue').split(' ')[0],o:o,c:String(d.select('.bookcover img').attr('src')),l:t('a.bookchapter')});",
+    "intro": "$.o",
+    "kind": "$.k",
+    "lastChapter": "$.l",
+    "name": "$.n",
+    "tocUrl": "{{baseUrl}}##/book/##/chapter/",
+    "wordCount": "$.w"
+  },
+  "ruleContent": {
+    "content": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#content p');var a=[];for(var i=0;i<es.size();i++){var t=String(java.t2s(String(es.get(i).text())));if(t.length>0)a.push(t);}a.join(String.fromCharCode(10));",
+    "title": "@js:java.t2s(String(Packages.org.jsoup.Jsoup.parse(String(result)).select('h1').text()));"
+  },
+  "ruleExplore": {
+    "author": "$.author",
+    "bookList": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));function t(x){return String(java.t2s(String(x)));}var a=[];var bs=d.select('.item');if(bs.size()>0){for(var i=0;i<bs.size();i++){var b=bs.get(i),n=b.select('dl dt a[href^=/book/]');if(n.size()>0)a.push({name:t(n.text()),author:t(b.select('dl dt span').text()),intro:t(b.select('dl dd').text()),coverUrl:String(b.select('.image img').attr('src')),bookUrl:String(n.attr('href'))});}}else{bs=d.select('.bookbox');for(var i=0;i<bs.size();i++){var b=bs.get(i),au=b.select('.author'),n=b.select('.bookname a'),up=b.select('.update');var o=String(up.attr('title'));if(!o)o=String(up.text());if(n.size()>0)a.push({name:t(n.text()),author:t(au.size()?au.get(0).text():'').replace(/^作者[：:]/,'').trim(),wordCount:t(au.size()>1?au.get(1).text():'').replace(/^字数[：:]/,'').trim(),intro:t(o).replace(/^简介[：:]/,'').trim(),lastChapter:t(b.select('.cat a').text()),bookUrl:String(n.attr('href'))});}}for(var twkIndex=0;twkIndex<a.length;twkIndex++){a[twkIndex]=String(JSON.stringify(a[twkIndex]));}a;",
+    "bookUrl": "$.bookUrl",
+    "coverUrl": "$.coverUrl",
+    "intro": "$.intro",
+    "lastChapter": "$.lastChapter",
+    "name": "$.name",
+    "wordCount": "$.wordCount"
+  },
+  "ruleSearch": {
+    "author": "$.author",
+    "bookList": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));function t(x){return String(java.t2s(String(x)));}var a=[];var bs=d.select('.item');if(bs.size()>0){for(var i=0;i<bs.size();i++){var b=bs.get(i),n=b.select('dl dt a[href^=/book/]');if(n.size()>0)a.push({name:t(n.text()),author:t(b.select('dl dt span').text()),intro:t(b.select('dl dd').text()),coverUrl:String(b.select('.image img').attr('src')),bookUrl:String(n.attr('href'))});}}else{bs=d.select('.bookbox');for(var i=0;i<bs.size();i++){var b=bs.get(i),au=b.select('.author'),n=b.select('.bookname a'),up=b.select('.update');var o=String(up.attr('title'));if(!o)o=String(up.text());if(n.size()>0)a.push({name:t(n.text()),author:t(au.size()?au.get(0).text():'').replace(/^作者[：:]/,'').trim(),wordCount:t(au.size()>1?au.get(1).text():'').replace(/^字数[：:]/,'').trim(),intro:t(o).replace(/^简介[：:]/,'').trim(),lastChapter:t(b.select('.cat a').text()),bookUrl:String(n.attr('href'))});}}for(var twkIndex=0;twkIndex<a.length;twkIndex++){a[twkIndex]=String(JSON.stringify(a[twkIndex]));}a;",
+    "bookUrl": "$.bookUrl",
+    "checkKeyWord": "斗破苍穹",
+    "coverUrl": "$.coverUrl",
+    "intro": "$.intro",
+    "lastChapter": "$.lastChapter",
+    "name": "$.name",
+    "wordCount": "$.wordCount"
+  },
+  "ruleToc": {
+    "chapterList": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));var es=d.select('#allchapter a');var a=[];for(var i=0;i<es.size();i++){var u=String(es.get(i).attr('href'));if(/^[/]chapter[/][A-Za-z0-9]+[/][A-Za-z0-9]{10,}[.]html$/.test(u))a.push({n:String(java.t2s(String(es.get(i).text()))),u:u});}for(var twkIndex=0;twkIndex<a.length;twkIndex++){a[twkIndex]=String(JSON.stringify(a[twkIndex]));}a;",
+    "chapterName": "$.n",
+    "chapterUrl": "$.u",
+    "nextTocUrl": "@js:var d=Packages.org.jsoup.Jsoup.parse(String(result));var u=String(d.select('#linkNext').attr('href'));/^[/]chapter[/][A-Za-z0-9]+[/][0-9]+[.]html$/.test(u)?u:'';"
+  },
+  "searchUrl": "https://www.twkan.cc/search/{{key}}/{{page}}.html",
+  "storageKind": 0,
+  "weight": 0,
+  "_fixtureProvenance": {
+    "rules": "真实规则，原样摘自用户上传配置文件_14个.json（14源）",
+    "data": "测试响应为合成 HTML；不请求真实网站，也不声称端到端成功"
+  }
+}

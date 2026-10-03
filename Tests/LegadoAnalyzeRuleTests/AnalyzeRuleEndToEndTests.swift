@@ -5,8 +5,9 @@
 //  端到端：用「配置文件_7个.json」里的【真实书源规则文本】跑 AnalyzeRule，
 //  输入响应为【合成数据】（规则真实、数据合成）。来源书源名在每个用例注释标出。
 //
-//  含 <js>/Java 互操作的真实规则（魔丸小说、爱丽丝书屋）预期触发「未实现 / 不支持」错误，
-//  测试断言该错误行为，不假装成功。
+//  魔丸小说用 JsExtensions（没有 Java 互操作），预期触发未实现错误；
+//  爱丽丝书屋、台湾小说网用 Java 互操作，预期触发不支持错误。
+//  台湾规则来自用户配置14个的小资源；测试断言错误及 diagnostics，不假装端到端成功。
 //
 
 import XCTest
@@ -121,6 +122,33 @@ final class AnalyzeRuleEndToEndTests: XCTestCase {
         try a.setContent("<div>x</div>")
         XCTAssertThrowsError(try a.getString("@js:var doc = org.jsoup.Jsoup.parse(result); doc"))
         XCTAssertTrue(diag.diagnostics.contains { $0.message.contains("org.jsoup") || $0.message.contains("互操作") })
+    }
+
+    // ===== 台湾小说网（用户配置14个中的真实 ruleContent.content；输入合成）=====
+    // 断言真实 Java 互操作规则被明确拒绝，不声称台湾源端到端成功。
+    func testTaiwan_realJsoupInteropThrows() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "taiwan_real_source", withExtension: "json"))
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+        let source = try XCTUnwrap(object as? [String: Any])
+        XCTAssertTrue((source["bookSourceName"] as? String)?.contains("台湾小说网") == true)
+        XCTAssertEqual(source["bookSourceUrl"] as? String, "https://twkan.cc/")
+        XCTAssertNotNil(source["_fixtureProvenance"])
+        let contentRules = try XCTUnwrap(source["ruleContent"] as? [String: Any])
+        let rule = try XCTUnwrap(contentRules["content"] as? String)
+        XCTAssertTrue(rule.contains("Packages.org.jsoup.Jsoup.parse"))
+        let diag = RuleEngineDiagnostics()
+        let a = AnalyzeRule(diagnostics: diag)
+        try a.setContent("<h1>合成标题</h1><div id='content'><p>合成正文</p></div>")
+        XCTAssertThrowsError(try a.getString(rule)) { error in
+            guard case RuleEngineError.jsError(let message) = error else {
+                XCTFail("台湾真实规则应抛 jsError，实际：\(error)")
+                return
+            }
+            XCTAssertTrue(message.contains("Packages.") || message.contains("Java 互操作"), message)
+        }
+        XCTAssertTrue(diag.diagnostics.contains {
+            $0.message.contains("Packages") || $0.message.contains("org.jsoup") || $0.message.contains("互操作")
+        }, "台湾真实规则被拒绝必须有 Java 互操作诊断")
     }
 
     // ===== 得间小说（class./body. 组合语法，真实）=====

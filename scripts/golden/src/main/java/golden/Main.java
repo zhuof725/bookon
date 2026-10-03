@@ -113,6 +113,17 @@ public class Main {
                     output.add("jsonPathResults", outArr);
                 }
 
+                if (input.has("jsCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("jsCases")) {
+                        outArr.add(RhinoGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("jsResults", outArr);
+                    System.out.println("Rhino 1.8.1: " + outArr.size()
+                            + " 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）");
+                }
+
                 String outName = path.getFileName().toString();
                 try (FileWriter w = new FileWriter(Paths.get(outDir, outName).toFile(), StandardCharsets.UTF_8)) {
                     gson.toJson(output, w);

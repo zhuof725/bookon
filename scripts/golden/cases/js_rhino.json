@@ -1,0 +1,291 @@
+{
+  "_comment": "⚠️ 合成样本，非真实数据。JS 片段为手工构造，用于对照 Rhino(legado 用) 与 JavaScriptCore(本移植用) 的求值结果。规则文本来源：无（全部合成）。",
+  "_SAMPLE_KIND": "合成样本（synthetic）",
+  "jsCases": [
+    {
+      "name": "int_add",
+      "js": "1+1"
+    },
+    {
+      "name": "int_add_multi",
+      "js": "100+200+300"
+    },
+    {
+      "name": "float_add",
+      "js": "1.5+2.25"
+    },
+    {
+      "name": "int_sub_negative",
+      "js": "1-3"
+    },
+    {
+      "name": "negative_mul",
+      "js": "-2*3"
+    },
+    {
+      "name": "div_exact",
+      "js": "10/2"
+    },
+    {
+      "name": "div_inexact",
+      "js": "10/4"
+    },
+    {
+      "name": "div_by_three",
+      "js": "1/3"
+    },
+    {
+      "name": "zero_float",
+      "js": "0.0"
+    },
+    {
+      "name": "zero_int",
+      "js": "0"
+    },
+    {
+      "name": "neg_zero",
+      "js": "-0"
+    },
+    {
+      "name": "big_number",
+      "js": "1234567890123"
+    },
+    {
+      "name": "big_number_plus",
+      "js": "9007199254740991+1"
+    },
+    {
+      "name": "float_precision",
+      "js": "0.1+0.2"
+    },
+    {
+      "name": "nan_value",
+      "js": "NaN"
+    },
+    {
+      "name": "nan_expr",
+      "js": "0/0"
+    },
+    {
+      "name": "infinity_value",
+      "js": "Infinity"
+    },
+    {
+      "name": "infinity_expr",
+      "js": "1/0"
+    },
+    {
+      "name": "neg_infinity",
+      "js": "-Infinity"
+    },
+    {
+      "name": "sqrt_two",
+      "js": "Math.sqrt(2)"
+    },
+    {
+      "name": "exp_large",
+      "js": "1e21"
+    },
+    {
+      "name": "exp_small",
+      "js": "1e-7"
+    },
+    {
+      "name": "exp_normalize",
+      "js": "1.0e2"
+    },
+    {
+      "name": "num_to_string_add",
+      "js": "1+''"
+    },
+    {
+      "name": "str_concat",
+      "js": "'a' + 'b' + 'c'"
+    },
+    {
+      "name": "str_concat_num",
+      "js": "'x=' + 1.5"
+    },
+    {
+      "name": "str_concat_int",
+      "js": "'n=' + 2"
+    },
+    {
+      "name": "template_string",
+      "js": "`v=${1+1}`"
+    },
+    {
+      "name": "template_string_float",
+      "js": "`f=${1.5}`"
+    },
+    {
+      "name": "template_string_int",
+      "js": "`i=${2}`"
+    },
+    {
+      "name": "array_to_string",
+      "js": "[1,2,3]"
+    },
+    {
+      "name": "array_mixed",
+      "js": "['a',1,true,null]"
+    },
+    {
+      "name": "array_nested",
+      "js": "[[1,2],[3]]"
+    },
+    {
+      "name": "array_join",
+      "js": "[1,2,3].join('-')"
+    },
+    {
+      "name": "object_to_string",
+      "js": "({a:1,b:'x'})"
+    },
+    {
+      "name": "object_empty",
+      "js": "({})"
+    },
+    {
+      "name": "json_stringify_obj",
+      "js": "JSON.stringify({a:1,b:'x'})"
+    },
+    {
+      "name": "json_stringify_array",
+      "js": "JSON.stringify([1,2,3])"
+    },
+    {
+      "name": "json_stringify_nested",
+      "js": "JSON.stringify({a:{b:[1,2]}})"
+    },
+    {
+      "name": "undefined_value",
+      "js": "undefined"
+    },
+    {
+      "name": "undefined_var",
+      "js": "void 0"
+    },
+    {
+      "name": "null_value",
+      "js": "null"
+    },
+    {
+      "name": "null_plus",
+      "js": "null + 1"
+    },
+    {
+      "name": "undefined_plus",
+      "js": "undefined + 1"
+    },
+    {
+      "name": "parseint_str",
+      "js": "parseInt('42')"
+    },
+    {
+      "name": "parseint_float_str",
+      "js": "parseInt('42.9')"
+    },
+    {
+      "name": "parseint_radix",
+      "js": "parseInt('ff',16)"
+    },
+    {
+      "name": "parsefloat_str",
+      "js": "parseFloat('3.14abc')"
+    },
+    {
+      "name": "result_times_one",
+      "js": "result*1",
+      "result": "3"
+    },
+    {
+      "name": "result_times_one_float",
+      "js": "result*1.0",
+      "result": "3"
+    },
+    {
+      "name": "result_times_ten",
+      "js": "result*10",
+      "result": "3"
+    },
+    {
+      "name": "result_plus",
+      "js": "result + 5",
+      "result": "3"
+    },
+    {
+      "name": "result_string_of",
+      "js": "String(result)",
+      "result": "3"
+    },
+    {
+      "name": "string_of_number",
+      "js": "String(2)"
+    },
+    {
+      "name": "string_of_float",
+      "js": "String(2.5)"
+    },
+    {
+      "name": "number_of_string",
+      "js": "Number('3.5')"
+    },
+    {
+      "name": "boolean_true",
+      "js": "true"
+    },
+    {
+      "name": "boolean_false",
+      "js": "false"
+    },
+    {
+      "name": "boolean_expr",
+      "js": "2 > 1"
+    },
+    {
+      "name": "date_to_string",
+      "js": "new Date(0).toISOString()"
+    },
+    {
+      "name": "date_gettime",
+      "js": "new Date(86400000).getTime()"
+    },
+    {
+      "name": "math_floor",
+      "js": "Math.floor(3.7)"
+    },
+    {
+      "name": "math_round",
+      "js": "Math.round(2.5)"
+    },
+    {
+      "name": "tofixed",
+      "js": "(1.005).toFixed(2)"
+    },
+    {
+      "name": "str_length",
+      "js": "'hello'.length"
+    },
+    {
+      "name": "str_slice",
+      "js": "'hello'.slice(1,3)"
+    },
+    {
+      "name": "json_parse_get",
+      "js": "JSON.parse('{\"k\":7}').k"
+    },
+    {
+      "name": "json_parse_array",
+      "js": "JSON.parse('[1,2,3]')"
+    },
+    {
+      "name": "literal_two",
+      "js": "2"
+    },
+    {
+      "name": "literal_two_point_zero",
+      "js": "2.0"
+    }
+  ]
+}

@@ -83,7 +83,7 @@ org.jsoup.Jsoup）→ JSC 无法运行，预检测抛 jsError + 记诊断；@put
 
 - **iOS==macOS 测试总数核对**：`ios_sim_test.sh` 改为按 bundle 求和 + 与 macOS artifact 总数比对，
   不相等则 iOS job 失败；新增 `scripts/extract_macos_count.py`；workflow 加 artifact 传递。
-- **补 RuleValue `.jsObject`/`.jsonObject` 分支测试**：`RuleValueObjectBranchTests.swift`（17 例），
+- **补 RuleValue `.jsObject`/`.jsonObject` 分支测试**：`RuleValueObjectBranchTests.swift`（18 例），
   覆盖 getString/getStringList/getElement/getElements 的键值直取、`{{ }}`、嵌套对象、数组、
   null、数字格式 + contentEquals 近似 3 个边界用例（结果无差异，README 已记录）。
 - **`JS_EXTENSIONS_USAGE.md` 重写**：基于 14 个真实书源（`配置文件_14个.json`）严格扫描，

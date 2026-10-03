@@ -38,6 +38,12 @@
 
   <dependencies>
     <dependency>
+      <!-- 与 legado gradle/libs.versions.toml rhino=1.8.1 一致；真实 JS 求值/返回值拆箱对照。 -->
+      <groupId>org.mozilla</groupId>
+      <artifactId>rhino</artifactId>
+      <version>1.8.1</version>
+    </dependency>
+    <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
     </dependency>
