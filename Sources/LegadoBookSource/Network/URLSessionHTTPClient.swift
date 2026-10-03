@@ -476,18 +476,18 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
         guard !host.isEmpty, let port = Int(portString), (1...65535).contains(port) else { return nil }
         if scheme == "socks" {
             return [
-                kCFNetworkProxiesSOCKSEnable as String: true,
-                kCFNetworkProxiesSOCKSProxy as String: host,
-                kCFNetworkProxiesSOCKSPort as String: port
+                "SOCKSEnable" as String: true,
+                "SOCKSProxy" as String: host,
+                "SOCKSPort" as String: port
             ]
         }
         return [
-            kCFNetworkProxiesHTTPEnable as String: true,
-            kCFNetworkProxiesHTTPProxy as String: host,
-            kCFNetworkProxiesHTTPPort as String: port,
-            kCFNetworkProxiesHTTPSEnable as String: true,
-            kCFNetworkProxiesHTTPSProxy as String: host,
-            kCFNetworkProxiesHTTPSPort as String: port
+            "HTTPEnable" as String: true,
+            "HTTPProxy" as String: host,
+            "HTTPPort" as String: port,
+            "HTTPSEnable" as String: true,
+            "HTTPSProxy" as String: host,
+            "HTTPSPort" as String: port
         ]
     }
 
