@@ -209,7 +209,6 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
     /// - 缓存：OkHttp 默认无缓存（无 .cache()），用 reloadIgnoringLocalCacheData + urlCache=nil 对齐。
     private func makeConfiguration(for request: HTTPRequest) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpShouldHandleCookies = false
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -333,7 +332,7 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
                 return HTTPError(kind: .unknownHost, message: message)
             case NSURLErrorCannotConnectToHost:
                 return HTTPError(kind: .connectRefused, message: message)
-            case NSURLErrorNetworkConnectionLost, NSURLErrorDataLengthExceeded:
+            case NSURLErrorNetworkConnectionLost, URLError.Code.dataLengthExceeded.rawValue:
                 return HTTPError(kind: .socket, message: message)
             case NSURLErrorSecureConnectionFailed,
                  NSURLErrorServerCertificateUntrusted,
