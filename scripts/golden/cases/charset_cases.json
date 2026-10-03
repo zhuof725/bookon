@@ -1,0 +1,506 @@
+{
+ "_comment": "⚠️ 合成样本（synthetic），非真实数据。第 6 步 6B golden：字符集检测/响应解码。由 scripts/golden/gen_charset_cases.py 生成（确定性规则 + Python codec 编码 + JDK 11 规则解码回读校验）。Java 侧 CharsetGen.java 输出 {name, hex, detected, htmlEncode, decoded} 供 Swift 测试比对。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "charsetCases": [
+  {
+   "name": "utf8_chinese_bom",
+   "category": "utf8",
+   "hex": "EFBBBFE7ACACE4B880E7ABA020E4BDA0E5A5BDE4B896E7958CEFBC8CE8BF99E698AFE5AD97E7ACA6E99B86E6A380E6B58BE6B58BE8AF95E38082"
+  },
+  {
+   "name": "utf8_chinese",
+   "category": "utf8",
+   "hex": "E7ACACE4B880E7ABA020E4BDA0E5A5BDE4B896E7958CEFBC8CE8BF99E698AFE5AD97E7ACA6E99B86E6A380E6B58BE6B58BE8AF95E38082"
+  },
+  {
+   "name": "utf8_emoji",
+   "category": "utf8",
+   "hex": "48656C6C6F20F09F988020E4B896E7958C20F09F8C8D"
+  },
+  {
+   "name": "utf8_mixed",
+   "category": "utf8",
+   "hex": "48656C6C6F20E4B896E7958C203132332C20746573742E"
+  },
+  {
+   "name": "utf8_latin",
+   "category": "utf8",
+   "hex": "636166C3A92064C3A96AC3A020767520E28094206E61C3AF7665"
+  },
+  {
+   "name": "utf8_punct",
+   "category": "utf8",
+   "hex": "E3808AE3808BE3808CE3808DE3808EE3808FEFBC88EFBC89E28094E28094E280A6E280A6EFBC81EFBC9F"
+  },
+  {
+   "name": "utf8_garbage_1",
+   "category": "garbage",
+   "hex": "E228A1"
+  },
+  {
+   "name": "utf8_truncated_3byte",
+   "category": "garbage",
+   "hex": "E282"
+  },
+  {
+   "name": "utf8_overlong_c0",
+   "category": "garbage",
+   "hex": "C0AF"
+  },
+  {
+   "name": "utf8_ff",
+   "category": "garbage",
+   "hex": "FF"
+  },
+  {
+   "name": "utf8_lone_continuation",
+   "category": "garbage",
+   "hex": "8041"
+  },
+  {
+   "name": "utf8_surrogate_encoded",
+   "category": "garbage",
+   "hex": "EDA080"
+  },
+  {
+   "name": "utf8_4byte_overlong",
+   "category": "garbage",
+   "hex": "F0808080"
+  },
+  {
+   "name": "utf8_4byte_too_high",
+   "category": "garbage",
+   "hex": "F4908080"
+  },
+  {
+   "name": "utf8_lead_at_end",
+   "category": "garbage",
+   "hex": "E2"
+  },
+  {
+   "name": "utf8_4byte_truncated",
+   "category": "garbage",
+   "hex": "F180"
+  },
+  {
+   "name": "utf8_4byte_bad3rd",
+   "category": "garbage",
+   "hex": "F18028"
+  },
+  {
+   "name": "utf8_e0_9f",
+   "category": "garbage",
+   "hex": "E09F80"
+  },
+  {
+   "name": "utf8_mixed_valid_invalid",
+   "category": "garbage",
+   "hex": "41E228A142E282AC43"
+  },
+  {
+   "name": "ascii_plain",
+   "category": "ascii",
+   "hex": "54686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920646F672E"
+  },
+  {
+   "name": "ascii_short",
+   "category": "ascii",
+   "hex": "68656C6C6F"
+  },
+  {
+   "name": "ascii_with_ws",
+   "category": "ascii",
+   "hex": "6C696E65310A6C696E653209656E640D0A"
+  },
+  {
+   "name": "ascii_numbers",
+   "category": "ascii",
+   "hex": "30313233343536373839203132332E343536202D376539"
+  },
+  {
+   "name": "short_1_ascii",
+   "category": "short",
+   "hex": "41"
+  },
+  {
+   "name": "short_2_gbk_ni",
+   "category": "short",
+   "hex": "C4E3"
+  },
+  {
+   "name": "short_3_utf8_zhong",
+   "category": "short",
+   "hex": "E4B8AD"
+  },
+  {
+   "name": "short_4_emoji",
+   "category": "short",
+   "hex": "F09F9880"
+  },
+  {
+   "name": "short_1_lead",
+   "category": "short",
+   "hex": "81"
+  },
+  {
+   "name": "short_1_ff",
+   "category": "short",
+   "hex": "FF"
+  },
+  {
+   "name": "short_2_bom_le",
+   "category": "short",
+   "hex": "FFFE"
+  },
+  {
+   "name": "short_2_bom_be",
+   "category": "short",
+   "hex": "FEFF"
+  },
+  {
+   "name": "short_2_null_a",
+   "category": "short",
+   "hex": "0041"
+  },
+  {
+   "name": "short_3_incomplete_utf16",
+   "category": "short",
+   "hex": "410042"
+  },
+  {
+   "name": "gbk_chinese",
+   "category": "gbk",
+   "hex": "D6D0CEC4D0A1CBB5D4C4B6C1B2E2CAD4A3ACB5DAD2BBD5C2A1A3"
+  },
+  {
+   "name": "gbk_fullwidth",
+   "category": "gbk",
+   "hex": "A3C1A3C2A3C3A3B1A3B2A3B3A3A8C8ABBDC7A3A9B2E2CAD4"
+  },
+  {
+   "name": "gbk_symbols",
+   "category": "gbk",
+   "hex": "A3ACA1A3A3A1A3BFA3BAA3BBA1B0A1B1A1BAA1BBA1B6A1B7A1AAA1AAA1ADA1A4"
+  },
+  {
+   "name": "gbk_mixed",
+   "category": "gbk",
+   "hex": "48656C6C6F20CAC0BDE7203230323420746573742E"
+  },
+  {
+   "name": "gbk_common_book",
+   "category": "gbk",
+   "hex": "CCECD0D0BDA1A3ACBEFDD7D3D2D4D7D4C7BFB2BBCFA2A1A3"
+  },
+  {
+   "name": "gb2312_chinese",
+   "category": "gb2312",
+   "hex": "D6D0BBAAC8CBC3F1B9B2BACDB9FAD6D0D1EBC8CBC3F1D5FEB8AE"
+  },
+  {
+   "name": "gb2312_pinyin_like",
+   "category": "gb2312",
+   "hex": "D0C2BBAAD7D6B5E4B4CAD3EFBDE2CACDCABEC0FD"
+  },
+  {
+   "name": "gb18030_chinese",
+   "category": "gb18030",
+   "hex": "BCF2CCE5D6D0CEC4C4DAC8DDA3ACBCE6C8DDB2E2CAD4A1A3"
+  },
+  {
+   "name": "gb18030_ext_a",
+   "category": "gb18030",
+   "hex": "8139EE398139EF308235883820C0A9D5B941C7F8"
+  },
+  {
+   "name": "gb18030_supp_plane",
+   "category": "gb18030",
+   "hex": "9439FC3620C0A9D5B94220953282362095328237"
+  },
+  {
+   "name": "gb18030_last_cp",
+   "category": "gb18030",
+   "hex": "BCABCFDEC2EBCEBBE3329A35"
+  },
+  {
+   "name": "gb18030_euro",
+   "category": "gb18030",
+   "hex": "BCDBB8F120A2E331303020D4AA"
+  },
+  {
+   "name": "big5_chinese",
+   "category": "big5",
+   "hex": "C163C5E9A4A4A4E5A470BBA1BE5CC5AAB4FAB8D5"
+  },
+  {
+   "name": "big5_common",
+   "category": "big5",
+   "hex": "A741A66EA141A540ACC9A149B36FAC4FB4FAB8D5A143"
+  },
+  {
+   "name": "big5_mixed",
+   "category": "big5",
+   "hex": "426F6F6B20A470BBA1203132332074657374"
+  },
+  {
+   "name": "big5_level2",
+   "category": "big5",
+   "hex": "C074C5BEC562C67CC561C64E"
+  },
+  {
+   "name": "gbk_ext_pua",
+   "category": "gbk",
+   "hex": "A140A141A142",
+   "explicitCharset": "GBK"
+  },
+  {
+   "name": "gb18030_2005_a6f6",
+   "category": "gb18030",
+   "hex": "A6F6A6F7A6F8",
+   "explicitCharset": "gb18030"
+  },
+  {
+   "name": "gb18030_2005_a740",
+   "category": "gb18030",
+   "hex": "A740A741A742",
+   "explicitCharset": "gb18030"
+  },
+  {
+   "name": "gbk_a2e3_euro",
+   "category": "gbk",
+   "hex": "A2E3",
+   "explicitCharset": "gbk"
+  },
+  {
+   "name": "big5_a440",
+   "category": "big5",
+   "hex": "A440A441A442",
+   "explicitCharset": "Big5"
+  },
+  {
+   "name": "utf16le_bom",
+   "category": "utf16le",
+   "hex": "FFFE2D4E87654B6DD58B87652C67"
+  },
+  {
+   "name": "utf16le_nobom",
+   "category": "utf16le",
+   "hex": "2D4E87654B6DD58B87652C67"
+  },
+  {
+   "name": "utf16be_bom",
+   "category": "utf16be",
+   "hex": "FEFF4E2D65876D4B8BD56587672C"
+  },
+  {
+   "name": "utf16be_nobom",
+   "category": "utf16be",
+   "hex": "4E2D65876D4B8BD56587672C"
+  },
+  {
+   "name": "utf16le_ascii",
+   "category": "utf16le",
+   "hex": "480065006C006C006F00200057006F0072006C006400"
+  },
+  {
+   "name": "utf16le_emoji",
+   "category": "utf16le",
+   "hex": "3DD800DE3DD801DE3DD802DE"
+  },
+  {
+   "name": "utf16le_unpaired_high",
+   "category": "garbage",
+   "hex": "00D84100",
+   "explicitCharset": "UTF-16LE"
+  },
+  {
+   "name": "utf16be_reversed_bom",
+   "category": "garbage",
+   "hex": "FFFE",
+   "explicitCharset": "UTF-16BE"
+  },
+  {
+   "name": "utf16le_odd_trailing",
+   "category": "garbage",
+   "hex": "4100420041",
+   "explicitCharset": "UTF-16LE"
+  },
+  {
+   "name": "iso_latin1_accent",
+   "category": "iso88591",
+   "hex": "636166E92064E96AE0207675206E61EF7665"
+  },
+  {
+   "name": "iso_latin1_control",
+   "category": "iso88591",
+   "hex": "41809F42",
+   "explicitCharset": "ISO-8859-1"
+  },
+  {
+   "name": "cp1252_smart_quotes",
+   "category": "cp1252",
+   "hex": "9371756F74656494209720646173682080"
+  },
+  {
+   "name": "cp1252_undefined",
+   "category": "cp1252",
+   "hex": "41818D8F909D42",
+   "explicitCharset": "windows-1252"
+  },
+  {
+   "name": "cp1252_mixed",
+   "category": "cp1252",
+   "hex": "6E61EF7665206661E7616465209C75767265"
+  },
+  {
+   "name": "html_meta_charset_gbk",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C6D65746120636861727365743D2267626B223E3C2F686561643E3C626F64793E3C703EB5DAD2BBD5C220C4DAC8DDD5FDCEC4A1A33C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_charset_utf8",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C6D65746120636861727365743D225554462D38223E3C2F686561643E3C626F64793E3C703EE4BDA0E5A5BD205554462D3820E9A1B5E99DA23C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_charset_utf8_no_quotes",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C6D65746120636861727365743D7574662D383E3C2F686561643E3C626F64793E3C703EE697A0E5BC95E58FB7E5B19EE680A73C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_http_equiv",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C6D65746120687474702D65717569763D22436F6E74656E742D547970652220636F6E74656E743D22746578742F68746D6C3B20636861727365743D676232333132223E3C2F686561643E3C626F64793E3C703ED0C2BBAAD7D6B5E4B4CAD3EFBDE2CACDCABEC0FD3C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_case_upper",
+   "category": "html_meta",
+   "hex": "3C48544D4C3E3C484541443E3C4D45544120434841525345543D2747424B273E3C2F484541443E3C424F44593E3C503EB4F3D0A1D0B4B1E4CCE53C2F503E3C2F424F44593E3C2F48544D4C3E"
+  },
+  {
+   "name": "html_meta_equiv_case_upper",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D65746120485454502D45515549563D22434F4E54454E542D545950452220434F4E54454E543D22746578742F68746D6C3B20434841525345543D67626B223E3C2F686561643E3C626F64793E3C703EB4F3D0B4CAF4D0D43C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_second_wins",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D657461206E616D653D226465736372697074696F6E2220636F6E74656E743D226E6F223E3C6D65746120636861727365743D2262696735223E3C2F686561643E3C626F64793E3C703EC163C5E9A4A4A4E53C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_first_charset_wins",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D65746120636861727365743D227574662D38223E3C6D65746120636861727365743D2267626B223E3C2F686561643E3C626F64793E3C703EE7ACACE4B880E4B8AAE7949FE695883C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_content_no_semicolon",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D65746120687474702D65717569763D22436F6E74656E742D547970652220636F6E74656E743D2247424B223E3C2F686561643E3C626F64793E3C703EC3BBD3D0B7D6BAC5B5C420636F6E74656E743C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_content_charset_tail",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D65746120687474702D65717569763D22636F6E74656E742D747970652220636F6E74656E743D22746578742F68746D6C3B636861727365743D67623138303330223E3C2F686561643E3C626F64793E3C703EBCF2CCE5D6D0CEC4C4DAC8DD3C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_no_head_tag",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C626F64793E3C6D65746120636861727365743D2267626B223E3C703EC3BBD3D0206865616420B1EAC7A93C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_no_meta_gbk",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C7469746C653EB1EACCE23C2F7469746C653E3C2F686561643E3C626F64793E3C703EC3BBD3D0206D65746120B5C42047424B20D2B3C3E63C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_no_meta_utf8",
+   "category": "html_meta",
+   "hex": "3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C7469746C653EE6A087E9A2983C2F7469746C653E3C2F686561643E3C626F64793E3C703EE6B2A1E69C89206D65746120E79A84205554462D3820E9A1B5E99DA23C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_bom_utf8_meta",
+   "category": "html_meta",
+   "hex": "EFBBBF3C21444F43545950452068746D6C3E3C68746D6C3E3C686561643E3C6D65746120636861727365743D227574662D38223E3C2F686561643E3C626F64793E3C703EE5B8A620424F4D20E9A1B5E99DA23C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "html_meta_space_around_eq",
+   "category": "html_meta",
+   "hex": "3C68746D6C3E3C686561643E3C6D6574612063686172736574203D202267626B22203E3C2F686561643E3C626F64793E3C703EB5C8BAC5C1BDB2E0D3D0BFD5B8F13C2F703E3C2F626F64793E3C2F68746D6C3E"
+  },
+  {
+   "name": "mixed_cn_en_no_meta",
+   "category": "mixed",
+   "hex": "43686170746572203120B5DAD2BBD5C22048656C6C6F20CAC0BDE7A1A3"
+  },
+  {
+   "name": "garbage_random_mb",
+   "category": "garbage",
+   "hex": "8A9B8C9D8E9F8A8B"
+  },
+  {
+   "name": "garbage_random_text",
+   "category": "garbage",
+   "hex": "C8CBD6D0CEC4B2E2CAD4"
+  },
+  {
+   "name": "garbage_high_bytes",
+   "category": "garbage",
+   "hex": "A1A2A3A4A5A6A7A8A9AA"
+  },
+  {
+   "name": "explicit_utf8_alias",
+   "category": "explicit",
+   "hex": "E698BEE5BC8F207574663820E588ABE5908D",
+   "explicitCharset": "utf8"
+  },
+  {
+   "name": "explicit_gb2312_alias",
+   "category": "explicit",
+   "hex": "CFD4CABD20474232333132",
+   "explicitCharset": "euc-cn"
+  },
+  {
+   "name": "explicit_latin1_alias",
+   "category": "explicit",
+   "hex": "636166E9",
+   "explicitCharset": "latin1"
+  },
+  {
+   "name": "explicit_cp1252_alias",
+   "category": "explicit",
+   "hex": "9371756F74656494",
+   "explicitCharset": "cp1252"
+  },
+  {
+   "name": "explicit_gbk_header_first",
+   "category": "explicit",
+   "hex": "CDB7B2BF2047424B20D3C5CFC8D3DACFD4CABD3F",
+   "explicitCharset": "utf-8",
+   "contentTypeHeader": "text/html; charset=gbk"
+  },
+  {
+   "name": "header_charset_gbk",
+   "category": "header",
+   "hex": "CDB7B2BFC9F9C3F72047424B20D2B3C3E6",
+   "contentTypeHeader": "text/html; charset=GBK"
+  },
+  {
+   "name": "header_charset_utf16le",
+   "category": "header",
+   "hex": "3459E890F0580E6620005500540046002D00310036004C004500",
+   "contentTypeHeader": "application/octet-stream;charset=utf-16le"
+  },
+  {
+   "name": "header_quoted_charset",
+   "category": "header",
+   "hex": "B4F8D2FDBAC5B5C4CDB7B2BF",
+   "contentTypeHeader": "text/html; charset=\"gb18030\""
+  },
+  {
+   "name": "header_no_charset",
+   "category": "header",
+   "hex": "CDB7B2BFCEDE206368617273657420B5C42047424B20D2B3C3E6",
+   "contentTypeHeader": "text/html"
+  }
+ ]
+}

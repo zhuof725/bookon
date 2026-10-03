@@ -198,6 +198,17 @@ public class Main {
                     output.add("httpUrlResults", outArr);
                     System.out.println("URL 规范化: " + outArr.size() + " 条（真实 OkHttp 5.3.2 HttpUrl）");
                 }
+                // ---- 第 6 步 6B：字符集检测 / 响应解码 ----
+                if (input.has("charsetCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("charsetCases")) {
+                        outArr.add(CharsetGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("charsetResults", outArr);
+                    System.out.println("字符集检测/解码: " + outArr.size()
+                            + " 条（真实 legado icu4j 检测器 + JDK 11 Charset）");
+                }
                 if (input.has("cookieCases")) {
                     JsonArray outArr = new JsonArray();
                     for (JsonElement el : input.getAsJsonArray("cookieCases")) {

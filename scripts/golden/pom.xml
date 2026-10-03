@@ -112,6 +112,25 @@
   <build>
     <finalName>golden-generator</finalName>
     <plugins>
+      <!-- 第 6 步 6B：把 scripts/golden/icu4j-src（legado icu4j 检测器的 JVM 适配副本）加入编译源码目录。
+           只增加源码目录，不触碰任何既有配置。 -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.4.0</version>
+        <executions>
+          <execution>
+            <id>add-icu4j-source</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>icu4j-src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
