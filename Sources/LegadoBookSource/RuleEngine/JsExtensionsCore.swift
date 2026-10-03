@@ -32,10 +32,17 @@ public enum JsExtensionsCore {
     }
 
     public static func bytesToStr(_ bytes: [UInt8], charset: String = "UTF-8") throws -> String {
-        guard let encoding = stringEncoding(charset), let string = String(data: Data(bytes), encoding: encoding) else {
-            throw RuleEngineError.unsupported("字节无法按字符集解码：\(charset)")
+        let data = Data(bytes)
+        switch charset.uppercased().replacingOccurrences(of: "_", with: "-") {
+        case "UTF-8", "UTF8":
+            // 对齐 Kotlin String(bytes, UTF-8)：非法序列替换为 U+FFFD，不抛错。
+            return String(decoding: data, as: UTF8.self)
+        default:
+            guard let encoding = stringEncoding(charset), let string = String(data: data, encoding: encoding) else {
+                throw RuleEngineError.unsupported("字节无法按字符集解码：\(charset)")
+            }
+            return string
         }
-        return string
     }
 
     public static func base64Encode(_ input: String) -> String {
@@ -60,12 +67,10 @@ public enum JsExtensionsCore {
         input.utf8.map { String(format: "%02x", $0) }.joined()
     }
 
-    public static func hexDecodeToString(_ input: String) throws -> String {
-        let bytes = try hexDecodeToBytes(input)
-        guard let string = String(bytes: bytes, encoding: .utf8) else {
-            throw RuleEngineError.unsupported("Hex 内容不是有效 UTF-8")
-        }
-        return string
+    public static func hexDecodeToString(_ input: String) -> String? {
+        // 对齐 hutool HexUtil.decodeHexStr：非法输入返回 null。
+        guard let bytes = try? hexDecodeToBytes(input) else { return nil }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     /// 对齐 Kotlin HexUtil.decodeHex（返回 byte[]）。

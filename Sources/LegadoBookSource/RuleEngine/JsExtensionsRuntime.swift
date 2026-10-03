@@ -101,7 +101,7 @@ final class JsExtensionsRuntime {
             case "base64DecodeToByteArray":
                 return ok(JsExtensionsCore.base64DecodeToByteArray(arguments.first as? String) ?? [])
             case "hexDecodeToString":
-                return ok(try JsExtensionsCore.hexDecodeToString(stringArg(arguments, 0)))
+                return ok(JsExtensionsCore.hexDecodeToString(stringArg(arguments, 0)))
             case "hexEncodeToString":
                 return ok(JsExtensionsCore.hexEncodeToString(stringArg(arguments, 0)))
             case "hexDecodeToByteArray":
@@ -194,7 +194,7 @@ final class JsExtensionsRuntime {
     func base64Encode(_ input: String) -> String? { JsExtensionsCore.base64Encode(input) }
     func base64Decode(_ input: String?) -> String { (try? JsExtensionsCore.base64Decode(input)) ?? "" }
     func base64DecodeToByteArray(_ input: String?) -> [UInt8]? { JsExtensionsCore.base64DecodeToByteArray(input) }
-    func hexDecodeToString(_ hex: String) -> String? { try? JsExtensionsCore.hexDecodeToString(hex) }
+    func hexDecodeToString(_ hex: String) -> String? { JsExtensionsCore.hexDecodeToString(hex) }
     func hexEncodeToString(_ utf8: String) -> String? { JsExtensionsCore.hexEncodeToString(utf8) }
     func hexDecodeToByteArray(_ hex: String) -> [UInt8]? { JsExtensionsCore.hexDecodeToByteArray(hex) }
     func htmlFormat(_ input: String) -> String { JsExtensionsCore.htmlFormat(input) }

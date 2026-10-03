@@ -112,6 +112,15 @@ public class Main {
                     }
                     output.add("jsonPathResults", outArr);
                 }
+                // ---- 第 5 步：JsExtensions 纯算法 golden ----
+                if (input.has("jsExtCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("jsExtCases")) {
+                        outArr.add(JsExtGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("jsExtResults", outArr);
+                }
 
                 if (input.has("jsCases")) {
                     JsonArray outArr = new JsonArray();

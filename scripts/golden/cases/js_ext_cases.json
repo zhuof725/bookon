@@ -92,7 +92,7 @@
     {"name": "bytes_ascii", "method": "strToBytes", "args": ["abc"]},
     {"name": "bytes_zh", "method": "strToBytes", "args": ["中文"]},
     {"name": "bytes_emoji", "method": "strToBytes", "args": ["😀"]},
-    {"name": "bytes_roundtrip", "method": "bytesToStr", "args": ["{{bytes}}"]},
-    {"name": "bytes_gbk_invalid", "method": "bytesToStr", "args": ["{{bytes}}"]}
+    {"name": "bytes_roundtrip", "method": "bytesToStr", "args": [null], "hex": "e4b8ade69687"},
+    {"name": "bytes_gbk_invalid", "method": "bytesToStr", "args": [null], "hex": "e4b8ad"}
   ]
 }
