@@ -43,11 +43,22 @@ final class JSEngine {
 
     /// Java 互操作检测：出现这些片段即判定为 Rhino-only，JSC 无法运行。
     private static let javaInteropMarkers = [
-        "Packages.", "importClass", "importPackage",
-        "org.jsoup", "java.lang", "java.util", "java.net", "JavaImporter"
+        "importClass", "importPackage",
+        "java.lang", "java.util", "java.net", "java.math", "JavaImporter"
     ]
 
-    /// 预检测 Java 互操作。返回命中的标记（若有）。
+    /// Step 5：org.jsoup.Jsoup 替身放行。返回 true 表示该 JS 只用了 jsoup 两种写法（可放行）。
+    static func isJsoupOnlyInterop(_ js: String) -> Bool {
+        let hasJsoup = js.contains("org.jsoup.Jsoup")
+        guard hasJsoup else { return false }
+        // 除 jsoup 外不得命中其它 Rhino 互操作标记
+        for marker in javaInteropMarkers where js.contains(marker) {
+            return false
+        }
+        return true
+    }
+
+    /// 预检测 Java 互操作。返回命中的标记（若有）；jsoup 写法不算（Step 5 放行）。
     static func detectJavaInterop(_ js: String) -> String? {
         for m in javaInteropMarkers where js.contains(m) {
             return m
@@ -72,11 +83,14 @@ final class JSEngine {
 
     /// 执行 JS，返回结果（已转 RuleValue）。对应 Kotlin evalJS。
     func eval(_ jsStr: String, bindings: Bindings) throws -> RuleValue {
-        // Java 互操作预检测：JSC 无法运行，抛明确错误（对齐 README 差异表）。
-        if let marker = JSEngine.detectJavaInterop(jsStr) {
-            let msg = "JS 含 Java 互操作『\(marker)』，JavaScriptCore 不支持（Rhino-only，见 README 差异表）"
-            diagnostics?.record(source: "JSEngine.eval", rule: String(jsStr.prefix(120)), message: msg)
-            throw RuleEngineError.jsError(msg)
+        // Step 5：org.jsoup.Jsoup / Packages.org.jsoup.Jsoup 放行（安装 SwiftSoup 替身）；
+        // 其它 Java 互操作仍是 Rhino-only，抛明确错误。
+        if !JSEngine.isJsoupOnlyInterop(jsStr) {
+            if let marker = JSEngine.detectJavaInterop(jsStr) {
+                let msg = "JS 含 Java 互操作『\(marker)』，JavaScriptCore 不支持（Rhino-only，见 README 差异表）"
+                diagnostics?.record(source: "JSEngine.eval", rule: String(jsStr.prefix(120)), message: msg)
+                throw RuleEngineError.jsError(msg)
+            }
         }
 
         guard let context = JSContext() else {
@@ -88,6 +102,11 @@ final class JSEngine {
         }
 
         bind(context: context, bindings: bindings)
+
+        // Step 5：JS 用到 jsoup 时安装替身（在绑定后、执行前，保证作用域可见）。
+        if JSEngine.isJsoupOnlyInterop(jsStr) {
+            JsoupJSBridge(diagnostics: diagnostics).install(into: context)
+        }
 
         // 缓存记录（容量 16，对齐 Kotlin）。JSC 无「编译后脚本」对象，故缓存源码字符串即可。
         rememberScript(jsStr)

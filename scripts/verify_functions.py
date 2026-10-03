@@ -49,6 +49,16 @@ MAPPING = {
     "NetworkUtils.kt": [
         "Sources/LegadoBookSource/RuleEngine/NetworkUtils.swift",
     ],
+    # 第 5 步：JsExtensions + 父接口 JsEncodeUtils（纯算法实现 + 运行时分发）。
+    "JsExtensions.kt": [
+        "Sources/LegadoBookSource/RuleEngine/JsExtensionsCore.swift",
+        "Sources/LegadoBookSource/RuleEngine/JsExtensionsRuntime.swift",
+        "Sources/LegadoBookSource/RuleEngine/AnalyzeRule+JS.swift",
+    ],
+    "JsEncodeUtils.kt": [
+        "Sources/LegadoBookSource/RuleEngine/JsExtensionsCore.swift",
+        "Sources/LegadoBookSource/RuleEngine/JsExtensionsRuntime.swift",
+    ],
 }
 
 # 明确排除的 Kotlin 函数（本步骤范围外 / Swift 以不同形态实现），每项必须给理由。
@@ -97,6 +107,73 @@ EXCLUDED = {
         "encodedQuery": "query 编码，非本步骤范围",
         "isAvailable": "网络可用性探测，非本步骤范围",
         "isDigit16Char": "16 进制字符判定（编码辅助），非本步骤范围",
+    },
+    # —— 第 5 步：JsExtensions / JsEncodeUtils ——
+    # Swift 侧通过 JsExtensionsRuntime 按方法名字符串分发（switch），并非每个方法都有
+    # 同名 `func name(`。真正覆盖判定 = 「catalog 全集 - implemented」为空；已实现方法
+    # 见 JsExtensionsCatalog.implemented，Proxy 对未实现方法抛错并记诊断。
+    # 已实现方法若 Swift 中确有同名 func 会自动匹配；其余在此按类别列出理由。
+    "JsExtensions.kt": {
+        # 未实现：书源使用次数 0，JS Proxy 抛错 + 记诊断（第 5 步范围外）。
+        "ajaxTestAll": "书源未使用；Proxy 抛错（第 5 步范围外）",
+        "androidId": "书源未使用；Proxy 抛错",
+        "deleteFile": "书源未使用；Proxy 抛错",
+        "get7zByteArrayContent": "书源未使用；Proxy 抛错",
+        "get7zStringContent": "书源未使用；Proxy 抛错",
+        "getFile": "书源未使用；Proxy 抛错",
+        "getRarByteArrayContent": "书源未使用；Proxy 抛错",
+        "getRarStringContent": "书源未使用；Proxy 抛错",
+        "getReadBookConfig": "书源未使用；Proxy 抛错",
+        "getReadBookConfigMap": "书源未使用；Proxy 抛错",
+        "getThemeConfig": "书源未使用；Proxy 抛错",
+        "getThemeConfigMap": "书源未使用；Proxy 抛错",
+        "getThemeMode": "书源未使用；Proxy 抛错",
+        "getTxtInFolder": "书源未使用；Proxy 抛错",
+        "getWebViewUA": "书源未使用；Proxy 抛错",
+        "getZipByteArrayContent": "书源未使用；Proxy 抛错",
+        "getZipStringContent": "书源未使用；Proxy 抛错",
+        "importScript": "书源未使用；Proxy 抛错",
+        "logType": "书源未使用；Proxy 抛错",
+        "openVideoPlayer": "书源未使用；Proxy 抛错",
+        "queryBase64TTF": "书源未使用；Proxy 抛错",
+        "queryTTF": "书源未使用；Proxy 抛错",
+        "readFile": "书源未使用；Proxy 抛错",
+        "readTxtFile": "书源未使用；Proxy 抛错",
+        "replaceFont": "书源未使用；Proxy 抛错",
+        "toURL": "书源未使用；Proxy 抛错",
+        "un7zFile": "书源未使用；Proxy 抛错",
+        "unArchiveFile": "书源未使用；Proxy 抛错",
+        "unrarFile": "书源未使用；Proxy 抛错",
+        "unzipFile": "书源未使用；Proxy 抛错",
+        "webViewGetOverrideUrl": "书源未使用；Proxy 抛错",
+        "webViewGetSource": "书源未使用；Proxy 抛错",
+    },
+    "JsEncodeUtils.kt": {
+        "createSymmetricCrypto": "对称加密，书源未使用；Proxy 抛错",
+        "createAsymmetricCrypto": "非对称加密，书源未使用；Proxy 抛错",
+        "createSign": "签名，书源未使用；Proxy 抛错",
+        "aesDecodeToByteArray": "书源未使用；Proxy 抛错",
+        "aesDecodeToString": "书源未使用；Proxy 抛错",
+        "aesDecodeArgsBase64Str": "书源未使用；Proxy 抛错",
+        "aesBase64DecodeToByteArray": "书源未使用；Proxy 抛错",
+        "aesBase64DecodeToString": "书源未使用；Proxy 抛错",
+        "aesEncodeToByteArray": "书源未使用；Proxy 抛错",
+        "aesEncodeToString": "书源未使用；Proxy 抛错",
+        "aesEncodeToBase64ByteArray": "书源未使用；Proxy 抛错",
+        "aesEncodeToBase64String": "书源未使用；Proxy 抛错",
+        "aesEncodeArgsBase64Str": "书源未使用；Proxy 抛错",
+        "desDecodeToString": "书源未使用；Proxy 抛错",
+        "desBase64DecodeToString": "书源未使用；Proxy 抛错",
+        "desEncodeToString": "书源未使用；Proxy 抛错",
+        "desEncodeToBase64String": "书源未使用；Proxy 抛错",
+        "tripleDESDecodeStr": "书源未使用；Proxy 抛错",
+        "tripleDESDecodeArgsBase64Str": "书源未使用；Proxy 抛错",
+        "tripleDESEncodeBase64Str": "书源未使用；Proxy 抛错",
+        "tripleDESEncodeArgsBase64Str": "书源未使用；Proxy 抛错",
+        "digestHex": "书源未使用；Proxy 抛错",
+        "digestBase64Str": "书源未使用；Proxy 抛错",
+        "HMacHex": "书源未使用；Proxy 抛错",
+        "HMacBase64": "书源未使用；Proxy 抛错",
     },
 }
 

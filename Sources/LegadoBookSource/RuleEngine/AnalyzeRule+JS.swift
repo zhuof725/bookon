@@ -16,30 +16,34 @@ extension AnalyzeRule {
     public func evalJS(_ jsStr: String, result: RuleValue = .null) throws -> RuleValue {
         #if canImport(JavaScriptCore)
         let engine = JSEngine(diagnostics: diagnostics)
-        let bridge = JSJavaBridge()
-        // 注入 java 对象的自有方法（回调本 AnalyzeRule）
-        bridge.putFn = { [weak self] k, v in self?.put(k, v) ?? v }
-        bridge.getFn = { [weak self] k in self?.get(k) ?? "" }
-        bridge.getStringFn = { [weak self] r in
+        let bridge = JSJavaBridge(diagnostics: diagnostics,
+                                  uiProvider: jsUIProviderValue,
+                                  networkProvider: jsNetworkProviderValue,
+                                  webJSProvider: webJSProviderValue)
+        // 注入 java 对象自有方法（回调本 AnalyzeRule）
+        bridge.runtime.putFn = { [weak self] k, v in self?.put(k, v) ?? v }
+        bridge.runtime.getFn = { [weak self] k in self?.get(k) ?? "" }
+        bridge.runtime.getStringFn = { [weak self] r in
             guard let self = self else { return "" }
             return (try? self.getString(r)) ?? ""
         }
-        bridge.getStringListFn = { [weak self] r in
+        bridge.runtime.getStringListFn = { [weak self] r in
             guard let self = self else { return [] }
             return ((try? self.getStringList(r)) ?? nil) ?? []
         }
-        bridge.getElementFn = { [weak self] r in
+        bridge.runtime.getElementFn = { [weak self] r in
             guard let self = self else { return "" }
             return ((try? self.getElement(r)) ?? nil)?.stringValue ?? ""
         }
-        bridge.getElementsFn = { [weak self] r in
+        bridge.runtime.getElementsFn = { [weak self] r in
             guard let self = self else { return [] }
             return ((try? self.getElements(r)) ?? []).map { $0.stringValue }
         }
-        bridge.ajaxFn = { [weak self] u in self?.ajax(u) ?? "" }
-        bridge.logFn = { [weak self] s in self?.log(s) ?? s }
-        bridge.getSourceKeyFn = { [weak self] in self?.sourceStore?.getKey() }
-        bridge.getTagFn = { [weak self] in self?.getTag() }
+        bridge.runtime.ajaxFn = { [weak self] u in self?.ajax(u) ?? "" }
+        bridge.runtime.logFn = { [weak self] s in self?.log(s) ?? s }
+        bridge.runtime.getSourceKeyFn = { [weak self] in self?.sourceStore?.getKey() }
+        bridge.runtime.getTagFn = { [weak self] in self?.getTag() }
+        bridge.runtime.cookieStore = cookieStoreValue
 
         let bindings = JSEngine.Bindings(
             java: bridge,
