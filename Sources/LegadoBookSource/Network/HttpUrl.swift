@@ -403,11 +403,11 @@ public struct HttpUrl: Equatable {
                     while true {
                         let t: UInt32 = k <= bias ? tmin : (k >= bias &+ tmax ? tmax : k &- bias)
                         if q < t { break }
-                        output &+= digit(t &+ (q &- t) % (base &- t))
+                        output += digit(t &+ (q &- t) % (base &- t))
                         q = (q &- t) / (base &- t)
                         k = k &+ base
                     }
-                    output &+= digit(q)
+                    output += digit(q)
                     bias = adapt(delta, UInt32(h + 1), h == 0)
                     delta = 0
                     h &+= 1
