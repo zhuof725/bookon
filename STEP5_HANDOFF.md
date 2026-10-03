@@ -114,15 +114,15 @@
 > 旧版曾登记的「bytesToStr 非 UTF-8 未对照」「NaN/Infinity 数字经 stringify 输出 Swift 字面量」
 > 两条**已消除**：前者已按 UTF-8/ISO-8859-1/GBK 真实对照，后者已由 Rhino 定义 + `JsNumberFormat` 复刻。
 
-## 最终验证（真实 CI 结果，run 37135205456，HEAD `22514a4`）
+## 最终验证（真实 CI 结果，run 37135836791，HEAD `45b03a4`）
 
 三个 job 全绿 ✅：
 
 | job | 状态 | 关键数字 | 日志 |
 |---|---|---|---|
-| golden（ubuntu，真实 java 库） | ✓ success | **1233 条用例 / 15 个用例文件**（jsoup 91、js_ext 321、numberArg 42、javaDigest 2） | `ci_logs/step5b_final_golden.log` |
-| test-macos（swift test） | ✓ success | **Executed 453 tests, 0 failures** | `ci_logs/step5b_final_macos.log` |
-| test-ios-simulator（xcodebuild test） | ✓ success | **实际执行 453 个测试**（与 macOS 相等） | `ci_logs/step5b_final_ios.log` |
+| golden（ubuntu，真实 java 库） | ✓ success | **1233 条用例 / 15 个用例文件**（jsoup 91、js_ext 321、numberArg 42、javaDigest 2） | `ci_logs/step5c_final_golden.log` |
+| test-macos（swift test） | ✓ success | **Executed 453 tests, 0 failures** | `ci_logs/step5c_final_macos.log` |
+| test-ios-simulator（xcodebuild test） | ✓ success | **实际执行 453 个测试**（与 macOS 相等） | `ci_logs/step5c_final_ios.log` |
 
 **iOS == macOS 测试总数核对**：iOS 按 8 个 xctest bundle 求和得 453，macOS `swift test` 的
 「All tests」总数也是 453，脚本实测打印 `✅ iOS 总数与 macOS 总数一致（均为 453）`。
