@@ -332,7 +332,7 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
                 return HTTPError(kind: .unknownHost, message: message)
             case NSURLErrorCannotConnectToHost:
                 return HTTPError(kind: .connectRefused, message: message)
-            case NSURLErrorNetworkConnectionLost, URLError.Code.dataLengthExceeded.rawValue:
+            case NSURLErrorNetworkConnectionLost, -1103:  // -1103 = NSURLErrorDataLengthExceeded（SDK 未导出常量，用数值）
                 return HTTPError(kind: .socket, message: message)
             case NSURLErrorSecureConnectionFailed,
                  NSURLErrorServerCertificateUntrusted,
