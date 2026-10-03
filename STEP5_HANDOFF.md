@@ -114,7 +114,10 @@
 > 旧版曾登记的「bytesToStr 非 UTF-8 未对照」「NaN/Infinity 数字经 stringify 输出 Swift 字面量」
 > 两条**已消除**：前者已按 UTF-8/ISO-8859-1/GBK 真实对照，后者已由 Rhino 定义 + `JsNumberFormat` 复刻。
 
-## 最终验证（真实 CI 结果，run 37135836791，HEAD `45b03a4`）
+## 最终验证（真实 CI 结果，run 37136309131，HEAD `78144ef`）
+
+> 日志取自 HEAD `78144ef` 的 run 37136309131（三个 job 全绿）。该次运行之后的最后一次 push 只改了本文件的
+> run 号引用，代码完全相同。
 
 三个 job 全绿 ✅：
 
