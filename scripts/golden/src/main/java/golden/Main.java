@@ -189,6 +189,15 @@ public class Main {
                     output.add("analyzeUrlResults", outArr);
                     System.out.println("AnalyzeUrl 规则解析: " + outArr.size() + " 条（手工移植调度 + 真实 Rhino）");
                 }
+                if (input.has("httpUrlCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("httpUrlCases")) {
+                        outArr.add(HttpUrlGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("httpUrlResults", outArr);
+                    System.out.println("URL 规范化: " + outArr.size() + " 条（真实 OkHttp 5.3.2 HttpUrl）");
+                }
                 if (input.has("cookieCases")) {
                     JsonArray outArr = new JsonArray();
                     for (JsonElement el : input.getAsJsonArray("cookieCases")) {
