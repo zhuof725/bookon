@@ -395,6 +395,8 @@ public final class UrlRuleGen {
             String method = "GET";
             String charset = null;
             String body = null;
+            String encodedQuery = null;
+            String encodedForm = null;
             if (urlNoOption.length() != ruleUrl.length()) {
                 String urlOptionStr = ruleUrl.substring(urlMatcher.end());
                 UrlOptionJava option = null;
