@@ -928,3 +928,72 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 
 所有 golden 用例输入（URL 字符串、待转义字符串、正则、JSON 文档）均为**合成测试数据**，用
 `synthetic_` 前缀 + 文件 `_comment` 字段标注。无真实书源规则文本（纯工具函数输入）。
+
+---
+
+# 第 5 步：JsExtensions 方法体 + org.jsoup.Jsoup 替身
+
+在既有 `java`（JsExtensions）Proxy 桥接基础上，实现第一批纯算法方法体、注入 UI/网络类协议、
+放行 org.jsoup 两种写法（SwiftSoup 替身），并全部由真实 Java 库 golden 对照验证。
+
+## 已实现的方法（JsExtensionsCore.swift）
+
+| 方法 | 对齐语义（Kotlin 源码 + 真实库） | golden 对照库 |
+|---|---|---|
+| `md5Encode` / `md5Encode16` | UTF-8 字节 MD5 小写 hex；16 位 = substring(8,24) | hutool 5.8.22 DigestUtil |
+| `t2s` | quick-chinese-transfer 0.2.17 最长匹配词典 + legado fixT2sDict 排除词 | quick-transfer-core 0.2.17 |
+| `s2t` | 同上（简体→繁体方向） | quick-transfer-core 0.2.17 |
+| `timeFormat` | `FastDateFormat("yyyy/MM/dd HH:mm")`（默认时区/区域） | Java SimpleDateFormat |
+| `timeFormatUTC(time, format, sh)` | `SimpleTimeZone(sh ms, "UTC")` 的格式 | Java SimpleTimeZone |
+| `base64Encode` | android Base64.NO_WRAP 等价（标准表无换行） | hutool Base64 |
+| `base64Decode` | hutool Base64Decoder 容错解码（跳过非法字符、`=` padding、4 字符一组） | hutool Base64Decoder 逐行移植 |
+| `base64DecodeToByteArray` | 空白输入 -> null；否则容错解码字节 | 同上 |
+| `hexEncodeToString` | UTF-8 → 小写 hex | hutool HexUtil |
+| `hexDecodeToString` | 空串原样返回；奇数长度前补 `0`；非法字符抛错 | hutool HexUtil/Base16Codec |
+| `hexDecodeToByteArray` | 空串 -> null；奇数前补 0；非法抛错 | hutool Base16Codec |
+| `htmlFormat` | `HtmlFormatter.formatKeepImg(null)` 全正则链 + img 归一化 | legado 源码逐行复刻 |
+| `encodeURI` | `URLEncoder.encode(UTF-8)`：空格→`+`、保留 `. - * _`、异常→`""` | Java URLEncoder |
+| `randomUUID` | 小写 UUID 字符串 | Java UUID |
+| `toNumChapter` | `(第)(.+?)(章)` + fullToHalf + parseInt/中文数字 | legado StringUtils 逐行复刻 |
+| `strToBytes` / `bytesToStr` | UTF-8（bytesToStr 对齐 Java `new String` 的 U+FFFD 替换语义） | Java 标准库 |
+
+## 注入类方法（协议 + 默认实现）
+
+| 方法 | 协议 | 默认行为 |
+|---|---|---|
+| `toast` / `longToast` / `openUrl` / `startBrowser` / `startBrowserAwait` / `getVerificationCode` / `webView` | `JsUIProvider`（webView 同时接入既有 `WebJSProvider`） | 抛 `RuleEngineError.unsupported` + 记 diagnostics（真实 UI 第 6 步） |
+| `get` / `post` / `head` / `ajaxAll` / `connect` / `cacheFile` / `downloadFile` | `JsNetworkExtensionsProvider` | 同上（真实网络第 6 步） |
+
+## org.jsoup.Jsoup 替身（JsoupJSBridge.swift）
+
+- `org.jsoup.Jsoup.parse(...)` 与 `Packages.org.jsoup.Jsoup.parse(...)` 两种写法**放行**，
+  用 SwiftSoup 实现真实书源实际用到的链：`parse(html)` → `select(css)` → `text()` / `html()` /
+  `attr(name)` / `outerHtml()` / `first()` / `get(i)` / `size()` / `eq(i)` / `remove()`。
+- 端到端实证：爱丽丝书屋 `org.jsoup.Jsoup.parse(result).select('div.read-content').text()`、
+  台湾小说网 `d.select('#content p') → es.get(i).text() → join('\n')` 全链执行并断言真实结果
+  （见 `AnalyzeRuleEndToEndTests.testAlice_jsoupParseWorks` / `testTaiwan_realJsoupChainWorks`）。
+- 其余 Rhino 互操作（`importClass`/`importPackage`/`JavaImporter`/`java.lang|util|io|net|math`、
+  非 jsoup 的 `Packages.xxx`）仍预检测抛 `RuleEngineError.jsError` + 记 diagnostics。
+
+## golden 对照（真实的 Java 库）
+
+`scripts/golden` 新增 `JsExtGen.java` 与 `cases/js_ext_cases.json`（约 96 条），对
+hutool 5.8.22（MD5/Base64/Hex）、quick-transfer-core 0.2.17（t2s/s2t）、Java 标准库
+（URLEncoder/SimpleDateFormat/SimpleTimeZone/UUID）逐条生成真实结果：
+- 覆盖空串/中文/emoji/超长/非法输入与数字入参（JS 数字 → 字符串按 JS ToString 语义：整数无 `.0`）；
+- 非法输入以「抛错 <-> 抛错」三态比较（值必须相等、null 必须同为 null、异常必须同为异常）；
+- 失败信息含 name/输入/Java 结果/Swift 结果；CI 缺失 golden 必 fail。
+
+### JsExtensions 数字入参差异（第 4 步结论的延续）
+
+Rhino 把 JS number 传给 Java String 参数时用 JS ToString（`123` 无 `.0`；`1.5` 保留小数）。
+本移植在 `JsExtensionsRuntime.stringify` 与 golden harness 中对 NSNumber 应用同一规则；
+`NaN`/`Infinity` 等常规值不进入该路径。与第 4 步「Rhino Integer 包装类型」差异互补，
+两者均被 golden 或既有文档覆盖。
+
+## 样本诚实标注（第 5 步）
+
+- `cases/js_ext_cases.json` 全部输入为**合成样本**（文件名/`_comment` 字段标注）。
+- 端到端测试使用 14 书源**真实规则文本** + 合成响应（规则真实、数据合成），来源书源名在用例注释标出。
+- `Sources/LegadoBookSource/Resources/Chinese/*.txt` 为 quick-chinese-transfer 0.2.17 原样资源
+  （含 `PROVENANCE.md`），非本项目编写。
