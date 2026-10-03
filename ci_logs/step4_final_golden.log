@@ -1,308 +1,313 @@
-golden	Set up job	﻿2026-10-02T19:41:20.2504796Z Current runner version: '2.337.0'
-golden	Set up job	2026-10-02T19:41:20.2531137Z ##[group]Runner Image Provisioner
-golden	Set up job	2026-10-02T19:41:20.2532132Z Hosted Compute Agent
-golden	Set up job	2026-10-02T19:41:20.2532727Z Version: 20260901.588
-golden	Set up job	2026-10-02T19:41:20.2533323Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
-golden	Set up job	2026-10-02T19:41:20.2534097Z Build Date: 2026-09-01T19:56:44Z
-golden	Set up job	2026-10-02T19:41:20.2534741Z Worker ID: {1bd7c88a-cb85-4a05-9950-326387d06d67}
-golden	Set up job	2026-10-02T19:41:20.2535442Z Azure Region: westcentralus
-golden	Set up job	2026-10-02T19:41:20.2536040Z ##[endgroup]
-golden	Set up job	2026-10-02T19:41:20.2537520Z ##[group]Operating System
-golden	Set up job	2026-10-02T19:41:20.2538168Z Ubuntu
-golden	Set up job	2026-10-02T19:41:20.2538685Z 24.04.5
-golden	Set up job	2026-10-02T19:41:20.2539201Z LTS
-golden	Set up job	2026-10-02T19:41:20.2539755Z ##[endgroup]
-golden	Set up job	2026-10-02T19:41:20.2540451Z ##[group]Runner Image
-golden	Set up job	2026-10-02T19:41:20.2541088Z Image: ubuntu-24.04
-golden	Set up job	2026-10-02T19:41:20.2541638Z Version: 20260927.320.1
-golden	Set up job	2026-10-02T19:41:20.2542725Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
-golden	Set up job	2026-10-02T19:41:20.2544434Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
-golden	Set up job	2026-10-02T19:41:20.2545418Z ##[endgroup]
-golden	Set up job	2026-10-02T19:41:20.2546561Z ##[group]GITHUB_TOKEN Permissions
-golden	Set up job	2026-10-02T19:41:20.2548972Z Contents: read
-golden	Set up job	2026-10-02T19:41:20.2549564Z Metadata: read
-golden	Set up job	2026-10-02T19:41:20.2550766Z Packages: read
-golden	Set up job	2026-10-02T19:41:20.2551368Z ##[endgroup]
-golden	Set up job	2026-10-02T19:41:20.2553495Z Secret source: Actions
-golden	Set up job	2026-10-02T19:41:20.2554402Z Cache mode: write
-golden	Set up job	2026-10-02T19:41:20.2555055Z Prepare workflow directory
-golden	Set up job	2026-10-02T19:41:20.2886644Z Prepare all required actions
-golden	Set up job	2026-10-02T19:41:20.2936738Z Getting action download info
-golden	Set up job	2026-10-02T19:41:20.6018838Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
-golden	Set up job	2026-10-02T19:41:20.6870181Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
-golden	Set up job	2026-10-02T19:41:21.5603345Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-golden	Set up job	2026-10-02T19:41:21.8470931Z Complete job name: golden
-golden	Run actions/checkout@v4	﻿2026-10-02T19:41:21.9325414Z ##[group]Run actions/checkout@v4
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9326955Z with:
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9328035Z   repository: zhuof725/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9337004Z   token: ***
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9338128Z   ssh-strict: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9339173Z   ssh-user: git
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9340401Z   persist-credentials: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9341595Z   clean: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9342650Z   sparse-checkout-cone-mode: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9343844Z   fetch-depth: 1
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9344898Z   fetch-tags: false
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9345936Z   show-progress: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9346991Z   lfs: false
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9348033Z   submodules: false
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9349132Z   set-safe-directory: true
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9350415Z   allow-unsafe-pr-checkout: false
-golden	Run actions/checkout@v4	2026-10-02T19:41:21.9351975Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0403429Z Syncing repository: zhuof725/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0407448Z ##[group]Getting Git version info
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0409458Z Working directory is '/home/runner/work/bookon/bookon'
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0412583Z [command]/usr/bin/git version
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0470637Z git version 2.55.0
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0502958Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0514196Z Temporarily overriding HOME='/home/runner/work/_temp/e0e1e2cd-2c30-4b3d-af43-5f69174dfc4b' before making global git config changes
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0518479Z Adding repository directory to the temporary git global config as a safe directory
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0522915Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0575322Z Deleting the contents of '/home/runner/work/bookon/bookon'
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0581106Z ##[group]Initializing the repository
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0584639Z [command]/usr/bin/git init /home/runner/work/bookon/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0912977Z hint: Using 'master' as the name for the initial branch. This default branch name
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0916682Z hint: will change to "main" in Git 3.0. To configure the initial branch name
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0918964Z hint: to use in all of your new repositories, which will suppress this warning,
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0921186Z hint: call:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0922857Z hint:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0924240Z hint: 	git config --global init.defaultBranch <name>
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0925776Z hint:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0927201Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0929296Z hint: 'development'. The just-created branch can be renamed via this command:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0931358Z hint:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0932467Z hint: 	git branch -m <name>
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0934289Z hint:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0936604Z hint: Disable this message with "git config set advice.defaultBranchName false"
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0939835Z Initialized empty Git repository in /home/runner/work/bookon/bookon/.git/
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0945749Z [command]/usr/bin/git remote add origin https://github.com/zhuof725/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0983174Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0985518Z ##[group]Disabling automatic garbage collection
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.0987444Z [command]/usr/bin/git config --local gc.auto 0
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1029747Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1032903Z ##[group]Setting up auth
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1035877Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1071358Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1399191Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1428946Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1612401Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1642011Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1830363Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1883839Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1885993Z ##[group]Fetching the repository
-golden	Run actions/checkout@v4	2026-10-02T19:41:22.1894193Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8d1382db8a855d2454a485e14875076ff0e467c3:refs/remotes/origin/main
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2134795Z From https://github.com/zhuof725/bookon
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2137296Z  * [new ref]         8d1382db8a855d2454a485e14875076ff0e467c3 -> origin/main
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2141015Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2142488Z ##[group]Determining the checkout info
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2144058Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2150326Z [command]/usr/bin/git sparse-checkout disable
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2206474Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2237751Z ##[group]Checking out the ref
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2241741Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2791905Z Switched to a new branch 'main'
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2794624Z branch 'main' set up to track 'origin/main'.
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2805212Z ##[endgroup]
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2845867Z [command]/usr/bin/git log -1 --format=%H
-golden	Run actions/checkout@v4	2026-10-02T19:41:23.2868938Z 8d1382db8a855d2454a485e14875076ff0e467c3
-golden	Set up JDK 11	﻿2026-10-02T19:41:23.3169535Z ##[group]Run actions/setup-java@v4
-golden	Set up JDK 11	2026-10-02T19:41:23.3170290Z with:
-golden	Set up JDK 11	2026-10-02T19:41:23.3171265Z   distribution: temurin
-golden	Set up JDK 11	2026-10-02T19:41:23.3171722Z   java-version: 11
-golden	Set up JDK 11	2026-10-02T19:41:23.3172096Z   cache: maven
-golden	Set up JDK 11	2026-10-02T19:41:23.3172458Z   java-package: jdk
-golden	Set up JDK 11	2026-10-02T19:41:23.3172865Z   check-latest: false
-golden	Set up JDK 11	2026-10-02T19:41:23.3173418Z   server-id: github
-golden	Set up JDK 11	2026-10-02T19:41:23.3173860Z   server-username: GITHUB_ACTOR
-golden	Set up JDK 11	2026-10-02T19:41:23.3174287Z   server-password: GITHUB_TOKEN
-golden	Set up JDK 11	2026-10-02T19:41:23.3174685Z   overwrite-settings: true
-golden	Set up JDK 11	2026-10-02T19:41:23.3175141Z   job-status: success
-golden	Set up JDK 11	2026-10-02T19:41:23.3178226Z   token: ***
-golden	Set up JDK 11	2026-10-02T19:41:23.3178838Z ##[endgroup]
-golden	Set up JDK 11	2026-10-02T19:41:23.4838095Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
-golden	Set up JDK 11	2026-10-02T19:41:23.4845305Z ##[group]Installed distributions
-golden	Set up JDK 11	2026-10-02T19:41:23.4970340Z Resolved Java 11.0.32+1 from tool-cache
-golden	Set up JDK 11	2026-10-02T19:41:23.4971082Z Setting Java 11.0.32+1 as the default
-golden	Set up JDK 11	2026-10-02T19:41:23.4979263Z (node:2356) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-golden	Set up JDK 11	2026-10-02T19:41:23.4980576Z (Use `node --trace-deprecation ...` to show where the warning was created)
-golden	Set up JDK 11	2026-10-02T19:41:23.4982917Z Creating toolchains.xml for JDK version 11 from temurin
-golden	Set up JDK 11	2026-10-02T19:41:23.5049297Z Writing to /home/runner/.m2/toolchains.xml
-golden	Set up JDK 11	2026-10-02T19:41:23.5049823Z 
-golden	Set up JDK 11	2026-10-02T19:41:23.5050161Z Java configuration:
-golden	Set up JDK 11	2026-10-02T19:41:23.5050689Z   Distribution: temurin
-golden	Set up JDK 11	2026-10-02T19:41:23.5051264Z   Version: 11.0.32+1
-golden	Set up JDK 11	2026-10-02T19:41:23.5051822Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Set up JDK 11	2026-10-02T19:41:23.5052304Z 
-golden	Set up JDK 11	2026-10-02T19:41:23.5053183Z ##[endgroup]
-golden	Set up JDK 11	2026-10-02T19:41:23.5076235Z Creating settings.xml with server-id: github
-golden	Set up JDK 11	2026-10-02T19:41:23.5093633Z Writing to /home/runner/.m2/settings.xml
-golden	Set up JDK 11	2026-10-02T19:41:23.7493662Z Cache hit for: setup-java-Linux-x64-maven-d6fa3a36a973909832d067779ba143bee687be0434faeefc2244e181ca03d6d6
-golden	Set up JDK 11	2026-10-02T19:41:23.7726315Z (node:2356) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-golden	Set up JDK 11	2026-10-02T19:41:24.8473373Z Received 20962974 of 20962974 (100.0%), 22.8 MBs/sec
-golden	Set up JDK 11	2026-10-02T19:41:24.8474127Z Cache Size: ~20 MB (20962974 B)
-golden	Set up JDK 11	2026-10-02T19:41:24.8501930Z [command]/usr/bin/tar -xf /home/runner/work/_temp/118f438d-1be1-4ac2-a0b6-363635ba27db/cache.tzst -P -C /home/runner/work/bookon/bookon --use-compress-program unzstd
-golden	Set up JDK 11	2026-10-02T19:41:24.8942653Z Cache restored successfully
-golden	Set up JDK 11	2026-10-02T19:41:24.8955192Z Cache restored from key: setup-java-Linux-x64-maven-d6fa3a36a973909832d067779ba143bee687be0434faeefc2244e181ca03d6d6
-golden	Build golden generator (Maven)	﻿2026-10-02T19:41:24.9138533Z ##[group]Run mvn -B -ntp package
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9138965Z ^[[36;1mmvn -B -ntp package^[[0m
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9354403Z shell: /usr/bin/bash -e {0}
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9354755Z env:
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9355092Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9355591Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Build golden generator (Maven)	2026-10-02T19:41:24.9355976Z ##[endgroup]
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.8270593Z [INFO] Scanning for projects...
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.9091156Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.9092293Z [INFO] -----------------< io.legado.golden:golden-generator >------------------
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.9093410Z [INFO] Building golden-generator 1.0.0
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.9094311Z [INFO]   from pom.xml
-golden	Build golden generator (Maven)	2026-10-02T19:41:34.9107232Z [INFO] --------------------------------[ jar ]---------------------------------
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.1293499Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.1341659Z [INFO] --- resources:3.4.0:resources (default-resources) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.3719651Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/main/resources
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.3729267Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.3730181Z [INFO] --- compiler:3.15.0:compile (default-compile) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.7149782Z [INFO] Recompiling the module because of changed source code.
-golden	Build golden generator (Maven)	2026-10-02T19:41:35.7661294Z [INFO] Compiling 7 source files with javac [debug target 11] to target/classes
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6079078Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6091609Z [INFO] --- resources:3.4.0:testResources (default-testResources) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6131600Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/test/resources
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6136200Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6161489Z [INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6191056Z [INFO] No sources to compile
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6220908Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.6240372Z [INFO] --- surefire:3.5.4:test (default-test) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.7850504Z [INFO] No tests to run.
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.9091895Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:37.9101441Z [INFO] --- jar:3.5.0:jar (default-jar) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.3329288Z [INFO] Building jar: /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.3963647Z [INFO] 
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.3964421Z [INFO] --- shade:3.5.1:shade (default) @ golden-generator ---
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4742533Z [INFO] Including org.jsoup:jsoup:jar:1.16.2 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4743726Z [INFO] Including cn.wanghaomiao:JsoupXpath:jar:2.5.3 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4747403Z [INFO] Including org.apache.commons:commons-lang3:jar:3.18.0 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4748388Z [INFO] Including org.antlr:antlr4-runtime:jar:4.7.2 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4749196Z [INFO] Including org.slf4j:slf4j-api:jar:1.7.36 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4750246Z [INFO] Including com.google.code.gson:gson:jar:2.13.2 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4751349Z [INFO] Including com.google.errorprone:error_prone_annotations:jar:2.41.0 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4752258Z [INFO] Including com.jayway.jsonpath:json-path:jar:2.10.0 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4753069Z [INFO] Including net.minidev:json-smart:jar:2.6.0 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4753879Z [INFO] Including net.minidev:accessors-smart:jar:2.6.0 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4754738Z [INFO] Including org.ow2.asm:asm:jar:9.7.1 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4755525Z [INFO] Including org.apache.commons:commons-text:jar:1.13.1 in the shaded jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.4771350Z [INFO] Dependency-reduced POM written at: /home/runner/work/bookon/bookon/scripts/golden/dependency-reduced-pom.xml
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7497531Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7859580Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar define 2 overlapping resources: 
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7861288Z [WARNING]   - META-INF/LICENSE.txt
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7862601Z [WARNING]   - META-INF/NOTICE.txt
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7916572Z [WARNING] JsoupXpath-2.5.3.jar, accessors-smart-2.6.0.jar, antlr4-runtime-4.7.2.jar, asm-9.7.1.jar, commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, golden-generator.jar, gson-2.13.2.jar, json-path-2.10.0.jar, json-smart-2.6.0.jar, jsoup-1.16.2.jar, slf4j-api-1.7.36.jar define 1 overlapping resource: 
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7939957Z [WARNING]   - META-INF/MANIFEST.MF
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7941517Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, gson-2.13.2.jar define 1 overlapping classes: 
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7957630Z [WARNING]   - META-INF.versions.9.module-info
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7959380Z [WARNING] maven-shade-plugin has detected that some files are
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7960549Z [WARNING] present in two or more JARs. When this happens, only one
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7969392Z [WARNING] single version of the file is copied to the uber jar.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7970585Z [WARNING] Usually this is not harmful and you can skip these warnings,
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7972776Z [WARNING] otherwise try to manually exclude artifacts based on
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7973584Z [WARNING] mvn dependency:tree -Ddetail=true and the above output.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7974343Z [WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7975453Z [INFO] Replacing original artifact with shaded artifact.
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7977993Z [INFO] Replacing /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar with /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator-1.0.0-shaded.jar
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7978907Z [INFO] ------------------------------------------------------------------------
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7979366Z [INFO] BUILD SUCCESS
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7979774Z [INFO] ------------------------------------------------------------------------
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7980531Z [INFO] Total time:  4.005 s
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7980917Z [INFO] Finished at: 2026-10-02T19:41:38Z
-golden	Build golden generator (Maven)	2026-10-02T19:41:38.7981413Z [INFO] ------------------------------------------------------------------------
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	﻿2026-10-02T19:41:38.8257616Z ##[group]Run set -e
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8257920Z ^[[36;1mset -e^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8258250Z ^[[36;1mjava -jar target/golden-generator.jar cases out^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8258609Z ^[[36;1mecho "=== 生成的文件 ==="^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8258875Z ^[[36;1mls -la out^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8259139Z ^[[36;1mCOUNT=$(ls out/*.json 2>/dev/null | wc -l)^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8259457Z ^[[36;1mif [ "$COUNT" -eq 0 ]; then^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8259741Z ^[[36;1m  echo "错误：未生成任何 golden 文件"^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8260186Z ^[[36;1m  exit 1^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8260486Z ^[[36;1mfi^[[0m
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8302260Z shell: /usr/bin/bash -e {0}
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8302659Z env:
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8303008Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8303516Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:38.8303898Z ##[endgroup]
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.2232638Z 生成: css_basic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.2301780Z 生成: css_real_xiaoshuo2016.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.2575295Z SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.2581588Z SLF4J: Defaulting to no-operation (NOP) logger implementation
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.2582816Z SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.3301098Z 生成: jsonpath_cases.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.4331616Z 生成: malformed_html.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.4389659Z 生成: regex_analyze.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.4461021Z 生成: regex_replace.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.6461381Z 生成: serializer_synthetic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.6721594Z 生成: unescape_html4.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.6801340Z 生成: url_absolute.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7129941Z line 1:10 token recognition error at: '%'
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7151164Z line 1:11 token recognition error at: '%'
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7545394Z 生成: xpath_basic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7622940Z 生成: xpath_real_caimoge.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7728939Z 完成：处理 11 个用例文件，共 703 条用例。
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7885540Z === 生成的文件 ===
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7897985Z total 328
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7898477Z drwxr-xr-x 2 runner runner   4096 Oct  2 19:41 .
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7899027Z drwxr-xr-x 6 runner runner   4096 Oct  2 19:41 ..
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7899733Z -rw-r--r-- 1 runner runner  17657 Oct  2 19:41 css_basic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7900623Z -rw-r--r-- 1 runner runner   4656 Oct  2 19:41 css_real_xiaoshuo2016.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7901463Z -rw-r--r-- 1 runner runner  41164 Oct  2 19:41 jsonpath_cases.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7902013Z -rw-r--r-- 1 runner runner  16828 Oct  2 19:41 malformed_html.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7902490Z -rw-r--r-- 1 runner runner   7921 Oct  2 19:41 regex_analyze.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7902962Z -rw-r--r-- 1 runner runner   9501 Oct  2 19:41 regex_replace.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7903493Z -rw-r--r-- 1 runner runner 152520 Oct  2 19:41 serializer_synthetic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7904115Z -rw-r--r-- 1 runner runner   5447 Oct  2 19:41 unescape_html4.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7904809Z -rw-r--r-- 1 runner runner  10750 Oct  2 19:41 url_absolute.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7905458Z -rw-r--r-- 1 runner runner  24993 Oct  2 19:41 xpath_basic.json
-golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-02T19:41:39.7906155Z -rw-r--r-- 1 runner runner   4863 Oct  2 19:41 xpath_real_caimoge.json
-golden	Upload golden artifact	﻿2026-10-02T19:41:39.8010338Z ##[group]Run actions/upload-artifact@v4
-golden	Upload golden artifact	2026-10-02T19:41:39.8010683Z with:
-golden	Upload golden artifact	2026-10-02T19:41:39.8010920Z   name: golden-data
-golden	Upload golden artifact	2026-10-02T19:41:39.8011172Z   path: scripts/golden/out/*.json
-golden	Upload golden artifact	2026-10-02T19:41:39.8011456Z   if-no-files-found: error
-golden	Upload golden artifact	2026-10-02T19:41:39.8011723Z   compression-level: 6
-golden	Upload golden artifact	2026-10-02T19:41:39.8011978Z   overwrite: false
-golden	Upload golden artifact	2026-10-02T19:41:39.8012214Z   include-hidden-files: false
-golden	Upload golden artifact	2026-10-02T19:41:39.8012471Z env:
-golden	Upload golden artifact	2026-10-02T19:41:39.8012785Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Upload golden artifact	2026-10-02T19:41:39.8013296Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-golden	Upload golden artifact	2026-10-02T19:41:39.8013682Z ##[endgroup]
-golden	Upload golden artifact	2026-10-02T19:41:39.9637346Z (node:2459) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-golden	Upload golden artifact	2026-10-02T19:41:39.9638393Z (Use `node --trace-deprecation ...` to show where the warning was created)
-golden	Upload golden artifact	2026-10-02T19:41:39.9742489Z With the provided path, there will be 11 files uploaded
-golden	Upload golden artifact	2026-10-02T19:41:39.9743948Z Artifact name is valid!
-golden	Upload golden artifact	2026-10-02T19:41:39.9744329Z Root directory input is valid!
-golden	Upload golden artifact	2026-10-02T19:41:40.2989971Z Beginning upload of artifact content to blob storage
-golden	Upload golden artifact	2026-10-02T19:41:40.3349251Z (node:2459) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-golden	Upload golden artifact	2026-10-02T19:41:40.5860840Z Uploaded bytes 30778
-golden	Upload golden artifact	2026-10-02T19:41:40.6456121Z Finished uploading artifact content to blob storage!
-golden	Upload golden artifact	2026-10-02T19:41:40.6457736Z SHA256 digest of uploaded artifact zip is b07a020660d2ea84a49b7d92c03470cc29238794f9cdbafdd362af3120e329dc
-golden	Upload golden artifact	2026-10-02T19:41:40.6458940Z Finalizing artifact upload
-golden	Upload golden artifact	2026-10-02T19:41:40.8972494Z Artifact golden-data.zip successfully finalized. Artifact ID 11248552181
-golden	Upload golden artifact	2026-10-02T19:41:40.8973534Z Artifact golden-data has been successfully uploaded! Final size is 30778 bytes. Artifact ID is 11248552181
-golden	Upload golden artifact	2026-10-02T19:41:40.8979409Z Artifact download URL: https://github.com/zhuof725/bookon/actions/runs/37055728627/artifacts/11248552181
-golden	Post Set up JDK 11	﻿2026-10-02T19:41:40.9138364Z Post job cleanup.
-golden	Post Set up JDK 11	2026-10-02T19:41:41.0488832Z (node:2471) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-golden	Post Set up JDK 11	2026-10-02T19:41:41.0489921Z (Use `node --trace-deprecation ...` to show where the warning was created)
-golden	Post Set up JDK 11	2026-10-02T19:41:41.0493692Z Cache hit occurred on the primary key setup-java-Linux-x64-maven-d6fa3a36a973909832d067779ba143bee687be0434faeefc2244e181ca03d6d6, not saving cache.
-golden	Post Run actions/checkout@v4	﻿2026-10-02T19:41:41.0693334Z Post job cleanup.
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1681060Z [command]/usr/bin/git version
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1723135Z git version 2.55.0
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1771755Z Temporarily overriding HOME='/home/runner/work/_temp/d446af82-089d-4557-a525-a8b5789dce26' before making global git config changes
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1773090Z Adding repository directory to the temporary git global config as a safe directory
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1803371Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1863838Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.1925715Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2182611Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2207303Z http.https://github.com/.extraheader
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2217505Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2263901Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2483964Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-golden	Post Run actions/checkout@v4	2026-10-02T19:41:41.2521122Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-golden	Complete job	﻿2026-10-02T19:41:41.2857083Z Cleaning up orphan processes
-golden	Complete job	2026-10-02T19:41:41.3072827Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+golden	Set up job	﻿2026-10-03T10:07:04.1275072Z Current runner version: '2.337.0'
+golden	Set up job	2026-10-03T10:07:04.1296261Z ##[group]Runner Image Provisioner
+golden	Set up job	2026-10-03T10:07:04.1297013Z Hosted Compute Agent
+golden	Set up job	2026-10-03T10:07:04.1297560Z Version: 20260901.588
+golden	Set up job	2026-10-03T10:07:04.1298118Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+golden	Set up job	2026-10-03T10:07:04.1298699Z Build Date: 2026-09-01T19:56:44Z
+golden	Set up job	2026-10-03T10:07:04.1299355Z Worker ID: {434ab5c2-8d1a-4de2-a0de-fd66fcf119a3}
+golden	Set up job	2026-10-03T10:07:04.1300127Z Azure Region: westus3
+golden	Set up job	2026-10-03T10:07:04.1300650Z ##[endgroup]
+golden	Set up job	2026-10-03T10:07:04.1301864Z ##[group]Operating System
+golden	Set up job	2026-10-03T10:07:04.1302364Z Ubuntu
+golden	Set up job	2026-10-03T10:07:04.1302904Z 24.04.5
+golden	Set up job	2026-10-03T10:07:04.1303329Z LTS
+golden	Set up job	2026-10-03T10:07:04.1303780Z ##[endgroup]
+golden	Set up job	2026-10-03T10:07:04.1304258Z ##[group]Runner Image
+golden	Set up job	2026-10-03T10:07:04.1304764Z Image: ubuntu-24.04
+golden	Set up job	2026-10-03T10:07:04.1305336Z Version: 20260927.320.1
+golden	Set up job	2026-10-03T10:07:04.1306188Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+golden	Set up job	2026-10-03T10:07:04.1307564Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+golden	Set up job	2026-10-03T10:07:04.1308332Z ##[endgroup]
+golden	Set up job	2026-10-03T10:07:04.1309409Z ##[group]GITHUB_TOKEN Permissions
+golden	Set up job	2026-10-03T10:07:04.1311634Z Contents: read
+golden	Set up job	2026-10-03T10:07:04.1312145Z Metadata: read
+golden	Set up job	2026-10-03T10:07:04.1312602Z Packages: read
+golden	Set up job	2026-10-03T10:07:04.1313147Z ##[endgroup]
+golden	Set up job	2026-10-03T10:07:04.1314804Z Secret source: Actions
+golden	Set up job	2026-10-03T10:07:04.1315657Z Cache mode: write
+golden	Set up job	2026-10-03T10:07:04.1316239Z Prepare workflow directory
+golden	Set up job	2026-10-03T10:07:04.1583559Z Prepare all required actions
+golden	Set up job	2026-10-03T10:07:04.1636315Z Getting action download info
+golden	Set up job	2026-10-03T10:07:04.4827198Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+golden	Set up job	2026-10-03T10:07:04.7570989Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+golden	Set up job	2026-10-03T10:07:05.8200745Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+golden	Set up job	2026-10-03T10:07:06.2422524Z Complete job name: golden
+golden	Run actions/checkout@v4	﻿2026-10-03T10:07:06.3178746Z ##[group]Run actions/checkout@v4
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3180259Z with:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3180928Z   repository: zhuof725/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3187466Z   token: ***
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3188110Z   ssh-strict: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3188773Z   ssh-user: git
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3189488Z   persist-credentials: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3190346Z   clean: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3191026Z   sparse-checkout-cone-mode: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3191828Z   fetch-depth: 1
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3192484Z   fetch-tags: false
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3193158Z   show-progress: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3193835Z   lfs: false
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3194471Z   submodules: false
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3195158Z   set-safe-directory: true
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3195931Z   allow-unsafe-pr-checkout: false
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.3196958Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4036394Z Syncing repository: zhuof725/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4038873Z ##[group]Getting Git version info
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4040528Z Working directory is '/home/runner/work/bookon/bookon'
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4042847Z [command]/usr/bin/git version
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4140525Z git version 2.55.0
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4143593Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4150494Z Temporarily overriding HOME='/home/runner/work/_temp/b224eec0-4d66-479a-bb17-01e7f9daf339' before making global git config changes
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4153865Z Adding repository directory to the temporary git global config as a safe directory
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4156500Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4200576Z Deleting the contents of '/home/runner/work/bookon/bookon'
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4214855Z ##[group]Initializing the repository
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4218300Z [command]/usr/bin/git init /home/runner/work/bookon/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4305590Z hint: Using 'master' as the name for the initial branch. This default branch name
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4308325Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4310750Z hint: to use in all of your new repositories, which will suppress this warning,
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4312699Z hint: call:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4313627Z hint:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4314749Z hint: 	git config --global init.defaultBranch <name>
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4316150Z hint:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4317478Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4319673Z hint: 'development'. The just-created branch can be renamed via this command:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4321552Z hint:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4322485Z hint: 	git branch -m <name>
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4323725Z hint:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4325195Z hint: Disable this message with "git config set advice.defaultBranchName false"
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4327516Z Initialized empty Git repository in /home/runner/work/bookon/bookon/.git/
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4335285Z [command]/usr/bin/git remote add origin https://github.com/zhuof725/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4363846Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4365584Z ##[group]Disabling automatic garbage collection
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4368487Z [command]/usr/bin/git config --local gc.auto 0
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4395412Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4396993Z ##[group]Setting up auth
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4399538Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4426231Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4742511Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4774097Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4962340Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.4991419Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.5177064Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.5211448Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.5212591Z ##[group]Fetching the repository
+golden	Run actions/checkout@v4	2026-10-03T10:07:06.5219348Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f3f2000735a5583bc36ef7183d75b62618f6c171:refs/remotes/origin/main
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0459186Z From https://github.com/zhuof725/bookon
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0459970Z  * [new ref]         f3f2000735a5583bc36ef7183d75b62618f6c171 -> origin/main
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0463005Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0463740Z ##[group]Determining the checkout info
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0465471Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0470701Z [command]/usr/bin/git sparse-checkout disable
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0517662Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0545717Z ##[group]Checking out the ref
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.0548590Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.1022692Z Switched to a new branch 'main'
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.1030523Z branch 'main' set up to track 'origin/main'.
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.1042919Z ##[endgroup]
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.1084820Z [command]/usr/bin/git log -1 --format=%H
+golden	Run actions/checkout@v4	2026-10-03T10:07:08.1107813Z f3f2000735a5583bc36ef7183d75b62618f6c171
+golden	Set up JDK 11	﻿2026-10-03T10:07:08.1404627Z ##[group]Run actions/setup-java@v4
+golden	Set up JDK 11	2026-10-03T10:07:08.1404900Z with:
+golden	Set up JDK 11	2026-10-03T10:07:08.1405070Z   distribution: temurin
+golden	Set up JDK 11	2026-10-03T10:07:08.1405263Z   java-version: 11
+golden	Set up JDK 11	2026-10-03T10:07:08.1405429Z   cache: maven
+golden	Set up JDK 11	2026-10-03T10:07:08.1405600Z   java-package: jdk
+golden	Set up JDK 11	2026-10-03T10:07:08.1405772Z   check-latest: false
+golden	Set up JDK 11	2026-10-03T10:07:08.1406087Z   server-id: github
+golden	Set up JDK 11	2026-10-03T10:07:08.1406255Z   server-username: GITHUB_ACTOR
+golden	Set up JDK 11	2026-10-03T10:07:08.1406459Z   server-password: GITHUB_TOKEN
+golden	Set up JDK 11	2026-10-03T10:07:08.1406651Z   overwrite-settings: true
+golden	Set up JDK 11	2026-10-03T10:07:08.1406841Z   job-status: success
+golden	Set up JDK 11	2026-10-03T10:07:08.1408733Z   token: ***
+golden	Set up JDK 11	2026-10-03T10:07:08.1408905Z ##[endgroup]
+golden	Set up JDK 11	2026-10-03T10:07:08.2727091Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+golden	Set up JDK 11	2026-10-03T10:07:08.2732804Z ##[group]Installed distributions
+golden	Set up JDK 11	2026-10-03T10:07:08.2754657Z Resolved Java 11.0.32+1 from tool-cache
+golden	Set up JDK 11	2026-10-03T10:07:08.2755112Z Setting Java 11.0.32+1 as the default
+golden	Set up JDK 11	2026-10-03T10:07:08.2762351Z (node:2081) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+golden	Set up JDK 11	2026-10-03T10:07:08.2762897Z (Use `node --trace-deprecation ...` to show where the warning was created)
+golden	Set up JDK 11	2026-10-03T10:07:08.2765157Z Creating toolchains.xml for JDK version 11 from temurin
+golden	Set up JDK 11	2026-10-03T10:07:08.2819305Z Writing to /home/runner/.m2/toolchains.xml
+golden	Set up JDK 11	2026-10-03T10:07:08.2819713Z 
+golden	Set up JDK 11	2026-10-03T10:07:08.2820050Z Java configuration:
+golden	Set up JDK 11	2026-10-03T10:07:08.2820367Z   Distribution: temurin
+golden	Set up JDK 11	2026-10-03T10:07:08.2829638Z   Version: 11.0.32+1
+golden	Set up JDK 11	2026-10-03T10:07:08.2830216Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Set up JDK 11	2026-10-03T10:07:08.2830570Z 
+golden	Set up JDK 11	2026-10-03T10:07:08.2830833Z ##[endgroup]
+golden	Set up JDK 11	2026-10-03T10:07:08.2850658Z Creating settings.xml with server-id: github
+golden	Set up JDK 11	2026-10-03T10:07:08.2855011Z Writing to /home/runner/.m2/settings.xml
+golden	Set up JDK 11	2026-10-03T10:07:08.5164282Z Cache hit for: setup-java-Linux-x64-maven-1893eef10fecc7985daf4007c21b74604b6a1b42c53e37612296a38a80f6b303
+golden	Set up JDK 11	2026-10-03T10:07:08.5287226Z (node:2081) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+golden	Set up JDK 11	2026-10-03T10:07:09.6351456Z Received 22178738 of 22178738 (100.0%), 23.8 MBs/sec
+golden	Set up JDK 11	2026-10-03T10:07:09.6357349Z Cache Size: ~21 MB (22178738 B)
+golden	Set up JDK 11	2026-10-03T10:07:09.6402720Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c032a946-dffc-427d-9a05-7e99fbb1ac83/cache.tzst -P -C /home/runner/work/bookon/bookon --use-compress-program unzstd
+golden	Set up JDK 11	2026-10-03T10:07:09.6922095Z Cache restored successfully
+golden	Set up JDK 11	2026-10-03T10:07:09.6936570Z Cache restored from key: setup-java-Linux-x64-maven-1893eef10fecc7985daf4007c21b74604b6a1b42c53e37612296a38a80f6b303
+golden	Build golden generator (Maven)	﻿2026-10-03T10:07:09.7090882Z ##[group]Run mvn -B -ntp package
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7091199Z ^[[36;1mmvn -B -ntp package^[[0m
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7308976Z shell: /usr/bin/bash -e {0}
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7309209Z env:
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7309467Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7310070Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Build golden generator (Maven)	2026-10-03T10:07:09.7310379Z ##[endgroup]
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.1293223Z [INFO] Scanning for projects...
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.2000385Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.2000901Z [INFO] -----------------< io.legado.golden:golden-generator >------------------
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.2001390Z [INFO] Building golden-generator 1.0.0
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.2001617Z [INFO]   from pom.xml
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.2001872Z [INFO] --------------------------------[ jar ]---------------------------------
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.3795026Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.3825905Z [INFO] --- resources:3.4.0:resources (default-resources) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.5813857Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/main/resources
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.5840491Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.5890345Z [INFO] --- compiler:3.15.0:compile (default-compile) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.9041406Z [INFO] Recompiling the module because of changed source code.
+golden	Build golden generator (Maven)	2026-10-03T10:07:14.9146660Z [INFO] Compiling 8 source files with javac [debug target 11] to target/classes
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4476441Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4490849Z [INFO] --- resources:3.4.0:testResources (default-testResources) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4526837Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/test/resources
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4527806Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4528413Z [INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4570383Z [INFO] No sources to compile
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4570746Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.4571136Z [INFO] --- surefire:3.5.4:test (default-test) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.5711180Z [INFO] No tests to run.
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.6242226Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:16.6243099Z [INFO] --- jar:3.5.0:jar (default-jar) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.2700288Z [INFO] Building jar: /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.5354870Z [INFO] 
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.5355399Z [INFO] --- shade:3.5.1:shade (default) @ golden-generator ---
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6146415Z [INFO] Including org.mozilla:rhino:jar:1.8.1 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6147293Z [INFO] Including org.jsoup:jsoup:jar:1.16.2 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6148218Z [INFO] Including cn.wanghaomiao:JsoupXpath:jar:2.5.3 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6149064Z [INFO] Including org.apache.commons:commons-lang3:jar:3.18.0 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6155555Z [INFO] Including org.antlr:antlr4-runtime:jar:4.7.2 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6156453Z [INFO] Including org.slf4j:slf4j-api:jar:1.7.36 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6157224Z [INFO] Including com.google.code.gson:gson:jar:2.13.2 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6158089Z [INFO] Including com.google.errorprone:error_prone_annotations:jar:2.41.0 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6158970Z [INFO] Including com.jayway.jsonpath:json-path:jar:2.10.0 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6160991Z [INFO] Including net.minidev:json-smart:jar:2.6.0 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6161796Z [INFO] Including net.minidev:accessors-smart:jar:2.6.0 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6162508Z [INFO] Including org.ow2.asm:asm:jar:9.7.1 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6163242Z [INFO] Including org.apache.commons:commons-text:jar:1.13.1 in the shaded jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.6164306Z [INFO] Dependency-reduced POM written at: /home/runner/work/bookon/bookon/scripts/golden/dependency-reduced-pom.xml
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.7743067Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+golden	Build golden generator (Maven)	2026-10-03T10:07:17.9727639Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0033386Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar define 2 overlapping resources: 
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0034347Z [WARNING]   - META-INF/LICENSE.txt
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0060488Z [WARNING]   - META-INF/NOTICE.txt
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0065885Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, gson-2.13.2.jar define 1 overlapping classes: 
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0069973Z [WARNING]   - META-INF.versions.9.module-info
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0072102Z [WARNING] JsoupXpath-2.5.3.jar, accessors-smart-2.6.0.jar, antlr4-runtime-4.7.2.jar, asm-9.7.1.jar, commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, golden-generator.jar, gson-2.13.2.jar, json-path-2.10.0.jar, json-smart-2.6.0.jar, jsoup-1.16.2.jar, rhino-1.8.1.jar, slf4j-api-1.7.36.jar define 1 overlapping resource: 
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0086453Z [WARNING]   - META-INF/MANIFEST.MF
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0087123Z [WARNING] maven-shade-plugin has detected that some files are
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0087851Z [WARNING] present in two or more JARs. When this happens, only one
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0088582Z [WARNING] single version of the file is copied to the uber jar.
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0089329Z [WARNING] Usually this is not harmful and you can skip these warnings,
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0115544Z [WARNING] otherwise try to manually exclude artifacts based on
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0116635Z [WARNING] mvn dependency:tree -Ddetail=true and the above output.
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0122474Z [WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0123918Z [INFO] Replacing original artifact with shaded artifact.
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0124923Z [INFO] Replacing /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar with /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator-1.0.0-shaded.jar
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0125997Z [INFO] ------------------------------------------------------------------------
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0126772Z [INFO] BUILD SUCCESS
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0127463Z [INFO] ------------------------------------------------------------------------
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0129116Z [INFO] Total time:  3.909 s
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0129593Z [INFO] Finished at: 2026-10-03T10:07:18Z
+golden	Build golden generator (Maven)	2026-10-03T10:07:18.0130510Z [INFO] ------------------------------------------------------------------------
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	﻿2026-10-03T10:07:18.0398106Z ##[group]Run set -e
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0398350Z ^[[36;1mset -e^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0398583Z ^[[36;1mjava -jar target/golden-generator.jar cases out^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0398873Z ^[[36;1mecho "=== 生成的文件 ==="^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0399077Z ^[[36;1mls -la out^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0399283Z ^[[36;1mCOUNT=$(ls out/*.json 2>/dev/null | wc -l)^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0399552Z ^[[36;1mif [ "$COUNT" -eq 0 ]; then^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0399952Z ^[[36;1m  echo "错误：未生成任何 golden 文件"^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0400171Z ^[[36;1m  exit 1^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0400338Z ^[[36;1mfi^[[0m
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0456036Z shell: /usr/bin/bash -e {0}
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0456252Z env:
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0456502Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0456888Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.0457188Z ##[endgroup]
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.3703919Z 生成: css_basic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.3750354Z 生成: css_real_xiaoshuo2016.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.5721639Z Rhino 1.8.1: 74 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.5776573Z 生成: js_rhino.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.5930827Z SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.5931451Z SLF4J: Defaulting to no-operation (NOP) logger implementation
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.5932139Z SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.6310539Z 生成: jsonpath_cases.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.7093811Z 生成: malformed_html.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.7146392Z 生成: regex_analyze.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.7186661Z 生成: regex_replace.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.8681092Z 生成: serializer_synthetic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.8870714Z 生成: unescape_html4.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.8936234Z 生成: url_absolute.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.9170719Z line 1:10 token recognition error at: '%'
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.9171625Z line 1:11 token recognition error at: '%'
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.9390760Z 生成: xpath_basic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.9441427Z 生成: xpath_real_caimoge.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:18.9507076Z 完成：处理 12 个用例文件，共 777 条用例。
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0688717Z === 生成的文件 ===
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0702984Z total 344
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0703324Z drwxr-xr-x 2 runner runner   4096 Oct  3 10:07 .
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0703767Z drwxr-xr-x 6 runner runner   4096 Oct  3 10:07 ..
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0704190Z -rw-r--r-- 1 runner runner  17657 Oct  3 10:07 css_basic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0704589Z -rw-r--r-- 1 runner runner   4656 Oct  3 10:07 css_real_xiaoshuo2016.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0704925Z -rw-r--r-- 1 runner runner  15684 Oct  3 10:07 js_rhino.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0705238Z -rw-r--r-- 1 runner runner  41164 Oct  3 10:07 jsonpath_cases.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0705681Z -rw-r--r-- 1 runner runner  16828 Oct  3 10:07 malformed_html.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0706159Z -rw-r--r-- 1 runner runner   7921 Oct  3 10:07 regex_analyze.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0706641Z -rw-r--r-- 1 runner runner   9501 Oct  3 10:07 regex_replace.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0707470Z -rw-r--r-- 1 runner runner 152520 Oct  3 10:07 serializer_synthetic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0708007Z -rw-r--r-- 1 runner runner   5447 Oct  3 10:07 unescape_html4.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0708504Z -rw-r--r-- 1 runner runner  10750 Oct  3 10:07 url_absolute.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0708971Z -rw-r--r-- 1 runner runner  24993 Oct  3 10:07 xpath_basic.json
+golden	Generate golden data (real jsoup 1.16.2 + JsoupXpath 2.5.3)	2026-10-03T10:07:19.0709294Z -rw-r--r-- 1 runner runner   4863 Oct  3 10:07 xpath_real_caimoge.json
+golden	Upload golden artifact	﻿2026-10-03T10:07:19.0776772Z ##[group]Run actions/upload-artifact@v4
+golden	Upload golden artifact	2026-10-03T10:07:19.0777018Z with:
+golden	Upload golden artifact	2026-10-03T10:07:19.0777185Z   name: golden-data
+golden	Upload golden artifact	2026-10-03T10:07:19.0777369Z   path: scripts/golden/out/*.json
+golden	Upload golden artifact	2026-10-03T10:07:19.0777581Z   if-no-files-found: error
+golden	Upload golden artifact	2026-10-03T10:07:19.0777909Z   compression-level: 6
+golden	Upload golden artifact	2026-10-03T10:07:19.0778101Z   overwrite: false
+golden	Upload golden artifact	2026-10-03T10:07:19.0778283Z   include-hidden-files: false
+golden	Upload golden artifact	2026-10-03T10:07:19.0778480Z env:
+golden	Upload golden artifact	2026-10-03T10:07:19.0778730Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Upload golden artifact	2026-10-03T10:07:19.0779136Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+golden	Upload golden artifact	2026-10-03T10:07:19.0779433Z ##[endgroup]
+golden	Upload golden artifact	2026-10-03T10:07:19.2061240Z (node:2181) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+golden	Upload golden artifact	2026-10-03T10:07:19.2062016Z (Use `node --trace-deprecation ...` to show where the warning was created)
+golden	Upload golden artifact	2026-10-03T10:07:19.2161582Z With the provided path, there will be 12 files uploaded
+golden	Upload golden artifact	2026-10-03T10:07:19.2162298Z Artifact name is valid!
+golden	Upload golden artifact	2026-10-03T10:07:19.2162592Z Root directory input is valid!
+golden	Upload golden artifact	2026-10-03T10:07:19.5303464Z Beginning upload of artifact content to blob storage
+golden	Upload golden artifact	2026-10-03T10:07:19.5588212Z (node:2181) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+golden	Upload golden artifact	2026-10-03T10:07:19.8264723Z Uploaded bytes 32684
+golden	Upload golden artifact	2026-10-03T10:07:19.8887147Z Finished uploading artifact content to blob storage!
+golden	Upload golden artifact	2026-10-03T10:07:19.8890899Z SHA256 digest of uploaded artifact zip is 0573ad11fe87c5dbc9af8f535779af14892bcdac51ef6e5a15ce2b5ac2f906f2
+golden	Upload golden artifact	2026-10-03T10:07:19.8891575Z Finalizing artifact upload
+golden	Upload golden artifact	2026-10-03T10:07:20.1436801Z Artifact golden-data.zip successfully finalized. Artifact ID 11271363603
+golden	Upload golden artifact	2026-10-03T10:07:20.1437652Z Artifact golden-data has been successfully uploaded! Final size is 32684 bytes. Artifact ID is 11271363603
+golden	Upload golden artifact	2026-10-03T10:07:20.1443283Z Artifact download URL: https://github.com/zhuof725/bookon/actions/runs/37115324928/artifacts/11271363603
+golden	Post Set up JDK 11	﻿2026-10-03T10:07:20.1602508Z Post job cleanup.
+golden	Post Set up JDK 11	2026-10-03T10:07:20.2645570Z (node:2193) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+golden	Post Set up JDK 11	2026-10-03T10:07:20.2646195Z (Use `node --trace-deprecation ...` to show where the warning was created)
+golden	Post Set up JDK 11	2026-10-03T10:07:20.2650069Z Cache hit occurred on the primary key setup-java-Linux-x64-maven-1893eef10fecc7985daf4007c21b74604b6a1b42c53e37612296a38a80f6b303, not saving cache.
+golden	Post Run actions/checkout@v4	﻿2026-10-03T10:07:20.2815990Z Post job cleanup.
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3496041Z [command]/usr/bin/git version
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3529926Z git version 2.55.0
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3558176Z Temporarily overriding HOME='/home/runner/work/_temp/f3ba36ce-ce2a-4b1c-8086-40ca89b6ab5a' before making global git config changes
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3559173Z Adding repository directory to the temporary git global config as a safe directory
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3563219Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3593336Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3621060Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3824077Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3853049Z http.https://github.com/.extraheader
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3864601Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.3892267Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.4105885Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+golden	Post Run actions/checkout@v4	2026-10-03T10:07:20.4145545Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+golden	Complete job	﻿2026-10-03T10:07:20.4455545Z Cleaning up orphan processes
+golden	Complete job	2026-10-03T10:07:20.4724780Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

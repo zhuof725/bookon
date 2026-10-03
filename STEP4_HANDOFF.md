@@ -5,25 +5,25 @@
 
 ---
 
-## 最终验证（真实 CI 结果，run 37055728627，HEAD `8d1382d`）
+## 最终验证（真实 CI 结果，run 37115324928，HEAD `f3f2000`）
 
 三个 job 全绿 ✅：
 
 | job | 状态 | 关键数字 | 日志 |
 |---|---|---|---|
-| golden（ubuntu，真实 java 库） | ✓ success | **703 条用例**（11 个用例文件） | `ci_logs/step4_final_golden.log` |
-| test-macos（swift test） | ✓ success | **Executed 443 tests, 0 failures** | `ci_logs/step4_final_macos.log` |
-| test-ios-simulator（xcodebuild test） | ✓ success | **实际执行 443 个测试**（与 macOS 相等） | `ci_logs/step4_final_ios.log` |
+| golden（ubuntu，真实 java 库） | ✓ success | **777 条用例**（12 个用例文件，含 74 条真实 Rhino 1.8.1 JS 片段） | `ci_logs/step4_final_golden.log` |
+| test-macos（swift test） | ✓ success | **Executed 446 tests, 0 failures** | `ci_logs/step4_final_macos.log` |
+| test-ios-simulator（xcodebuild test） | ✓ success | **实际执行 446 个测试**（与 macOS 相等） | `ci_logs/step4_final_ios.log` |
 
-**iOS == macOS 测试总数核对**：iOS 按 8 个 xctest bundle 求和得 443，macOS `swift test` 的
-「All tests」总数也是 443，两者**相等**（`scripts/ios_sim_test.sh` 实测打印
-`✅ iOS 总数与 macOS 总数一致（均为 443）`，workflow 已加入相等性强制核对，不相等则 iOS job 失败）。
+**iOS == macOS 测试总数核对**：iOS 按 8 个 xctest bundle 求和得 446，macOS `swift test` 的
+「All tests」总数也是 446，两者**相等**（`scripts/ios_sim_test.sh` 实测打印
+`✅ iOS 总数与 macOS 总数一致（均为 446）`，workflow 已加入相等性强制核对，不相等则 iOS job 失败）。
 
 iOS 各 bundle 明细（来自 `step4_final_ios.log`）：
-`LegadoAnalyzeRuleTests`=126、`LegadoAnalyzeRulePublicAPITests`=13、
+`LegadoAnalyzeRuleTests`=127、`LegadoAnalyzeRulePublicAPITests`=13、
 `LegadoBookSourceTests`=14、`LegadoBookSourcePublicAPITests`=3、
-`LegadoHTMLEngineTests`=171、`LegadoHTMLEnginePublicAPITests`=4、
-`LegadoRuleEngineTests`=107、`LegadoRuleEnginePublicAPITests`=5，合计 443。
+`LegadoHTMLEngineTests`=173、`LegadoHTMLEnginePublicAPITests`=4、
+`LegadoRuleEngineTests`=107、`LegadoRuleEnginePublicAPITests`=5，合计 446。
 
 > **更正记录**：STEP4B 曾写「iOS 107 vs macOS 420，与第 3 步历史一致」。经核对**该说法错误**——
 > 107 是单个 bundle（LegadoRuleEngineTests）的执行数被误当成 iOS 总数；iOS 实际跑全部 8 个

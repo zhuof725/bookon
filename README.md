@@ -813,14 +813,14 @@ Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** 
 
 - 合成样本：`Tests/LegadoAnalyzeRuleTests/` 内除标注「真实规则」外，所有 HTML/JSON/规则文本
   均为合成（测试注释标「合成样本，非真实数据」）。
-- 真实规则 + 合成数据：端到端测试（`AnalyzeRuleEndToEndTests`）用 `配置文件_7个.json` 里的
-  **真实书源规则文本**，输入响应为合成数据，每个用例注释标「规则真实、数据合成」及来源书源名
-  （淘小说书城/速读谷/得奇小说网/笔趣阁345/得间小说/魔丸小说/爱丽丝书屋）。
+- 真实规则 + 合成数据：端到端测试（`AnalyzeRuleEndToEndTests`）用 `配置文件_7个.json` 及
+  从 `配置文件_14个.json` 提取的 `taiwan_real_source.json` **真实书源规则文本**，输入响应为合成数据，
+  每个用例注释标「规则真实、数据合成」及来源书源名（含台湾小说网 Packages.org.jsoup 拒绝用例）。
 
 ## java.xxx 使用情况表
 
-见 `JS_EXTENSIONS_USAGE.md`（7 个真实书源实际调用的 `java.xxx` 方法 + 次数 + 已/未实现状态 +
-Java 互操作标记 + 第 5 步实现优先级）。
+见 `JS_EXTENSIONS_USAGE.md`（14 个真实书源实际调用的 `java.xxx` / `cookie.xxx` / `cache.xxx`
+方法 + 次数 + 已/未实现状态 + Java 互操作标记 + 第 5 步实现优先级）。
 
 
 ---
