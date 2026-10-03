@@ -149,11 +149,13 @@ public struct HttpUrl: Equatable {
                     guard let p = HttpUrl.parsePort(portPart) else { return nil }
                     port = p
                     hostPort = hostPart
-                } else if portPart.isEmpty {
-                    // "host:" 形式：OkHttp 视为无端口但保留 ':'?（差异登记）
+                } else {
+                    // 端口部分不是纯数字（含空端口 "host:"、负数、字母）-> OkHttp 判非法
                     return nil
                 }
             }
+            // 非 bracket 的 host 里不允许出现 ':'（IPv6 必须写方括号）
+            if hostPort.contains(":") { return nil }
             guard let h = HttpUrl.canonicalizeHost(hostPort) else { return nil }
             host = h
         }
@@ -183,6 +185,15 @@ public struct HttpUrl: Equatable {
         }
         host = host.lowercased()
         if host.isEmpty { return nil }
+        // host 里出现空格、控制字符或 URL 保留字符 -> 非法（对齐 OkHttp canonicalizeHost 的行为）
+        for scalar in host.unicodeScalars {
+            if scalar.value <= 0x20 || scalar.value == 0x7F { return nil }
+            switch scalar.value {
+            case 0x3C, 0x3E, 0x22, 0x5E, 0x60, 0x7B, 0x7D, 0x7C, 0x5C, 0x2F, 0x3F, 0x23, 0x40:
+                return nil
+            default: break
+            }
+        }
         // IPv4 字面量（OkHttp 只做校验形式的保留，不做数值归一化）
         if isIPv4Literal(host) { return host }
         if host.unicodeScalars.contains(where: { $0.value > 0x7F }) {
@@ -394,7 +405,8 @@ public struct HttpUrl: Equatable {
             }
             // RFC 3492：编码循环遍历**完整**码点序列（基本码点参与 delta 计数），h 从基本码点数 b 开始
             let encoded = punycodeEncode(allPoints)
-            out.append("xn--" + basic + encoded)
+            // 有基本码点时，基本部分与编码部分之间用 "-" 分隔（如 bücher -> bcher-kva）
+            out.append("xn--" + basic + (basic.isEmpty ? "" : "-") + encoded)
         }
         return out.joined(separator: ".")
     }
