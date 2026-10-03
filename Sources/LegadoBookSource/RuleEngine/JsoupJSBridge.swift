@@ -137,7 +137,7 @@ final class JsoupJSBridge {
 
         // jsoup Elements.attr(key)：返回第一个**拥有该属性**的元素的属性值；都没有则空串。
         // jsoup Element.attr(key)：没有该属性返回空串。
-        let attr: @convention(block) (String) -> String = {
+        let attr: @convention(block) (String) -> String = { name in
             switch wrapped {
             case .document(let doc): return (try? doc.attr(name)) ?? ""
             case .element(let el): return (try? el.attr(name)) ?? ""

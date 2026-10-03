@@ -32,7 +32,13 @@ final class RhinoNumberArgGoldenTests: XCTestCase {
         let javaReceived: String?
         let callResult: String?
         let error: String?
+        /// 已登记到 README 差异表的不可对齐项（最小值次正规数的最短十进制表示）。
+        let knownDivergence: String?
     }
+
+    /// 已登记差异 `subnormalShortestRepr` 的两侧实际值（钉住，若哪天变了测试会失败提醒更新文档）。
+    private static let subnormalRhinoValue = "4.9e-324"
+    private static let subnormalSpecValue = "5e-324"
 
     private struct Envelope: Decodable { let numberArgResults: [NumberArgCase]? }
 
@@ -77,12 +83,22 @@ final class RhinoNumberArgGoldenTests: XCTestCase {
         let cases = try loadCases()
         var failures: [String] = []
         guard let context = JSContext() else { XCTFail("无法创建 JSContext"); return }
+        var divergencesChecked = 0
         for c in cases {
             let value = context.evaluateScript("String(\(c.literal))")?.toString()
+            if c.knownDivergence == "subnormalShortestRepr" {
+                divergencesChecked += 1
+                if value != Self.subnormalSpecValue || c.javaReceived != Self.subnormalRhinoValue {
+                    failures.append("[\(c.name)] 已登记差异的实际值变了：JSC=\(value ?? "<nil>") Rhino=\(c.javaReceived ?? "<nil>")，"
+                                    + "期望 JSC=\(Self.subnormalSpecValue) / Rhino=\(Self.subnormalRhinoValue)，请更新 README 差异表")
+                }
+                continue
+            }
             if value != c.javaReceived {
                 failures.append("[\(c.name)] String(\(c.literal)) JSC=\(value ?? "<nil>") Rhino=\(c.javaReceived ?? "<nil>")")
             }
         }
+        XCTAssertEqual(divergencesChecked, 1, "已登记差异用例数变化（README 差异表需要同步）")
         if !failures.isEmpty {
             XCTFail("JSC 与 Rhino 的数字→字符串不一致 \(failures.count) 处：\n" + failures.joined(separator: "\n"))
         }
@@ -92,6 +108,7 @@ final class RhinoNumberArgGoldenTests: XCTestCase {
     func testJsNumberFormatMatchesRhino() throws {
         let cases = try loadCases()
         var failures: [String] = []
+        var divergencesChecked = 0
         for c in cases {
             guard let d = Double(c.literal) else {
                 // 5e-324 这类次正规数 Double(_) 仍可解析；解析失败视为错误。
@@ -99,10 +116,19 @@ final class RhinoNumberArgGoldenTests: XCTestCase {
                 continue
             }
             let formatted = JsNumberFormat.toString(d)
+            if c.knownDivergence == "subnormalShortestRepr" {
+                divergencesChecked += 1
+                // 本移植与 JSC/ECMAScript 一致（"5e-324"），与 Rhino 的 "4.9e-324" 是已登记差异。
+                if formatted != Self.subnormalSpecValue || c.javaReceived != Self.subnormalRhinoValue {
+                    failures.append("[\(c.name)] 已登记差异的实际值变了：JsNumberFormat=\(formatted) Rhino=\(c.javaReceived ?? "<nil>")")
+                }
+                continue
+            }
             if formatted != c.javaReceived {
                 failures.append("[\(c.name)] JsNumberFormat(\(c.literal))=\(formatted) Rhino=\(c.javaReceived ?? "<nil>")")
             }
         }
+        XCTAssertEqual(divergencesChecked, 1, "已登记差异用例数变化（README 差异表需要同步）")
         if !failures.isEmpty {
             XCTFail("JsNumberFormat 与 Rhino 不一致 \(failures.count) 处：\n" + failures.joined(separator: "\n"))
         }
@@ -112,7 +138,7 @@ final class RhinoNumberArgGoldenTests: XCTestCase {
     func testAnalyzeRuleCallPathMatchesRhino() throws {
         let cases = try loadCases()
         var failures: [String] = []
-        for c in cases where c.error == nil {
+        for c in cases where c.error == nil && c.knownDivergence == nil {
             let rule = "<js>java.\(c.method)(\(c.literal))</js>"
             let a = AnalyzeRule()
             do {

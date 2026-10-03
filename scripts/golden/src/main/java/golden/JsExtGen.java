@@ -341,7 +341,11 @@ public final class JsExtGen {
         try (Context cx = Context.enter()) {
             cx.setLanguageVersion(Context.VERSION_ES6);
             cx.setInterpretedMode(true);
-            Scriptable scope = cx.initStandardObjects();
+            ScriptableObject standard = cx.initStandardObjects();
+            // 与 legado RhinoScriptEngine 一致：绑定放在**顶层对象下新建的子作用域**上
+            // （原型链仍指向标准全局对象），而不是直接改 ImporterTopLevel 自己的属性。
+            Scriptable scope = cx.newObject(standard);
+            scope.setPrototype(standard);
             ScriptableObject.putProperty(scope, "result", html);
             // 真实书源的 JS 链里还会调 `java.t2s(...)`（台湾小说网 ruleContent.content），
             // 这里绑一个与 legado 同名同签名的探针（真实 quick-chinese-transfer 实现）。

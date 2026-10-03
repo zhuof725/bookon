@@ -85,7 +85,8 @@
     {
       "name": "numarg_md5_5eneg324",
       "method": "md5Encode",
-      "literal": "5e-324"
+      "literal": "5e-324",
+      "knownDivergence": "subnormalShortestRepr"
     },
     {
       "name": "numarg_md5_NaN",
@@ -212,5 +213,6 @@
       "method": "hexEncodeToString",
       "literal": "1e21"
     }
-  ]
+  ],
+  "_KNOWN_DIVERGENCE": "最小值次正规数 5e-324：Rhino 1.8.1 的 DoubleFormatter.toString 给出 \"4.9e-324\"（2 位有效数字），而 JSC/V8 与本移植（ECMAScript Number::toString）给出 \"5e-324\"（1 位有效数字）。两者解析回同一个 double，仅字符串形式不同；真实书源不会把次正规数传给 String 参数。该用例在 Swift 测试里按「已登记差异」处理（钉住两边实际值），详见 README 差异表。"
 }

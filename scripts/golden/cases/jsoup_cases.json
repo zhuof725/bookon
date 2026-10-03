@@ -556,6 +556,18 @@
       "html": "aliceE2EPage",
       "js": "typeof org.jsoup.Jsoup.parse(result).select('div.read-content').html().length",
       "knownDivergence": "javaStringWrapping"
+    },
+    {
+      "name": "probe_java_binding_before_packages",
+      "source": "替身/绑定诊断（合成）: 确认求值器里 `java` 绑定生效——Rhino 端与 JSC+替身端都应给出 function",
+      "html": "aliceE2EPage",
+      "js": "String(typeof java.t2s)"
+    },
+    {
+      "name": "probe_java_binding_after_packages",
+      "source": "替身/绑定诊断（合成）: 访问 Packages.org.jsoup 之后 `java` 绑定仍然生效",
+      "html": "aliceE2EPage",
+      "js": "String(Packages.org.jsoup.Jsoup.parse(result).select('div.read-content').size()) + String(typeof java.t2s)"
     }
   ]
 }

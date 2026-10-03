@@ -125,6 +125,12 @@ public final class NumberArgGen {
                 ScriptableObject.putProperty(scope, "java", Context.javaToJS(probe, scope));
                 Object r = cx.evaluateString(scope, "java." + method + "(" + literal + ")",
                         name, 1, null);
+                // Rhino 的 javaPrimitiveWrap 默认 true：Java String 返回值会被包成 NativeJavaObject，
+                // 必须像 RhinoGen 一样先拆箱（否则 toString() 得到的是对象 identity hash）。
+                if (r instanceof org.mozilla.javascript.Wrapper) {
+                    r = ((org.mozilla.javascript.Wrapper) r).unwrap();
+                }
+                if (r instanceof org.mozilla.javascript.ConsString) r = r.toString();
                 if (r == null) {
                     out.add("callResult", JsonNull.INSTANCE);
                 } else {
