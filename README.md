@@ -1054,3 +1054,53 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 - 端到端测试使用 14 书源**真实规则文本** + 合成响应（规则真实、数据合成），来源书源名在用例注释标出。
 - `Sources/LegadoBookSource/Resources/Chinese/*.txt` 为 quick-chinese-transfer 0.2.17 原样资源
   （含 `PROVENANCE.md`），非本项目编写。
+
+
+# 第 6 步 6A：AnalyzeUrl 规则解析与请求构造（不发网络请求）
+
+在既有 RuleEngine（第 1–5 步 API 与行为不变）之上，新增 `Sources/LegadoBookSource/Network/`：
+`AnalyzeUrl.swift`（AnalyzeUrl.kt 的完整移植：initUrl/analyzeJs/replaceKeyPageJs/analyzeUrl/
+encodeParams/evalJS/put/get/buildRequest 等）、`UrlOption.swift`、`GsonJSON.swift`、
+`ConcurrentRateLimiter.swift`（actor + 时钟注入）、`CookieStore.swift`、`CookieManager.swift`、
+`CacheManager.swift`、`NetworkUtilsEncoding.swift`、`HTTPTypes.swift`（HTTPRequest/HTTPResponse/
+HTTPClient 协议 + ScriptedHTTPClient 假实现）。**真实网络在 6B。**
+
+## 请求构造（6A 的核心输出）
+
+`AnalyzeUrl.buildRequest() -> HTTPRequest` 把 Kotlin `executeStrRequest`/`getResponseAwait`/`upload`
+里「构造 Request」的部分抽出来：url（GET/HEAD 为 `urlNoQuery` + `?` + encodedQuery，POST 为 urlNoQuery）、
+method、**有序** headers（headerMap 插入顺序 + `setCookie()` 注入的 Cookie 与 `CookieJar` 标记）、
+body（form / 按 Content-Type 的原始体 / JSON 三种形态）、contentType、charset、retry、readTimeout、
+callTimeout、useWebView、webJs、bodyJs、dnsIp、proxy、type、serverID。
+
+## golden 对照（真实 Java 库）
+
+`scripts/golden/UrlRuleGen.java` 新增四类用例，共 **524 条**：
+
+| 用例文件 | 条数 | 对照对象 |
+|---|---|---|
+| `url_codec_cases.json` | 299 | hutool `RFC3986.UNRESERVED.orNew(PercentCodec.of(...))`、`URLEncoder`、`EncoderUtils.escape`、`NetworkUtils.encodedQuery/encodedForm` |
+| `url_option_cases.json` | 84 | 真实 Gson 2.13.2 + legado 的 `StringJsonDeserializer`/`IntJsonDeserializer`/`LONG_OR_DOUBLE` |
+| `analyze_url_cases.json` | 94 | java.net.URL + Rhino 1.8.1（JS）+ **AnalyzeUrl 调度逻辑的手工 Java 移植** |
+| `cookie_cases.json` | 47 | CookieStore/CookieManager 纯函数的手工移植版 |
+
+> **本 README 明确标注**：`UrlRuleGen.java` 里的 `encodeParams`/`analyzeJs`/`replaceKeyPageJs`/`analyzeUrl`
+> 是 AnalyzeUrl.kt **调度逻辑的手工 Java 移植**（不是 Kotlin 原码），它只验证真实库的行为；
+> 逐条对照的结果以 CI 的 `golden` job 为准（每个测试都要求「值必须相等 / null 同为 null / 异常同为异常」）。
+
+## 与 Kotlin 的已知差异（第 6 步 6A）
+
+| # | 主题 | Kotlin | 本移植 | 处理 |
+|---|---|---|---|---|
+| 1 | 公共后缀 | Android `PublicSuffixDatabase` 完整列表 | 内置常见多段后缀 + 默认末两段 | 差异表登记；常见书源域名一致 |
+| 2 | cookie 4096 截断 | 随机删键 | 按插入顺序删第一个 | 结果可复现，语义相同 |
+| 3 | 持久化 | Room/ACache | 协议 + JSON 文件原子写 | 接口一致 |
+| 4 | OkHttp `HttpUrl` 规范化 | 有 | `buildRequest()` 直接拼接，不规范化 | 6B 请求对照时补充自动头/规范化差异表 |
+| 5 | WebView 分支 | `BackstageWebView` | 不实现（只记录字段） | 6B/后续 |
+| 6 | 阻塞版限速 API | `getConcurrentRecordBlocking`/`withLimitBlocking` | 只有 async | 调用方用 `withLimit` |
+| 7 | `dnsIp` 自定义解析 | OkHttp `Dns` 直连指定 IP | 只落到 HTTPRequest | 6B 里 URLSession 不支持，如实写「不支持」并记 diagnostics |
+| 8 | 证书策略 | `SSLHelper` 信任所有证书 | 6B 实现（URLSessionDelegate 接受服务器证书） | 安全取舍在 6B 的 README 章节写明 |
+
+（其余「已对照一致」的语义：`escape` 的 UTF-16 遍历、非 UTF-8 字符集的 `?` 替换与逐字节转义、
+`Long.intValue()` 的 32 位截断、`{{}}` 的 null→`""` 与整数 Double→`%.0f`、`@js:` 的 null→`"null"`，
+全部由 golden 逐条钉住。）
