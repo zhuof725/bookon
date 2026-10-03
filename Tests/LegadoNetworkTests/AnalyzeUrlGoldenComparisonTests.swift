@@ -208,7 +208,7 @@ final class AnalyzeUrlGoldenComparisonTests: XCTestCase {
             }
             let a = AnalyzeUrl(c.ruleUrl ?? "", key: c.key, page: c.page, baseUrl: c.baseUrl ?? "")
             if a.url != (c.resultUrl ?? "") {
-                failures.append("[\(c.name)] url 不一致\n  rule: \(c.ruleUrl ?? "") base: \(c.baseUrl ?? "")\n  Java: \(c.resultUrl ?? "<nil>")\n  Swift: \(a.url)")
+                failures.append(esc("[\(c.name)] url 不一致\n  rule: \(c.ruleUrl ?? "") base: \(c.baseUrl ?? "")\n  Java: \(c.resultUrl ?? "<nil>")\n  Swift: \(a.url)"))
                 continue
             }
             if a.urlNoQuery != (c.urlNoQuery ?? "") {
