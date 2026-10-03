@@ -602,6 +602,13 @@ public final class AnalyzeUrl {
             }
         }
 
+        // 与 Kotlin 一致：最终 URL 经过 OkHttp HttpUrl 的规范化（scheme/host 小写、默认端口剥离、
+        // 路径 %xx 与 . / .. 段解析、查询/片段编码）。解析失败时保留拼接结果（Kotlin 会在
+        // toHttpUrl() 处抛异常 -> AnalyzeUrl 的 try/catch 路径，6B 的客户端负责记录 diagnostics）。
+        if let normalized = HttpUrl.parse(finalUrl) {
+            finalUrl = normalized.urlString
+        }
+
         return HTTPRequest(url: finalUrl,
                            method: method,
                            headers: headers,
