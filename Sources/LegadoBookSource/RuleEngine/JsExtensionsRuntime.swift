@@ -56,7 +56,9 @@ final class JsExtensionsRuntime {
             // MARK: AnalyzeRule 自有
             case "put":
                 return ok(try putFn(stringArg(arguments, 0), stringArg(arguments, 1)))
-            case "get":
+            case "get" where arguments.count < 2:
+                // 1 参 = AnalyzeRule.get(key)（变量读取，对应 Kotlin 的重载决议）；
+                // >= 2 参是网络 get（url, headers[, timeout]），落到下方「网络 / 文件」分支。
                 return ok(getFn(stringArg(arguments, 0)))
             case "getString":
                 return ok(getStringFn(stringArg(arguments, 0)))
@@ -136,7 +138,14 @@ final class JsExtensionsRuntime {
                 }
 
             // MARK: 网络 / 文件（协议注入，默认 unsupported）
-            case "get", "post", "head", "ajaxAll", "connect", "cacheFile", "downloadFile":
+            case "get" where arguments.count >= 2:
+                // 对应 Kotlin 的重载决议：java.get(url, headers[, timeout]) 是 JsExtensions 的
+                // 网络方法（2-3 参）；java.get(key)（1 参）是 AnalyzeRule 的变量读取。
+                return ok(try networkProvider.invoke(method: name, arguments: arguments.map { stringify($0) }))
+            case "ajaxAll":
+                // Kotlin: ajaxAll(urlList: Array<String>)：把 JS 数组参数展开为多个 URL 字符串。
+                return ok(try networkProvider.invoke(method: name, arguments: flattenAjaxAllArguments(arguments)))
+            case "post", "head", "connect", "cacheFile", "downloadFile":
                 return ok(try networkProvider.invoke(method: name, arguments: arguments.map { stringify($0) }))
 
             default:
@@ -210,6 +219,14 @@ final class JsExtensionsRuntime {
         return stringify(v)
     }
 
+    /// ajaxAll 的 JS 数组参数 → [String]（数组展开；单元素非数组时也容忍）。
+    private func flattenAjaxAllArguments(_ arguments: [Any?]) -> [String] {
+        if let array = arguments.first as? [Any] {
+            return array.map { stringify($0) }
+        }
+        return arguments.map { stringify($0) }
+    }
+
     private func int64Arg(_ args: [Any?], _ index: Int) -> Int64 {
         guard index < args.count, let n = args[index] as? NSNumber else { return 0 }
         return n.int64Value
@@ -238,7 +255,15 @@ final class JsExtensionsRuntime {
             return JsNumberFormat.toString(number.doubleValue)
         }
         if let array = value as? [Any] { return array.map { stringify($0) }.joined(separator: ",") }
-        if let dict = value as? [String: Any] { return "\(dict)" }
+        if let dict = value as? [String: Any] {
+            // 6B：JS 对象（如 java.get 的 headers Map）→ JSON 字符串，供网络 provider 解析。
+            // 用 sortedKeys 保证确定性（差异：Kotlin 保持 JS 对象插入顺序，见 6B 文档）。
+            if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                return json
+            }
+            return "\(dict)"
+        }
         if value is NSNull { return "" }
         return "\(value)"
     }

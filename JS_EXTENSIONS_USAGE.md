@@ -16,7 +16,7 @@
 |---|---|---|---|
 | `md5Encode` | **177** | ✅ **第 5 步已实现**（JsExtensionsCore / hutool 对照 golden） | JsExtensions |
 | `getString` | 16 | ✅ 已实现（AnalyzeRule 自有，`java` 对象直通） | AnalyzeRule 自有 |
-| `ajax` | 8 | ✅ 已实现（AjaxProvider 注入，默认返回错误串；真实网络第 6 步） | AnalyzeRule 自有 |
+| `ajax` | 8 | ✅ **已实现（真实网络，第 6 步 6B）**：`AjaxProvider` 默认已换为 `RealAjaxProvider`（AnalyzeUrl + URLSessionHTTPClient）；失败返回错误串 | AnalyzeRule 自有 |
 | `t2s` | 6 | ✅ **第 5 步已实现**（quick-chinese-transfer 0.2.17 词典 + 排除词） | JsExtensions |
 | `timeFormat` | 4 | ✅ **第 5 步已实现**（FastDateFormat `yyyy/MM/dd HH:mm` 对照） | JsExtensions |
 | `toast` | 4 | ⚠️ 协议注入（`JsUIProvider`，默认抛 unsupported + 记 diagnostics；真实 UI 第 6 步） | JsExtensions |
@@ -29,7 +29,9 @@
 
 > **14 书源里没有任何书源用到 `java.getString` 之外的 Java 互操作来取 JS 对象键值以外的能力；
 > `java.getString`/`java.ajax` 由 AnalyzeRule 自身实现，已在 `java` 对象上提供真实实现**
-> （ajax 默认走注入的 `AjaxProvider`，无真实网络时返回错误串，对齐 Kotlin 失败分支）。
+> （ajax 默认走 `AjaxProvider`，第 6 步 6B 起默认实现是 `RealAjaxProvider`（真实网络）；
+> 失败时返回错误串，对齐 Kotlin `getOrElse { stackTraceStr }` 分支；测试/App 仍可注入
+> `UnsupportedAjaxProvider` 覆盖）。
 
 ## 二、`cookie.xxx` / `cache.xxx`（14 书源）
 
@@ -81,8 +83,11 @@
 > 第 5 步另外实现（书源未用但属首批纯算法）：`s2t`、`timeFormatUTC`、`hexEncodeToString`、
 > `base64DecodeToByteArray`、`hexDecodeToByteArray`、`htmlFormat`、`encodeURI`、`randomUUID`、
 > `toNumChapter`、`strToBytes`、`bytesToStr`、`md5Encode16`。
-> 网络/文件类（get/post/head/ajaxAll/connect/cacheFile/downloadFile）为 `JsNetworkExtensionsProvider`
-> 协议注入（默认 unsupported）；压缩/字体/TTF/读书配置/主题/加密等保持 Proxy 拦截抛错。
+> **第 6 步 6B 更新**：网络/文件类（get/post/head/ajaxAll/connect/cacheFile/downloadFile）已由
+> `RealJsNetworkExtensionsProvider` **接真实实现**（`JsNetworkExtensionsProvider` 协议保留，
+> `UnsupportedJsNetworkExtensionsProvider` 仍可注入覆盖；AnalyzeRule 默认已换为真实实现）。
+> 各方法语义、JS 可见对象方法、落盘位置与 Kotlin 差异见文末「七、第 6 步 6B 实施明细」。
+> 压缩/字体/TTF/读书配置/主题/加密等保持 Proxy 拦截抛错。
 > JsExtensions 全量方法清单见 `Sources/.../JsExtensionsCatalog.swift`（JsExtensions.kt 67 +
 > JsEncodeUtils.kt 27 = 94 个，正则自动提取），`scripts/verify_functions.py` 校验未处理清单为空。
 
@@ -115,5 +120,61 @@ webViewGetOverrideUrl webViewGetSource
 > `hexDecodeToByteArray/htmlFormat/encodeURI/randomUUID/toNumChapter/strToBytes/bytesToStr`
 > 为 Step 5 真实实现（JsExtensionsCore）；`toast/longToast/openUrl/startBrowser/startBrowserAwait/`
 > `getVerificationCode/webView` 经 JsUIProvider/WebJSProvider 注入；`get/post/head/ajaxAll/connect/`
-> `cacheFile/downloadFile` 经 JsNetworkExtensionsProvider 注入。其余（压缩/字体/TTF/读书配置/主题/
+> `cacheFile/downloadFile` 经 `RealJsNetworkExtensionsProvider`（**第 6 步 6B 已接真实实现**，
+> 见文末「七」）。其余（压缩/字体/TTF/读书配置/主题/
 > 加密等）保持 JS Proxy 拦截抛错 + 记 diagnostics，且 14 书源使用次数均为 0。
+
+## 七、第 6 步 6B 实施明细（网络方法真实实现）
+
+> 第 6 步 6B 新增：`Sources/LegadoBookSource/Network/RealJsNetworkExtensionsProvider.swift`
+> （JsNetworkExtensionsProvider 真实实现）与 `RealAjaxProvider.swift`（AjaxProvider 真实实现）；
+> `AnalyzeRule` 的 init 默认参数已把两者换成真实实现（`Unsupported*` 定义与协议均未改动，
+> 测试/App 仍可注入覆盖）。
+
+### 7.1 方法与 JS 可见对象
+
+| `java.xxx` | 语义（对齐 JsExtensions.kt） | JS 返回值 |
+|---|---|---|
+| `ajax(url[, callTimeout])` | AnalyzeUrl（含 concurrentRateLimiter 限速）→ URLSessionHTTPClient → 解码后 body；失败返回 `"ajax(url) error\n..."` 错误串（对齐 `getOrElse { stackTraceStr }`） | String |
+| `get(url, headers[, timeout])` | Jsoup.connect 语义（不走 AnalyzeUrl）：followRedirects(false)、timeout 默认 30000ms、ignoreContentType | Connection.Response 替身 |
+| `post(url, body[, headers[, timeout]])` | 同上 + requestBody(body)（jsoup 不自动加 Content-Type，用户给了才发） | Connection.Response 替身 |
+| `head(url[, headers][, timeout])` | 同上（HEAD） | Connection.Response 替身 |
+| `connect(url[, headerJSON][, callTimeout])` | AnalyzeUrl（header 为 JSON 字符串，容错解析）→ StrResponse；失败返回错误体（code 200/callTime 0，对齐 Kotlin 错误构造器） | StrResponse 替身 |
+| `ajaxAll([url...])` | 并发（默认 4，可注入）请求，顺序与输入一致；任一失败整体抛错（对齐 isTest=false） | StrResponse 替身数组 |
+| `cacheFile(url[, saveTime])` | md5Encode16(url) 查 CacheManager；命中文件 → 读文本；否则 downloadFile 落盘并缓存后读文本 | String（文件文本） |
+| `downloadFile(url)` | 文件名 `md5Encode16(url).<type>`（type = analyzeUrl.type ?: getSuffix(url)），写入缓存根 | String（相对路径，带前导 `/`） |
+
+**Connection.Response 替身（get/post/head）在 JS 里可调用的方法**：
+`body()`、`statusCode()`、`statusMessage()`、`headers()`（`{name: [values]}`，另带非枚举
+`get(name)` 大小写不敏感查询，向 jsoup Headers 靠拢）、`cookies()`（`{name: value}`，带 `get(name)`）、
+`header(name)`（首个同名值或 null）、`cookieKey(name)`（cookies()[name] 便捷读取，Kotlin 无此方法）、
+`url()`、`contentType()`。
+
+**StrResponse 替身（connect/ajaxAll 元素）在 JS 里可调用的方法**（对齐 jsHelp.md 文档面）：
+`body()`、`code()`、`message()`、`headers()`、`raw()`、`toString()`、`callTime()`、`url()`。
+
+> 差异：Kotlin 的 StrResponse 是「JavaBean 属性 + 同名方法」双通道（`.body` 与 `body()` 都能用），
+> JS 对象上同名数据属性与方法无法并存，本移植只提供**同名方法**（`.body` 请写 `.body()`）。
+
+### 7.2 落盘位置
+
+- 缓存根（cacheFile/downloadFile）：默认 `FileManager` 的 Caches 目录 + `legado-js-cache/`
+  （可注入；测试用临时目录）。**差异：Kotlin 用 `Context.externalCacheDir`
+  （`/android/data/{pkg}/cache`）。**
+- 文件名：`md5Encode16(url) + "." + type`；`downloadFile` 返回相对路径 `/<文件名>`
+  （对齐 Kotlin `path.substring(getCachePath().length)`）。
+- `cacheFile` 的 key 也是 `md5Encode16(url)`；缓存条目用 `CacheManager.put(key, path, saveTime)`
+  （注入的 cacheManager 是带 saveTime 的 `CacheManager` 时透传 TTL，否则退化为无 TTL 版本）。
+
+### 7.3 主要差异（与 Kotlin）
+
+1. 缓存根目录不同（见上）。
+2. 文本解码为最小链（BOM → 显式 charset → Content-Type charset → UTF-8 替换语义）；
+   Kotlin 还有 ICU4J `EncodingDetect.getHtmlEncode` 检测级（该链在 step6-6b-wip 分支 WIP(4)/(5)，
+   尚未并入 main）。
+3. headers 参数顺序按 JSON 字典序（JS 对象插入顺序经桥接不可恢复；键唯一时不影响 HTTP 语义）。
+4. get/post/head 经 URLSessionHTTPClient 会注入 CookieStore 的 Cookie（Kotlin 的 Jsoup.connect
+   用自建客户端，不带 legado CookieStore）；书源并发率限速也未接线（provider 不携带书源）。
+5. StrResponse 只提供同名方法（无 `.body` 属性通道）；`raw()`/`toString()` 返回
+   `Response{code=..., message=..., url=...}` 描述串（Kotlin 是 okhttp Response.toString()）。
+6. `ajax` 失败串里是 Swift 错误描述（Kotlin 是 Java stackTraceStr）。

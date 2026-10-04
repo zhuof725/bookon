@@ -98,10 +98,13 @@ public final class AnalyzeRule {
         preUpdateJs: Bool = false,
         cookieStore: CookieStoreProtocol = InMemoryCookieStore(),
         cacheManager: CacheManagerProtocol = InMemoryCacheManager(),
-        ajaxProvider: AjaxProvider = UnsupportedAjaxProvider(),
+        // 第 6 步 6B：默认改为真实网络实现（Kotlin 的 JsExtensions 真实方法体）。
+        // 既有测试仍可显式注入 UnsupportedAjaxProvider()/UnsupportedJsNetworkExtensionsProvider()
+        // 覆盖（如 AnalyzeRulePublicAPITests）。
+        ajaxProvider: AjaxProvider = RealAjaxProvider(),
         webJSProvider: WebJSProvider = UnsupportedWebJSProvider(),
         jsUIProvider: JsUIProvider = UnsupportedJsUIProvider(),
-        jsNetworkProvider: JsNetworkExtensionsProvider = UnsupportedJsNetworkExtensionsProvider(),
+        jsNetworkProvider: JsNetworkExtensionsProvider = RealJsNetworkExtensionsProvider(),
         diagnostics: RuleEngineDiagnostics? = nil
     ) {
         self.ruleData = ruleData

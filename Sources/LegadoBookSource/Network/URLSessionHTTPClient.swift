@@ -42,7 +42,10 @@
 //      本移植忽略凭据（记 diagnostics），只使用 host:port；
 //   11. WebView：Kotlin 先发真实请求再把结果灌进 BackstageWebView 渲染；本移植按任务约定
 //      直接调用注入的 WebJSProvider.eval，不发网络请求；
-//   12. 会话复用：OkHttp 有连接池；本移植每次 execute 新建一个 URLSession（可后续做会话池）。
+//   12. 会话复用：OkHttp 有连接池；本移植每次 execute 新建一个 URLSession（可后续做会话池）；
+//   13. followRedirects=false（6B 追加，Jsoup get/post/head 的重定向拦截用）：delegate 以
+//       completionHandler(nil) 停止跟随并返回 3xx 原样（个别系统版本若以错误结束，用捕获的
+//       重定向响应还原，见 performAttempt）。
 //
 
 import Foundation
@@ -167,7 +170,9 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
         }
         let attemptStart = Date()
         let configuration = makeConfiguration(for: request)
-        let delegate = AttemptDelegate(client: self, originalBody: request.body)
+        let delegate = AttemptDelegate(client: self,
+                                       originalBody: request.body,
+                                       followRedirects: request.followRedirects)
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
 
@@ -180,6 +185,17 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
                 try await session.data(for: urlRequest)
             }
         } catch {
+            // followRedirects=false（对应 Kotlin Jsoup followRedirects(false)）：
+            // 若 URLSession 以错误结束而没有把 3xx 响应交给任务（不同系统版本行为不同），
+            // 用 delegate 捕获的重定向响应还原——「不跟随重定向」必须返回重定向本身。
+            if !request.followRedirects, let captured = delegate.capturedRedirectResponse {
+                return HTTPResponse(url: captured.url?.absoluteString ?? request.url,
+                                    status: captured.statusCode,
+                                    message: Self.reasonPhrase(for: captured.statusCode),
+                                    headers: Self.orderedHeaders(from: captured),
+                                    body: Data(),
+                                    callTime: Int(Date().timeIntervalSince(attemptStart) * 1000))
+            }
             throw Self.mapError(error, requestURL: request.url)
         }
         guard let http = response as? HTTPURLResponse else {
@@ -517,11 +533,17 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
         /// 307/308 重定向需要重放请求体（URLSession 发出后会消费 httpBodyStream，
         /// 这里保留原始 Data 的拷贝）。
         private let originalBody: Data?
+        /// 是否跟随重定向（对应 Kotlin Jsoup 的 followRedirects(false)；6B 追加）。
+        private let followRedirects: Bool
+        /// followRedirects=false 时捕获的 3xx 响应（URLSession 个别系统版本会以错误结束，
+        /// performAttempt 用它还原「不跟随」的响应；若正常返回 3xx 则由任务响应自己承载）。
+        private(set) var capturedRedirectResponse: HTTPURLResponse?
         private var redirectHopCount = 0
 
-        init(client: URLSessionHTTPClient, originalBody: Data?) {
+        init(client: URLSessionHTTPClient, originalBody: Data?, followRedirects: Bool = true) {
             self.client = client
             self.originalBody = originalBody
+            self.followRedirects = followRedirects
         }
 
         // MARK: 重定向（手工处理，对应 OkHttp RedirectInterceptor）
@@ -538,6 +560,14 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
             // 每一跳的中间响应都要保存 Set-Cookie（对应 Kotlin CookieManager.saveResponse，
             // legado 的 network interceptor 对每一跳响应都生效）。
             client.saveCookies(from: response)
+
+            // followRedirects=false（Jsoup 语义）：不跟随，把 3xx 原样交给调用方
+            // （经 completionHandler(nil) 停止跟随；captured 供错误路径还原）。
+            if !followRedirects {
+                capturedRedirectResponse = response
+                completionHandler(nil)
+                return
+            }
 
             redirectHopCount += 1
             if redirectHopCount > URLSessionHTTPClient.maxRedirects {

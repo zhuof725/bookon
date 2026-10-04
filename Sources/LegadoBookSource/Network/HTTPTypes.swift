@@ -72,6 +72,9 @@ public struct HTTPRequest: Sendable {
     public var enabledCookieJar: Bool
     /// webViewDelayTime（毫秒）
     public var webViewDelayTime: Int64
+    /// 是否跟随重定向（6B 追加）。OkHttp 默认跟随；Kotlin 的 Jsoup get/post/head 显式
+    /// `followRedirects(false)`（js 重定向拦截），本移植用该字段表达（URLSessionHTTPClient 支持）。
+    public var followRedirects: Bool
 
     public init(url: String,
                 method: RequestMethod = .get,
@@ -90,7 +93,8 @@ public struct HTTPRequest: Sendable {
                 type: String? = nil,
                 serverID: Int64? = nil,
                 enabledCookieJar: Bool = false,
-                webViewDelayTime: Int64 = 0) {
+                webViewDelayTime: Int64 = 0,
+                followRedirects: Bool = true) {
         self.url = url
         self.method = method
         self.headers = headers
@@ -109,6 +113,7 @@ public struct HTTPRequest: Sendable {
         self.serverID = serverID
         self.enabledCookieJar = enabledCookieJar
         self.webViewDelayTime = webViewDelayTime
+        self.followRedirects = followRedirects
     }
 
     /// 手写 Equatable（headers 是有序元组数组，Swift 不会自动合成）。
@@ -122,6 +127,7 @@ public struct HTTPRequest: Sendable {
         if lhs.useWebView != rhs.useWebView || lhs.webJs != rhs.webJs || lhs.bodyJs != rhs.bodyJs { return false }
         if lhs.dnsIp != rhs.dnsIp || lhs.proxy != rhs.proxy || lhs.type != rhs.type { return false }
         if lhs.serverID != rhs.serverID || lhs.enabledCookieJar != rhs.enabledCookieJar { return false }
+        if lhs.followRedirects != rhs.followRedirects { return false }
         return lhs.webViewDelayTime == rhs.webViewDelayTime
     }
 

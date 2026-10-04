@@ -1105,3 +1105,60 @@ callTimeout、useWebView、webJs、bodyJs、dnsIp、proxy、type、serverID。
 （其余「已对照一致」的语义：`escape` 的 UTF-16 遍历、非 UTF-8 字符集的 `?` 替换与逐字节转义、
 `Long.intValue()` 的 32 位截断、`{{}}` 的 null→`""` 与整数 Double→`%.0f`、`@js:` 的 null→`"null"`，
 全部由 golden 逐条钉住。）
+
+
+## 第 6 步 6B：JsExtensions 网络方法 + AjaxProvider 真实实现（追加）
+
+> 本节为 6B 追加小节（只加不改既有内容）。新增
+> `Sources/LegadoBookSource/Network/RealJsNetworkExtensionsProvider.swift`、
+> `Sources/LegadoBookSource/Network/RealAjaxProvider.swift`；
+> `AnalyzeRule` 的 init 默认参数由 `Unsupported*` 换为真实实现（协议与 Unsupported 定义未动，
+> 测试/App 仍可显式注入覆盖）；`HTTPRequest` 追加 `followRedirects` 字段（默认 true，零行为变化），
+> 只被 Jsoup 语义的 get/post/head 使用。
+
+### 真实网络方法表（对齐 `help/JsExtensions.kt`）
+
+| `java.xxx` | Kotlin 语义 | 本移植实现 | JS 可见对象 |
+|---|---|---|---|
+| `ajax(url[, callTimeout])` | AnalyzeUrl → getStrResponse().body；失败返回 stackTraceStr 错误串 | AnalyzeUrl（限速）+ URLSessionHTTPClient；失败返回 `ajax(url) error\n<错误>` | String |
+| `get(url, headers[, timeout])` | Jsoup.connect，followRedirects(false)、timeout 30000ms 默认 | HTTPRequest(followRedirects=false) + 同一 HTTPClient | Connection.Response 替身：`body()/statusCode()/statusMessage()/headers()/cookies()/header(name)/cookieKey(name)/url()/contentType()` |
+| `post(url, body[, headers[, timeout]])` | 同上 + requestBody(body) | 同上（body 原样，Content-Type 由用户 header 决定） | 同上 |
+| `head(url[, headers][, timeout])` | 同上（HEAD） | 同上 | 同上 |
+| `connect(url[, headerJSON][, callTimeout])` | AnalyzeUrl(headerMapF=JSON 头) → StrResponse；失败返回错误体 | 同左；失败返回错误体（code 200/callTime 0） | StrResponse 替身：`body()/code()/message()/headers()/raw()/toString()/callTime()/url()` |
+| `ajaxAll([url...])` | 并发 mapAsync(threadCount) → StrResponse[]，顺序不变；失败抛错 | 分批并发（默认 4）+ 顺序合并；失败整体抛错 | StrResponse 替身数组 |
+| `cacheFile(url[, saveTime])` | md5Encode16 查 CacheManager → 否则 downloadFile → 读文本 | 同左（缓存根见下） | String（文件文本） |
+| `downloadFile(url)` | 文件名 md5Encode16(url).type；返回 `path.substring(cachePath.length)` | 同左，文件写入缓存根 | String（`/<md5>.<type>`，相对路径） |
+
+JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通道返回
+`\u{1}JSCONN\u{1}/JSSTR/JSSTRS + JSON` 信封，`JSJavaBridge` 注入的 `__javaUnwrap`
+还原为带方法的对象（对照表见 `RealJsNetworkExtensionsProvider.swift` 文件头）。
+
+### 落盘位置
+
+- 缓存根（cacheFile/downloadFile 共用）：默认 FileManager Caches 的 `legado-js-cache/`，可注入
+  （测试用临时目录）。**差异：Kotlin 是 `Context.externalCacheDir`（/android/data/{pkg}/cache）。**
+- `downloadFile` 返回相对路径 `/<md5>.<type>`；`type = analyzeUrl.type ?: UrlUtil.getSuffix(url)`
+  （无合法后缀时 `ext`，如 `/big` → `<md5>.ext`）。
+
+### 6B 差异清单（追加到 6A 差异表之外）
+
+| # | 主题 | Kotlin | 本移植 | 处理 |
+|---|---|---|---|---|
+| 6B-1 | 缓存根目录 | `Context.externalCacheDir` | FileManager Caches + `legado-js-cache`（可注入） | 差异登记；相对路径语义一致（前导 `/`） |
+| 6B-2 | 文本解码 | BOM → charset → Content-Type → ICU4J `EncodingDetect.getHtmlEncode` | BOM → charset → Content-Type → UTF-8 替换语义 | 最小链；ICU4J 检测链在 step6-6b-wip 分支 WIP(4)/(5)，尚未并入 main |
+| 6B-3 | headers 顺序 | JS 对象插入顺序（LinkedHashMap） | JSON 字典序（Swift 侧不可恢复插入序） | 键唯一时不影响 HTTP 语义 |
+| 6B-4 | get/post/head Cookie | Jsoup 自建客户端（不带 legado CookieStore） | 经 URLSessionHTTPClient 注入 CookieStore Cookie | 客户端既有差异 #5 的延展 |
+| 6B-5 | get/post/head 限速 | ConcurrentRateLimiter(getSource()) withLimitBlocking | provider 不携带书源，未接线 | 可显式注入/包装；如实登记 |
+| 6B-6 | StrResponse JS 面 | 属性 + 方法双通道（`.body`/`.body()`） | 仅同名方法 | `.body` 请改用 `.body()` |
+| 6B-7 | `raw()`/`toString()` | okhttp Response.toString() | `Response{code=..., message=..., url=...}` 描述串 | 近似 |
+| 6B-8 | 失败错误文本 | Java stackTraceStr | Swift 错误描述 | 对齐失败分支语义，文本不同 |
+
+### 测试（`Tests/LegadoNetworkTests/RealJsNetworkProviderTests.swift`，23 个用例）
+
+覆盖：ajax 成功/失败/非 2xx/`type=data:` 十六进制分支；get/head/post 的 JS 对象方法
+（body/statusCode/statusMessage/header/headers 大小写不敏感 get/contentType/url）；
+headers 对象真实到达服务器；cookies()/cookieKey()；get/post 不跟随重定向（各 1 跳）；
+connect 成功/失败/header JSON + callTimeout；ajaxAll 多 URL 顺序与失败抛错；
+cacheFile 落盘 + 二次命中（含真实 CacheManager saveTime 路径）；downloadFile 内容/大小/默认后缀；
+未实现方法仍抛 unsupported 回归（Real/Unsupported/JS Proxy 三路）；java.get 单参仍为变量读取；
+AnalyzeRule 默认 provider 接线与显式覆盖。JS 断言全部走真实 JavaScriptCore（evalJS 全链路）。
