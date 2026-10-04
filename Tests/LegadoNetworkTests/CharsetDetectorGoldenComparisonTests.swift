@@ -231,7 +231,7 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
 
         if !failures.isEmpty {
             XCTFail("charset 检测 golden 不一致 \(failures.count) 处（共 \(cases.count) 条样本）：\n"
-                    + failures.prefix(20).joined(separator: "\n"))
+                    + failures.joined(separator: "\n"))
         }
     }
 
@@ -254,7 +254,7 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         }
         if !failures.isEmpty {
             XCTFail("getHtmlEncode golden 不一致 \(failures.count)/\(cases.count)：\n"
-                    + failures.prefix(20).joined(separator: "\n"))
+                    + failures.joined(separator: "\n"))
         }
     }
 
@@ -460,13 +460,20 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         print("[charset-decode-chain] comparisons=\(comparisons) "
               + "standardUtf8=\(standardUtf8Comparisons) "
               + "compatMapExempt=\(compatMapDifferences) failures=\(failures.count)")
-        for f in failures.prefix(15) {
+        // **不做截断**：必须让 CI 日志拿到完整失败全集。
+        // 历史教训（CI run 37217650394）：此前 `prefix(15)` 只暴露了 1 条
+        //（windows-1251），无法判断到底还有几条失败，白跑一轮 CI。
+        for f in failures {
             print("[charset-decode-chain-FAIL] " + f.replacingOccurrences(of: "\n", with: " \\n "))
         }
+        // 显式 flush：macOS runner 上 stdout 若被块缓冲，失败的诊断行可能整段丢失
+        //（CI run 37212186047 实测汇总行缺失，只有 XCTFail 的消息通道漏出 3 条）。
+        fflush(stdout)
 
         if !failures.isEmpty {
             XCTFail("解码链 golden 不一致 \(failures.count)/\(comparisons)：\n"
-                    + failures.prefix(15).joined(separator: "\n"))
+                    + failures.joined(separator: "\n"))
+            fflush(stdout)
         }
     }
 

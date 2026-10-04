@@ -20,3 +20,6 @@ live-smoke-out/
 live_smoke_test.log
 macos_test_output.log
 macos_test_count.txt
+
+# SwiftPM 依赖解析结果（本地生成，不入库）
+Package.resolved

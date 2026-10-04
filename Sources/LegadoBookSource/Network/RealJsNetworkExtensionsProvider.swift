@@ -278,6 +278,12 @@ enum JsNetTextDecoder {
             return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding)
         case "UTF-16BE", "UTF16BE":
             return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding)
+        case "UTF-32", "UTF32":
+            return Self.lossyString(data, nsEncoding: NSUTF32StringEncoding)
+        case "UTF-32LE", "UTF32LE":
+            return Self.lossyString(data, nsEncoding: NSUTF32LittleEndianStringEncoding)
+        case "UTF-32BE", "UTF32BE":
+            return Self.lossyString(data, nsEncoding: NSUTF32BigEndianStringEncoding)
         case "ISO-8859-1", "LATIN1", "ISO8859-1":
             return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding)
         case "US-ASCII", "ASCII":
@@ -346,9 +352,66 @@ enum JsNetTextDecoder {
                                         profile: Self.mbcsProfile(for: name)) { return s }
             return nil
         }
+
+        // ── 通用单字节编码兜底（windows-* / ISO-8859-* / KOI8-R / …）───────────
+        //
+        // 检测器（`EncodingDetect.getHtmlEncode`）会输出一批**单字节**编码名：
+        // `windows-1250/1251/1252/1256`、`ISO-8859-5/7/8-I/9`、`KOI8-R` 等。
+        // 这些编码没有多字节结构（每字节恒映射 1 个字符，未定义位点给 `U+FFFD`），
+        // 因此不需要 `MBCSProfile`，但**必须有显式分支**——否则会落到函数末尾的
+        // `return nil`，上层误判「charset 不可用」而回落到 UTF-8 兜底。
+        //
+        // 真实缺陷来源（CI run `37217650394`，样本 `windows-1251-russian`）：
+        //   Java : decodedDefault = "Глава первая: Дорога…"（俄文）
+        //   Swift: "����� ������: ������…"（把 windows-1251 字节当 UTF-8 解）
+        // 这是修好 EUC-JP 之后**被暴露出来的下一条**（此前被 EUC-JP 的失败掩盖）。
+        //
+        // 用 `CFStringConvertIANACharSetNameToEncoding` 让 CF 自己解析 IANA 名，
+        // 从而**一次覆盖全部单字节编码**，不必逐个手写 case。Apple 对
+        // `windows-1251`/`ISO-8859-5`/`KOI8-R` 等的 IANA 名支持完整。
+        //
+        // ⚠️ 只对「CF 认得的、且不是已知多字节族」的名字生效：多字节族已在上面处理完，
+        // 走到这里的一定是单字节族或未知名；未知名（如 `x-unknown-encoding`）解析结果
+        // 为 `kCFStringEncodingInvalidId`，仍返回 nil，由上层回落。
+        if let cfEnc = Self.ianaSingleByteEncodingName(name),
+           cfEnc != kCFStringEncodingInvalidId {
+            let nsEnc = CFStringConvertEncodingToNSStringEncoding(cfEnc)
+            if nsEnc != 0, let s = Self.lossyString(data, nsEncoding: nsEnc) { return s }
+            return nil
+        }
         return nil
     }
 
+    /// 把一个 IANA 字符集名解析为 CF 的**单字节**编码；不适用时返回 nil。
+    ///
+    /// 这是 `decode(_:charsetName:)` 的通用兜底：只放行单字节族，避免把
+    /// 多字节编码（已在上面显式处理）误交到逐字节路径上。
+    ///
+    /// 放行名单来自 golden 侧检测器实际会输出的名字全集（见 `charset_cases.json`
+    /// 的 `detectName` / `htmlEncode` 取值集），并做前缀匹配以覆盖别名。
+    ///
+    /// ⚠️ 只在 Apple 平台启用：`CFStringConvertIANACharSetNameToEncoding` 虽然在
+    /// Linux 的 corelibs-foundation 里有符号，但其 IANA 名表是**空**的（恒返回
+    /// `kCFStringEncodingInvalidId`），依赖它会让 Linux 侧行为与 Apple 不一致。
+    /// 本移植只为 Apple 平台交付运行时行为，Linux 仅用于 `swiftc -parse`。
+    private static func ianaSingleByteEncodingName(_ name: String) -> CFStringEncoding? {
+        #if canImport(Darwin)
+        // 只放行已知单字节族的前缀。
+        let singleBytePrefixes = [
+            "WINDOWS-12",   // windows-1250/1251/1252/1256
+            "CP12",         // cp1250/1251/1252
+            "ISO-8859-",    // ISO-8859-2..16（-1 已在上面处理）
+            "ISO8859-",
+            "KOI8-",
+            "IBM8",         // IBM866 等
+        ]
+        guard singleBytePrefixes.contains(where: { name.hasPrefix($0) }) else { return nil }
+        return CFStringEncoding(CFStringConvertIANACharSetNameToEncoding(name as CFString))
+        #else
+        _ = name
+        return nil
+        #endif
+    }
     /// 用容错解码把字节转成字符串，**永不因字节非法而返回 nil**。
     ///
     /// 这是 Java `new String(bytes, charset)` / Kotlin `String(bytes, Charset)` 的语义：
