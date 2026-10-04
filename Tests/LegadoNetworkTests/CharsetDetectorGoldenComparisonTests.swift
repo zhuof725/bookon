@@ -182,7 +182,14 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         }
         // 整段一起解码，避免逐条 JSONSerialization 往返（条目里的 null 会走 NSNull，
         // 往返再喂给 JSONDecoder 容易出岔子）。这里把数组重新序列化一次即可。
-        let arrData = try JSONSerialization.data(withJSONObject: arr, options: [.fragmentsAllowed])
+        //
+        // ⚠️ **必须再跑一次 `repairingLeadingBomEscapes`**：
+        // `JSONSerialization.data(withJSONObject:)` 会把 `U+FEFF` 重新写成 raw `EF BB BF`，
+        // 于是 `JSONDecoder` 又会把它当文档 BOM 吞掉（CI run `37221670089` 实测：
+        // 只在第 177 行修一次仍报 `java=128`）。这里对往返后的字节再转义一遍，
+        // 保证最终喂给 `JSONDecoder` 的字节里没有「`"` 紧跟 `EF BB BF`」。
+        let arrData = repairingLeadingBomEscapes(
+            try JSONSerialization.data(withJSONObject: arr, options: [.fragmentsAllowed]))
         return try JSONDecoder().decode([CharsetCase].self, from: arrData)
     }
 

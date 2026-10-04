@@ -470,20 +470,18 @@ enum JsNetTextDecoder {
             return lossyFallback(bytes, nsEncoding: nsEncoding)
         }
         // 先整体试一次（合法输入的最快路径，也是绝大多数情况）。
-        // ⚠️ 变长 MBCS（profile != nil 且 unitWidth == 0）**不能**走这条捷径：
-        // Apple 的 CF 会把非法字节悄悄跳过/替换，且消耗字节数与 JDK 不同
-        //（见 `incrementalLossyDecode` 的文档）。
-        //
-        // 定宽码元（UTF-16，unitWidth == 2）**可以**走捷径：对完全合法的 UTF-16 输入，
-        // CF 的整体解码与 JDK 逐码元解码结果一致，代理对也能正确合并；只有含孤立代理等
-        // 非法输入时才会落到下面的增量路径（此时按码元推进，见 `utf16Profile`）。
-        let isVariableWidthMBCS = (profile != nil && profile!.unitWidth == 0)
-        if !isVariableWidthMBCS,
+        // ⚠️ **profile != nil 时一律不走这条捷径**：
+        //   - 变长 MBCS：Apple 的 CF 会把非法字节悄悄跳过/替换，消耗字节数与 JDK 不同；
+        //   - 定宽码元（UTF-16）：CF 对**孤立代理**的处理与 JDK 也不同 ——
+        //     实测（CI run `37221670089` 的 `ext-cn-3-utf-16be`）CF 把孤立高代理只吃
+        //     1 个码元，而 JDK 是 `MALFORMED[4]` 吃 **2** 个码元，于是整段错位。
+        // 因此只有 `profile == nil`（尚未指定画像）时才用整体解码。
+        if profile == nil,
            let whole = decodeCFString(bytes, cfEncoding: cfEncoding),
            !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
         }
-        // 整块失败（或含 PUA，或变长 MBCS）：走增量容错，**永不返回 nil**。
+        // 整块失败（或含 PUA，或已给定画像）：走增量容错，**永不返回 nil**。
         // 非 MBCS（profile == nil，即 ISO-8859-1/ASCII）用「逐字节」画像：
         // 每个字节单独试解，失败记 1 个 U+FFFD —— 这正是 ISO-8859-1 / ASCII 的
         // JDK 语义（单字节编码永不 MALFORMED）。UTF-16 用 `utf16Profile`（按 2 字节码元）。
@@ -2123,27 +2121,41 @@ enum JsNetTextDecoder {
         }
         while i < n {
             let b = bytes[i]
-            // ⓪ 固定码元宽度（UTF-16 = 2 字节）：整体解 1 个码元。
+            // ⓪ 固定码元宽度（UTF-16 = 2 字节）：整体解 1 个码元（或 1 个代理对）。
             //
-            // JDK 语义（`new String(bytes, "UTF-16LE")`）：
-            //   - 每 `unitWidth` 字节为 1 个码元；高代理 + 低代理 → 1 个补充平面标量；
-            //   - 孤立代理 → 1 个 U+FFFD（仍占满 1 个码元）；
-            //   - 末尾不足 `unitWidth` 字节 → 1 个 U+FFFD。
+            // JDK 权威语义（`U16` 探针，`CharsetDecoder` + `REPORT`，`UTF-16LE`）：
             //
-            // ⚠️ 必须**先于**下面的逐字节路径处理，否则代理对会被拆成两个半码元
-            //（CI run `37219082032` 的 `ext-cn-3-utf-16be` 即因此多出 1 个标量）。
+            // | 输入 | CoderResult | 消耗 |
+            // |---|---|---|
+            // | 高代理 `D800-DBFF` + 低代理 `DC00-DFFF` | 映射 | 4 字节 → 1 个补充平面标量 |
+            // | 高代理 + 非低代理（含另一个高代理） | `MALFORMED[4]` | **4** 字节 → 1 个 `U+FFFD` |
+            // | 高代理（缓冲只剩它） | `MALFORMED[2]` | 2 字节 → 1 个 `U+FFFD` |
+            // | 孤立低代理 `DC00-DFFF` | `MALFORMED[2]` | 2 字节 → 1 个 `U+FFFD` |
+            // | 末尾不足 2 字节 | `MALFORMED[n]` | 余下全部 → 1 个 `U+FFFD` |
+            //
+            // ⚠️ 最易漏的是**第 2 行**：高代理后面跟的不是低代理时，JDK 吃掉 **4** 字节
+            //（把那一对单元整体当作一个畸形序列），而不是各吃 2 字节。CI run `37221670089`
+            // 的 `ext-cn-3-utf-16be` 即因此：字节 `8F D9 4E 2A`（单元 `D98F` `2A4E`）
+            // JDK 吃 4 字节出 1 个 `U+FFFD`，旧实现吃 2 字节，导致后续全部错位 1 个单元，
+            // Java 41 个标量在 Swift 侧变成 42。
             if profile.unitWidth > 0 {
                 let w = profile.unitWidth
                 let avail = n - i
                 if avail >= w {
-                    let take = min(2 * w, avail)   // 尝试「码元对」以合并代理
+                    let take = min(2 * w, avail)   // 先尝试「码元对」以合并代理
                     if let s = tryDecode(i, take), s.unicodeScalars.count == 1 {
                         out += s; i += take; continue
                     }
                     if let s = tryDecode(i, w), s.unicodeScalars.count == 1 {
                         out += s; i += w; continue
                     }
-                    // 该码元非法（孤立代理等）→ 1 个 U+FFFD，吃掉 1 个码元。
+                    // 该码元非法（孤立代理等）。
+                    //
+                    // UTF-16（w == 2）时区分「高代理」与其它：高代理且后面**还有**一个完整
+                    // 码元时按 `MALFORMED[4]` 吃 2 个码元；否则吃 1 个码元。
+                    if w == 2, avail >= 2 * w, Self.isUtf16HighSurrogate(bytes, at: i, littleEndian: cfEncoding) {
+                        out += "\u{FFFD}"; i += 2 * w; continue
+                    }
                     out += "\u{FFFD}"; i += w; continue
                 } else {
                     // 末尾残字节（不足 1 个完整码元）→ 1 个 U+FFFD，全部吃掉。
@@ -2259,6 +2271,34 @@ enum JsNetTextDecoder {
         return out
     }
     #endif
+
+    /// 判断 `bytes[start..<start+2]` 这个 UTF-16 码元是否为**高代理**（`D800-DBFF`）。
+    ///
+    /// 用于复刻 JDK 的 `MALFORMED[4]` 语义：高代理后面跟的不是低代理时，JDK 把这两个
+    /// 码元整体吃掉（4 字节）出 1 个 `U+FFFD`。见 `incrementalLossyDecode` 的 ⓪ 分支。
+    ///
+    /// - Parameter littleEndian: `cfEncoding` 为 `kCFStringEncodingUTF16LE` 时为 `true`；
+    ///   `kCFStringEncodingUTF16BE` 时为 `false`；`kCFStringEncodingUTF16`（带 BOM 自动判定）
+    ///   时按 BOM 判定，无 BOM 则按宿主字节序（Java 的默认行为是 big-endian）。
+    private static func isUtf16HighSurrogate(_ bytes: [UInt8],
+                                             at start: Int,
+                                             littleEndian cfEncoding: CFStringEncoding) -> Bool {
+        guard start + 1 < bytes.count else { return false }
+        var le: Bool
+        switch Int(cfEncoding) {
+        case Int(kCFStringEncodingUTF16LE): le = true
+        case Int(kCFStringEncodingUTF16BE): le = false
+        default:
+            // 通用 UTF-16：BOM 优先；无 BOM 时 Java 默认按 big-endian。
+            if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] == 0xFE { le = true }
+            else if bytes.count >= 2, bytes[0] == 0xFE, bytes[1] == 0xFF { le = false }
+            else { le = false }
+        }
+        let unit: UInt32 = le
+            ? (UInt32(bytes[start]) | (UInt32(bytes[start + 1]) << 8))
+            : ((UInt32(bytes[start]) << 8) | UInt32(bytes[start + 1]))
+        return unit >= 0xD800 && unit <= 0xDBFF
+    }
 
     /// 通用容错解码退路：对 Foundation 严格解码失败的字节，按「UTF-8 用 `String(decoding:)`
     /// 的替换字符语义；ISO-8859-1 逐字节映射」产出字符串。
