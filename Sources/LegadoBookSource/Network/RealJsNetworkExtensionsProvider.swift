@@ -275,7 +275,22 @@ enum JsNetTextDecoder {
         case "UTF-16", "UTF16":
             // 通用 UTF-16：字节序由 BOM 决定，无 BOM 时 JDK 默认 big-endian
             // → `utf16LittleEndian: false`（`incrementalLossyDecode` 内部按 BOM 再校正）。
-            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding,
+            //
+            // ⚠️ **通用 UTF-16 会把前导 BOM 剥掉**，而显式 UTF-16LE/BE 会把它保留成
+            // `U+FEFF`。这不是猜测，是 JDK 权威实测（探针 `golden.S`，JDK 20）：
+            //
+            // | 编码 | 输入 | 输出标量 |
+            // |---|---|---|
+            // | `UTF-16` | `FF FE 41 00 42 00 43 00` | `U+0041 U+0042 U+0043`（3 个，BOM 消失） |
+            // | `UTF-16LE` | `FF FE 41 00 42 00 43 00` | `U+FEFF U+0041 U+0042 U+0043`（4 个，BOM 保留） |
+            // | `UTF-16` | `FF FE`（只有 BOM） | 空串 |
+            // | `UTF-16LE` | `FF FE` | `U+FEFF` |
+            //
+            // CI run `37223557235` 的 16 处失败（`utf16le-bom-chinese` / `utf16be-bom-chinese` /
+            // `empty-only-bom16le` / `empty-only-bom16be` 各两个断言）全部是「Swift 多 1 个
+            // `U+FEFF`」——因为探测器对这些样本返回的正是**通用** `UTF-16`，而旧实现没有剥 BOM。
+            let stripped = Self.strippingLeadingUtf16Bom(data)
+            return Self.lossyString(stripped, nsEncoding: NSUTF16StringEncoding,
                                     profile: Self.utf16Profile(littleEndian: false))
         case "UTF-16LE", "UTF16LE":
             return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding,
@@ -284,7 +299,9 @@ enum JsNetTextDecoder {
             return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding,
                                     profile: Self.utf16Profile(littleEndian: false))
         case "UTF-32", "UTF32":
-            return Self.lossyString(data, nsEncoding: NSUTF32StringEncoding)
+            // 同 UTF-16：通用 UTF-32 剥前导 BOM（显式 UTF-32LE/BE 保留）。
+            return Self.lossyString(Self.strippingLeadingUtf32Bom(data),
+                                    nsEncoding: NSUTF32StringEncoding)
         case "UTF-32LE", "UTF32LE":
             return Self.lossyString(data, nsEncoding: NSUTF32LittleEndianStringEncoding)
         case "UTF-32BE", "UTF32BE":
@@ -2160,28 +2177,55 @@ enum JsNetTextDecoder {
             if profile.unitWidth > 0 {
                 let w = profile.unitWidth
                 let avail = n - i
-                if avail >= w {
-                    let take = min(2 * w, avail)   // 先尝试「码元对」以合并代理
-                    if let s = tryDecode(i, take), s.unicodeScalars.count == 1 {
-                        out += s; i += take; continue
-                    }
-                    if let s = tryDecode(i, w), s.unicodeScalars.count == 1 {
-                        out += s; i += w; continue
-                    }
-                    // 该码元非法（孤立代理等）。
-                    //
-                    // UTF-16（w == 2）时区分「高代理」与其它：高代理且后面**还有**一个完整
-                    // 码元时按 `MALFORMED[4]` 吃 2 个码元；否则吃 1 个码元。
-                    if w == 2, avail >= 2 * w,
-                       Self.isUtf16HighSurrogate(bytes, at: i,
-                                                 littleEndian: profile.utf16LittleEndian ?? false) {
-                        out += "\u{FFFD}"; i += 2 * w; continue
-                    }
-                    out += "\u{FFFD}"; i += w; continue
-                } else {
+                if avail < w {
                     // 末尾残字节（不足 1 个完整码元）→ 1 个 U+FFFD，全部吃掉。
                     out += "\u{FFFD}"; i = n; continue
                 }
+                // ⚠️ **UTF-16 必须先把「代理」判在前面，不能先去试探 CF**。
+                //
+                // 踩过的坑（CI run `37223557235` 的 `ext-cn-3-utf-16be`）：
+                // 字节 `… 8F 5E 0A 00 **D9 8F 2A 4E** 45 65 …`（UTF-16LE），
+                // 码元 `D98F` 是**高代理**、`2A4E` **不是低代理**。JDK 报 `MALFORMED[4]`，
+                // 把这两个码元**一起**吃掉、出 1 个 `U+FFFD`，因此 Java 结果里**没有** `U+2A4E`。
+                //
+                // 但 Apple 的 `CFStringCreateWithBytes` 对**孤立的一半代理**会「礼貌地」
+                // 产出 `U+FFFD`（而不是报错）。于是旧代码里 `tryDecode(i, w=2)` 拿到了
+                // 1 个标量 `U+FFFD`、判定为「成功」→ 只吃 2 字节，把 `2A4E` 当普通码元留下，
+                // Java 41 个标量在 Swift 侧变成 42 个。**必须让代理分支优先于 CF 试探**。
+                if w == 2 {
+                    let u = Self.utf16Unit(bytes, at: i,
+                                           littleEndian: profile.utf16LittleEndian ?? false)
+                    let isHigh = u >= 0xD800 && u <= 0xDBFF
+                    let isLow  = u >= 0xDC00 && u <= 0xDFFF
+                    if isHigh {
+                        // 高代理 + 低代理 → 合法的补充平面标量（吃 2 个码元）。
+                        if avail >= 2 * w {
+                            let lo = Self.utf16Unit(bytes, at: i + w,
+                                                    littleEndian: profile.utf16LittleEndian ?? false)
+                            if lo >= 0xDC00 && lo <= 0xDFFF {
+                                let cp = 0x10000 + ((UInt32(u) - 0xD800) << 10) + (UInt32(lo) - 0xDC00)
+                                if let us = Unicode.Scalar(cp) { out += String(us); i += 2 * w; continue }
+                            }
+                        }
+                        // 高代理 + 非低代理（含另一个高代理）→ `MALFORMED[4]`，吃 2 个码元；
+                        // 缓冲只剩这一个码元时 → `MALFORMED[2]`，吃 1 个码元。
+                        out += "\u{FFFD}"; i += (avail >= 2 * w ? 2 * w : w); continue
+                    }
+                    if isLow {
+                        // 孤立低代理 → `MALFORMED[2]`，吃 1 个码元。
+                        out += "\u{FFFD}"; i += w; continue
+                    }
+                    // 普通 BMP 码元：交 CF 解（失败则 1 个 U+FFFD，仍吃 1 个码元）。
+                    if let s = tryDecode(i, w), s.unicodeScalars.count == 1 {
+                        out += s; i += w; continue
+                    }
+                    out += "\u{FFFD}"; i += w; continue
+                }
+                // 其它定宽码元（如 UTF-32 的 4 字节）：先整体试，失败吃 1 个码元。
+                if let s = tryDecode(i, w), s.unicodeScalars.count == 1 {
+                    out += s; i += w; continue
+                }
+                out += "\u{FFFD}"; i += w; continue
             }
             // ① 单字节
             if profile.isSingle(b) {
@@ -2293,29 +2337,50 @@ enum JsNetTextDecoder {
     }
     #endif
 
-    /// 判断 `bytes[start..<start+2]` 这个 UTF-16 码元是否为**高代理**（`D800-DBFF`）。
+    /// 剥掉通用 **UTF-16** 的前导 BOM（`FF FE` / `FE FF`）。
     ///
-    /// 用于复刻 JDK 的 `MALFORMED[4]` 语义：高代理后面跟的不是低代理时，JDK 把这两个
-    /// 码元整体吃掉（4 字节）出 1 个 `U+FFFD`。见 `incrementalLossyDecode` 的 ⓪ 分支。
+    /// 仅用于通用 `UTF-16`：JDK 实测会消费掉开头的 BOM（见 `decode` 的 `UTF-16` 分支表格）。
+    /// **显式 `UTF-16LE` / `UTF-16BE` 不要调用本函数** —— 它们的 BOM 会作为 `U+FEFF` 保留。
+    private static func strippingLeadingUtf16Bom(_ data: Data) -> Data {
+        guard data.count >= 2 else { return data }
+        let b = [UInt8](data.prefix(2))
+        if (b[0] == 0xFF && b[1] == 0xFE) || (b[0] == 0xFE && b[1] == 0xFF) {
+            return data.dropFirst(2)
+        }
+        return data
+    }
+
+    /// 剥掉通用 **UTF-32** 的前导 BOM（`FF FE 00 00` / `00 00 FE FF`）。
+    private static func strippingLeadingUtf32Bom(_ data: Data) -> Data {
+        guard data.count >= 4 else { return data }
+        let b = [UInt8](data.prefix(4))
+        if b[0] == 0xFF, b[1] == 0xFE, b[2] == 0x00, b[3] == 0x00 { return data.dropFirst(4) }
+        if b[0] == 0x00, b[1] == 0x00, b[2] == 0xFE, b[3] == 0xFF { return data.dropFirst(4) }
+        return data
+    }
+
+    /// 读出 `bytes[start..<start+2]` 这个 UTF-16 码元的**数值**（`0xD800..0xDFFF` 即代理区）。
+    ///
+    /// 用于复刻 JDK 的代理语义（见 `incrementalLossyDecode` 的 ⓪ 分支）：
+    ///   - 高代理 + 低代理 → 合并为 1 个补充平面标量（吃 2 个码元）；
+    ///   - 高代理 + 非低代理 → `MALFORMED[4]`，**吃 2 个码元**出 1 个 `U+FFFD`；
+    ///   - 孤立高/低代理（缓冲不足）→ `MALFORMED[2]`，吃 1 个码元。
     ///
     /// 字节序**全部来自参数**，不再反查 `kCFStringEncodingUTF16LE` / `..BE` ——
     /// 这两个常量在 Swift 里非全局可见（CI run `37222347200` 实测编译失败）。
-    /// 通用 UTF-16（`utf16LittleEndian == false`）时按 BOM 校正，无 BOM 则按
-    /// big-endian（JDK 默认）。
-    private static func isUtf16HighSurrogate(_ bytes: [UInt8],
-                                             at start: Int,
-                                             littleEndian: Bool) -> Bool {
-        guard start + 1 < bytes.count else { return false }
+    /// 开头若有 BOM，让 BOM 决定字节序（覆盖传入的默认值）。
+    private static func utf16Unit(_ bytes: [UInt8],
+                                  at start: Int,
+                                  littleEndian: Bool) -> UInt16 {
+        guard start + 1 < bytes.count else { return 0 }
         var le = littleEndian
-        // 若恰好落在开头的 BOM 上，让 BOM 决定字节序（覆盖传入的默认值）。
         if start == 0 {
             if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] == 0xFE { le = true }
             else if bytes.count >= 2, bytes[0] == 0xFE, bytes[1] == 0xFF { le = false }
         }
-        let unit: UInt32 = le
-            ? (UInt32(bytes[start]) | (UInt32(bytes[start + 1]) << 8))
-            : ((UInt32(bytes[start]) << 8) | UInt32(bytes[start + 1]))
-        return unit >= 0xD800 && unit <= 0xDBFF
+        return le
+            ? (UInt16(bytes[start]) | (UInt16(bytes[start + 1]) << 8))
+            : ((UInt16(bytes[start]) << 8) | UInt16(bytes[start + 1]))
     }
 
     /// 通用容错解码退路：对 Foundation 严格解码失败的字节，按「UTF-8 用 `String(decoding:)`

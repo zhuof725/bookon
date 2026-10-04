@@ -174,23 +174,49 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             throw XCTSkip("charset_cases.json 缺失（本地未跑 golden job）。")
         }
         // 见 `repairingLeadingBomEscapes`：先把前导 BOM 转义，避免被 JSON 解析器当文档 BOM 吞掉。
-        let data = repairingLeadingBomEscapes(rawData)
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let arr = obj["charsetResults"] as? [Any] else {
-            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（charset_cases.json/charsetResults）") }
-            throw XCTSkip("charset_cases.json 结构异常。")
-        }
-        // 整段一起解码，避免逐条 JSONSerialization 往返（条目里的 null 会走 NSNull，
-        // 往返再喂给 JSONDecoder 容易出岔子）。这里把数组重新序列化一次即可。
         //
-        // ⚠️ **必须再跑一次 `repairingLeadingBomEscapes`**：
-        // `JSONSerialization.data(withJSONObject:)` 会把 `U+FEFF` 重新写成 raw `EF BB BF`，
-        // 于是 `JSONDecoder` 又会把它当文档 BOM 吞掉（CI run `37221670089` 实测：
-        // 只在第 177 行修一次仍报 `java=128`）。这里对往返后的字节再转义一遍，
-        // 保证最终喂给 `JSONDecoder` 的字节里没有「`"` 紧跟 `EF BB BF`」。
-        let arrData = repairingLeadingBomEscapes(
-            try JSONSerialization.data(withJSONObject: arr, options: [.fragmentsAllowed]))
-        return try JSONDecoder().decode([CharsetCase].self, from: arrData)
+        // ⚠️ **全程只解析一次，绝不做 `JSONSerialization` 往返**：
+        // 之前用「`JSONSerialization.jsonObject` 取数组 → `data(withJSONObject:)` 重新序列化
+        // → `JSONDecoder`」这条链路，虽然对往返后的字节又转义了一遍，但**重新序列化本身**
+        // 就会改写内容：`data(withJSONObject:)` 把 `U+FEFF` 写回 raw `EF BB BF`（被再次吞掉），
+        // 还把 `NSNull`、控制字符、孤立代理等一并改写。CI run `37223557235` 实测仍有 16 处
+        // 「swift=129 java=128」——正是这些 BOM 值。
+        //
+        // 现在改成：**先把顶层结构里的 `charsetResults` 摘出来，只对这一段做一次转义 + 解码**。
+        // 摘取用字节级扫描（不经过 Foundation 的 JSON），因此 golden 原始字节里
+        // 「`"` 紧跟 `EF BB BF`」的位置一个不丢。
+        let start = try firstArrayContentStart(in: rawData, key: "charsetResults")
+        let escaped = repairingLeadingBomEscapes(rawData.subdata(in: start..<rawData.count))
+        return try JSONDecoder().decode([CharsetCase].self, from: escaped)
+    }
+
+    /// 在 golden 原始字节里定位 `"<key>"` 之后那个 `[` 的位置，返回**紧跟其后**的偏移。
+    ///
+    /// 纯字节扫描，不引入任何 JSON 解析，从而不会触发 Foundation 的前导 BOM 剥离。
+    private func firstArrayContentStart(in data: Data, key: String) throws -> Int {
+        let needle = Array("\"\(key)\"".utf8)
+        let src = [UInt8](data)
+        guard src.count > needle.count else {
+            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（找不到 \(key)）") }
+            throw XCTSkip("charset_cases.json 结构异常（找不到 \(key)）。")
+        }
+        var idx = -1
+        outer: for i in 0...(src.count - needle.count) where src[i] == needle[0] {
+            for j in 0..<needle.count where src[i + j] != needle[j] { continue outer }
+            idx = i
+            break
+        }
+        guard idx >= 0 else {
+            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（找不到 \(key)）") }
+            throw XCTSkip("charset_cases.json 结构异常（找不到 \(key)）。")
+        }
+        var k = idx + needle.count
+        while k < src.count, src[k] != 0x5B { k += 1 }   // '['
+        guard k < src.count else {
+            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（\(key) 之后没有数组）") }
+            throw XCTSkip("charset_cases.json 结构异常（\(key) 之后没有数组）。")
+        }
+        return k + 1
     }
 
     private func bytes(fromBase64 b64: String) -> [UInt8] {
