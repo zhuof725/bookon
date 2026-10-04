@@ -273,25 +273,26 @@ enum JsNetTextDecoder {
             //     且替换字符个数与 Unicode 标准一致。
             return String(decoding: Array(data), as: UTF8.self)
         case "UTF-16", "UTF16":
-            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding, maxCharLength: 2)
+            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding)
         case "UTF-16LE", "UTF16LE":
-            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding, maxCharLength: 2)
+            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding)
         case "UTF-16BE", "UTF16BE":
-            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding, maxCharLength: 2)
+            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding)
         case "ISO-8859-1", "LATIN1", "ISO8859-1":
-            return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding, maxCharLength: 1)
+            return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding)
         case "US-ASCII", "ASCII":
             // Java 的 US-ASCII 对 >0x7F 也是替换字符语义；这里同样用容错路径。
-            return Self.lossyString(data, nsEncoding: NSASCIIStringEncoding, maxCharLength: 1)
+            return Self.lossyString(data, nsEncoding: NSASCIIStringEncoding)
         default:
             break
         }
         // GBK/GB2312/GB18030（CFStringEncodings.GB_18030_2000 与 Java 的 GBK 系兼容）。
-        // GB18030 有 4 字节序列，故 maxCharLength = 4。
+        // 字节结构（含 GB18030 的 4 字节形式）由 `mbcsProfile` 给出。
         if name == "GBK" || name == "GB2312" || name == "GB-2312" || name == "GB18030" || name == "CP936" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 4) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc,
+                                        profile: Self.mbcsProfile(for: name)) { return s }
             return nil
         }
         // Big5。⚠️ 必须开 `puaIsFailure`：Apple 走 CP950 表（把 JDK 严格 Big5 表判为
@@ -301,7 +302,8 @@ enum JsNetTextDecoder {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.big5.rawValue))
             if let s = Self.lossyString(data, nsEncoding: nsEnc,
-                                        maxCharLength: 2, puaIsFailure: true) { return s }
+                                        profile: Self.mbcsProfile(for: name),
+                                        puaIsFailure: true) { return s }
             return nil
         }
 
@@ -315,19 +317,22 @@ enum JsNetTextDecoder {
             || name == "WINDOWS-31J" || name == "CP932" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.shiftJIS.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 2) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc,
+                                        profile: Self.mbcsProfile(for: name)) { return s }
             return nil
         }
         if name == "EUC-JP" || name == "EUCJP" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.EUC_JP.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 3) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc,
+                                        profile: Self.mbcsProfile(for: name)) { return s }
             return nil
         }
         if name == "EUC-KR" || name == "EUCKR" || name == "CP949" || name == "KSC5601" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.EUC_KR.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 2) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc,
+                                        profile: Self.mbcsProfile(for: name)) { return s }
             return nil
         }
         return nil
@@ -369,12 +374,14 @@ enum JsNetTextDecoder {
     /// 入参用 `UInt`（`CFStringConvertEncodingToNSStringEncoding` 的返回类型；
     /// Swift 里 `NSStringEncoding` 已 unavailable）。
     ///
-    /// `maxCharLength` 是单个字符的最大字节数，只用于增量解码的窗口上界。
-    /// 由调用点按编码族给出，**不在函数内反查 CF 常量**——避免依赖具体 SDK 里
+    /// `mbcsProfile` 是该编码的**字节结构画像**（由调用点按编码族给出）。
+    /// 传 `nil` 表示非 MBCS（UTF 系 / 单字节系），此时不做结构化解码。
+    ///
+    /// 刻意**不在函数内反查 CF 常量**：避免依赖具体 SDK 里
     /// `kCFStringEncoding*` / `CFStringEncodings.*` 成员的拼写与可用性
     /// （CI 实测：`kCFStringEncodingUTF8` 等在 Swift 里并非全局可见，会编译不过）。
     private static func lossyString(_ data: Data, nsEncoding: UInt,
-                                    maxCharLength: Int = 2,
+                                    profile: MBCSProfile? = nil,
                                     puaIsFailure: Bool = false) -> String? {
         guard nsEncoding != 0 else { return nil }
         let bytes = [UInt8](data)
@@ -386,17 +393,23 @@ enum JsNetTextDecoder {
             return lossyFallback(bytes, nsEncoding: nsEncoding)
         }
         // 先整体试一次（合法输入的最快路径，也是绝大多数情况）。
-        if let whole = decodeCFString(bytes, cfEncoding: cfEncoding),
+        // ⚠️ MBCS（profile != nil）**不能**走这条捷径：Apple 的 CF 会把非法字节悄悄跳过/替换，
+        // 且消耗字节数与 JDK 不同（见 `incrementalLossyDecode` 的文档）。
+        if profile == nil,
+           let whole = decodeCFString(bytes, cfEncoding: cfEncoding),
            !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
         }
-        // 整块失败（或含 PUA）：走增量容错，**永不返回 nil**。
+        // 整块失败（或含 PUA，或 MBCS）：走增量容错，**永不返回 nil**。
+        // 非 MBCS（profile == nil，即 UTF-16/ISO-8859-1/ASCII）用「逐字节」画像：
+        // 每个字节单独试解，失败记 1 个 U+FFFD —— 这正是 ISO-8859-1 / ASCII / UTF-16 的
+        // JDK 语义（单字节编码永不 MALFORMED；UTF-16 的孤立尾字节亦然）。
         return incrementalLossyDecode(bytes, cfEncoding: cfEncoding,
-                                      maxCharLength: maxCharLength,
+                                      profile: profile ?? Self.byteWiseProfile,
                                       puaIsFailure: puaIsFailure)
         #else
         // 非 Darwin（本地 Linux 验证）：同样先整体试，失败再增量容错。
-        _ = maxCharLength   // 仅 Darwin 的增量路径使用；此处显式忽略以免 unused 警告
+        _ = profile   // 仅 Darwin 的增量路径使用；此处显式忽略以免 unused 警告
         if let whole = NSString(data: data, encoding: nsEncoding) as String?,
            !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
@@ -433,69 +446,345 @@ enum JsNetTextDecoder {
         s.unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) }
     }
 
+    /// 多字节编码（MBCS）的**字节结构画像**：决定「从位置 `i` 起该吃几个字节」。
+    ///
+    /// ### 为什么需要它
+    ///
+    /// JDK 的 `CharsetDecoder` 在遇到非法输入时会报两种错误，**消耗的字节数不同**：
+    ///
+    /// | 错误 | 含义 | `CoderResult.length()` | 单向替换时的消耗 |
+    /// |---|---|---|---|
+    /// | `MALFORMED` | 该位置**根本不构成合法的字节序列** | 1（或 2/3，见下） | 吃掉 `length` 个字节，产 1 个 `U+FFFD` |
+    /// | `UNMAPPABLE` | 字节序列**合法但码表里没有对应字符** | 全部序列长度 | 同上 |
+    ///
+    /// 这个差别**直接决定输出字符数**。真实 CI 实测（run `37211011044`，样本 `utf8-chinese`
+    /// 的 `decodedExplicitBig5`）：Java 给 234 字符，旧 Swift 给 283 字符 —— 就是因为在
+    /// `MALFORMED[1]`（吃 1）与 `UNMAPPABLE[2]`（吃 2）两类位置上判错，逐位累积成 49 个字符的偏差。
+    ///
+    /// ### 为什么不能用「试探窗口能解出几个字符」来推断
+    ///
+    /// `CFStringCreateWithBytes` 是**整块** API，没有「消耗了几个字节」的概念；对非法字节它要么
+    /// 整块返回 `NULL`，要么（更麻烦）**悄悄跳过或替换**。而 Apple 的码表与 JDK 又有系统性差异
+    /// （见 `README` 差异 6B-13/6B-14）。唯一可靠的做法是：**按字节结构先算出该吃几个字节，
+    /// 再把这一段交给 CF 解出字符**——结构规则来自真实 JVM 探针，不依赖任何 Apple 行为。
+    ///
+    /// ### 规则来源
+    ///
+    /// 下表由真实 JDK 逐位探针得出（`MALFORMED`/`UNMAPPABLE` 的 `length()` 全枚举）：
+    ///
+    /// | 编码 | 单字节有效范围 | 双字节 lead | 双字节 trail | 额外多字节 |
+    /// |---|---|---|---|---|
+    /// | GBK / GB2312 / CP936 | `00–7F` | `81–FE` | `40–7E`,`80–FE` | — |
+    /// | GB18030 | `00–7F` | `81–FE` | `40–7E`,`80–FE` | `81–FE`+`30–39`+`81–FE`+`30–39` |
+    /// | Big5 | `00–7F` | `A1–F9` | `40–7E`,`A1–FE` | — |
+    /// | Shift_JIS / CP932 | `00–7F`,`A1–DF` | `81–9F`,`E0–FC` | `40–7E`,`80–FC` | — |
+    /// | EUC-KR | `00–7F` | `A1–FE` | `A1–FE` | — |
+    /// | EUC-JP | `00–7F` | `A1–FE` | `A1–FE` | `8E`+`A1–DF`；`8F`+`A1–FE`+`A1–FE` |
+    ///
+    /// 任一条件不满足即为非法：若「首字节本身就不可能是 lead」→ `MALFORMED[1]`；
+    /// 若「首字节是 lead 但 trail 不合法」→ `MALFORMED[1]`（trail 属于 `00–3F`/`7F` 的空白带）
+    /// 或 `UNMAPPABLE[2]`（trail 属于 `80–A0`/`FF` 的高位带）。两类都产 1 个 `U+FFFD`，
+    /// 但**消耗字节数不同**，所以必须区分。
+    ///
+    /// ### trail 的三分类（本结构的关键）
+    ///
+    /// 设首字节 `hi` 是合法 lead、次字节 `lo` 是「形状上像 trail」的字节，则 JDK 会把它归入三类之一：
+    ///
+    /// | 类别 | 判定 | 单向替换时 |
+    /// |---|---|---|
+    /// | **映射区** | `lo` 落在映射用 trail 范围且码表有值 | 吃 2 字节，出 1 个字符 |
+    /// | `UNMAPPABLE[2]` | `lo` 落在「高位带」 | 吃 2 字节，出 1 个 `U+FFFD` |
+    /// | `MALFORMED[1]` | `lo` 落在「低位带」 | 吃 1 字节，出 1 个 `U+FFFD`（`lo` 留到下一轮） |
+    ///
+    /// 真实 JDK 全枚举探针（`lead = 0xB8`）得到的分带：
+    ///
+    /// | 编码 | 映射区 trail | `MALFORMED[1]` | `UNMAPPABLE[2]` |
+    /// |---|---|---|---|
+    /// | GBK / GB18030 | `40–7E`, `80–FE` | `00–3F`, `7F` | `FF` |
+    /// | Big5 | `40–7E`, `A1–FE` | `00–3F`, `7F` | `80–A0`, `FF` |
+    /// | Shift_JIS | `40–7E`, `80–FC` | `00–3F`, `7F` | `FD–FF` |
+    /// | EUC-KR | `A1–FE` | `00–7F` | `80–A0`, `FF` |
+    ///
+    /// ### `malformedExceptions`：少数 lead 的映射区「有洞」
+    ///
+    /// 大多数 lead 的分带是规整区间，但有极少数 lead 在**映射区内部**开了洞 —— 这些 `(hi, lo)`
+    /// 组合形状合法、却仍判 `MALFORMED[1]`。它们来自码表本身的结构（如 Big5 的 `A3` 区、
+    /// JIS X 0208 的 `81`/`82`/`EA` 区），必须逐条列出。探针实测的规模：
+    ///
+    /// | 编码 | 有洞的 lead 数 | 备注 |
+    /// |---|---|---|
+    /// | GBK / GB18030 / EUC-JP | **0** | 纯区间规则即可 100% 吻合 |
+    /// | Big5 | 4（`A1`/`A3`/`C8`/`F9`） | 压缩成 7 个区间 |
+    /// | EUC-KR | 13 | 压缩成 21 个区间 |
+    ///
+    /// 这张例外表是 `README` 差异 6B-17 的修复依据。
+    struct MBCSProfile {
+        /// 单字节直接映射（ASCII）的上界，含。
+        let singleByteMax: UInt8
+        /// 单字节直接映射的**额外**离散取值（Shift_JIS 的 `A1–DF` 半角片假名）。
+        let singleByteExtra: ClosedRange<UInt8>?
+        /// 双字节序列的 lead 范围列表。
+        let leadRanges: [ClosedRange<UInt8>]
+        /// 双字节序列中**可映射**的 trail 范围列表。
+        let trailRanges: [ClosedRange<UInt8>]
+        /// trail 落在这些范围内时判 `UNMAPPABLE[2]`（吃 2 字节）。
+        let u2TrailRanges: [ClosedRange<UInt8>]
+        /// trail 落在这些范围内时判 `MALFORMED[2]`（吃 **2** 字节，产 1 个 `U+FFFD`）。
+        /// 目前只有 GB18030 需要：`hi(81-FE) + lo(30-39)` 是 4 字节序列的第 1、2 字节，
+        /// 若后续两字节不构成合法 4 字节序列，JDK 报 `MALFORMED[2]`（而不是 `[1]`）。
+        let m2TrailRanges: [ClosedRange<UInt8>]
+        /// `(lead, trail)` 落在这些区间内时判 `MALFORMED[1]`（吃 1 字节），
+        /// **即便该 trail 落在 `trailRanges` 内**。键为 lead 字节。
+        let malformedExceptions: [UInt8: [ClosedRange<UInt8>]]
+        /// 三字节序列的 lead（EUC-JP 的 `8E`/`8F`）。
+        let threeByteLead: [UInt8]
+        /// 四字节序列（GB18030）的第二、四字节范围。
+        let fourByteDigitRange: ClosedRange<UInt8>?
+
+        func isLead(_ b: UInt8) -> Bool { leadRanges.contains { $0.contains(b) } }
+        func isTrail(_ b: UInt8) -> Bool { trailRanges.contains { $0.contains(b) } }
+        func isU2Trail(_ b: UInt8) -> Bool { u2TrailRanges.contains { $0.contains(b) } }
+        func isM2Trail(_ b: UInt8) -> Bool { m2TrailRanges.contains { $0.contains(b) } }
+        func isSingle(_ b: UInt8) -> Bool {
+            if b <= singleByteMax { return true }
+            if let e = singleByteExtra, e.contains(b) { return true }
+            return false
+        }
+        /// 该 `(hi, lo)` 是否命中「映射区内的洞」→ 应按 `MALFORMED[1]` 处理。
+        func isMalformedException(_ hi: UInt8, _ lo: UInt8) -> Bool {
+            guard let rs = malformedExceptions[hi] else { return false }
+            return rs.contains { $0.contains(lo) }
+        }
+    }
+
+    /// 构造区间列表的简写。
+    private static func ranges(_ pairs: (UInt8, UInt8)...) -> [ClosedRange<UInt8>] {
+        pairs.map { $0.0...$0.1 }
+    }
+
+    /// 按编码族返回字节结构画像；返回 `nil` 表示该编码不走结构化解码（UTF 系 / 单字节系）。
+    static func mbcsProfile(for name: String) -> MBCSProfile? {
+        switch name {
+        case "GBK", "GB2312", "GB-2312", "CP936", "GB18030":
+            // GB18030 的 4 字节形式：b1(81-FE) b2(30-39) b3(81-FE) b4(30-39)。
+            // 探针实测：GBK / GB18030 的 lead **零例外**，纯区间规则即 100% 吻合。
+            let four: ClosedRange<UInt8>? = (name == "GB18030") ? 0x30...0x39 : nil
+            return MBCSProfile(
+                singleByteMax: 0x7F,
+                singleByteExtra: nil,
+                leadRanges: ranges((0x81, 0xFE)),
+                trailRanges: ranges((0x40, 0x7E), (0x80, 0xFE)),
+                u2TrailRanges: ranges((0xFF, 0xFF)),
+                m2TrailRanges: (four == nil) ? [] : ranges((0x30, 0x39)),
+                malformedExceptions: [:],
+                threeByteLead: [],
+                fourByteDigitRange: four)
+        case "BIG5", "BIG-5", "BIG5-HKSCS":
+            // lead 仅 A1-F9；u2 带为 80-A0 与 FF；另有 4 个 lead 在映射区开洞。
+            return MBCSProfile(
+                singleByteMax: 0x7F,
+                singleByteExtra: nil,
+                leadRanges: ranges((0xA1, 0xF9)),
+                trailRanges: ranges((0x40, 0x7E), (0xA1, 0xFE)),
+                u2TrailRanges: ranges((0x80, 0xA0), (0xFF, 0xFF)),
+                m2TrailRanges: [],
+                malformedExceptions: [
+                    0xA1: ranges((0xC3, 0xC3), (0xC5, 0xC5)),
+                    0xA3: ranges((0xC0, 0xC7), (0xC9, 0xF9)),
+                    0xC8: ranges((0x40, 0x7E), (0x80, 0xFF)),
+                    0xF9: ranges((0xD6, 0xF9)),
+                ],
+                threeByteLead: [],
+                fourByteDigitRange: nil)
+        case "SHIFT-JIS", "SHIFTJIS", "SJIS", "MS-KANJI", "WINDOWS-31J", "CP932":
+            // 0xA1-0xDF 是半角片假名（单字节）；lead 为 81-9F / E0-FC。
+            // u2 带为 FD-FF；JIS X 0208 的 81/82/83/84/88/98/EA 区在映射区开洞。
+            return MBCSProfile(
+                singleByteMax: 0x7F,
+                singleByteExtra: 0xA1...0xDF,
+                leadRanges: ranges((0x81, 0x9F), (0xE0, 0xFC)),
+                trailRanges: ranges((0x40, 0x7E), (0x80, 0xFC)),
+                u2TrailRanges: ranges((0xFD, 0xFF)),
+                m2TrailRanges: [],
+                malformedExceptions: [
+                    0x81: ranges((0xAD, 0xAD), (0xB7, 0xB7), (0xC0, 0xC7), (0xCF, 0xD9), (0xE9, 0xEA)),
+                    0x82: ranges((0x40, 0x4E), (0x59, 0x5F), (0x7A, 0x7E), (0x9B, 0x9E), (0xF2, 0xFC)),
+                    0x83: ranges((0x97, 0x9E), (0xB7, 0xBE), (0xD7, 0xFC)),
+                    0x84: ranges((0x61, 0x6F), (0x92, 0x9E), (0xBF, 0xFC)),
+                    0x88: ranges((0x40, 0x7E), (0x81, 0x84), (0x88, 0x9E)),
+                    0x98: ranges((0x73, 0x7E), (0x81, 0x84), (0x88, 0x9E)),
+                    0xEA: ranges((0xA5, 0xFC)),
+                ],
+                threeByteLead: [],
+                fourByteDigitRange: nil)
+        case "EUC-KR", "EUCKR", "CP949", "KSC5601":
+            // u2 带为 80-A0 与 FF；13 个 lead 在映射区开洞。
+            return MBCSProfile(
+                singleByteMax: 0x7F,
+                singleByteExtra: nil,
+                leadRanges: ranges((0xA1, 0xFE)),
+                trailRanges: ranges((0xA1, 0xFE)),
+                u2TrailRanges: ranges((0x80, 0xA0), (0xFF, 0xFF)),
+                m2TrailRanges: [],
+                malformedExceptions: [
+                    0xA2: ranges((0xE9, 0xFD)),
+                    0xA5: ranges((0xAB, 0xAC), (0xBA, 0xC0), (0xD9, 0xE0), (0xF9, 0xFD)),
+                    0xA6: ranges((0xE5, 0xFD)),
+                    0xA7: ranges((0xF0, 0xFD)),
+                    0xA8: ranges((0xA5, 0xA5), (0xA7, 0xA7), (0xB0, 0xB0)),
+                    0xAA: ranges((0xF4, 0xFD)),
+                    0xAB: ranges((0xF7, 0xFD)),
+                    0xAC: ranges((0xC2, 0xC8), (0xCA, 0xD0), (0xF2, 0xFD)),
+                    0xC9: ranges((0xA1, 0xFE)),
+                    0xAD: ranges((0xA1, 0xFE)),
+                    0xAE: ranges((0xA1, 0xFE)),
+                    0xAF: ranges((0xA1, 0xFE)),
+                    0xFE: ranges((0xA1, 0xFE)),
+                ],
+                threeByteLead: [],
+                fourByteDigitRange: nil)
+        case "EUC-JP", "EUCJP":
+            // 0x8E + 1 字节（半角片假名）；0x8F + 2 字节（JIS X 0212）。
+            // 探针实测：EUC-JP 的 A1-FE lead **零例外**。
+            return MBCSProfile(
+                singleByteMax: 0x7F,
+                singleByteExtra: nil,
+                leadRanges: ranges((0xA1, 0xFE)),
+                trailRanges: ranges((0xA1, 0xFE)),
+                u2TrailRanges: ranges((0x80, 0xA0), (0xFF, 0xFF)),
+                m2TrailRanges: [],
+                malformedExceptions: [:],
+                threeByteLead: [0x8E, 0x8F],
+                fourByteDigitRange: nil)
+        default:
+            return nil
+        }
+    }
+
+    /// 「逐字节」画像：单字节上界覆盖全部取值，因而 `isSingle` 恒为 `true`，
+    /// `incrementalLossyDecode` 会逐字节推进。用于 UTF 系与单字节系
+    /// （UTF-16/ISO-8859-1/ASCII）——它们的 JDK 语义就是「每字节独立」。
+    static let byteWiseProfile = MBCSProfile(
+        singleByteMax: 0xFF, singleByteExtra: nil,
+        leadRanges: [], trailRanges: [], u2TrailRanges: [], m2TrailRanges: [],
+        malformedExceptions: [:],
+        threeByteLead: [], fourByteDigitRange: nil)
+
     #if canImport(Darwin)
-    /// 增量容错解码：**按编码自身的字符边界逐字符推进**，而不是「最长可解码前缀」。
+    /// `MALFORMED`/`UNMAPPABLE` 消耗语义逐字节对齐。
     ///
     /// 只在「整块解码失败」时才会走到（即输入确实含非法字节的少数样本）。
     ///
-    /// ### 为什么不能做「最长可解码前缀」试探
+    /// ### 算法
     ///
-    /// 早期实现从 `i` 开始向后试探最长能解出**不含 PUA** 的前缀。这在 MBCS（GBK/Big5/EUC）
-    /// 上会**穿透字符边界**：`CFStringCreateWithBytes` 会把这些编码里的部分非常用双字节
-    /// 映射到 PUA，于是「整段含 PUA」判定失败后不断缩短窗口，直到恰好切在某个双字节中间，
-    /// 此时窗口尾部剩一个孤立的 lead byte —— CF 会把它与**下一个 ASCII 字节**拼成双字节，
-    /// 从而把本该输出的 ASCII（如 `*`）吞掉。真实 CI 实测：
+    /// 每一步在位置 `i` 上先由 `MBCSProfile` 算出「这一段应该是几字节」：
     ///
-    /// ```
-    /// 字节:... 0x97 0x2A ...
-    /// Java(Big5) : U+FFFD U+002A        ← 0x97 非法 → 替换；0x2A 是 ASCII `*`，照常输出
-    /// 旧 Swift   : U+FFFD               ← 0x2A 被当成 0x97 的 trail byte 一起吃掉了（错误）
-    /// ```
+    /// 1. 若 `bytes[i]` 是单字节有效值 → 吃 1 字节，用 CF 解出该字符；
+    /// 2. 否则若 `bytes[i]` 是合法 lead 且**后续字节构成完整合法序列** → 吃整段（2/3/4 字节），
+    ///    用 CF 解出；CF 解不出（JDK 判 `UNMAPPABLE` 但 Apple 表不同）→ 输出 1 个 `U+FFFD`；
+    /// 3. 否则若 `bytes[i]` 是合法 lead 但 trail 落在**高位带** → `UNMAPPABLE[n]`：
+    ///    吃整段，输出 1 个 `U+FFFD`；
+    /// 4. 否则（含 trail 落低位带、lead 本身非法）→ `MALFORMED[1]`：吃 1 字节，输出 1 个 `U+FFFD`。
     ///
-    /// ### 现行算法
+    /// 第 3/4 步的区分是本次修复的核心：旧实现一律「吃 1 字节」，导致每个 `UNMAPPABLE[2]`
+    /// 位置都比 JDK 多出 1 个 `U+FFFD`（CI run `37211011044`：283 vs 234）。
     ///
-    /// 每一步从 `i` 开始，按**当前编码的最大字符长度**由长到短尝试解**单个字符**：
-    /// - 解出的恰好是 1 个标量且不含 PUA → 接受，`i += 该长度`；
-    /// - 否则继续缩短窗口；
-    /// - 连单字节都解不出，或单字节解出的是 PUA → 输出一个 `U+FFFD`，`i += 1`。
+    /// ### 与旧实现的对比
     ///
-    /// 关键差别是「**每次只解一个字符**」：窗口长度上界是编码最大字符长度（MBCS 为 2，
-    /// UTF 系为 4），窗口内**不会跨过字符边界**，因此不会吞掉后续 ASCII。
+    /// 旧实现从 `min(maxCharLength, n-i)` 起**由长到短**试探「能否解出 1 个标量」，这在两处出错：
+    /// - 窗口可能**跨过字符边界**：`maxCharLength=4` 时窗口含 4 字节，`0x80 0xE7 0xB0 0x87`
+    ///   会被当成候选，而 Apple `GB_18030_2000` 把单个 `0x80` 解成 `U+20AC`（欧元符号），
+    ///   于是一路降到 1 字节窗口后「成功」接受 —— JDK 在此给 `U+FFFD`（`0x80` 是非法单字节）。
+    ///   真实 CI 实测：`utf8-chinese` 的 `decodedExplicitGbk` 在位置 79 处 Java `U+FFFD` /
+    ///   旧 Swift `U+20AC`。
+    /// - 只看「能否解出 1 个标量」而**不看消耗了几个字节**，无法复刻 `MALFORMED[1]` 与
+    ///   `UNMAPPABLE[2]` 的差别。
+    ///
+    /// 新实现的两条不变量：
+    /// - **单字节窗口只接受 `profile.isSingle(...)` 的字节**，因此 `0x80` 在 GB 系绝不可能是
+    ///   「1 个字符」，只能走 `MALFORMED[1]`；
+    /// - **窗口长度由字节结构决定，不由试探结果决定**，因此绝不跨字符边界、绝不吞掉后续 ASCII。
     ///
     /// 结果与 Java `new String(bytes, charset)` 的替换语义逐码位一致
-    /// （已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD，本实现完全相同；
-    /// 本次修复后又核对 `0x97 0x2A` → `U+FFFD U+002A`）。
+    /// （真实 JVM 已核对：`0x97 0x2A` → `U+FFFD U+002A`；`AC E4` → 1 个 `U+FFFD`；
+    /// `B8 80` → 1 个 `U+FFFD`）。
     private static func incrementalLossyDecode(_ bytes: [UInt8],
                                                cfEncoding: CFStringEncoding,
-                                               maxCharLength: Int = 2,
+                                               profile: MBCSProfile,
                                                puaIsFailure: Bool = false) -> String {
         var out = ""
         var i = 0
         let n = bytes.count
+        /// 把一段字节交给 CF 解；解出恰好 1 个标量且（按需）不含 PUA 才算成功。
+        func tryDecode(_ start: Int, _ len: Int) -> String? {
+            guard start + len <= n else { return nil }
+            let slice = Array(bytes[start..<(start + len)])
+            guard let s = decodeCFString(slice, cfEncoding: cfEncoding),
+                  s.unicodeScalars.count == 1 else { return nil }
+            if puaIsFailure && containsPrivateUse(s) { return nil }
+            return s
+        }
         while i < n {
-            var consumed = 0
-            var decoded: String?
-            // 从「最长」往「最短」试，但窗口**不超过单个字符的最大长度**，不跨字符边界。
-            let upper = min(maxCharLength, n - i)
-            var len = upper
-            while len >= 1 {
-                let slice = Array(bytes[i..<(i + len)])
-                if let s = decodeCFString(slice, cfEncoding: cfEncoding),
-                   s.unicodeScalars.count == 1,
-                   !(puaIsFailure && containsPrivateUse(s)) {
-                    consumed = len
-                    decoded = s
-                    break
+            let b = bytes[i]
+            // ① 单字节
+            if profile.isSingle(b) {
+                if let s = tryDecode(i, 1) { out += s; i += 1; continue }
+                // 理论上单字节合法段一定能解出；真解不出就按 U+FFFD 处理。
+                out += "\u{FFFD}"; i += 1; continue
+            }
+            // ② 多字节：先由结构算出应有的长度
+            var seqLen = 0
+            var isUnmappableSeq = false
+            if profile.isLead(b) {
+                if i + 1 < n {
+                    let t = bytes[i + 1]
+                    if profile.isTrail(t) {
+                        if profile.isMalformedException(b, t) {
+                            // 映射区内的「洞」→ MALFORMED[1]（吃 1 字节），不进入下面的分支。
+                            out += "\u{FFFD}"; i += 1; continue
+                        }
+                        // GB18030 的 4 字节形式优先。
+                        if let digit = profile.fourByteDigitRange, digit.contains(t),
+                           i + 3 < n,
+                           profile.isLead(bytes[i + 2]), digit.contains(bytes[i + 3]) {
+                            seqLen = 4
+                        } else {
+                            seqLen = 2
+                        }
+                    } else if profile.isU2Trail(t) {
+                        // trail 落 UNMAPPABLE 带 → 吃整段 2 字节，出 1 个 U+FFFD。
+                        seqLen = 2
+                        isUnmappableSeq = true
+                    } else if profile.isM2Trail(t) {
+                        // GB18030 的 `hi + 30-39`：本应是 4 字节序列的前两字节，
+                        // 但后续不构成合法 4 字节 → JDK 报 MALFORMED[2]，吃 2 字节。
+                        seqLen = 2
+                        isUnmappableSeq = true
+                    }
                 }
-                len -= 1
             }
-            if let s = decoded {
-                out += s
-                i += consumed
-            } else {
-                out += "\u{FFFD}"
-                i += 1
+            // EUC-JP 的 0x8E / 0x8F 前置形式
+            if seqLen == 0, profile.threeByteLead.contains(b), i + 1 < n {
+                let t = bytes[i + 1]
+                if b == 0x8E {
+                    if t >= 0xA1 && t <= 0xDF { seqLen = 2 }
+                    else if profile.isU2Trail(t) { seqLen = 2; isUnmappableSeq = true }
+                } else {  // 0x8F + 2 字节
+                    if i + 2 < n, profile.isTrail(t), profile.isTrail(bytes[i + 2]),
+                       !profile.isMalformedException(b, t), !profile.isMalformedException(b, bytes[i + 2]) {
+                        seqLen = 3
+                    } else if profile.isU2Trail(t) { seqLen = 3; isUnmappableSeq = true }
+                }
             }
+            if seqLen > 0 {
+                if !isUnmappableSeq, let s = tryDecode(i, seqLen) {
+                    out += s; i += seqLen; continue
+                }
+                // 序列合法（或 UNMAPPABLE 带）但码表无对应 → 1 个 U+FFFD，吃掉整段。
+                out += "\u{FFFD}"; i += seqLen; continue
+            }
+            // ③ 这里只剩 MALFORMED[1]：lead 本身非法，或 trail 落低位带（00-3F / 7F）。
+            out += "\u{FFFD}"; i += 1
         }
         return out
     }

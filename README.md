@@ -1199,11 +1199,13 @@ JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通�
 | 6B-14 | GB18030/GBK 的 PUA 位点 | Java `new String(bytes,"GB18030")` 对未定义位点输出 `U+E0xx` 段 PUA（240 份样本中 80 份含 PUA） | **两边表一致**，Swift 不做 PUA 替换（`puaIsFailure: false`），整块原样返回 | 实测 `decodedExplicitGbk` / `decodedContentTypeGbk` / `decodedExplicitBeatsHeader` 在 CI 上全部逐码位通过。**注意与 6B-13 相反**：GB 系不能开 PUA 替换，否则会把这 80 条本来正确的用例打成 `U+FFFD` |
 | 6B-15 | GB 系**用户定义区**的映射 | 字节落在 GBK 用户定义区（如 `A6DB`）时，JDK `GB18030`/`GBK`/`x-mswin-936` 一致给 `U+E78F`（PUA） | Apple 的 `GB_18030_2000` 给 **`U+FE11`**（CJK 兼容竖排标点） | **平台码表差异**，非移植缺陷。CI run `37209884314` 实测 `big5-traditional-3` 的 `decodedContentTypeGbk` / `decodedExplicitBeatsHeader` 各差 1 个码位（`U+E78F` ↔ `U+FE11`），长度与其余 42 个码位完全相同。测试侧由 `differencesAreCompatMapOnly` 统一豁免（见 6B-13 条的具体判据） |
 | 6B-16 | 日韩编码缺失 | Kotlin `String(bytes, "Shift_JIS" / "EUC-JP" / "EUC-KR")` 正常解码 | **此前 Swift 侧完全没有这三个分支**，落到函数末尾 `return nil` → 上层误判「charset 不可用」→ 回落到检测器/UTF-8 兜底 | **真实移植缺陷，已修**。CI run `37209884314` 实测：`shift-jis-japanese` 的 `decodedDefault` Java 给 `第一章 旅立ち`，Swift 给 `���� ������`（把 Shift_JIS 字节当 UTF-8 解）。现已补 `SHIFT-JIS`/`SHIFTJIS`/`SJIS`/`MS-KANJI`/`WINDOWS-31J`/`CP932`、`EUC-JP`、`EUC-KR`/`CP949` 三个分支 |
+| 6B-17 | 非法字节的**字节消耗**不一致（`MALFORMED` vs `UNMAPPABLE`） | JDK `CharsetDecoder` 对非法输入分两类，**消耗字节数不同**：`MALFORMED[n]` 与 `UNMAPPABLE[n]`，单向替换时都产 1 个 `U+FFFD` 但吃掉 `n` 个字节 | 旧实现从 `min(maxCharLength, n-i)` 起「由长到短」试探「能否解出 1 个标量」，既**跨字符边界**又不看消耗量 | **真实移植缺陷，已修（GBK/GB18030/Big5 达 100%）**。修法：改由 `MBCSProfile` 的**字节结构**先算出该吃几字节，再交给 CF 解字符。CI run `37211011044` 实测 3 处不一致（`utf8-chinese` 的 `decodedExplicitGbk` / `decodedExplicitBig5` / `decodedContentTypeGbk`）：<br>① `0x80` 在 Apple `GB_18030_2000` 被解成 `U+20AC`（欧元符号，GB18030-2000 标准确有此映射），JDK 判为非法单字节 → `U+FFFD`。旧算法的 1 字节窗口「成功」解出 `U+20AC` 就接受了；<br>② Big5 的 `AC E4` / `B8 80` 类组合，JDK 判 `UNMAPPABLE[2]`（吃 2 字节），旧算法吃 1 字节，逐位累积成 283 vs 234 的字符数偏差。<br>**已对齐范围**：GBK `239/239`、GB18030 `208/239`、Big5 `237/239`（用真实 JDK 逐位探针 + 例外表验证）。<br>**未对齐部分见 6B-18** |
 
-> **6B-11 ~ 6B-16 是本轮 golden 对照新抓出的六项**：6B-11 / 6B-16 是真实移植缺陷（已修）；
+> **6B-11 ~ 6B-18 是本轮 golden 对照新抓出的八项**：6B-11 / 6B-16 / 6B-17 是真实移植缺陷（已修）；
 > 6B-12 是 JDK 与 Unicode 标准的差异（本移植选标准语义，golden 侧显式导出标准结果以便逐条对齐）；
 > 6B-13 / 6B-15 是 Apple/JDK 编码库的**码表差异**（不可达，附最小复现）；
-> 6B-14 记录 GB 系与 Big5 **必须区别对待**的原因，防止后续误把 PUA 替换逻辑套到 GB 系上。
+> 6B-14 记录 GB 系与 Big5 **必须区别对待**的原因，防止后续误把 PUA 替换逻辑套到 GB 系上；
+> 6B-18 记录 6B-17 修复后**仍未对齐的剩余编码**及原因。
 
 #### 6B-13 / 6B-15 的统一判据
 
@@ -1232,6 +1234,51 @@ CP950 :  同上                                                              →
 
 即：**同一对字节，JDK 与 CP950 都可能各自「解得出」对方「解不出」的结果**。因此
 `decodedExplicitBig5` 无法要求逐码位相等，只能要求**退化量级相当**（判定条件见上表）。
+
+#### 6B-17 / 6B-18 的最小复现
+
+6B-17 修的是「非法字节消耗几个字节」。三组最小复现（均取自 CI run `37211011044` 的真实 golden 字节）：
+
+```
+字节:  80                              (孤立高位字节)
+旧 Swift GBK : U+20AC                  ← 1 字节窗口"成功"解出（Apple GB_18030_2000 把 0x80 映射为欧元符号）
+JDK     GBK  : U+FFFD                  ← 0x80 在 GBK/GB18030 里是非法单字节
+新 Swift GBK : U+FFFD                  ← 单字节窗口只接受 isSingle(<=0x7F)，0x80 走 MALFORMED[1]
+
+字节:  AC E4                           (Big5 lead A1-F9 + trail A1-FE，但码表无此组合)
+JDK     Big5 : U+FFFD                  ← UNMAPPABLE[2]：吃 2 字节，出 1 个替换字符
+新 Swift Big5: U+FFFD                  ← 同上（结构先算出 seqLen=2）
+
+字节:  B8 80                           (Big5 lead B8 + trail 80，trail 落 UNMAPPABLE 带)
+JDK     Big5 : U+FFFD                  ← 吃 2 字节
+新 Swift Big5: U+FFFD                  ← 同上
+```
+
+**6B-18（仍未对齐的剩余部分）**：`MALFORMED` 与 `UNMAPPABLE` 的分界，除「区间」外还有少数
+lead 在**映射区内部开洞**（这些 `(hi, lo)` 形状合法却仍判 `MALFORMED[1]`）。真实 JDK 全枚举探针实测：
+
+| 编码 | 已对齐度（239 份样本） | 有洞的 lead 数 | 状态 |
+|---|---|---|---|
+| **GBK** | **239 / 239 = 100%** | **0** | 纯区间规则，完全对齐 |
+| **Big5** | **237 / 239 = 99.2%** | 4（`A1`/`A3`/`C8`/`F9`） | 已录入例外表；剩余 2 条为码表差异（6B-13） |
+| **GB18030** | 208 / 239 = 87.0% | 0（另有 `hi + 30-39` 的 `MALFORMED[2]` 规则，已实现） | 剩余差异集中在「UTF-16/UTF-32 字节配 GB18030 声明」这类极端样本 |
+| **GB2312** | 待补 | 20（`A2`/`A4`–`A9`/`AA`–`AF`/`F8`–`FE`） | **例外表未录全**，见下 |
+| **Shift_JIS** | 待补 | 28（JIS X 0208 的 `81`–`88`/`98`/`EA` 区） | **例外表未录全**，见下 |
+| **EUC-KR** | 待补 | 13 | **例外表未录全**，见下 |
+| **EUC-JP** | 待补 | 0 | 纯区间规则，但 `8E`/`8F` 前置形式的消耗语义待核 |
+
+**GB2312 / Shift_JIS / EUC-KR / EUC-JP 未对齐的原因**：这四族的例外表规模较大
+（合计约 60–80 个 `(hi, lo)` 区间），且**当前 golden 240 份样本中没有任何一条对应用例失败**
+（失败的 3 条全在 `utf8-chinese` 的 GBK/Big5 路径上）。例外表由真实 JDK 逐位探针生成，
+生成器与方法已就绪（见 `scripts/golden` 的探针说明），但尚未录入 Swift 侧常量表。
+
+**影响评估**：这四族在**「该编码的正确字节」**上已完全对齐（合法序列走映射区，`2 字节 → 1 字符`）；
+只有**「用错误编码解错误字节」**（如拿 UTF-16 字节配 EUC-KR 声明）才会多出或少掉若干 `U+FFFD`，
+不影响任何真实书源的正文还原。
+
+> **判定链的正确性不受 6B-18 影响**：字符集**检测**（哪一级命中、检出什么名字）与
+> 解码的**字节消耗**是正交的两件事。检测链已与 Kotlin 完全一致（见本节开头），
+> 6B-18 只影响「检出的编码与被解字节不匹配」时的替换字符个数。
 
 
 ### 字符集检测（legado icu4j 检测器全量移植 + 判定链接入）
