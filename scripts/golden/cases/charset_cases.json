@@ -1,0 +1,4 @@
+{
+  "_comment": "第 6 步 6B 字符集检测 golden 的触发 marker。样本语料由 golden.CharsetCorpus 在代码中生成（≥200 份，含 40 份标注的合成小说章节文本），检测算法使用 legado 自带的 icu4j 源码（golden 侧包 legadoicu）与 EncodingDetect.kt 的 Java 移植（golden.EncodingDetectGolden）。生成结果写入 outDir/charset_cases.json 的 charsetResults。",
+  "charsetCases": []
+}

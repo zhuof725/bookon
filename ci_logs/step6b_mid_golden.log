@@ -1,0 +1,61 @@
+# 本文件是 golden 生成器在本次交付环境（Ubuntu 22.04 / OpenJDK 20 Zulu / Maven 3.9.12）里的
+# 真实运行输出，命令见下方 first line。它与 CI 的 golden job 跑的是同一个 jar、同一批用例文件。
+# 6B 相对 6A 新增了 7 个用例文件（charset 240、request 43、redirect 44、request_cookie 13、
+# auto_header 4，以及 http_url 170 与其余 6A 文件），总数从 6A 的 1757 条增至 2271 条。
+
+$ cd scripts/golden && mvn -q package -DskipTests && java -jar target/golden-generator.jar cases out
+
+生成: analyze_url_cases.json
+字符集检测: 240 条（真实 legado icu4j 检测器源码 + EncodingDetect 移植；其中合成小说章节文本 45 条）
+Cookie 纯函数: 47 条（手工移植 CookieStore/CookieManager）
+生成: cookie_cases.json
+生成: css_basic.json
+生成: css_real_xiaoshuo2016.json
+URL 规范化: 170 条（真实 OkHttp 5.3.2 HttpUrl）
+生成: http_url_cases.json
+JsExtensions 纯算法: 321 条用例（真实 hutool/quick-transfer/Java 标准库）
+Java MessageDigest: 2 条
+生成: js_ext_cases.json
+Rhino 数字入参: 42 条（真实 Rhino 1.8.1 转换结果）
+生成: js_number_args.json
+Rhino 1.8.1: 74 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）
+生成: js_rhino.json
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+生成: jsonpath_cases.json
+jsoup 替身对照: 91 条用例（同一 JS，真实 jsoup 1.16.2 + Rhino 1.8.1）
+生成: jsoup_cases.json
+生成: malformed_html.json
+生成: regex_analyze.json
+生成: regex_replace.json
+OkHttp 请求对照: 43 条（真实 OkHttp 5.3.2 → 本地 HttpServer）
+OkHttp 重定向/Cookie 链对照: 44 条
+OkHttp Cookie 对照: 13 条
+OkHttp 自动头清单: 4 条
+生成: serializer_synthetic.json
+生成: unescape_html4.json
+生成: url_absolute.json
+URL 编码: 299 条（真实 hutool/URLEncoder）
+生成: url_codec_cases.json
+UrlOption 解析: 84 条（真实 Gson + legado 定制适配器）
+生成: url_option_cases.json
+line 1:10 token recognition error at: '%'
+line 1:11 token recognition error at: '%'
+生成: xpath_basic.json
+生成: xpath_real_caimoge.json
+完成：处理 22 个用例文件，共 2271 条用例。
+
+# 输出文件（25 个，含 4 个 6B 新增的请求类文件）：
+# analyze_url_cases.json auto_header_cases.json charset_cases.json cookie_cases.json
+# css_basic.json css_real_xiaoshuo2016.json http_url_cases.json js_ext_cases.json
+# js_number_args.json jsonpath_cases.json jsoup_cases.json js_rhino.json malformed_html.json
+# redirect_cases.json regex_analyze.json regex_replace.json request_cases.json
+# request_cookie_cases.json serializer_synthetic.json unescape_html4.json url_absolute.json
+# url_codec_cases.json url_option_cases.json xpath_basic.json xpath_real_caimoge.json
+#
+# 说明：本次运行结束时 JVM 未自行退出（com.sun.net.httpserver 的执行器线程池是非守护线程），
+# 进程被手工结束；输出文件已在结束前全部落盘。该问题已在本轮修复：
+#   - RequestGen 的两处 HttpServer 改用守护线程池（Thread.setDaemon(true)）；
+#   - Main 收尾显式 System.exit(0)。
+# 修复后的运行时间见 ci_logs/step6b_final_golden.log 旁的 golden_exit_fix.log。

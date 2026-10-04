@@ -1,0 +1,1 @@
+# 这个目录在 CI 里由 golden job 的 artifact 填充（见 .github/workflows/test.yml）。

@@ -1,0 +1,322 @@
+{
+ "_comment": "⚠️ 合成样本，非真实数据。第 6 步 6A golden 用例：输入均为手工构造（编码/JSON/URL 规则/Cookie），Java 侧用真实 hutool(RFC3986/PercentCodec/URLEncoder)、真实 Gson(legado 定制适配器)、真实 Rhino 1.8.1、java.net.URL 生成对照；AnalyzeUrl 的调度逻辑（encodeParams/analyzeJs/replaceKeyPageJs/analyzeUrl）是 AnalyzeUrl.kt 的**手工 Java 移植**（README 标明）。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "cookieCases": [
+  {
+   "name": "c2m_00",
+   "op": "cookieToMap",
+   "cookie": "a=1"
+  },
+  {
+   "name": "c2m_01",
+   "op": "cookieToMap",
+   "cookie": "a=1; b=2"
+  },
+  {
+   "name": "c2m_02",
+   "op": "cookieToMap",
+   "cookie": "a=1;b=2;"
+  },
+  {
+   "name": "c2m_03",
+   "op": "cookieToMap",
+   "cookie": "a=1;;b=2"
+  },
+  {
+   "name": "c2m_04",
+   "op": "cookieToMap",
+   "cookie": "a"
+  },
+  {
+   "name": "c2m_05",
+   "op": "cookieToMap",
+   "cookie": "a="
+  },
+  {
+   "name": "c2m_06",
+   "op": "cookieToMap",
+   "cookie": "a= "
+  },
+  {
+   "name": "c2m_07",
+   "op": "cookieToMap",
+   "cookie": "a=null"
+  },
+  {
+   "name": "c2m_08",
+   "op": "cookieToMap",
+   "cookie": "a=nullx"
+  },
+  {
+   "name": "c2m_09",
+   "op": "cookieToMap",
+   "cookie": "a = 1 ; b = 2"
+  },
+  {
+   "name": "c2m_10",
+   "op": "cookieToMap",
+   "cookie": "=1"
+  },
+  {
+   "name": "c2m_11",
+   "op": "cookieToMap",
+   "cookie": "a=1=2"
+  },
+  {
+   "name": "c2m_12",
+   "op": "cookieToMap",
+   "cookie": "a==b"
+  },
+  {
+   "name": "c2m_13",
+   "op": "cookieToMap",
+   "cookie": "x=1; y="
+  },
+  {
+   "name": "c2m_14",
+   "op": "cookieToMap",
+   "cookie": ";a=1"
+  },
+  {
+   "name": "c2m_15",
+   "op": "cookieToMap",
+   "cookie": "a=1; ;b=2"
+  },
+  {
+   "name": "c2m_16",
+   "op": "cookieToMap",
+   "cookie": "中=文"
+  },
+  {
+   "name": "c2m_17",
+   "op": "cookieToMap",
+   "cookie": "a=1; a=2"
+  },
+  {
+   "name": "c2m_18",
+   "op": "cookieToMap",
+   "cookie": "A=1;a=2"
+  },
+  {
+   "name": "c2m_19",
+   "op": "cookieToMap",
+   "cookie": "a=b=c;d=e"
+  },
+  {
+   "name": "c2m_20",
+   "op": "cookieToMap",
+   "cookie": "a= 1 ;  b=2  "
+  },
+  {
+   "name": "c2m_21",
+   "op": "cookieToMap",
+   "cookie": "k=;m=2"
+  },
+  {
+   "name": "c2m_22",
+   "op": "cookieToMap",
+   "cookie": "none"
+  },
+  {
+   "name": "c2m_23",
+   "op": "cookieToMap",
+   "cookie": "= "
+  },
+  {
+   "name": "c2m_24",
+   "op": "cookieToMap",
+   "cookie": "a=1&b=2"
+  },
+  {
+   "name": "m2c_00",
+   "op": "mapToCookie",
+   "pairs": []
+  },
+  {
+   "name": "m2c_01",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "a",
+     "v": "1"
+    }
+   ]
+  },
+  {
+   "name": "m2c_02",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "a",
+     "v": "1"
+    },
+    {
+     "k": "b",
+     "v": "2"
+    }
+   ]
+  },
+  {
+   "name": "m2c_03",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "a",
+     "v": ""
+    }
+   ]
+  },
+  {
+   "name": "m2c_04",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "",
+     "v": "1"
+    }
+   ]
+  },
+  {
+   "name": "m2c_05",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "a",
+     "v": "1=2"
+    }
+   ]
+  },
+  {
+   "name": "m2c_06",
+   "op": "mapToCookie",
+   "pairs": [
+    {
+     "k": "中",
+     "v": "文"
+    }
+   ]
+  },
+  {
+   "name": "merge_00",
+   "op": "mergeCookies",
+   "cookies": [
+    null,
+    null
+   ]
+  },
+  {
+   "name": "merge_01",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1",
+    "b=2"
+   ]
+  },
+  {
+   "name": "merge_02",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1",
+    "a=2"
+   ]
+  },
+  {
+   "name": "merge_03",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1;b=2",
+    "b=3;c=4"
+   ]
+  },
+  {
+   "name": "merge_04",
+   "op": "mergeCookies",
+   "cookies": [
+    null,
+    "a=1"
+   ]
+  },
+  {
+   "name": "merge_05",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1",
+    null
+   ]
+  },
+  {
+   "name": "merge_06",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1;b=2",
+    "c=3",
+    "a=9"
+   ]
+  },
+  {
+   "name": "merge_07",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=",
+    "a=1"
+   ]
+  },
+  {
+   "name": "merge_08",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1",
+    "a="
+   ]
+  },
+  {
+   "name": "merge_09",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=null",
+    "a=1"
+   ]
+  },
+  {
+   "name": "merge_10",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1;b=2;c=3",
+    "b=9"
+   ]
+  },
+  {
+   "name": "merge_11",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1",
+    "a=1"
+   ]
+  },
+  {
+   "name": "merge_12",
+   "op": "mergeCookies",
+   "cookies": [
+    "a=1;b=2",
+    "",
+    "c=3"
+   ]
+  },
+  {
+   "name": "merge_13",
+   "op": "mergeCookies",
+   "cookies": [
+    "中=文",
+    "中=字"
+   ]
+  },
+  {
+   "name": "merge_14",
+   "op": "mergeCookies",
+   "cookies": [
+    "x=1;y=2;z=3",
+    "z=9;y=8"
+   ]
+  }
+ ]
+}

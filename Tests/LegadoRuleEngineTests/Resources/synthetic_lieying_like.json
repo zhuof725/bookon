@@ -1,0 +1,24 @@
+{
+  "_SAMPLE_KIND": "SYNTHETIC — 合成样本，非真实数据。仅用于 JSONPath 单元测试。",
+  "_NOTE": "结构参考『猎鹰小说网』书源规则（$..books[*] / $.chapterInfo.chapters.[*] / $.chapter.body 等）手工构造，不是真实接口返回。",
+  "search": {
+    "data": {
+      "books": [
+        { "_id": "b001", "title": "书一", "author": "作者一", "cover": "http://c/1.jpg", "shortIntro": "简介一", "minorCate": "玄幻", "lastChapter": "第100章" },
+        { "_id": "b002", "title": "书二", "author": "作者二", "cover": "http://c/2.jpg", "shortIntro": "简介二", "minorCate": "都市", "lastChapter": "第200章" }
+      ]
+    }
+  },
+  "toc": {
+    "chapterInfo": {
+      "chapters": [
+        { "title": "第一章", "link": "/read/1" },
+        { "title": "第二章", "link": "/read/2" },
+        { "title": "第三章", "link": "/read/3" }
+      ]
+    }
+  },
+  "content": {
+    "chapter": { "body": "正文内容第一段\n正文内容第二段" }
+  }
+}

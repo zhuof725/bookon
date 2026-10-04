@@ -1,0 +1,2099 @@
+{
+ "_comment": "⚠️ 合成样本，非真实数据。第 6 步 6A golden 用例：输入均为手工构造（编码/JSON/URL 规则/Cookie），Java 侧用真实 hutool(RFC3986/PercentCodec/URLEncoder)、真实 Gson(legado 定制适配器)、真实 Rhino 1.8.1、java.net.URL 生成对照；AnalyzeUrl 的调度逻辑（encodeParams/analyzeJs/replaceKeyPageJs/analyzeUrl）是 AnalyzeUrl.kt 的**手工 Java 移植**（README 标明）。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "codecCases": [
+  {
+   "name": "enc_null_0",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_1",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_2",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_3",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_4",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_5",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_6",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_7",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_8",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_9",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_10",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_11",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_12",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_13",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_14",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_15",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_16",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_17",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_18",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_19",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_20",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_21",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_22",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_23",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_null_24",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_25",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_26",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_27",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_28",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_29",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_30",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_31",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_32",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_33",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_34",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_35",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_36",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_37",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_38",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_39",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_40",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_41",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_42",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_43",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_44",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_45",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_46",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_47",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_48",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_utf-8_49",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "utf-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_50",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_51",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_52",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_53",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_54",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_55",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_56",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_57",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_58",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_59",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_60",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_61",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_62",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_63",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_64",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_65",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_66",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_67",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_68",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_69",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_70",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_71",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_72",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_73",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_UTF-8_74",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "UTF-8",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_75",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_76",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_77",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_78",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_79",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_80",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_81",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_82",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_83",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_84",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_85",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_86",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_87",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_88",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_89",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_90",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_91",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_92",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_93",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_94",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_95",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_96",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_97",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_98",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GBK_99",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "GBK",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_100",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_101",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_102",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_103",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_104",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_105",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_106",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_107",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_108",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_109",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_110",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_111",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_112",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_113",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_114",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_115",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_116",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_117",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_118",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_119",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_120",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_121",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_122",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_123",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_gb2312_124",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "gb2312",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_125",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_126",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_127",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_128",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_129",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_130",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_131",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_132",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_133",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_134",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_135",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_136",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_137",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_138",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_139",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_140",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_141",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_142",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_143",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_144",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_145",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_146",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_147",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_148",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_escape_149",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "escape",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_150",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_151",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_152",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_153",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_154",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_155",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_156",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_157",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_158",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_159",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_160",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_161",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_162",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_163",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_164",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_165",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_166",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_167",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_168",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_169",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_170",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_171",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_172",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_173",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_iso-8859-1_174",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "iso-8859-1",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_175",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_176",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_177",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_178",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_179",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_180",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_181",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_182",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_183",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_184",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_185",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_186",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_187",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_188",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_189",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_190",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_191",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_192",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_193",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_194",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_195",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_196",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_197",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_198",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_GB18030_199",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "GB18030",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_200",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_201",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_202",
+   "kind": "encodeParams",
+   "params": "a=中 文",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_203",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_204",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_205",
+   "kind": "encodeParams",
+   "params": "a=%4",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_206",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_207",
+   "kind": "encodeParams",
+   "params": "a=+",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_208",
+   "kind": "encodeParams",
+   "params": "a=",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_209",
+   "kind": "encodeParams",
+   "params": "=1",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_210",
+   "kind": "encodeParams",
+   "params": "a",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_211",
+   "kind": "encodeParams",
+   "params": "",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_212",
+   "kind": "encodeParams",
+   "params": "a=1&b",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_213",
+   "kind": "encodeParams",
+   "params": "a=b=c",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_214",
+   "kind": "encodeParams",
+   "params": "&a=1",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_215",
+   "kind": "encodeParams",
+   "params": "a=1&",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_216",
+   "kind": "encodeParams",
+   "params": "a=%E4%B8%AD",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_217",
+   "kind": "encodeParams",
+   "params": "a b=c d",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_218",
+   "kind": "encodeParams",
+   "params": "a=~-._*",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_219",
+   "kind": "encodeParams",
+   "params": "a=!$&()*+,/:;=?@[]^`{|}",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_220",
+   "kind": "encodeParams",
+   "params": "a=　",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_221",
+   "kind": "encodeParams",
+   "params": "a=🀄",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_222",
+   "kind": "encodeParams",
+   "params": "key=中文 x&k2=%41",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_223",
+   "kind": "encodeParams",
+   "params": "a=一😀二",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "enc_US-ASCII_224",
+   "kind": "encodeParams",
+   "params": "a=%;b?",
+   "charset": "US-ASCII",
+   "isQuery": false
+  },
+  {
+   "name": "encq_null_225",
+   "kind": "encodeParams",
+   "params": "a=1&b=中文 x",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_226",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_227",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_228",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_229",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_230",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_null_231",
+   "kind": "encodeParams",
+   "params": "a=+&b=~",
+   "charset": null,
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_232",
+   "kind": "encodeParams",
+   "params": "a=1&b=中文 x",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_233",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_234",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_235",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_236",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_237",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_utf-8_238",
+   "kind": "encodeParams",
+   "params": "a=+&b=~",
+   "charset": "utf-8",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_239",
+   "kind": "encodeParams",
+   "params": "a=1&b=中文 x",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_240",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_241",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_242",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_243",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_244",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_GBK_245",
+   "kind": "encodeParams",
+   "params": "a=+&b=~",
+   "charset": "GBK",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_246",
+   "kind": "encodeParams",
+   "params": "a=1&b=中文 x",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_247",
+   "kind": "encodeParams",
+   "params": "a=%41",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_248",
+   "kind": "encodeParams",
+   "params": "a=中文",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_249",
+   "kind": "encodeParams",
+   "params": "a=1&b=2",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_250",
+   "kind": "encodeParams",
+   "params": "a=emoji😀",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_251",
+   "kind": "encodeParams",
+   "params": "a=%zz",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "encq_escape_252",
+   "kind": "encodeParams",
+   "params": "a=+&b=~",
+   "charset": "escape",
+   "isQuery": true
+  },
+  {
+   "name": "qflag_0",
+   "kind": "encodedQuery",
+   "params": "a=1&b=2",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_0",
+   "kind": "encodedForm",
+   "params": "a=1&b=2",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_1",
+   "kind": "encodedQuery",
+   "params": "a=%41",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_1",
+   "kind": "encodedForm",
+   "params": "a=%41",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_2",
+   "kind": "encodedQuery",
+   "params": "a=%zz",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_2",
+   "kind": "encodedForm",
+   "params": "a=%zz",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_3",
+   "kind": "encodedQuery",
+   "params": "a=中",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_3",
+   "kind": "encodedForm",
+   "params": "a=中",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_4",
+   "kind": "encodedQuery",
+   "params": "a=%E4%B8%AD&b=1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_4",
+   "kind": "encodedForm",
+   "params": "a=%E4%B8%AD&b=1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_5",
+   "kind": "encodedQuery",
+   "params": "a=1 2",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_5",
+   "kind": "encodedForm",
+   "params": "a=1 2",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_6",
+   "kind": "encodedQuery",
+   "params": "a=~-._*",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_6",
+   "kind": "encodedForm",
+   "params": "a=~-._*",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_7",
+   "kind": "encodedQuery",
+   "params": "a=+",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_7",
+   "kind": "encodedForm",
+   "params": "a=+",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_8",
+   "kind": "encodedQuery",
+   "params": "",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_8",
+   "kind": "encodedForm",
+   "params": "",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_9",
+   "kind": "encodedQuery",
+   "params": "a=1&",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_9",
+   "kind": "encodedForm",
+   "params": "a=1&",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_10",
+   "kind": "encodedQuery",
+   "params": "&",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_10",
+   "kind": "encodedForm",
+   "params": "&",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_11",
+   "kind": "encodedQuery",
+   "params": "a=b=c",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_11",
+   "kind": "encodedForm",
+   "params": "a=b=c",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_12",
+   "kind": "encodedQuery",
+   "params": "a=%4",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_12",
+   "kind": "encodedForm",
+   "params": "a=%4",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_13",
+   "kind": "encodedQuery",
+   "params": "a=😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_13",
+   "kind": "encodedForm",
+   "params": "a=😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "qflag_14",
+   "kind": "encodedQuery",
+   "params": "a=一😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "fflag_14",
+   "kind": "encodedForm",
+   "params": "a=一😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_0",
+   "kind": "escape",
+   "params": "abc",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_1",
+   "kind": "escape",
+   "params": "a b",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_2",
+   "kind": "escape",
+   "params": "a+b",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_3",
+   "kind": "escape",
+   "params": "中文",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_4",
+   "kind": "escape",
+   "params": "a%20b",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_5",
+   "kind": "escape",
+   "params": "中 文&x=1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_6",
+   "kind": "escape",
+   "params": "😀",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_7",
+   "kind": "escape",
+   "params": "~!*()'",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_8",
+   "kind": "escape",
+   "params": "%",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_9",
+   "kind": "escape",
+   "params": "%%",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_10",
+   "kind": "escape",
+   "params": "%4",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_11",
+   "kind": "escape",
+   "params": "a-b_c.d",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_12",
+   "kind": "escape",
+   "params": "A1",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_13",
+   "kind": "escape",
+   "params": "\t",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_14",
+   "kind": "escape",
+   "params": "\n",
+   "charset": null,
+   "isQuery": false
+  },
+  {
+   "name": "esc_15",
+   "kind": "escape",
+   "params": "中😀a",
+   "charset": null,
+   "isQuery": false
+  }
+ ]
+}

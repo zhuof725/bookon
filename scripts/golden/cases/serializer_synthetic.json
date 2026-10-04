@@ -1,0 +1,1395 @@
+{
+  "_SAMPLE_KIND": "合成样本（synthetic），非真实书源数据。Step4-A 新增：专门验证 JsoupCompatSerializer 重写后的 HTML 序列化（@html/@all/html()/outerHtml()）与真实 jsoup 1.16.2 逐字节对齐，覆盖块级嵌套内联、多层列表、表格、pre/textarea空白保留、连续br、br夹文本、图文混排、空元素、注释、实体、emoji、属性边界、布尔属性、深层嵌套、超长文本、script/style、未闭合标签容错、纯文本等场景。",
+  "htmls": {
+    "blockNestedInline": "<div class='x'>文本<span>内联<b>加粗</b></span>结尾</div>",
+    "inlineNestedBlock_viaUnknown": "<div class='y'><span>外<i>斜体中<div>内部块</div>后续</i>尾</span></div>",
+    "nestedUl": "<ul class='n1'><li>一<ul><li>一之一</li><li>一之二</li></ul></li><li>二</li></ul>",
+    "nestedOl": "<ol class='n2'><li>A<ol><li>A-1</li><li>A-2<ol><li>A-2-i</li></ol></li></ol></li><li>B</li></ol>",
+    "mixedUlOl": "<div class='m'><ul><li>项目<ol><li>子项1</li><li>子项2</li></ol></li></ul></div>",
+    "tableBasic": "<table class='t1'><tr><td>A1</td><td>B1</td></tr><tr><td>A2</td><td>B2</td></tr></table>",
+    "tableWithTheadTbody": "<table class='t2'><thead><tr><th>列1</th><th>列2</th></tr></thead><tbody><tr><td>v1</td><td>v2</td></tr></tbody></table>",
+    "tableNested": "<table class='t3'><tr><td>外<table><tr><td>内层</td></tr></table></td></tr></table>",
+    "preWhitespace": "<pre class='p1'>line1\n    line2\n  line3</pre>",
+    "textareaWhitespace": "<textarea class='ta1'>保留  空格\n换行</textarea>",
+    "preWithTags": "<pre class='p2'>code <b>bold</b> more</pre>",
+    "multiBr3": "<div class='b3'>第一行<br><br><br>第二行</div>",
+    "multiBr5": "<p class='b5'>A<br><br><br><br><br>B</p>",
+    "brTextInterleave": "<p class='bi1'>文本一<br>文本二<br>文本三</p>",
+    "brTextInterleaveDiv": "<div class='bi2'>段落A<br>段落B<br>段落C<br>段落D</div>",
+    "imgInText": "<p class='img1'>看图<img src='a.png'>说话<img src='b.png'>结束</p>",
+    "imgAttrsInText": "<div class='img2'>前<img src='x.jpg' alt='x图' width='100'>后</div>",
+    "emptyP": "<div class='e1'><p></p></div>",
+    "emptyDivs": "<div class='e2'><div></div><span></span></div>",
+    "commentBasic": "<div class='c1'><!-- 这是注释 --><p>正文</p></div>",
+    "commentFirst": "<div class='c2'><!--first comment--><span>内容</span></div>",
+    "entityAmpLt": "<div class='en1'>A &amp; B &lt; C &gt; D</div>",
+    "entityNbsp": "<div class='en2'>左&nbsp;&nbsp;右</div>",
+    "entityCopy": "<div class='en3'>版权 &copy; 2024</div>",
+    "entityQuote": "<div class='en4' title='含&quot;引号&quot;'>内容</div>",
+    "emojiBasic": "<div class='em1'>你好🔥世界💧再见😀</div>",
+    "emojiAttr": "<div class='em2' data-note='备注🎉'>内容</div>",
+    "attrWithQuote": "<div class='aq1' data-x=\"he said &quot;hi&quot;\">内容</div>",
+    "attrWithNewline": "<div class='aq2' title='第一行\n第二行'>内容</div>",
+    "boolDisabled": "<div class='bo1'><input disabled type='text'></div>",
+    "boolChecked": "<div class='bo2'><input type='checkbox' checked></div>",
+    "boolMultiple": "<div class='bo3'><select multiple><option>A</option></select></div>",
+    "deepNesting14": "<div class='deep'><div>L0<div>L1<div>L2<div>L3<div>L4<div>L5<div>L6<div>L7<div>L8<div>L9<div>L10<div>L11<div>L12<div>L13内容</div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>",
+    "longSingleLineText": "<p class='long1'>这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容这是一段没有换行点的超长单行文本内容</p>",
+    "scriptContent": "<div class='sc1'><script>var x = 1 < 2 && \"ok\";</script><p>正文</p></div>",
+    "styleContent": "<div class='sc2'><style>.a { color: red; } /* comment */</style><p>正文</p></div>",
+    "unclosedP": "<div class='u1'><p>第一段<p>第二段</div>",
+    "unclosedLi": "<ul class='u2'><li>项目一<li>项目二<li>项目三</ul>",
+    "unclosedSpan": "<div class='u3'>文本<span>未闭合span继续文本</div>",
+    "plainTextFragment": "<div class='pt1'>纯文本内容没有子标签</div>",
+    "mixedInlineBlockDeep": "<article class='mx1'><h2>标题</h2><p>段落包含<a href='/x'>链接</a>和<em>强调</em>文本</p></article>",
+    "tableWithColgroup": "<table class='tc1'><colgroup><col><col></colgroup><tr><td>1</td><td>2</td></tr></table>",
+    "multipleAttrsOrder": "<div class='ma1' id='box' data-a='1' data-b='2' title='t'>内容</div>",
+    "nestedQuoteAttr": "<a class='nq1' href=\"/path?a=1&amp;b=2\">链接</a>",
+    "hrInContent": "<div class='hr1'>上部<hr>下部</div>",
+    "wbrInText": "<p class='wbr1'>一个很长的单词Super<wbr>Long<wbr>Word需要断行</p>",
+    "multipleImgsNoText": "<div class='mi1'><img src='1.jpg'><img src='2.jpg'><img src='3.jpg'></div>",
+    "blockquoteNested": "<blockquote class='bq1'>引用内容<blockquote>嵌套引用</blockquote>结尾</blockquote>",
+    "definitionList": "<dl class='dl1'><dt>术语一</dt><dd>定义一</dd><dt>术语二</dt><dd>定义二</dd></dl>",
+    "formWithInputs": "<form class='f1'><input type='text' name='a' placeholder='请输入'><button type='submit'>提交</button></form>",
+    "figureWithCaption": "<figure class='fig1'><img src='photo.jpg' alt='照片'><figcaption>图片说明文字</figcaption></figure>",
+    "spanWithStyleAttr": "<p class='sp1'>普通<span style='color:red;font-weight:bold'>红色加粗</span>文字</p>",
+    "tableWithTfoot": "<table class='tf1'><tbody><tr><td>数据</td></tr></tbody><tfoot><tr><td>合计</td></tr></tfoot></table>",
+    "addressTag": "<address class='ad1'>联系地址：某某街道123号</address>",
+    "preMultilineCode": "<pre class='pc1'>function foo() {\n    return 1;\n}</pre>",
+    "sectionWithHeader": "<section class='se1'><header><h1>页眉标题</h1></header><p>正文内容</p></section>",
+    "navWithLinks": "<nav class='nv1'><a href='/1'>链接一</a><a href='/2'>链接二</a></nav>",
+    "detailsummary": "<details class='dt1'><summary>摘要标题</summary><p>详细内容</p></details>",
+    "rubyAnnotation": "<ruby class='ru1'>漢<rt>かん</rt>字<rt>じ</rt></ruby>",
+    "videoWithSource": "<video class='vd1' controls><source src='a.mp4' type='video/mp4'></video>",
+    "mixedCommentsAndText": "<div class='mc1'>前文<!-- 中间注释 -->后文</div>",
+    "singleCharText": "<p class='sc3'>字</p>",
+    "whitespaceOnlyText": "<div class='ws1'><p>A</p>   <p>B</p></div>",
+    "attrEmptyValue": "<div class='ae1'><a href=''>空链接</a></div>",
+    "surrogatePairEmoji": "<div class='sg1'>测试😀😁组合</div>",
+    "mixedChineseEnglishNum": "<p class='me1'>Hello世界123测试ABC</p>"
+  },
+  "cssCases": [
+    {
+      "name": "blockNestedInline_html",
+      "html": "blockNestedInline",
+      "rule": "class.x@html"
+    },
+    {
+      "name": "blockNestedInline_all",
+      "html": "blockNestedInline",
+      "rule": "class.x@all"
+    },
+    {
+      "name": "inlineNestedBlock_viaUnknown_html",
+      "html": "inlineNestedBlock_viaUnknown",
+      "rule": "class.y@html"
+    },
+    {
+      "name": "inlineNestedBlock_viaUnknown_all",
+      "html": "inlineNestedBlock_viaUnknown",
+      "rule": "class.y@all"
+    },
+    {
+      "name": "nestedUl_html",
+      "html": "nestedUl",
+      "rule": "class.n1@html"
+    },
+    {
+      "name": "nestedUl_all",
+      "html": "nestedUl",
+      "rule": "class.n1@all"
+    },
+    {
+      "name": "nestedOl_html",
+      "html": "nestedOl",
+      "rule": "class.n2@html"
+    },
+    {
+      "name": "nestedOl_all",
+      "html": "nestedOl",
+      "rule": "class.n2@all"
+    },
+    {
+      "name": "mixedUlOl_html",
+      "html": "mixedUlOl",
+      "rule": "class.m@html"
+    },
+    {
+      "name": "mixedUlOl_all",
+      "html": "mixedUlOl",
+      "rule": "class.m@all"
+    },
+    {
+      "name": "tableBasic_html",
+      "html": "tableBasic",
+      "rule": "class.t1@html"
+    },
+    {
+      "name": "tableBasic_all",
+      "html": "tableBasic",
+      "rule": "class.t1@all"
+    },
+    {
+      "name": "tableWithTheadTbody_html",
+      "html": "tableWithTheadTbody",
+      "rule": "class.t2@html"
+    },
+    {
+      "name": "tableWithTheadTbody_all",
+      "html": "tableWithTheadTbody",
+      "rule": "class.t2@all"
+    },
+    {
+      "name": "tableNested_html",
+      "html": "tableNested",
+      "rule": "class.t3@html"
+    },
+    {
+      "name": "tableNested_all",
+      "html": "tableNested",
+      "rule": "class.t3@all"
+    },
+    {
+      "name": "preWhitespace_html",
+      "html": "preWhitespace",
+      "rule": "class.p1@html"
+    },
+    {
+      "name": "preWhitespace_all",
+      "html": "preWhitespace",
+      "rule": "class.p1@all"
+    },
+    {
+      "name": "textareaWhitespace_html",
+      "html": "textareaWhitespace",
+      "rule": "class.ta1@html"
+    },
+    {
+      "name": "textareaWhitespace_all",
+      "html": "textareaWhitespace",
+      "rule": "class.ta1@all"
+    },
+    {
+      "name": "preWithTags_html",
+      "html": "preWithTags",
+      "rule": "class.p2@html"
+    },
+    {
+      "name": "preWithTags_all",
+      "html": "preWithTags",
+      "rule": "class.p2@all"
+    },
+    {
+      "name": "multiBr3_html",
+      "html": "multiBr3",
+      "rule": "class.b3@html"
+    },
+    {
+      "name": "multiBr3_all",
+      "html": "multiBr3",
+      "rule": "class.b3@all"
+    },
+    {
+      "name": "multiBr5_html",
+      "html": "multiBr5",
+      "rule": "class.b5@html"
+    },
+    {
+      "name": "multiBr5_all",
+      "html": "multiBr5",
+      "rule": "class.b5@all"
+    },
+    {
+      "name": "brTextInterleave_html",
+      "html": "brTextInterleave",
+      "rule": "class.bi1@html"
+    },
+    {
+      "name": "brTextInterleave_all",
+      "html": "brTextInterleave",
+      "rule": "class.bi1@all"
+    },
+    {
+      "name": "brTextInterleaveDiv_html",
+      "html": "brTextInterleaveDiv",
+      "rule": "class.bi2@html"
+    },
+    {
+      "name": "brTextInterleaveDiv_all",
+      "html": "brTextInterleaveDiv",
+      "rule": "class.bi2@all"
+    },
+    {
+      "name": "imgInText_html",
+      "html": "imgInText",
+      "rule": "class.img1@html"
+    },
+    {
+      "name": "imgInText_all",
+      "html": "imgInText",
+      "rule": "class.img1@all"
+    },
+    {
+      "name": "imgAttrsInText_html",
+      "html": "imgAttrsInText",
+      "rule": "class.img2@html"
+    },
+    {
+      "name": "imgAttrsInText_all",
+      "html": "imgAttrsInText",
+      "rule": "class.img2@all"
+    },
+    {
+      "name": "emptyP_html",
+      "html": "emptyP",
+      "rule": "class.e1@html"
+    },
+    {
+      "name": "emptyP_all",
+      "html": "emptyP",
+      "rule": "class.e1@all"
+    },
+    {
+      "name": "emptyDivs_html",
+      "html": "emptyDivs",
+      "rule": "class.e2@html"
+    },
+    {
+      "name": "emptyDivs_all",
+      "html": "emptyDivs",
+      "rule": "class.e2@all"
+    },
+    {
+      "name": "commentBasic_html",
+      "html": "commentBasic",
+      "rule": "class.c1@html"
+    },
+    {
+      "name": "commentBasic_all",
+      "html": "commentBasic",
+      "rule": "class.c1@all"
+    },
+    {
+      "name": "commentFirst_html",
+      "html": "commentFirst",
+      "rule": "class.c2@html"
+    },
+    {
+      "name": "commentFirst_all",
+      "html": "commentFirst",
+      "rule": "class.c2@all"
+    },
+    {
+      "name": "entityAmpLt_html",
+      "html": "entityAmpLt",
+      "rule": "class.en1@html"
+    },
+    {
+      "name": "entityAmpLt_all",
+      "html": "entityAmpLt",
+      "rule": "class.en1@all"
+    },
+    {
+      "name": "entityNbsp_html",
+      "html": "entityNbsp",
+      "rule": "class.en2@html"
+    },
+    {
+      "name": "entityNbsp_all",
+      "html": "entityNbsp",
+      "rule": "class.en2@all"
+    },
+    {
+      "name": "entityCopy_html",
+      "html": "entityCopy",
+      "rule": "class.en3@html"
+    },
+    {
+      "name": "entityCopy_all",
+      "html": "entityCopy",
+      "rule": "class.en3@all"
+    },
+    {
+      "name": "entityQuote_html",
+      "html": "entityQuote",
+      "rule": "class.en4@html"
+    },
+    {
+      "name": "entityQuote_all",
+      "html": "entityQuote",
+      "rule": "class.en4@all"
+    },
+    {
+      "name": "emojiBasic_html",
+      "html": "emojiBasic",
+      "rule": "class.em1@html"
+    },
+    {
+      "name": "emojiBasic_all",
+      "html": "emojiBasic",
+      "rule": "class.em1@all"
+    },
+    {
+      "name": "emojiAttr_html",
+      "html": "emojiAttr",
+      "rule": "class.em2@html"
+    },
+    {
+      "name": "emojiAttr_all",
+      "html": "emojiAttr",
+      "rule": "class.em2@all"
+    },
+    {
+      "name": "attrWithQuote_html",
+      "html": "attrWithQuote",
+      "rule": "class.aq1@html"
+    },
+    {
+      "name": "attrWithQuote_all",
+      "html": "attrWithQuote",
+      "rule": "class.aq1@all"
+    },
+    {
+      "name": "attrWithNewline_html",
+      "html": "attrWithNewline",
+      "rule": "class.aq2@html"
+    },
+    {
+      "name": "attrWithNewline_all",
+      "html": "attrWithNewline",
+      "rule": "class.aq2@all"
+    },
+    {
+      "name": "boolDisabled_html",
+      "html": "boolDisabled",
+      "rule": "class.bo1@html"
+    },
+    {
+      "name": "boolDisabled_all",
+      "html": "boolDisabled",
+      "rule": "class.bo1@all"
+    },
+    {
+      "name": "boolChecked_html",
+      "html": "boolChecked",
+      "rule": "class.bo2@html"
+    },
+    {
+      "name": "boolChecked_all",
+      "html": "boolChecked",
+      "rule": "class.bo2@all"
+    },
+    {
+      "name": "boolMultiple_html",
+      "html": "boolMultiple",
+      "rule": "class.bo3@html"
+    },
+    {
+      "name": "boolMultiple_all",
+      "html": "boolMultiple",
+      "rule": "class.bo3@all"
+    },
+    {
+      "name": "deepNesting14_html",
+      "html": "deepNesting14",
+      "rule": "class.deep@html"
+    },
+    {
+      "name": "deepNesting14_all",
+      "html": "deepNesting14",
+      "rule": "class.deep@all"
+    },
+    {
+      "name": "longSingleLineText_html",
+      "html": "longSingleLineText",
+      "rule": "class.long1@html"
+    },
+    {
+      "name": "longSingleLineText_all",
+      "html": "longSingleLineText",
+      "rule": "class.long1@all"
+    },
+    {
+      "name": "scriptContent_html",
+      "html": "scriptContent",
+      "rule": "class.sc1@html"
+    },
+    {
+      "name": "scriptContent_all",
+      "html": "scriptContent",
+      "rule": "class.sc1@all"
+    },
+    {
+      "name": "styleContent_html",
+      "html": "styleContent",
+      "rule": "class.sc2@html"
+    },
+    {
+      "name": "styleContent_all",
+      "html": "styleContent",
+      "rule": "class.sc2@all"
+    },
+    {
+      "name": "unclosedP_html",
+      "html": "unclosedP",
+      "rule": "class.u1@html"
+    },
+    {
+      "name": "unclosedP_all",
+      "html": "unclosedP",
+      "rule": "class.u1@all"
+    },
+    {
+      "name": "unclosedLi_html",
+      "html": "unclosedLi",
+      "rule": "class.u2@html"
+    },
+    {
+      "name": "unclosedLi_all",
+      "html": "unclosedLi",
+      "rule": "class.u2@all"
+    },
+    {
+      "name": "unclosedSpan_html",
+      "html": "unclosedSpan",
+      "rule": "class.u3@html"
+    },
+    {
+      "name": "unclosedSpan_all",
+      "html": "unclosedSpan",
+      "rule": "class.u3@all"
+    },
+    {
+      "name": "plainTextFragment_html",
+      "html": "plainTextFragment",
+      "rule": "class.pt1@html"
+    },
+    {
+      "name": "plainTextFragment_all",
+      "html": "plainTextFragment",
+      "rule": "class.pt1@all"
+    },
+    {
+      "name": "mixedInlineBlockDeep_html",
+      "html": "mixedInlineBlockDeep",
+      "rule": "class.mx1@html"
+    },
+    {
+      "name": "mixedInlineBlockDeep_all",
+      "html": "mixedInlineBlockDeep",
+      "rule": "class.mx1@all"
+    },
+    {
+      "name": "tableWithColgroup_html",
+      "html": "tableWithColgroup",
+      "rule": "class.tc1@html"
+    },
+    {
+      "name": "tableWithColgroup_all",
+      "html": "tableWithColgroup",
+      "rule": "class.tc1@all"
+    },
+    {
+      "name": "multipleAttrsOrder_html",
+      "html": "multipleAttrsOrder",
+      "rule": "class.ma1@html"
+    },
+    {
+      "name": "multipleAttrsOrder_all",
+      "html": "multipleAttrsOrder",
+      "rule": "class.ma1@all"
+    },
+    {
+      "name": "nestedQuoteAttr_html",
+      "html": "nestedQuoteAttr",
+      "rule": "class.nq1@html"
+    },
+    {
+      "name": "nestedQuoteAttr_all",
+      "html": "nestedQuoteAttr",
+      "rule": "class.nq1@all"
+    },
+    {
+      "name": "hrInContent_html",
+      "html": "hrInContent",
+      "rule": "class.hr1@html"
+    },
+    {
+      "name": "hrInContent_all",
+      "html": "hrInContent",
+      "rule": "class.hr1@all"
+    },
+    {
+      "name": "wbrInText_html",
+      "html": "wbrInText",
+      "rule": "class.wbr1@html"
+    },
+    {
+      "name": "wbrInText_all",
+      "html": "wbrInText",
+      "rule": "class.wbr1@all"
+    },
+    {
+      "name": "multipleImgsNoText_html",
+      "html": "multipleImgsNoText",
+      "rule": "class.mi1@html"
+    },
+    {
+      "name": "multipleImgsNoText_all",
+      "html": "multipleImgsNoText",
+      "rule": "class.mi1@all"
+    },
+    {
+      "name": "blockquoteNested_html",
+      "html": "blockquoteNested",
+      "rule": "class.bq1@html"
+    },
+    {
+      "name": "blockquoteNested_all",
+      "html": "blockquoteNested",
+      "rule": "class.bq1@all"
+    },
+    {
+      "name": "definitionList_html",
+      "html": "definitionList",
+      "rule": "class.dl1@html"
+    },
+    {
+      "name": "definitionList_all",
+      "html": "definitionList",
+      "rule": "class.dl1@all"
+    },
+    {
+      "name": "formWithInputs_html",
+      "html": "formWithInputs",
+      "rule": "class.f1@html"
+    },
+    {
+      "name": "formWithInputs_all",
+      "html": "formWithInputs",
+      "rule": "class.f1@all"
+    },
+    {
+      "name": "figureWithCaption_html",
+      "html": "figureWithCaption",
+      "rule": "class.fig1@html"
+    },
+    {
+      "name": "figureWithCaption_all",
+      "html": "figureWithCaption",
+      "rule": "class.fig1@all"
+    },
+    {
+      "name": "spanWithStyleAttr_html",
+      "html": "spanWithStyleAttr",
+      "rule": "class.sp1@html"
+    },
+    {
+      "name": "spanWithStyleAttr_all",
+      "html": "spanWithStyleAttr",
+      "rule": "class.sp1@all"
+    },
+    {
+      "name": "tableWithTfoot_html",
+      "html": "tableWithTfoot",
+      "rule": "class.tf1@html"
+    },
+    {
+      "name": "tableWithTfoot_all",
+      "html": "tableWithTfoot",
+      "rule": "class.tf1@all"
+    },
+    {
+      "name": "addressTag_html",
+      "html": "addressTag",
+      "rule": "class.ad1@html"
+    },
+    {
+      "name": "addressTag_all",
+      "html": "addressTag",
+      "rule": "class.ad1@all"
+    },
+    {
+      "name": "preMultilineCode_html",
+      "html": "preMultilineCode",
+      "rule": "class.pc1@html"
+    },
+    {
+      "name": "preMultilineCode_all",
+      "html": "preMultilineCode",
+      "rule": "class.pc1@all"
+    },
+    {
+      "name": "sectionWithHeader_html",
+      "html": "sectionWithHeader",
+      "rule": "class.se1@html"
+    },
+    {
+      "name": "sectionWithHeader_all",
+      "html": "sectionWithHeader",
+      "rule": "class.se1@all"
+    },
+    {
+      "name": "navWithLinks_html",
+      "html": "navWithLinks",
+      "rule": "class.nv1@html"
+    },
+    {
+      "name": "navWithLinks_all",
+      "html": "navWithLinks",
+      "rule": "class.nv1@all"
+    },
+    {
+      "name": "detailsummary_html",
+      "html": "detailsummary",
+      "rule": "class.dt1@html"
+    },
+    {
+      "name": "detailsummary_all",
+      "html": "detailsummary",
+      "rule": "class.dt1@all"
+    },
+    {
+      "name": "rubyAnnotation_html",
+      "html": "rubyAnnotation",
+      "rule": "class.ru1@html"
+    },
+    {
+      "name": "rubyAnnotation_all",
+      "html": "rubyAnnotation",
+      "rule": "class.ru1@all"
+    },
+    {
+      "name": "videoWithSource_html",
+      "html": "videoWithSource",
+      "rule": "class.vd1@html"
+    },
+    {
+      "name": "videoWithSource_all",
+      "html": "videoWithSource",
+      "rule": "class.vd1@all"
+    },
+    {
+      "name": "mixedCommentsAndText_html",
+      "html": "mixedCommentsAndText",
+      "rule": "class.mc1@html"
+    },
+    {
+      "name": "mixedCommentsAndText_all",
+      "html": "mixedCommentsAndText",
+      "rule": "class.mc1@all"
+    },
+    {
+      "name": "singleCharText_html",
+      "html": "singleCharText",
+      "rule": "class.sc3@html"
+    },
+    {
+      "name": "singleCharText_all",
+      "html": "singleCharText",
+      "rule": "class.sc3@all"
+    },
+    {
+      "name": "whitespaceOnlyText_html",
+      "html": "whitespaceOnlyText",
+      "rule": "class.ws1@html"
+    },
+    {
+      "name": "whitespaceOnlyText_all",
+      "html": "whitespaceOnlyText",
+      "rule": "class.ws1@all"
+    },
+    {
+      "name": "attrEmptyValue_html",
+      "html": "attrEmptyValue",
+      "rule": "class.ae1@html"
+    },
+    {
+      "name": "attrEmptyValue_all",
+      "html": "attrEmptyValue",
+      "rule": "class.ae1@all"
+    },
+    {
+      "name": "surrogatePairEmoji_html",
+      "html": "surrogatePairEmoji",
+      "rule": "class.sg1@html"
+    },
+    {
+      "name": "surrogatePairEmoji_all",
+      "html": "surrogatePairEmoji",
+      "rule": "class.sg1@all"
+    },
+    {
+      "name": "mixedChineseEnglishNum_html",
+      "html": "mixedChineseEnglishNum",
+      "rule": "class.me1@html"
+    },
+    {
+      "name": "mixedChineseEnglishNum_all",
+      "html": "mixedChineseEnglishNum",
+      "rule": "class.me1@all"
+    }
+  ],
+  "xpathCases": [
+    {
+      "name": "blockNestedInline_htmlFunc",
+      "html": "blockNestedInline",
+      "rule": "//div[@class='x']/html()"
+    },
+    {
+      "name": "blockNestedInline_outerHtmlFunc",
+      "html": "blockNestedInline",
+      "rule": "//div[@class='x']/outerHtml()"
+    },
+    {
+      "name": "inlineNestedBlock_viaUnknown_htmlFunc",
+      "html": "inlineNestedBlock_viaUnknown",
+      "rule": "//div[@class='y']/html()"
+    },
+    {
+      "name": "inlineNestedBlock_viaUnknown_outerHtmlFunc",
+      "html": "inlineNestedBlock_viaUnknown",
+      "rule": "//div[@class='y']/outerHtml()"
+    },
+    {
+      "name": "nestedUl_htmlFunc",
+      "html": "nestedUl",
+      "rule": "//ul[@class='n1']/html()"
+    },
+    {
+      "name": "nestedUl_outerHtmlFunc",
+      "html": "nestedUl",
+      "rule": "//ul[@class='n1']/outerHtml()"
+    },
+    {
+      "name": "nestedOl_htmlFunc",
+      "html": "nestedOl",
+      "rule": "//ol[@class='n2']/html()"
+    },
+    {
+      "name": "nestedOl_outerHtmlFunc",
+      "html": "nestedOl",
+      "rule": "//ol[@class='n2']/outerHtml()"
+    },
+    {
+      "name": "mixedUlOl_htmlFunc",
+      "html": "mixedUlOl",
+      "rule": "//div[@class='m']/html()"
+    },
+    {
+      "name": "mixedUlOl_outerHtmlFunc",
+      "html": "mixedUlOl",
+      "rule": "//div[@class='m']/outerHtml()"
+    },
+    {
+      "name": "tableBasic_htmlFunc",
+      "html": "tableBasic",
+      "rule": "//table[@class='t1']/html()"
+    },
+    {
+      "name": "tableBasic_outerHtmlFunc",
+      "html": "tableBasic",
+      "rule": "//table[@class='t1']/outerHtml()"
+    },
+    {
+      "name": "tableWithTheadTbody_htmlFunc",
+      "html": "tableWithTheadTbody",
+      "rule": "//table[@class='t2']/html()"
+    },
+    {
+      "name": "tableWithTheadTbody_outerHtmlFunc",
+      "html": "tableWithTheadTbody",
+      "rule": "//table[@class='t2']/outerHtml()"
+    },
+    {
+      "name": "tableNested_htmlFunc",
+      "html": "tableNested",
+      "rule": "//table[@class='t3']/html()"
+    },
+    {
+      "name": "tableNested_outerHtmlFunc",
+      "html": "tableNested",
+      "rule": "//table[@class='t3']/outerHtml()"
+    },
+    {
+      "name": "preWhitespace_htmlFunc",
+      "html": "preWhitespace",
+      "rule": "//pre[@class='p1']/html()"
+    },
+    {
+      "name": "preWhitespace_outerHtmlFunc",
+      "html": "preWhitespace",
+      "rule": "//pre[@class='p1']/outerHtml()"
+    },
+    {
+      "name": "textareaWhitespace_htmlFunc",
+      "html": "textareaWhitespace",
+      "rule": "//textarea[@class='ta1']/html()"
+    },
+    {
+      "name": "textareaWhitespace_outerHtmlFunc",
+      "html": "textareaWhitespace",
+      "rule": "//textarea[@class='ta1']/outerHtml()"
+    },
+    {
+      "name": "preWithTags_htmlFunc",
+      "html": "preWithTags",
+      "rule": "//pre[@class='p2']/html()"
+    },
+    {
+      "name": "preWithTags_outerHtmlFunc",
+      "html": "preWithTags",
+      "rule": "//pre[@class='p2']/outerHtml()"
+    },
+    {
+      "name": "multiBr3_htmlFunc",
+      "html": "multiBr3",
+      "rule": "//div[@class='b3']/html()"
+    },
+    {
+      "name": "multiBr3_outerHtmlFunc",
+      "html": "multiBr3",
+      "rule": "//div[@class='b3']/outerHtml()"
+    },
+    {
+      "name": "multiBr5_htmlFunc",
+      "html": "multiBr5",
+      "rule": "//p[@class='b5']/html()"
+    },
+    {
+      "name": "multiBr5_outerHtmlFunc",
+      "html": "multiBr5",
+      "rule": "//p[@class='b5']/outerHtml()"
+    },
+    {
+      "name": "brTextInterleave_htmlFunc",
+      "html": "brTextInterleave",
+      "rule": "//p[@class='bi1']/html()"
+    },
+    {
+      "name": "brTextInterleave_outerHtmlFunc",
+      "html": "brTextInterleave",
+      "rule": "//p[@class='bi1']/outerHtml()"
+    },
+    {
+      "name": "brTextInterleaveDiv_htmlFunc",
+      "html": "brTextInterleaveDiv",
+      "rule": "//div[@class='bi2']/html()"
+    },
+    {
+      "name": "brTextInterleaveDiv_outerHtmlFunc",
+      "html": "brTextInterleaveDiv",
+      "rule": "//div[@class='bi2']/outerHtml()"
+    },
+    {
+      "name": "imgInText_htmlFunc",
+      "html": "imgInText",
+      "rule": "//p[@class='img1']/html()"
+    },
+    {
+      "name": "imgInText_outerHtmlFunc",
+      "html": "imgInText",
+      "rule": "//p[@class='img1']/outerHtml()"
+    },
+    {
+      "name": "imgAttrsInText_htmlFunc",
+      "html": "imgAttrsInText",
+      "rule": "//div[@class='img2']/html()"
+    },
+    {
+      "name": "imgAttrsInText_outerHtmlFunc",
+      "html": "imgAttrsInText",
+      "rule": "//div[@class='img2']/outerHtml()"
+    },
+    {
+      "name": "emptyP_htmlFunc",
+      "html": "emptyP",
+      "rule": "//div[@class='e1']/html()"
+    },
+    {
+      "name": "emptyP_outerHtmlFunc",
+      "html": "emptyP",
+      "rule": "//div[@class='e1']/outerHtml()"
+    },
+    {
+      "name": "emptyDivs_htmlFunc",
+      "html": "emptyDivs",
+      "rule": "//div[@class='e2']/html()"
+    },
+    {
+      "name": "emptyDivs_outerHtmlFunc",
+      "html": "emptyDivs",
+      "rule": "//div[@class='e2']/outerHtml()"
+    },
+    {
+      "name": "commentBasic_htmlFunc",
+      "html": "commentBasic",
+      "rule": "//div[@class='c1']/html()"
+    },
+    {
+      "name": "commentBasic_outerHtmlFunc",
+      "html": "commentBasic",
+      "rule": "//div[@class='c1']/outerHtml()"
+    },
+    {
+      "name": "commentFirst_htmlFunc",
+      "html": "commentFirst",
+      "rule": "//div[@class='c2']/html()"
+    },
+    {
+      "name": "commentFirst_outerHtmlFunc",
+      "html": "commentFirst",
+      "rule": "//div[@class='c2']/outerHtml()"
+    },
+    {
+      "name": "entityAmpLt_htmlFunc",
+      "html": "entityAmpLt",
+      "rule": "//div[@class='en1']/html()"
+    },
+    {
+      "name": "entityAmpLt_outerHtmlFunc",
+      "html": "entityAmpLt",
+      "rule": "//div[@class='en1']/outerHtml()"
+    },
+    {
+      "name": "entityNbsp_htmlFunc",
+      "html": "entityNbsp",
+      "rule": "//div[@class='en2']/html()"
+    },
+    {
+      "name": "entityNbsp_outerHtmlFunc",
+      "html": "entityNbsp",
+      "rule": "//div[@class='en2']/outerHtml()"
+    },
+    {
+      "name": "entityCopy_htmlFunc",
+      "html": "entityCopy",
+      "rule": "//div[@class='en3']/html()"
+    },
+    {
+      "name": "entityCopy_outerHtmlFunc",
+      "html": "entityCopy",
+      "rule": "//div[@class='en3']/outerHtml()"
+    },
+    {
+      "name": "entityQuote_htmlFunc",
+      "html": "entityQuote",
+      "rule": "//div[@class='en4']/html()"
+    },
+    {
+      "name": "entityQuote_outerHtmlFunc",
+      "html": "entityQuote",
+      "rule": "//div[@class='en4']/outerHtml()"
+    },
+    {
+      "name": "emojiBasic_htmlFunc",
+      "html": "emojiBasic",
+      "rule": "//div[@class='em1']/html()"
+    },
+    {
+      "name": "emojiBasic_outerHtmlFunc",
+      "html": "emojiBasic",
+      "rule": "//div[@class='em1']/outerHtml()"
+    },
+    {
+      "name": "emojiAttr_htmlFunc",
+      "html": "emojiAttr",
+      "rule": "//div[@class='em2']/html()"
+    },
+    {
+      "name": "emojiAttr_outerHtmlFunc",
+      "html": "emojiAttr",
+      "rule": "//div[@class='em2']/outerHtml()"
+    },
+    {
+      "name": "attrWithQuote_htmlFunc",
+      "html": "attrWithQuote",
+      "rule": "//div[@class='aq1']/html()"
+    },
+    {
+      "name": "attrWithQuote_outerHtmlFunc",
+      "html": "attrWithQuote",
+      "rule": "//div[@class='aq1']/outerHtml()"
+    },
+    {
+      "name": "attrWithNewline_htmlFunc",
+      "html": "attrWithNewline",
+      "rule": "//div[@class='aq2']/html()"
+    },
+    {
+      "name": "attrWithNewline_outerHtmlFunc",
+      "html": "attrWithNewline",
+      "rule": "//div[@class='aq2']/outerHtml()"
+    },
+    {
+      "name": "boolDisabled_htmlFunc",
+      "html": "boolDisabled",
+      "rule": "//div[@class='bo1']/html()"
+    },
+    {
+      "name": "boolDisabled_outerHtmlFunc",
+      "html": "boolDisabled",
+      "rule": "//div[@class='bo1']/outerHtml()"
+    },
+    {
+      "name": "boolChecked_htmlFunc",
+      "html": "boolChecked",
+      "rule": "//div[@class='bo2']/html()"
+    },
+    {
+      "name": "boolChecked_outerHtmlFunc",
+      "html": "boolChecked",
+      "rule": "//div[@class='bo2']/outerHtml()"
+    },
+    {
+      "name": "boolMultiple_htmlFunc",
+      "html": "boolMultiple",
+      "rule": "//div[@class='bo3']/html()"
+    },
+    {
+      "name": "boolMultiple_outerHtmlFunc",
+      "html": "boolMultiple",
+      "rule": "//div[@class='bo3']/outerHtml()"
+    },
+    {
+      "name": "deepNesting14_htmlFunc",
+      "html": "deepNesting14",
+      "rule": "//div[@class='deep']/html()"
+    },
+    {
+      "name": "deepNesting14_outerHtmlFunc",
+      "html": "deepNesting14",
+      "rule": "//div[@class='deep']/outerHtml()"
+    },
+    {
+      "name": "longSingleLineText_htmlFunc",
+      "html": "longSingleLineText",
+      "rule": "//p[@class='long1']/html()"
+    },
+    {
+      "name": "longSingleLineText_outerHtmlFunc",
+      "html": "longSingleLineText",
+      "rule": "//p[@class='long1']/outerHtml()"
+    },
+    {
+      "name": "scriptContent_htmlFunc",
+      "html": "scriptContent",
+      "rule": "//div[@class='sc1']/html()"
+    },
+    {
+      "name": "scriptContent_outerHtmlFunc",
+      "html": "scriptContent",
+      "rule": "//div[@class='sc1']/outerHtml()"
+    },
+    {
+      "name": "styleContent_htmlFunc",
+      "html": "styleContent",
+      "rule": "//div[@class='sc2']/html()"
+    },
+    {
+      "name": "styleContent_outerHtmlFunc",
+      "html": "styleContent",
+      "rule": "//div[@class='sc2']/outerHtml()"
+    },
+    {
+      "name": "unclosedP_htmlFunc",
+      "html": "unclosedP",
+      "rule": "//div[@class='u1']/html()"
+    },
+    {
+      "name": "unclosedP_outerHtmlFunc",
+      "html": "unclosedP",
+      "rule": "//div[@class='u1']/outerHtml()"
+    },
+    {
+      "name": "unclosedLi_htmlFunc",
+      "html": "unclosedLi",
+      "rule": "//ul[@class='u2']/html()"
+    },
+    {
+      "name": "unclosedLi_outerHtmlFunc",
+      "html": "unclosedLi",
+      "rule": "//ul[@class='u2']/outerHtml()"
+    },
+    {
+      "name": "unclosedSpan_htmlFunc",
+      "html": "unclosedSpan",
+      "rule": "//div[@class='u3']/html()"
+    },
+    {
+      "name": "unclosedSpan_outerHtmlFunc",
+      "html": "unclosedSpan",
+      "rule": "//div[@class='u3']/outerHtml()"
+    },
+    {
+      "name": "plainTextFragment_htmlFunc",
+      "html": "plainTextFragment",
+      "rule": "//div[@class='pt1']/html()"
+    },
+    {
+      "name": "plainTextFragment_outerHtmlFunc",
+      "html": "plainTextFragment",
+      "rule": "//div[@class='pt1']/outerHtml()"
+    },
+    {
+      "name": "mixedInlineBlockDeep_htmlFunc",
+      "html": "mixedInlineBlockDeep",
+      "rule": "//article[@class='mx1']/html()"
+    },
+    {
+      "name": "mixedInlineBlockDeep_outerHtmlFunc",
+      "html": "mixedInlineBlockDeep",
+      "rule": "//article[@class='mx1']/outerHtml()"
+    },
+    {
+      "name": "tableWithColgroup_htmlFunc",
+      "html": "tableWithColgroup",
+      "rule": "//table[@class='tc1']/html()"
+    },
+    {
+      "name": "tableWithColgroup_outerHtmlFunc",
+      "html": "tableWithColgroup",
+      "rule": "//table[@class='tc1']/outerHtml()"
+    },
+    {
+      "name": "multipleAttrsOrder_htmlFunc",
+      "html": "multipleAttrsOrder",
+      "rule": "//div[@class='ma1']/html()"
+    },
+    {
+      "name": "multipleAttrsOrder_outerHtmlFunc",
+      "html": "multipleAttrsOrder",
+      "rule": "//div[@class='ma1']/outerHtml()"
+    },
+    {
+      "name": "nestedQuoteAttr_htmlFunc",
+      "html": "nestedQuoteAttr",
+      "rule": "//a[@class='nq1']/html()"
+    },
+    {
+      "name": "nestedQuoteAttr_outerHtmlFunc",
+      "html": "nestedQuoteAttr",
+      "rule": "//a[@class='nq1']/outerHtml()"
+    },
+    {
+      "name": "hrInContent_htmlFunc",
+      "html": "hrInContent",
+      "rule": "//div[@class='hr1']/html()"
+    },
+    {
+      "name": "hrInContent_outerHtmlFunc",
+      "html": "hrInContent",
+      "rule": "//div[@class='hr1']/outerHtml()"
+    },
+    {
+      "name": "wbrInText_htmlFunc",
+      "html": "wbrInText",
+      "rule": "//p[@class='wbr1']/html()"
+    },
+    {
+      "name": "wbrInText_outerHtmlFunc",
+      "html": "wbrInText",
+      "rule": "//p[@class='wbr1']/outerHtml()"
+    },
+    {
+      "name": "multipleImgsNoText_htmlFunc",
+      "html": "multipleImgsNoText",
+      "rule": "//div[@class='mi1']/html()"
+    },
+    {
+      "name": "multipleImgsNoText_outerHtmlFunc",
+      "html": "multipleImgsNoText",
+      "rule": "//div[@class='mi1']/outerHtml()"
+    },
+    {
+      "name": "blockquoteNested_htmlFunc",
+      "html": "blockquoteNested",
+      "rule": "//blockquote[@class='bq1']/html()"
+    },
+    {
+      "name": "blockquoteNested_outerHtmlFunc",
+      "html": "blockquoteNested",
+      "rule": "//blockquote[@class='bq1']/outerHtml()"
+    },
+    {
+      "name": "definitionList_htmlFunc",
+      "html": "definitionList",
+      "rule": "//dl[@class='dl1']/html()"
+    },
+    {
+      "name": "definitionList_outerHtmlFunc",
+      "html": "definitionList",
+      "rule": "//dl[@class='dl1']/outerHtml()"
+    },
+    {
+      "name": "formWithInputs_htmlFunc",
+      "html": "formWithInputs",
+      "rule": "//form[@class='f1']/html()"
+    },
+    {
+      "name": "formWithInputs_outerHtmlFunc",
+      "html": "formWithInputs",
+      "rule": "//form[@class='f1']/outerHtml()"
+    },
+    {
+      "name": "figureWithCaption_htmlFunc",
+      "html": "figureWithCaption",
+      "rule": "//figure[@class='fig1']/html()"
+    },
+    {
+      "name": "figureWithCaption_outerHtmlFunc",
+      "html": "figureWithCaption",
+      "rule": "//figure[@class='fig1']/outerHtml()"
+    },
+    {
+      "name": "spanWithStyleAttr_htmlFunc",
+      "html": "spanWithStyleAttr",
+      "rule": "//p[@class='sp1']/html()"
+    },
+    {
+      "name": "spanWithStyleAttr_outerHtmlFunc",
+      "html": "spanWithStyleAttr",
+      "rule": "//p[@class='sp1']/outerHtml()"
+    },
+    {
+      "name": "tableWithTfoot_htmlFunc",
+      "html": "tableWithTfoot",
+      "rule": "//table[@class='tf1']/html()"
+    },
+    {
+      "name": "tableWithTfoot_outerHtmlFunc",
+      "html": "tableWithTfoot",
+      "rule": "//table[@class='tf1']/outerHtml()"
+    },
+    {
+      "name": "addressTag_htmlFunc",
+      "html": "addressTag",
+      "rule": "//address[@class='ad1']/html()"
+    },
+    {
+      "name": "addressTag_outerHtmlFunc",
+      "html": "addressTag",
+      "rule": "//address[@class='ad1']/outerHtml()"
+    },
+    {
+      "name": "preMultilineCode_htmlFunc",
+      "html": "preMultilineCode",
+      "rule": "//pre[@class='pc1']/html()"
+    },
+    {
+      "name": "preMultilineCode_outerHtmlFunc",
+      "html": "preMultilineCode",
+      "rule": "//pre[@class='pc1']/outerHtml()"
+    },
+    {
+      "name": "sectionWithHeader_htmlFunc",
+      "html": "sectionWithHeader",
+      "rule": "//section[@class='se1']/html()"
+    },
+    {
+      "name": "sectionWithHeader_outerHtmlFunc",
+      "html": "sectionWithHeader",
+      "rule": "//section[@class='se1']/outerHtml()"
+    },
+    {
+      "name": "navWithLinks_htmlFunc",
+      "html": "navWithLinks",
+      "rule": "//nav[@class='nv1']/html()"
+    },
+    {
+      "name": "navWithLinks_outerHtmlFunc",
+      "html": "navWithLinks",
+      "rule": "//nav[@class='nv1']/outerHtml()"
+    },
+    {
+      "name": "detailsummary_htmlFunc",
+      "html": "detailsummary",
+      "rule": "//details[@class='dt1']/html()"
+    },
+    {
+      "name": "detailsummary_outerHtmlFunc",
+      "html": "detailsummary",
+      "rule": "//details[@class='dt1']/outerHtml()"
+    },
+    {
+      "name": "rubyAnnotation_htmlFunc",
+      "html": "rubyAnnotation",
+      "rule": "//ruby[@class='ru1']/html()"
+    },
+    {
+      "name": "rubyAnnotation_outerHtmlFunc",
+      "html": "rubyAnnotation",
+      "rule": "//ruby[@class='ru1']/outerHtml()"
+    },
+    {
+      "name": "videoWithSource_htmlFunc",
+      "html": "videoWithSource",
+      "rule": "//video[@class='vd1']/html()"
+    },
+    {
+      "name": "videoWithSource_outerHtmlFunc",
+      "html": "videoWithSource",
+      "rule": "//video[@class='vd1']/outerHtml()"
+    },
+    {
+      "name": "mixedCommentsAndText_htmlFunc",
+      "html": "mixedCommentsAndText",
+      "rule": "//div[@class='mc1']/html()"
+    },
+    {
+      "name": "mixedCommentsAndText_outerHtmlFunc",
+      "html": "mixedCommentsAndText",
+      "rule": "//div[@class='mc1']/outerHtml()"
+    },
+    {
+      "name": "singleCharText_htmlFunc",
+      "html": "singleCharText",
+      "rule": "//p[@class='sc3']/html()"
+    },
+    {
+      "name": "singleCharText_outerHtmlFunc",
+      "html": "singleCharText",
+      "rule": "//p[@class='sc3']/outerHtml()"
+    },
+    {
+      "name": "whitespaceOnlyText_htmlFunc",
+      "html": "whitespaceOnlyText",
+      "rule": "//div[@class='ws1']/html()"
+    },
+    {
+      "name": "whitespaceOnlyText_outerHtmlFunc",
+      "html": "whitespaceOnlyText",
+      "rule": "//div[@class='ws1']/outerHtml()"
+    },
+    {
+      "name": "attrEmptyValue_htmlFunc",
+      "html": "attrEmptyValue",
+      "rule": "//div[@class='ae1']/html()"
+    },
+    {
+      "name": "attrEmptyValue_outerHtmlFunc",
+      "html": "attrEmptyValue",
+      "rule": "//div[@class='ae1']/outerHtml()"
+    },
+    {
+      "name": "surrogatePairEmoji_htmlFunc",
+      "html": "surrogatePairEmoji",
+      "rule": "//div[@class='sg1']/html()"
+    },
+    {
+      "name": "surrogatePairEmoji_outerHtmlFunc",
+      "html": "surrogatePairEmoji",
+      "rule": "//div[@class='sg1']/outerHtml()"
+    },
+    {
+      "name": "mixedChineseEnglishNum_htmlFunc",
+      "html": "mixedChineseEnglishNum",
+      "rule": "//p[@class='me1']/html()"
+    },
+    {
+      "name": "mixedChineseEnglishNum_outerHtmlFunc",
+      "html": "mixedChineseEnglishNum",
+      "rule": "//p[@class='me1']/outerHtml()"
+    }
+  ]
+}

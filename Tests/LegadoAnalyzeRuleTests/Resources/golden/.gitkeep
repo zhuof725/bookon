@@ -1,0 +1,2 @@
+# 这个目录在 CI 里由 golden job 的 artifact 填充（见 .github/workflows/test.yml）。
+# 提交 .gitkeep 只为让本地/CI checkout 后目录存在，使 Package.swift 的 .copy("Resources/golden") 生效。

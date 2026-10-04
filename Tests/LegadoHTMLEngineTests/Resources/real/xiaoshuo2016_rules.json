@@ -1,0 +1,15 @@
+{
+  "_SAMPLE_KIND": "规则真实、数据合成。以下 CSS/JSoup 规则逐字取自用户在第1步提供的 test_bookSources.json 中的真实书源『🔥小说2016』，仅供测试引用规则文本；本文件不含任何该网站的真实响应数据。",
+  "source": "test_bookSources.json -> 🔥小说2016 (https://www.xiaoshuo2016.com)",
+  "rules": {
+    "ruleSearch.author": "@css:p:eq(2)>a@text",
+    "ruleSearch.bookList": "@css:li.clearfix",
+    "ruleSearch.bookUrl": "@css:.name>a@href",
+    "ruleSearch.coverUrl": "@css:img@src",
+    "ruleSearch.intro": "@css:.note.clearfix p@text",
+    "ruleSearch.kind": "@css:.note_text,p:eq(4)@text",
+    "ruleSearch.lastChapter": "@css:p:eq(3)@text",
+    "ruleSearch.name": "@css:.name@text",
+    "ruleContent.content": "@css:.articleDiv p@textNodes"
+  }
+}

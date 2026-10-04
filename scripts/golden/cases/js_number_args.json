@@ -1,0 +1,218 @@
+{
+  "_comment": "⚠️ 合成样本，非真实数据。Step5 收尾：用真实 Rhino 1.8.1 跑出「JS 数字字面量 → Rhino 实际传给 Java String 参数的那一串」。原理：legado 把 JsExtensions 实例绑成脚本里的 `java`，JS 调 java.xxx(数字) 时 Rhino 走 NativeJavaObject.coerceTypeImpl -> ScriptRuntime.toString -> DoubleFormatter.toString（源码注释：\"Convert a double to String as defined in the Number::toString operation in ECMAScript\"）。Swift 侧不再有任何手写转换规则：JsExtensionsRuntime 用 JsNumberFormat（ECMAScript Number::toString 复刻），harness 直接读 js_ext_cases 的 argStrings。",
+  "_SAMPLE_KIND": "合成样本（synthetic）",
+  "numberArgCases": [
+    {
+      "name": "numarg_md5_0",
+      "method": "md5Encode",
+      "literal": "0"
+    },
+    {
+      "name": "numarg_md5_neg0",
+      "method": "md5Encode",
+      "literal": "-0"
+    },
+    {
+      "name": "numarg_md5_1",
+      "method": "md5Encode",
+      "literal": "1"
+    },
+    {
+      "name": "numarg_md5_neg1",
+      "method": "md5Encode",
+      "literal": "-1"
+    },
+    {
+      "name": "numarg_md5_42",
+      "method": "md5Encode",
+      "literal": "42"
+    },
+    {
+      "name": "numarg_md5_123",
+      "method": "md5Encode",
+      "literal": "123"
+    },
+    {
+      "name": "numarg_md5_1_5",
+      "method": "md5Encode",
+      "literal": "1.5"
+    },
+    {
+      "name": "numarg_md5_neg1_5",
+      "method": "md5Encode",
+      "literal": "-1.5"
+    },
+    {
+      "name": "numarg_md5_0_5",
+      "method": "md5Encode",
+      "literal": "0.5"
+    },
+    {
+      "name": "numarg_md5_1e21",
+      "method": "md5Encode",
+      "literal": "1e21"
+    },
+    {
+      "name": "numarg_md5_1eneg7",
+      "method": "md5Encode",
+      "literal": "1e-7"
+    },
+    {
+      "name": "numarg_md5_1eneg6",
+      "method": "md5Encode",
+      "literal": "1e-6"
+    },
+    {
+      "name": "numarg_md5_1e20",
+      "method": "md5Encode",
+      "literal": "1e20"
+    },
+    {
+      "name": "numarg_md5_12345678901234567890",
+      "method": "md5Encode",
+      "literal": "12345678901234567890"
+    },
+    {
+      "name": "numarg_md5_9007199254740993",
+      "method": "md5Encode",
+      "literal": "9007199254740993"
+    },
+    {
+      "name": "numarg_md5_1_7976931348623157e308",
+      "method": "md5Encode",
+      "literal": "1.7976931348623157e308"
+    },
+    {
+      "name": "numarg_md5_5eneg324",
+      "method": "md5Encode",
+      "literal": "5e-324",
+      "knownDivergence": "subnormalShortestRepr"
+    },
+    {
+      "name": "numarg_md5_NaN",
+      "method": "md5Encode",
+      "literal": "NaN"
+    },
+    {
+      "name": "numarg_md5_Infinity",
+      "method": "md5Encode",
+      "literal": "Infinity"
+    },
+    {
+      "name": "numarg_md5_negInfinity",
+      "method": "md5Encode",
+      "literal": "-Infinity"
+    },
+    {
+      "name": "numarg_md5_3_141592653589793",
+      "method": "md5Encode",
+      "literal": "3.141592653589793"
+    },
+    {
+      "name": "numarg_md5_100_0",
+      "method": "md5Encode",
+      "literal": "100.0"
+    },
+    {
+      "name": "numarg_md5_neg0_5",
+      "method": "md5Encode",
+      "literal": "-0.5"
+    },
+    {
+      "name": "numarg_md5_1700000000000",
+      "method": "md5Encode",
+      "literal": "1700000000000"
+    },
+    {
+      "name": "numarg_md5_2_5eneg8",
+      "method": "md5Encode",
+      "literal": "2.5e-8"
+    },
+    {
+      "name": "numarg_b64_0",
+      "method": "base64Encode",
+      "literal": "0"
+    },
+    {
+      "name": "numarg_uri_0",
+      "method": "encodeURI",
+      "literal": "0"
+    },
+    {
+      "name": "numarg_b64_1_5",
+      "method": "base64Encode",
+      "literal": "1.5"
+    },
+    {
+      "name": "numarg_uri_1_5",
+      "method": "encodeURI",
+      "literal": "1.5"
+    },
+    {
+      "name": "numarg_b64_1e21",
+      "method": "base64Encode",
+      "literal": "1e21"
+    },
+    {
+      "name": "numarg_uri_1e21",
+      "method": "encodeURI",
+      "literal": "1e21"
+    },
+    {
+      "name": "numarg_b64_NaN",
+      "method": "base64Encode",
+      "literal": "NaN"
+    },
+    {
+      "name": "numarg_uri_NaN",
+      "method": "encodeURI",
+      "literal": "NaN"
+    },
+    {
+      "name": "numarg_b64_Infinity",
+      "method": "base64Encode",
+      "literal": "Infinity"
+    },
+    {
+      "name": "numarg_uri_Infinity",
+      "method": "encodeURI",
+      "literal": "Infinity"
+    },
+    {
+      "name": "numarg_b64_neg0",
+      "method": "base64Encode",
+      "literal": "-0"
+    },
+    {
+      "name": "numarg_uri_neg0",
+      "method": "encodeURI",
+      "literal": "-0"
+    },
+    {
+      "name": "numarg_t2s_1e21",
+      "method": "t2s",
+      "literal": "1e21"
+    },
+    {
+      "name": "numarg_t2s_NaN",
+      "method": "t2s",
+      "literal": "NaN"
+    },
+    {
+      "name": "numarg_t2s_neg0",
+      "method": "t2s",
+      "literal": "-0"
+    },
+    {
+      "name": "numarg_hex_neg0",
+      "method": "hexEncodeToString",
+      "literal": "-0"
+    },
+    {
+      "name": "numarg_hex_1e21",
+      "method": "hexEncodeToString",
+      "literal": "1e21"
+    }
+  ],
+  "_KNOWN_DIVERGENCE": "最小值次正规数 5e-324：Rhino 1.8.1 的 DoubleFormatter.toString 给出 \"4.9e-324\"（2 位有效数字），而 JSC/V8 与本移植（ECMAScript Number::toString）给出 \"5e-324\"（1 位有效数字）。两者解析回同一个 double，仅字符串形式不同；真实书源不会把次正规数传给 String 参数。该用例在 Swift 测试里按「已登记差异」处理（钉住两边实际值），详见 README 差异表。"
+}

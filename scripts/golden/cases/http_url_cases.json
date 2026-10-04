@@ -1,0 +1,877 @@
+{
+ "_comment": "⚠️ 合成样本，非真实数据。第 6 步 6B golden：URL 规范化（真实 OkHttp 5.3.2 的 HttpUrl.parse/toString）。kind=httpUrl 直接用 HttpUrl 解析 input；kind=absoluteThenHttpUrl 先用 AnalyzeUrl/NetworkUtils 的 getAbsoluteURL(base, input) 拼接（第 4 步 C 已 golden 对照过的 java.net.URL 语义）再交给 HttpUrl。解析失败（OkHttp 返回 null）时 result 为 null 且 ok=false。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "httpUrlCases": [
+  {
+   "name": "base_00",
+   "kind": "httpUrl",
+   "input": "https://www.example.com/"
+  },
+  {
+   "name": "base_01",
+   "kind": "httpUrl",
+   "input": "https://www.example.com"
+  },
+  {
+   "name": "base_02",
+   "kind": "httpUrl",
+   "input": "http://example.com/a/b"
+  },
+  {
+   "name": "base_03",
+   "kind": "httpUrl",
+   "input": "https://EXAMPLE.com/A/B"
+  },
+  {
+   "name": "base_04",
+   "kind": "httpUrl",
+   "input": "https://Example.COM:443/"
+  },
+  {
+   "name": "base_05",
+   "kind": "httpUrl",
+   "input": "http://example.com:80/"
+  },
+  {
+   "name": "base_06",
+   "kind": "httpUrl",
+   "input": "https://example.com:8443/"
+  },
+  {
+   "name": "base_07",
+   "kind": "httpUrl",
+   "input": "http://example.com:8080/a"
+  },
+  {
+   "name": "base_08",
+   "kind": "httpUrl",
+   "input": "https://example.com:0443/"
+  },
+  {
+   "name": "base_09",
+   "kind": "httpUrl",
+   "input": "https://example.com:0080/"
+  },
+  {
+   "name": "base_10",
+   "kind": "httpUrl",
+   "input": "https://user:pass@example.com/"
+  },
+  {
+   "name": "base_11",
+   "kind": "httpUrl",
+   "input": "https://user@example.com/"
+  },
+  {
+   "name": "base_12",
+   "kind": "httpUrl",
+   "input": "https://u%20s@example.com/"
+  },
+  {
+   "name": "base_13",
+   "kind": "httpUrl",
+   "input": "http://127.0.0.1:8080/x"
+  },
+  {
+   "name": "base_14",
+   "kind": "httpUrl",
+   "input": "http://127.000.000.001/x"
+  },
+  {
+   "name": "base_15",
+   "kind": "httpUrl",
+   "input": "http://[::1]:8080/x"
+  },
+  {
+   "name": "base_16",
+   "kind": "httpUrl",
+   "input": "http://[2001:db8::1]/x"
+  },
+  {
+   "name": "base_17",
+   "kind": "httpUrl",
+   "input": "https://例子.测试/"
+  },
+  {
+   "name": "base_18",
+   "kind": "httpUrl",
+   "input": "https://xn--fsqu00a.xn--0zwm56d/"
+  },
+  {
+   "name": "base_19",
+   "kind": "httpUrl",
+   "input": "https://bücher.example/"
+  },
+  {
+   "name": "base_20",
+   "kind": "httpUrl",
+   "input": "https://example.com./x"
+  },
+  {
+   "name": "base_21",
+   "kind": "httpUrl",
+   "input": "ftP://example.com/x"
+  },
+  {
+   "name": "base_22",
+   "kind": "httpUrl",
+   "input": "ftp://example.com/x"
+  },
+  {
+   "name": "base_23",
+   "kind": "httpUrl",
+   "input": "ws://example.com/x"
+  },
+  {
+   "name": "base_24",
+   "kind": "httpUrl",
+   "input": "https:///x"
+  },
+  {
+   "name": "base_25",
+   "kind": "httpUrl",
+   "input": "https://"
+  },
+  {
+   "name": "base_26",
+   "kind": "httpUrl",
+   "input": "https://:80/"
+  },
+  {
+   "name": "base_27",
+   "kind": "httpUrl",
+   "input": ""
+  },
+  {
+   "name": "path_00",
+   "kind": "httpUrl",
+   "input": "https://x.com/a b"
+  },
+  {
+   "name": "path_01",
+   "kind": "httpUrl",
+   "input": "https://x.com/a%20b"
+  },
+  {
+   "name": "path_02",
+   "kind": "httpUrl",
+   "input": "https://x.com/中文"
+  },
+  {
+   "name": "path_03",
+   "kind": "httpUrl",
+   "input": "https://x.com/%E4%B8%AD%E6%96%87"
+  },
+  {
+   "name": "path_04",
+   "kind": "httpUrl",
+   "input": "https://x.com/😀"
+  },
+  {
+   "name": "path_05",
+   "kind": "httpUrl",
+   "input": "https://x.com/%f0%9f%98%80"
+  },
+  {
+   "name": "path_06",
+   "kind": "httpUrl",
+   "input": "https://x.com/a%2Fb"
+  },
+  {
+   "name": "path_07",
+   "kind": "httpUrl",
+   "input": "https://x.com/a%2fb"
+  },
+  {
+   "name": "path_08",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/./b"
+  },
+  {
+   "name": "path_09",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/../b"
+  },
+  {
+   "name": "path_10",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/b/.."
+  },
+  {
+   "name": "path_11",
+   "kind": "httpUrl",
+   "input": "https://x.com/.."
+  },
+  {
+   "name": "path_12",
+   "kind": "httpUrl",
+   "input": "https://x.com/."
+  },
+  {
+   "name": "path_13",
+   "kind": "httpUrl",
+   "input": "https://x.com/a//b"
+  },
+  {
+   "name": "path_14",
+   "kind": "httpUrl",
+   "input": "https://x.com//a"
+  },
+  {
+   "name": "path_15",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/"
+  },
+  {
+   "name": "path_16",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/b/"
+  },
+  {
+   "name": "path_17",
+   "kind": "httpUrl",
+   "input": "https://x.com/%41"
+  },
+  {
+   "name": "path_18",
+   "kind": "httpUrl",
+   "input": "https://x.com/%7Ea"
+  },
+  {
+   "name": "path_19",
+   "kind": "httpUrl",
+   "input": "https://x.com/a|b"
+  },
+  {
+   "name": "path_20",
+   "kind": "httpUrl",
+   "input": "https://x.com/a{b}"
+  },
+  {
+   "name": "path_21",
+   "kind": "httpUrl",
+   "input": "https://x.com/a^b"
+  },
+  {
+   "name": "path_22",
+   "kind": "httpUrl",
+   "input": "https://x.com/a`b"
+  },
+  {
+   "name": "path_23",
+   "kind": "httpUrl",
+   "input": "https://x.com/a<b>c"
+  },
+  {
+   "name": "path_24",
+   "kind": "httpUrl",
+   "input": "https://x.com/a\"b"
+  },
+  {
+   "name": "path_25",
+   "kind": "httpUrl",
+   "input": "https://x.com/a'b"
+  },
+  {
+   "name": "path_26",
+   "kind": "httpUrl",
+   "input": "https://x.com/a\\\\b"
+  },
+  {
+   "name": "path_27",
+   "kind": "httpUrl",
+   "input": "https://x.com/a\tb"
+  },
+  {
+   "name": "path_28",
+   "kind": "httpUrl",
+   "input": "https://x.com/a\nb"
+  },
+  {
+   "name": "path_29",
+   "kind": "httpUrl",
+   "input": "https://x.com/ "
+  },
+  {
+   "name": "path_30",
+   "kind": "httpUrl",
+   "input": "https://x.com/a+b"
+  },
+  {
+   "name": "path_31",
+   "kind": "httpUrl",
+   "input": "https://x.com/a=b"
+  },
+  {
+   "name": "path_32",
+   "kind": "httpUrl",
+   "input": "https://x.com/a&b"
+  },
+  {
+   "name": "path_33",
+   "kind": "httpUrl",
+   "input": "https://x.com/%zz"
+  },
+  {
+   "name": "path_34",
+   "kind": "httpUrl",
+   "input": "https://x.com/a%"
+  },
+  {
+   "name": "path_35",
+   "kind": "httpUrl",
+   "input": "https://x.com/a%4"
+  },
+  {
+   "name": "query_00",
+   "kind": "httpUrl",
+   "input": "https://x.com/?"
+  },
+  {
+   "name": "query_01",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a"
+  },
+  {
+   "name": "query_02",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1"
+  },
+  {
+   "name": "query_03",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1&b=2"
+  },
+  {
+   "name": "query_04",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a="
+  },
+  {
+   "name": "query_05",
+   "kind": "httpUrl",
+   "input": "https://x.com/?=1"
+  },
+  {
+   "name": "query_06",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a b"
+  },
+  {
+   "name": "query_07",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=%20b"
+  },
+  {
+   "name": "query_08",
+   "kind": "httpUrl",
+   "input": "https://x.com/?中=文"
+  },
+  {
+   "name": "query_09",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=😀"
+  },
+  {
+   "name": "query_10",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=%E4%B8%AD"
+  },
+  {
+   "name": "query_11",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=%e4%b8%ad"
+  },
+  {
+   "name": "query_12",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b|c"
+  },
+  {
+   "name": "query_13",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b{c}"
+  },
+  {
+   "name": "query_14",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b^c"
+  },
+  {
+   "name": "query_15",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b`c"
+  },
+  {
+   "name": "query_16",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b<c>"
+  },
+  {
+   "name": "query_17",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=\"b\""
+  },
+  {
+   "name": "query_18",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a='b'"
+  },
+  {
+   "name": "query_19",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b#f"
+  },
+  {
+   "name": "query_20",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1#"
+  },
+  {
+   "name": "query_21",
+   "kind": "httpUrl",
+   "input": "https://x.com/#f"
+  },
+  {
+   "name": "query_22",
+   "kind": "httpUrl",
+   "input": "https://x.com/a#f#g"
+  },
+  {
+   "name": "query_23",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1&"
+  },
+  {
+   "name": "query_24",
+   "kind": "httpUrl",
+   "input": "https://x.com/?&a=1"
+  },
+  {
+   "name": "query_25",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1&a=2"
+  },
+  {
+   "name": "query_26",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=%zz"
+  },
+  {
+   "name": "query_27",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b+c"
+  },
+  {
+   "name": "query_28",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=b%2Bc"
+  },
+  {
+   "name": "rel_00",
+   "kind": "absoluteThenHttpUrl",
+   "input": "/a/b",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_01",
+   "kind": "absoluteThenHttpUrl",
+   "input": "a.html",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_02",
+   "kind": "absoluteThenHttpUrl",
+   "input": "../a.html",
+   "base": "https://x.com/dir/sub/"
+  },
+  {
+   "name": "rel_03",
+   "kind": "absoluteThenHttpUrl",
+   "input": "./a.html",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_04",
+   "kind": "absoluteThenHttpUrl",
+   "input": "//other.com/x",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_05",
+   "kind": "absoluteThenHttpUrl",
+   "input": "?q=1",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_06",
+   "kind": "absoluteThenHttpUrl",
+   "input": "",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_07",
+   "kind": "absoluteThenHttpUrl",
+   "input": "a b.html",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_08",
+   "kind": "absoluteThenHttpUrl",
+   "input": "中文.html",
+   "base": "https://x.com/dir/"
+  },
+  {
+   "name": "rel_09",
+   "kind": "absoluteThenHttpUrl",
+   "input": "../..",
+   "base": "https://x.com/a/b/"
+  },
+  {
+   "name": "rel_10",
+   "kind": "absoluteThenHttpUrl",
+   "input": "../../..",
+   "base": "https://x.com/a/"
+  },
+  {
+   "name": "rel_11",
+   "kind": "absoluteThenHttpUrl",
+   "input": "/a/./b/../c",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_12",
+   "kind": "absoluteThenHttpUrl",
+   "input": "http://abs.com/x",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_13",
+   "kind": "absoluteThenHttpUrl",
+   "input": "HTTP://ABS.com/x",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_14",
+   "kind": "absoluteThenHttpUrl",
+   "input": "a?b=c d",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_15",
+   "kind": "absoluteThenHttpUrl",
+   "input": "/a%20b",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_16",
+   "kind": "absoluteThenHttpUrl",
+   "input": "/a b",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "rel_17",
+   "kind": "absoluteThenHttpUrl",
+   "input": "/a|b",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "relbase_00",
+   "kind": "httpUrl",
+   "input": "https://x.com/dir/"
+  },
+  {
+   "name": "relbase_01",
+   "kind": "httpUrl",
+   "input": "https://x.com/dir"
+  },
+  {
+   "name": "relbase_02",
+   "kind": "httpUrl",
+   "input": "http://x.com:80/a"
+  },
+  {
+   "name": "relbase_03",
+   "kind": "httpUrl",
+   "input": "https://例子.测试/目录/"
+  },
+  {
+   "name": "bad_00",
+   "kind": "httpUrl",
+   "input": "http://"
+  },
+  {
+   "name": "bad_01",
+   "kind": "httpUrl",
+   "input": "http:///path"
+  },
+  {
+   "name": "bad_02",
+   "kind": "httpUrl",
+   "input": "https://"
+  },
+  {
+   "name": "bad_03",
+   "kind": "httpUrl",
+   "input": "://x.com"
+  },
+  {
+   "name": "bad_04",
+   "kind": "httpUrl",
+   "input": "about:blank"
+  },
+  {
+   "name": "bad_05",
+   "kind": "httpUrl",
+   "input": "javascript:void(0)"
+  },
+  {
+   "name": "bad_06",
+   "kind": "httpUrl",
+   "input": "data:text/plain;base64,QQ=="
+  },
+  {
+   "name": "bad_07",
+   "kind": "httpUrl",
+   "input": "mailto:a@b.com"
+  },
+  {
+   "name": "bad_08",
+   "kind": "httpUrl",
+   "input": "tel:+123"
+  },
+  {
+   "name": "bad_09",
+   "kind": "httpUrl",
+   "input": "file:///tmp/x"
+  },
+  {
+   "name": "bad_10",
+   "kind": "httpUrl",
+   "input": "http://[::1"
+  },
+  {
+   "name": "bad_11",
+   "kind": "httpUrl",
+   "input": "http://exa mple.com/"
+  },
+  {
+   "name": "bad_12",
+   "kind": "httpUrl",
+   "input": "http://例 子.测试/"
+  },
+  {
+   "name": "bad_13",
+   "kind": "httpUrl",
+   "input": "https://x.com:port/"
+  },
+  {
+   "name": "bad_14",
+   "kind": "httpUrl",
+   "input": "https://x.com:99999/"
+  },
+  {
+   "name": "bad_15",
+   "kind": "httpUrl",
+   "input": "https://x.com:-1/"
+  },
+  {
+   "name": "bad_16",
+   "kind": "httpUrl",
+   "input": "//x.com/a"
+  },
+  {
+   "name": "bad_17",
+   "kind": "httpUrl",
+   "input": "x.com/a"
+  },
+  {
+   "name": "bad_18",
+   "kind": "httpUrl",
+   "input": "http://user:pa ss@x.com/"
+  },
+  {
+   "name": "relbad_00",
+   "kind": "absoluteThenHttpUrl",
+   "input": "http://[::1",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "relbad_01",
+   "kind": "absoluteThenHttpUrl",
+   "input": "http://exa mple.com",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "relbad_02",
+   "kind": "absoluteThenHttpUrl",
+   "input": "://x",
+   "base": "https://x.com/"
+  },
+  {
+   "name": "more_00",
+   "kind": "httpUrl",
+   "input": "https://x.com/a;b"
+  },
+  {
+   "name": "more_01",
+   "kind": "httpUrl",
+   "input": "https://x.com/a:b"
+  },
+  {
+   "name": "more_02",
+   "kind": "httpUrl",
+   "input": "https://x.com/a@b"
+  },
+  {
+   "name": "more_03",
+   "kind": "httpUrl",
+   "input": "https://x.com/a[b]"
+  },
+  {
+   "name": "more_04",
+   "kind": "httpUrl",
+   "input": "https://x.com/a!b"
+  },
+  {
+   "name": "more_05",
+   "kind": "httpUrl",
+   "input": "https://x.com/a$b"
+  },
+  {
+   "name": "more_06",
+   "kind": "httpUrl",
+   "input": "https://x.com/a,b"
+  },
+  {
+   "name": "more_07",
+   "kind": "httpUrl",
+   "input": "https://x.com/a(b)"
+  },
+  {
+   "name": "more_08",
+   "kind": "httpUrl",
+   "input": "https://x.com/a*b"
+  },
+  {
+   "name": "more_09",
+   "kind": "httpUrl",
+   "input": "https://x.com/a+b;c=d"
+  },
+  {
+   "name": "more_10",
+   "kind": "httpUrl",
+   "input": "https://user:pa%20ss@x.com/"
+  },
+  {
+   "name": "more_11",
+   "kind": "httpUrl",
+   "input": "https://u:p@x.com:8080/a?b=c#d"
+  },
+  {
+   "name": "more_12",
+   "kind": "httpUrl",
+   "input": "https://x.com/%20a%20"
+  },
+  {
+   "name": "more_13",
+   "kind": "httpUrl",
+   "input": "https://x.com/%2E"
+  },
+  {
+   "name": "more_14",
+   "kind": "httpUrl",
+   "input": "https://x.com/%2e%2e/a"
+  },
+  {
+   "name": "more_15",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/%2E%2E/b"
+  },
+  {
+   "name": "more_16",
+   "kind": "httpUrl",
+   "input": "https://x.com/..%2Fb"
+  },
+  {
+   "name": "more_17",
+   "kind": "httpUrl",
+   "input": "https://x.com/a/b/../../../c"
+  },
+  {
+   "name": "more_18",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1%202"
+  },
+  {
+   "name": "more_19",
+   "kind": "httpUrl",
+   "input": "https://x.com/?%E4%B8%AD=%E6%96%87"
+  },
+  {
+   "name": "more_20",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a[]=1"
+  },
+  {
+   "name": "more_21",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1&b"
+  },
+  {
+   "name": "more_22",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a==1"
+  },
+  {
+   "name": "more_23",
+   "kind": "httpUrl",
+   "input": "https://x.com/??a=1"
+  },
+  {
+   "name": "more_24",
+   "kind": "httpUrl",
+   "input": "https://x.com/?a=1?b=2"
+  },
+  {
+   "name": "more2_00",
+   "kind": "httpUrl",
+   "input": "HTTPS://X.COM/A"
+  },
+  {
+   "name": "more2_01",
+   "kind": "httpUrl",
+   "input": "Http://User@X.Com:80/A?B=C#D"
+  },
+  {
+   "name": "more2_02",
+   "kind": "httpUrl",
+   "input": "https://xn--80ak6aa92e.com/x"
+  },
+  {
+   "name": "more2_03",
+   "kind": "httpUrl",
+   "input": "http://[fe80::1%25eth0]/x"
+  },
+  {
+   "name": "more2_04",
+   "kind": "httpUrl",
+   "input": "https://x.com:65535/"
+  },
+  {
+   "name": "more2_05",
+   "kind": "httpUrl",
+   "input": "https://x.com:65536/"
+  },
+  {
+   "name": "more3_01",
+   "kind": "httpUrl",
+   "input": "//USER@Other.COM:443/x"
+  },
+  {
+   "name": "more3_03",
+   "kind": "httpUrl",
+   "input": "a b/c d"
+  }
+ ]
+}

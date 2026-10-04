@@ -1,0 +1,342 @@
+{
+ "_comment": "⚠️ 合成样本，非真实数据。第 6 步 6A golden 用例：输入均为手工构造（编码/JSON/URL 规则/Cookie），Java 侧用真实 hutool(RFC3986/PercentCodec/URLEncoder)、真实 Gson(legado 定制适配器)、真实 Rhino 1.8.1、java.net.URL 生成对照；AnalyzeUrl 的调度逻辑（encodeParams/analyzeJs/replaceKeyPageJs/analyzeUrl）是 AnalyzeUrl.kt 的**手工 Java 移植**（README 标明）。",
+ "_SAMPLE_KIND": "合成样本（synthetic）",
+ "urlOptionCases": [
+  {
+   "name": "opt_00",
+   "json": "{}"
+  },
+  {
+   "name": "opt_01",
+   "json": "{\"method\":\"POST\"}"
+  },
+  {
+   "name": "opt_02",
+   "json": "{\"method\":\"\"}"
+  },
+  {
+   "name": "opt_03",
+   "json": "{\"method\":null}"
+  },
+  {
+   "name": "opt_04",
+   "json": "{\"method\":123}"
+  },
+  {
+   "name": "opt_05",
+   "json": "{\"method\":true}"
+  },
+  {
+   "name": "opt_06",
+   "json": "{\"method\":{\"a\":1}}"
+  },
+  {
+   "name": "opt_07",
+   "json": "{\"method\":\"  \"}"
+  },
+  {
+   "name": "opt_08",
+   "json": "{\"method\":\"post\"}"
+  },
+  {
+   "name": "opt_09",
+   "json": "{\"method\":\"HEAD\"}"
+  },
+  {
+   "name": "opt_10",
+   "json": "{\"method\":\"xxx\"}"
+  },
+  {
+   "name": "opt_11",
+   "json": "{\"charset\":\"\"}"
+  },
+  {
+   "name": "opt_12",
+   "json": "{\"charset\":\"GBK\"}"
+  },
+  {
+   "name": "opt_13",
+   "json": "{\"charset\":123}"
+  },
+  {
+   "name": "opt_14",
+   "json": "{\"charset\":null}"
+  },
+  {
+   "name": "opt_15",
+   "json": "{\"headers\":{\"A\":\"1\",\"B\":\"2\"}}"
+  },
+  {
+   "name": "opt_16",
+   "json": "{\"headers\":\"{\\\"A\\\":\\\"1\\\"}\"}"
+  },
+  {
+   "name": "opt_17",
+   "json": "{\"headers\":[\"A\"]}"
+  },
+  {
+   "name": "opt_18",
+   "json": "{\"headers\":null}"
+  },
+  {
+   "name": "opt_19",
+   "json": "{\"headers\":123}"
+  },
+  {
+   "name": "opt_20",
+   "json": "{\"headers\":\"not json\"}"
+  },
+  {
+   "name": "opt_21",
+   "json": "{\"headers\":{}}"
+  },
+  {
+   "name": "opt_22",
+   "json": "{\"body\":\"a=1&b=2\"}"
+  },
+  {
+   "name": "opt_23",
+   "json": "{\"body\":{\"k\":\"v\"}}"
+  },
+  {
+   "name": "opt_24",
+   "json": "{\"body\":[\"1\",\"2\"]}"
+  },
+  {
+   "name": "opt_25",
+   "json": "{\"body\":null}"
+  },
+  {
+   "name": "opt_26",
+   "json": "{\"body\":123}"
+  },
+  {
+   "name": "opt_27",
+   "json": "{\"body\":true}"
+  },
+  {
+   "name": "opt_28",
+   "json": "{\"body\":{\"n\":1,\"b\":true,\"s\":\"x\"}}"
+  },
+  {
+   "name": "opt_29",
+   "json": "{\"retry\":3}"
+  },
+  {
+   "name": "opt_30",
+   "json": "{\"retry\":3.7}"
+  },
+  {
+   "name": "opt_31",
+   "json": "{\"retry\":\"3\"}"
+  },
+  {
+   "name": "opt_32",
+   "json": "{\"retry\":true}"
+  },
+  {
+   "name": "opt_33",
+   "json": "{\"retry\":null}"
+  },
+  {
+   "name": "opt_34",
+   "json": "{\"retry\":{\"a\":1}}"
+  },
+  {
+   "name": "opt_35",
+   "json": "{\"retry\":-1}"
+  },
+  {
+   "name": "opt_36",
+   "json": "{\"retry\":9999999999}"
+  },
+  {
+   "name": "opt_37",
+   "json": "{\"serverID\":123}"
+  },
+  {
+   "name": "opt_38",
+   "json": "{\"serverID\":\"123\"}"
+  },
+  {
+   "name": "opt_39",
+   "json": "{\"serverID\":3.5}"
+  },
+  {
+   "name": "opt_40",
+   "json": "{\"serverID\":\"abc\"}"
+  },
+  {
+   "name": "opt_41",
+   "json": "{\"serverID\":null}"
+  },
+  {
+   "name": "opt_42",
+   "json": "{\"serverID\":99999999999999999999}"
+  },
+  {
+   "name": "opt_43",
+   "json": "{\"serverID\":true}"
+  },
+  {
+   "name": "opt_44",
+   "json": "{\"webViewDelayTime\":500}"
+  },
+  {
+   "name": "opt_45",
+   "json": "{\"webViewDelayTime\":\"600\"}"
+  },
+  {
+   "name": "opt_46",
+   "json": "{\"webViewDelayTime\":1.5}"
+  },
+  {
+   "name": "opt_47",
+   "json": "{\"webViewDelayTime\":null}"
+  },
+  {
+   "name": "opt_48",
+   "json": "{\"webView\":0}"
+  },
+  {
+   "name": "opt_49",
+   "json": "{\"webView\":1}"
+  },
+  {
+   "name": "opt_50",
+   "json": "{\"webView\":\"0\"}"
+  },
+  {
+   "name": "opt_51",
+   "json": "{\"webView\":\"1\"}"
+  },
+  {
+   "name": "opt_52",
+   "json": "{\"webView\":false}"
+  },
+  {
+   "name": "opt_53",
+   "json": "{\"webView\":true}"
+  },
+  {
+   "name": "opt_54",
+   "json": "{\"webView\":\"false\"}"
+  },
+  {
+   "name": "opt_55",
+   "json": "{\"webView\":\"\"}"
+  },
+  {
+   "name": "opt_56",
+   "json": "{\"webView\":null}"
+  },
+  {
+   "name": "opt_57",
+   "json": "{\"webView\":[]}"
+  },
+  {
+   "name": "opt_58",
+   "json": "{\"webView\":{\"a\":1}}"
+  },
+  {
+   "name": "opt_59",
+   "json": "{\"js\":\"url+1\"}"
+  },
+  {
+   "name": "opt_60",
+   "json": "{\"js\":123}"
+  },
+  {
+   "name": "opt_61",
+   "json": "{\"js\":null}"
+  },
+  {
+   "name": "opt_62",
+   "json": "{\"js\":\"  \"}"
+  },
+  {
+   "name": "opt_63",
+   "json": "{\"bodyJs\":\"result\"}"
+  },
+  {
+   "name": "opt_64",
+   "json": "{\"bodyJs\":null}"
+  },
+  {
+   "name": "opt_65",
+   "json": "{\"webJs\":\"x\"}"
+  },
+  {
+   "name": "opt_66",
+   "json": "{\"dnsIp\":\"1.2.3.4\"}"
+  },
+  {
+   "name": "opt_67",
+   "json": "{\"type\":\"data\"}"
+  },
+  {
+   "name": "opt_68",
+   "json": "{\"origin\":\"https://x/\"}"
+  },
+  {
+   "name": "opt_69",
+   "json": "{\"type\":null}"
+  },
+  {
+   "name": "opt_70",
+   "json": "{\"method\":\"POST\",\"charset\":\"GBK\",\"headers\":{\"A\":\"1\"},\"body\":\"a=1\",\"retry\":2,\"webView\":1,\"webJs\":\"j\",\"dnsIp\":\"1.1.1.1\",\"js\":\"url\",\"bodyJs\":\"result\",\"serverID\":9,\"webViewDelayTime\":100}"
+  },
+  {
+   "name": "opt_71",
+   "json": "{'method':'POST'}"
+  },
+  {
+   "name": "opt_72",
+   "json": "{method:\"POST\"}"
+  },
+  {
+   "name": "opt_73",
+   "json": "{\"method\":\"POST\",}"
+  },
+  {
+   "name": "opt_74",
+   "json": "{\"a\":1,\"a\":2}"
+  },
+  {
+   "name": "opt_75",
+   "json": "{\"method\":\"POST\",\"unknown\":1}"
+  },
+  {
+   "name": "opt_76",
+   "json": "{\"retry\":NaN}"
+  },
+  {
+   "name": "opt_77",
+   "json": "{\"retry\":Infinity}"
+  },
+  {
+   "name": "opt_78",
+   "json": "null"
+  },
+  {
+   "name": "opt_79",
+   "json": "[]"
+  },
+  {
+   "name": "opt_80",
+   "json": "\"str\""
+  },
+  {
+   "name": "opt_81",
+   "json": "{\"method\":\"POST\""
+  },
+  {
+   "name": "opt_82",
+   "json": "{\"method\":POST}"
+  },
+  {
+   "name": "opt_83",
+   "json": "{\"headers\":{\"x\":1,\"y\":true,\"z\":null,\"w\":{\"n\":2},\"v\":[1,2]}}"
+  }
+ ]
+}

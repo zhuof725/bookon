@@ -1,0 +1,19 @@
+{
+  "_SAMPLE_KIND": "规则真实、数据合成。CSS 规则取自真实书源『🔥小说2016』(Tests/LegadoHTMLEngineTests/Resources/real/xiaoshuo2016_rules.json)；HTML 为按其真实页面结构手工构造的合成样本。用第一个 <li> 的 outerHTML 作为独立文档，等价于 Swift 测试里 AnalyzeByJSoup(items.get(0)) 的效果。",
+  "htmls": {
+    "firstBook": "<li class=\"clearfix\">\n  <div class=\"name\"><a href=\"/book/1.html\">合成书名一</a></div>\n  <img src=\"/cover/1.jpg\">\n  <p><a>合成作者一</a></p>\n  <p>最新：合成第100章</p>\n  <p>玄幻</p>\n  <div class=\"note clearfix\"><p>合成简介一</p></div>\n</li>",
+    "fullList": "<html><body><li class=\"clearfix\"><div class=\"name\"><a href=\"/book/1.html\">合成书名一</a></div><img src=\"/cover/1.jpg\"><p><a>合成作者一</a></p><p>最新：合成第100章</p><p>玄幻</p><div class=\"note clearfix\"><p>合成简介一</p></div></li><li class=\"clearfix\"><div class=\"name\"><a href=\"/book/2.html\">合成书名二</a></div><img src=\"/cover/2.jpg\"><p><a>合成作者二</a></p><p>最新：合成第200章</p><p>都市</p><div class=\"note clearfix\"><p>合成简介二</p></div></li></body></html>",
+    "articleDivSample": "<div class='articleDiv'><p>正文第一段<br>正文第二段</p></div>"
+  },
+  "cssCases": [
+    { "name": "realBookList", "html": "fullList", "rule": "li.clearfix" },
+    { "name": "realName", "html": "firstBook", "rule": "@css:.name@text" },
+    { "name": "realAuthor", "html": "firstBook", "rule": "@css:p:eq(2)>a@text" },
+    { "name": "realBookUrl", "html": "firstBook", "rule": "@css:.name>a@href" },
+    { "name": "realCoverUrl", "html": "firstBook", "rule": "@css:img@src" },
+    { "name": "realLastChapter", "html": "firstBook", "rule": "@css:p:eq(3)@text" },
+    { "name": "realIntro", "html": "firstBook", "rule": "@css:.note.clearfix p@text" },
+    { "name": "realKind", "html": "firstBook", "rule": "@css:.note_text,p:eq(4)@text" },
+    { "name": "realContentTextNodes", "html": "articleDivSample", "rule": "@css:.articleDiv p@textNodes" }
+  ]
+}
