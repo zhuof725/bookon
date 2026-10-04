@@ -273,14 +273,16 @@ enum JsNetTextDecoder {
             //     且替换字符个数与 Unicode 标准一致。
             return String(decoding: Array(data), as: UTF8.self)
         case "UTF-16", "UTF16":
+            // 通用 UTF-16：字节序由 BOM 决定，无 BOM 时 JDK 默认 big-endian
+            // → `utf16LittleEndian: false`（`incrementalLossyDecode` 内部按 BOM 再校正）。
             return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding,
-                                    profile: Self.utf16Profile)
+                                    profile: Self.utf16Profile(littleEndian: false))
         case "UTF-16LE", "UTF16LE":
             return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding,
-                                    profile: Self.utf16Profile)
+                                    profile: Self.utf16Profile(littleEndian: true))
         case "UTF-16BE", "UTF16BE":
             return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding,
-                                    profile: Self.utf16Profile)
+                                    profile: Self.utf16Profile(littleEndian: false))
         case "UTF-32", "UTF32":
             return Self.lossyString(data, nsEncoding: NSUTF32StringEncoding)
         case "UTF-32LE", "UTF32LE":
@@ -805,6 +807,18 @@ enum JsNetTextDecoder {
         /// （Java `…U+A060 U+A060…` vs Swift 多出 1 个），被 golden 对照判为不一致。
         let unitWidth: Int
 
+        /// **UTF-16 码元的字节序**。`nil` = 非 UTF-16。
+        ///
+        /// 由调用点按 `NSUTF16LittleEndianStringEncoding` / `NSUTF16BigEndianStringEncoding`
+        /// 直接给出；通用 `NSUTF16StringEncoding` 传 `false`（按 BOM 判、无 BOM 视为
+        /// big-endian，与 JDK 默认一致）。
+        ///
+        /// ⚠️ **刻意不在解码函数内反查 `kCFStringEncodingUTF16LE` / `..BE`**：这两个常量
+        /// 在 Swift 里并非全局可见（CI run `37222347200` 实测
+        /// `error: cannot find 'kCFStringEncodingUTF16LE' in scope`，`maxCharLength`
+        /// 亦曾因同类问题改为参数传入）。改由调用点显式传参，彻底摆脱对 CF 常量的依赖。
+        let utf16LittleEndian: Bool?
+
         func isLead(_ b: UInt8) -> Bool { leadRanges.contains { $0.contains(b) } }
         func isTrail(_ b: UInt8) -> Bool { trailRanges.contains { $0.contains(b) } }
         func isU2Trail(_ b: UInt8) -> Bool { u2TrailRanges.contains { $0.contains(b) } }
@@ -871,7 +885,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [],
                 fourByteDigitRange: nil,
                 useJdkBig5Table: false,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         case "GBK", "CP936", "GB18030":
             // GB18030 的 4 字节形式：b1(81-FE) b2(30-39) b3(81-FE) b4(30-39)。
             // 探针实测：GBK / GB18030 的 lead **零例外**，纯区间规则即 100% 吻合。
@@ -888,7 +902,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [],
                 fourByteDigitRange: four,
                 useJdkBig5Table: false,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         case "BIG5", "BIG-5", "BIG5-HKSCS":
             // lead 为 A1-F9，但 **`C8` 是彻底无效的 lead**：JVM 探针实测 `C8` + 任意 trail
             // 全部报 `MALFORMED[1]`（吃 1 字节），且 JDK 严格 Big5 表里 `C8` 区**零映射**。
@@ -913,7 +927,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [],
                 fourByteDigitRange: nil,
                 useJdkBig5Table: true,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         case "SHIFT-JIS", "SHIFTJIS", "SJIS", "MS-KANJI", "WINDOWS-31J", "CP932":
             // 0xA1-0xDF 是半角片假名（单字节）；lead 为 81-9F / E0-FC。
             // u2 带为 FD-FF；JIS X 0208 的 81/82/83/84/88/98/EA 区在映射区开洞。
@@ -945,7 +959,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [],
                 fourByteDigitRange: nil,
                 useJdkBig5Table: false,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         case "EUC-KR", "EUCKR", "CP949", "KSC5601":
             // u2 带为 80-A0 与 FF；13 个 lead 在映射区开洞。
             return MBCSProfile(
@@ -977,7 +991,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [],
                 fourByteDigitRange: nil,
                 useJdkBig5Table: false,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         case "EUC-JP", "EUCJP":
             // 结构：`A1-FE` 双字节（JIS X 0208）；`8E`+1 字节（JIS X 0201 片假名）；
             // `8F`+2 字节（JIS X 0212）。后两者在 `incrementalLossyDecode` 里单独处理。
@@ -1042,7 +1056,7 @@ enum JsNetTextDecoder {
                 threeByteLead: [0x8E, 0x8F],
                 fourByteDigitRange: nil,
                 useJdkBig5Table: false,
-                unitWidth: 0)
+                unitWidth: 0, utf16LittleEndian: nil)
         default:
             return nil
         }
@@ -1299,7 +1313,7 @@ enum JsNetTextDecoder {
         malformedExceptions: [:],
         unmappableExceptions: [:],
         threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false,
-        unitWidth: 0)
+        unitWidth: 0, utf16LittleEndian: nil)
 
     /// UTF-16 画像：**按 2 字节码元**推进。
     ///
@@ -1312,13 +1326,18 @@ enum JsNetTextDecoder {
     /// 与 `byteWiseProfile` 的唯一差别是 `unitWidth: 2`，但影响实质：CI run `37219082032`
     /// 的 `ext-cn-3-utf-16be`（`decodedDefault` / `decodedContentTypeNoCharset`）
     /// 因逐字节推进把代理对拆开，Java 41 个标量在 Swift 侧变成 42 个。
-    static let utf16Profile = MBCSProfile(
-        singleByteMax: 0xFF, singleByteExtra: nil,
-        leadRanges: [], trailRanges: [], u2TrailRanges: [], m2TrailRanges: [],
-        malformedExceptions: [:],
-        unmappableExceptions: [:],
-        threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false,
-        unitWidth: 2)
+    ///
+    /// 字节序**不在画像里写死**：由调用点按具体 `NSUTF16*StringEncoding` 通过
+    /// `utf16LittleEndian` 传参给出（见该字段文档）。这里只提供默认值 `false`。
+    static func utf16Profile(littleEndian: Bool) -> MBCSProfile {
+        MBCSProfile(
+            singleByteMax: 0xFF, singleByteExtra: nil,
+            leadRanges: [], trailRanges: [], u2TrailRanges: [], m2TrailRanges: [],
+            malformedExceptions: [:],
+            unmappableExceptions: [:],
+            threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false,
+            unitWidth: 2, utf16LittleEndian: littleEndian)
+    }
 
     /// JIS X 0208 码表（ISO-2022-JP 的 `ESC $ B` / `ESC $ @` 双字节区）。
     ///
@@ -2153,7 +2172,9 @@ enum JsNetTextDecoder {
                     //
                     // UTF-16（w == 2）时区分「高代理」与其它：高代理且后面**还有**一个完整
                     // 码元时按 `MALFORMED[4]` 吃 2 个码元；否则吃 1 个码元。
-                    if w == 2, avail >= 2 * w, Self.isUtf16HighSurrogate(bytes, at: i, littleEndian: cfEncoding) {
+                    if w == 2, avail >= 2 * w,
+                       Self.isUtf16HighSurrogate(bytes, at: i,
+                                                 littleEndian: profile.utf16LittleEndian ?? false) {
                         out += "\u{FFFD}"; i += 2 * w; continue
                     }
                     out += "\u{FFFD}"; i += w; continue
@@ -2277,22 +2298,19 @@ enum JsNetTextDecoder {
     /// 用于复刻 JDK 的 `MALFORMED[4]` 语义：高代理后面跟的不是低代理时，JDK 把这两个
     /// 码元整体吃掉（4 字节）出 1 个 `U+FFFD`。见 `incrementalLossyDecode` 的 ⓪ 分支。
     ///
-    /// - Parameter littleEndian: `cfEncoding` 为 `kCFStringEncodingUTF16LE` 时为 `true`；
-    ///   `kCFStringEncodingUTF16BE` 时为 `false`；`kCFStringEncodingUTF16`（带 BOM 自动判定）
-    ///   时按 BOM 判定，无 BOM 则按宿主字节序（Java 的默认行为是 big-endian）。
+    /// 字节序**全部来自参数**，不再反查 `kCFStringEncodingUTF16LE` / `..BE` ——
+    /// 这两个常量在 Swift 里非全局可见（CI run `37222347200` 实测编译失败）。
+    /// 通用 UTF-16（`utf16LittleEndian == false`）时按 BOM 校正，无 BOM 则按
+    /// big-endian（JDK 默认）。
     private static func isUtf16HighSurrogate(_ bytes: [UInt8],
                                              at start: Int,
-                                             littleEndian cfEncoding: CFStringEncoding) -> Bool {
+                                             littleEndian: Bool) -> Bool {
         guard start + 1 < bytes.count else { return false }
-        var le: Bool
-        switch Int(cfEncoding) {
-        case Int(kCFStringEncodingUTF16LE): le = true
-        case Int(kCFStringEncodingUTF16BE): le = false
-        default:
-            // 通用 UTF-16：BOM 优先；无 BOM 时 Java 默认按 big-endian。
+        var le = littleEndian
+        // 若恰好落在开头的 BOM 上，让 BOM 决定字节序（覆盖传入的默认值）。
+        if start == 0 {
             if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] == 0xFE { le = true }
             else if bytes.count >= 2, bytes[0] == 0xFE, bytes[1] == 0xFF { le = false }
-            else { le = false }
         }
         let unit: UInt32 = le
             ? (UInt32(bytes[start]) | (UInt32(bytes[start + 1]) << 8))
