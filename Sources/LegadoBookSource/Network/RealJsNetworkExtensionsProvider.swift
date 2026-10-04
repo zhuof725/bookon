@@ -273,24 +273,25 @@ enum JsNetTextDecoder {
             //     且替换字符个数与 Unicode 标准一致。
             return String(decoding: Array(data), as: UTF8.self)
         case "UTF-16", "UTF16":
-            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding, maxCharLength: 2)
         case "UTF-16LE", "UTF16LE":
-            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding, maxCharLength: 2)
         case "UTF-16BE", "UTF16BE":
-            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding, maxCharLength: 2)
         case "ISO-8859-1", "LATIN1", "ISO8859-1":
-            return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding)
+            return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding, maxCharLength: 1)
         case "US-ASCII", "ASCII":
             // Java 的 US-ASCII 对 >0x7F 也是替换字符语义；这里同样用容错路径。
-            return Self.lossyString(data, nsEncoding: NSASCIIStringEncoding)
+            return Self.lossyString(data, nsEncoding: NSASCIIStringEncoding, maxCharLength: 1)
         default:
             break
         }
-        // GBK/GB2312/GB18030（CFStringEncodings.GB_18030_2000 与 Java 的 GBK 系兼容）
+        // GBK/GB2312/GB18030（CFStringEncodings.GB_18030_2000 与 Java 的 GBK 系兼容）。
+        // GB18030 有 4 字节序列，故 maxCharLength = 4。
         if name == "GBK" || name == "GB2312" || name == "GB-2312" || name == "GB18030" || name == "CP936" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 4) { return s }
             return nil
         }
         // Big5。⚠️ 必须开 `puaIsFailure`：Apple 走 CP950 表（把 JDK 严格 Big5 表判为
@@ -299,7 +300,8 @@ enum JsNetTextDecoder {
         if name == "BIG5" || name == "BIG-5" || name == "BIG5-HKSCS" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.big5.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc, puaIsFailure: true) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc,
+                                        maxCharLength: 2, puaIsFailure: true) { return s }
             return nil
         }
         return nil
@@ -340,7 +342,13 @@ enum JsNetTextDecoder {
     ///
     /// 入参用 `UInt`（`CFStringConvertEncodingToNSStringEncoding` 的返回类型；
     /// Swift 里 `NSStringEncoding` 已 unavailable）。
+    ///
+    /// `maxCharLength` 是单个字符的最大字节数，只用于增量解码的窗口上界。
+    /// 由调用点按编码族给出，**不在函数内反查 CF 常量**——避免依赖具体 SDK 里
+    /// `kCFStringEncoding*` / `CFStringEncodings.*` 成员的拼写与可用性
+    /// （CI 实测：`kCFStringEncodingUTF8` 等在 Swift 里并非全局可见，会编译不过）。
     private static func lossyString(_ data: Data, nsEncoding: UInt,
+                                    maxCharLength: Int = 2,
                                     puaIsFailure: Bool = false) -> String? {
         guard nsEncoding != 0 else { return nil }
         let bytes = [UInt8](data)
@@ -357,12 +365,12 @@ enum JsNetTextDecoder {
             return whole
         }
         // 整块失败（或含 PUA）：走增量容错，**永不返回 nil**。
-        // 单字符最大长度按编码族给；窗口上界不会跨过字符边界。
         return incrementalLossyDecode(bytes, cfEncoding: cfEncoding,
-                                      maxCharLength: Self.maxCharLength(for: cfEncoding),
+                                      maxCharLength: maxCharLength,
                                       puaIsFailure: puaIsFailure)
         #else
         // 非 Darwin（本地 Linux 验证）：同样先整体试，失败再增量容错。
+        _ = maxCharLength   // 仅 Darwin 的增量路径使用；此处显式忽略以免 unused 警告
         if let whole = NSString(data: data, encoding: nsEncoding) as String?,
            !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
@@ -372,29 +380,6 @@ enum JsNetTextDecoder {
     }
 
     #if canImport(Darwin)
-    /// 各编码的「单个字符最大字节数」。
-    ///
-    /// 只用于 `incrementalLossyDecode` 的窗口上界，**取偏大值也安全**（窗口偏大只会多试几次，
-    /// 因为算法要求解出「恰好 1 个标量」才接受）。给准确值只是省掉多余试探。
-    private static func maxCharLength(for cfEncoding: CFStringEncoding) -> Int {
-        switch Int(cfEncoding) {
-        case Int(kCFStringEncodingUTF8.rawValue),
-             Int(kCFStringEncodingGB_18030_2000.rawValue):
-            return 4
-        case Int(kCFStringEncodingBig5.rawValue),
-             Int(kCFStringEncodingBig5_HKSCS_1999.rawValue),
-             Int(kCFStringEncodingEUC_JP.rawValue),
-             Int(kCFStringEncodingEUC_KR.rawValue),
-             Int(kCFStringEncodingShiftJIS.rawValue),
-             Int(kCFStringEncodingDOSJapanese.rawValue),
-             Int(kCFStringEncodingDOSKorean.rawValue),
-             Int(kCFStringEncodingGB_2312_80.rawValue):
-            return 2
-        default:
-            return 2
-        }
-    }
-
     /// 用 CoreFoundation 把一个字节缓冲整体转成 `String`；失败返回 `nil`。
     private static func decodeCFString(_ bytes: [UInt8], cfEncoding: CFStringEncoding) -> String? {
         guard !bytes.isEmpty else { return "" }
@@ -410,14 +395,19 @@ enum JsNetTextDecoder {
         guard let s = created else { return nil }
         return s as String
     }
+    #endif
 
     /// 私有使用区（PUA）判定：Apple 的若干 CJK 编码（Big5/EUC 等）把「无法映射到标准
     /// Unicode 的位点」落到 PUA（U+E000–U+F8FF），而 Java 判为不可映射并输出 `U+FFFD`。
     /// 为了让两侧逐码位一致，把这些 PUA 码位视同「解码失败」，交给替换字符逻辑。
+    ///
+    /// **不放在 `#if canImport(Darwin)` 里**：`lossyString` 的两个分支（Darwin 走 CF、
+    /// 其它平台走 `NSString`）都需要它。
     private static func containsPrivateUse(_ s: String) -> Bool {
         s.unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) }
     }
 
+    #if canImport(Darwin)
     /// 增量容错解码：**按编码自身的字符边界逐字符推进**，而不是「最长可解码前缀」。
     ///
     /// 只在「整块解码失败」时才会走到（即输入确实含非法字节的少数样本）。
