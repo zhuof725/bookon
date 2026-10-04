@@ -66,7 +66,10 @@ final class LiveSmokeTests: XCTestCase {
         lines.append("时间: \(ISO8601DateFormatter().string(from: Date()))")
         lines.append("")
 
-        let client = URLSessionHTTPClient()
+        // 用内存实现构造真实客户端（冒烟不需要落盘 Cookie）。
+        let cache = CacheManager(storage: MemoryCacheStorage())
+        let store = CookieStore(persistence: MemoryCookiePersistence(), cache: cache)
+        let client = URLSessionHTTPClient(cookieStore: store, cookieManagerCache: cache)
         let environment = AnalyzeUrlEnvironment()
 
         var okCount = 0

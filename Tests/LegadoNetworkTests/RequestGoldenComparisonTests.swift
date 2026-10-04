@@ -207,7 +207,9 @@ final class RequestGoldenComparisonTests: XCTestCase {
                               contentType: contentType)
         req.followRedirects = c.followRedirects
 
-        let client = URLSessionHTTPClient()
+        let cache = CacheManager(storage: MemoryCacheStorage())
+        let store = CookieStore(persistence: MemoryCookiePersistence(), cache: cache)
+        let client = URLSessionHTTPClient(cookieStore: store, cookieManagerCache: cache)
         _ = try? await client.execute(req)
     }
 
