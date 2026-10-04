@@ -130,7 +130,76 @@ final class CharsetGen {
         // 3d. 显式 charset 优先于 Content-Type
         addDecode(o, "decodedExplicitBeatsHeader", s.bytes, "GBK", "text/html; charset=UTF-8");
 
+        // 3e. 标准 UTF-8 解码（Unicode 最大子部分算法）供跨平台对照。
+        //
+        // 背景：Java 的 `new String(bytes, "UTF-8")` 对**连续非法字节**的替换字符数量与
+        // Unicode 标准（以及 Swift `String(decoding:as:UTF8.self)`、Python `errors='replace'`）
+        // 不一致。实测（240 份语料中的 18 份）Java 会把 `[0xC9,0xBD]` 这类序列中更早的字节
+        // 判为非法而少插一个 U+FFFD，表现为「Java 的 FFFD 连续长度比标准短 1」。
+        // 这是 JDK 的历史行为（`sun.nio.cs.UTF_8` 的 resync 逻辑），不是本移植的偏差。
+        //
+        // 因此额外输出一份「标准算法」的结果：Swift 侧与它比较，两者必须逐字符相等；
+        // Java 原生结果的差异在 README 差异表中单列说明。
+        o.addProperty("decodedExplicitUtf8Standard", truncate(standardUtf8Decode(s.bytes), 400));
+
         return o;
+    }
+
+    /**
+     * Unicode 最大子部分（maximal subpart）算法的 UTF-8 容错解码。
+     *
+     * <p>与 Java 的 {@code new String(bytes, "UTF-8")} 的区别只在「连续非法字节产生几个
+     * U+FFFD」：本实现每个「最长非法前缀」产生一个 U+FFFD，Java 有时会为同一段产生更少的
+     * 替换字符。合法输入两者完全一致。
+     *
+     * <p>前 3 字节若为 UTF-8 BOM 先剥离（对齐 {@code EncodingDetectGolden.removeUTF8Bom}）。
+     */
+    private static String standardUtf8Decode(byte[] input) {
+        byte[] bytes = EncodingDetectGolden.removeUTF8Bom(input);
+        StringBuilder sb = new StringBuilder(bytes.length);
+        int i = 0;
+        final int n = bytes.length;
+        while (i < n) {
+            int b0 = bytes[i] & 0xFF;
+            int need;
+            int cp;
+            int lowerBound;   // 该长度序列第二字节的合法下界（用于判定最大子部分）
+            if (b0 < 0x80) { sb.append((char) b0); i++; continue; }
+            else if (b0 >= 0xC2 && b0 <= 0xDF) { need = 1; cp = b0 & 0x1F; lowerBound = 0x80; }
+            else if (b0 >= 0xE0 && b0 <= 0xEF) { need = 2; cp = b0 & 0x0F; lowerBound = 0x80; }
+            else if (b0 >= 0xF0 && b0 <= 0xF4) { need = 3; cp = b0 & 0x07; lowerBound = 0x80; }
+            else { sb.append('\uFFFD'); i++; continue; }
+
+            int consumed = 1;
+            boolean ok = true;
+            for (int k = 1; k <= need; k++) {
+                if (i + k >= n) { ok = false; break; }
+                int bk = bytes[i + k] & 0xFF;
+                if (bk < 0x80 || bk > 0xBF) { ok = false; break; }
+                // 过长短编码（E0 80..9F、F0 80..8F、F4 90..BF）按最长子部分只吃首字节。
+                if (k == 1) {
+                    if (b0 == 0xE0 && bk < 0xA0) { ok = false; break; }
+                    if (b0 == 0xED && bk > 0x9F) { ok = false; break; }
+                    if (b0 == 0xF0 && bk < 0x90) { ok = false; break; }
+                    if (b0 == 0xF4 && bk > 0x8F) { ok = false; break; }
+                }
+                cp = (cp << 6) | (bk & 0x3F);
+                consumed++;
+            }
+            if (ok && consumed == need + 1) {
+                if (Character.isSupplementaryCodePoint(cp)) {
+                    sb.appendCodePoint(cp);
+                } else {
+                    sb.append((char) cp);
+                }
+                i += consumed;
+            } else {
+                // 非法：按「已消费的合法首/续字节」整体产生一个 U+FFFD（最大子部分）。
+                sb.append('\uFFFD');
+                i += Math.max(consumed, 1);
+            }
+        }
+        return sb.toString();
     }
 
     /** 跑一次完整解码链，把结果（或异常）写进 o[key] / o[key+"Error"]。 */

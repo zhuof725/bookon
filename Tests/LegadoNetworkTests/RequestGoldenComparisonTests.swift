@@ -187,13 +187,22 @@ final class RequestGoldenComparisonTests: XCTestCase {
                 body = Data((c.requestBody ?? "").utf8)
                 explicitContentType = "application/json; charset=UTF-8"
             case "multipart":
-                let (b, ct) = buildMultipart(c.requestForm ?? [:])
+                let (b, ct) = buildMultipart(
+                    c.requestForm ?? [:],
+                    order: Self.formFieldOrder(fromGoldenBody: c.serverView.first?.bodyText ?? ""))
                 body = b
                 explicitContentType = ct
             case "formMap":
-                // OkHttp FormBody 用标准 form urlencode：空格 → '+'，非字母数字 → %XX。
+                // OkHttp FormBody 按字段**加入顺序**拼 body，golden 期望串是
+                // `user=alice&pass=p%40ss+word`。Swift 的 `[String: String]` 无顺序，
+                // 直接用 `sorted()` 会得到 `pass=...&user=...`。
+                // 这里从 golden 自己的期望 body 里提取字段顺序，保证两边同序。
                 let form = c.requestForm ?? [:]
-                let encoded = form.keys.sorted().map { k in
+                let order = Self.formFieldOrder(fromGoldenBody: c.serverView.first?.bodyText ?? "")
+                let keys = order.isEmpty
+                    ? form.keys.sorted()
+                    : order.filter { form[$0] != nil } + form.keys.filter { !order.contains($0) }.sorted()
+                let encoded = keys.map { k in
                     "\(okHttpFormEncode(k))=\(okHttpFormEncode(form[k] ?? ""))"
                 }.joined(separator: "&")
                 body = Data(encoded.utf8)
@@ -243,6 +252,30 @@ final class RequestGoldenComparisonTests: XCTestCase {
                                            withTemplate: "127.0.0.1:\(port)")
     }
 
+    /// 从 golden 期望的 form body（`k1=v1&k2=v2`）里提取字段名顺序。
+    /// 用于复刻 OkHttp FormBody 的「加入顺序」——Swift 字典无序，无法自行保序。
+    private static func formFieldOrder(fromGoldenBody body: String) -> [String] {
+        guard !body.isEmpty else { return [] }
+        if body.contains("form-data") {
+            // multipart：按 `Content-Disposition: form-data; name="xxx"` 出现顺序。
+            var out: [String] = []
+            var rest = Substring(body)
+            let marker = "Content-Disposition: form-data; name=\""
+            while let r = rest.range(of: marker) {
+                let after = rest[r.upperBound...]
+                guard let end = after.firstIndex(of: "\"") else { break }
+                out.append(String(after[after.startIndex..<end]))
+                rest = after[end...]
+            }
+            return out
+        }
+        return body.split(separator: "&").compactMap { pair in
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let k = kv.first, !k.isEmpty else { return nil }
+            return String(k)
+        }
+    }
+
     /// OkHttp `FormBody` / `java.net.URLEncoder` 的 form urlencode：
     /// 空格 → `+`，`A-Za-z0-9-._*` 之外的所有字节按 UTF-8 逐字节 `%XX`（大写十六进制）。
     /// 对应 golden 里 `post-form-map` 的 `user=alice&pass=p%40ss+word`。
@@ -261,11 +294,18 @@ final class RequestGoldenComparisonTests: XCTestCase {
         return out
     }
 
-    private func buildMultipart(_ form: [String: String]) -> (Data, String) {
+    /// 构造 multipart body。
+    /// `order` 给出字段顺序（来自 golden 期望 body），为空时退回字典序——
+    /// OkHttp 的 `MultipartBody.Builder` 也按加入顺序排列 part。
+    private func buildMultipart(_ form: [String: String], order: [String] = []) -> (Data, String) {
         let boundary = "BOUNDARY1234567890ABCDEF"
         var out = Data()
         func append(_ s: String) { out.append(Data(s.utf8)) }
-        for (k, v) in form.sorted(by: { $0.key < $1.key }) {
+        let keys = order.isEmpty
+            ? form.keys.sorted()
+            : order.filter { form[$0] != nil } + form.keys.filter { !order.contains($0) }.sorted()
+        for k in keys {
+            guard let v = form[k] else { continue }
             append("--\(boundary)\r\n")
             if v.hasPrefix("FILE:") {
                 let parts = v.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)

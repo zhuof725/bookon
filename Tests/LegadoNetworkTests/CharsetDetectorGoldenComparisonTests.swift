@@ -80,6 +80,14 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         let decodedContentTypeUtf8: String?
         let decodedContentTypeGbk: String?
         let decodedExplicitBeatsHeader: String?
+        /// 标准 UTF-8 解码（Unicode 最大子部分算法）结果。
+        ///
+        /// Java 的 `new String(bytes, "UTF-8")` 对**连续非法字节**产生的替换字符数量与
+        /// Unicode 标准（Swift `String(decoding:as:UTF8.self)`、Python `errors='replace'`）
+        /// 不一致（JDK 的 resync 行为），240 份语料里有 18 份受影响。golden 因此额外输出本字段，
+        /// 让 Swift 与「标准语义」对照；Java 原生结果 `decodedExplicitUtf8` 的差异在 README
+        /// 差异表单列说明。合法 UTF-8 输入下两者完全相同。
+        let decodedExplicitUtf8Standard: String?
 
         private enum CodingKeys: String, CodingKey {
             case name, group, note, synthetic, syntheticNovelChapter, bytesBase64, byteLength
@@ -88,6 +96,7 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             case decodedContentTypeQuoted, decodedContentTypeNoCharset
             case decodedExplicitUtf8, decodedExplicitGbk, decodedExplicitBig5, decodedExplicitIso88591
             case decodedContentTypeUtf8, decodedContentTypeGbk, decodedExplicitBeatsHeader
+            case decodedExplicitUtf8Standard
         }
 
         init(from decoder: Decoder) throws {
@@ -117,6 +126,7 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             decodedContentTypeUtf8 = try c.decodeIfPresent(String.self, forKey: .decodedContentTypeUtf8)
             decodedContentTypeGbk = try c.decodeIfPresent(String.self, forKey: .decodedContentTypeGbk)
             decodedExplicitBeatsHeader = try c.decodeIfPresent(String.self, forKey: .decodedExplicitBeatsHeader)
+            decodedExplicitUtf8Standard = try c.decodeIfPresent(String.self, forKey: .decodedExplicitUtf8Standard)
         }
     }
 
@@ -285,16 +295,55 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             }
         }
 
+        // Java 生成器把每个 `decoded*` 用 `substring(0, 400)` 截断（**UTF-16 单元**计）。
+        // Swift 必须做同样的截断再比较，否则长文本永远「不一致」（曾误报 64 处）。
+        // 注意计数单位是 UTF-16 code unit，不是 Unicode 标量：含代理对时 400 单元 = 399 标量。
+        func javaTruncate(_ s: String) -> String {
+            let u16 = Array(s.utf16)
+            if u16.count <= 400 { return s }
+            return String(decoding: u16[0..<400], as: UTF16.self)
+        }
+
         var failures: [String] = []
         var comparisons = 0
+        var standardUtf8Comparisons = 0
+
         for c in cases {
             let b = bytes(fromBase64: c.bytesBase64)
+
+            // 0) 标准 UTF-8 解码：与 golden 的 `decodedExplicitUtf8Standard` 对照。
+            // 这一项锁的是「Swift 的 UTF-8 容错解码 == Unicode 最大子部分算法」，
+            // 即与 Python `errors='replace'` 同语义（见 golden 侧 standardUtf8Decode 注释）。
+            if let expectedStd = c.decodedExplicitUtf8Standard {
+                standardUtf8Comparisons += 1
+                let swiftStd = javaTruncate(
+                    JsNetTextDecoder.decode(bytes: b, explicitCharset: "UTF-8", contentTypeHeader: nil))
+                if swiftStd != expectedStd {
+                    failures.append(esc("""
+                    [\(c.name)] decodedExplicitUtf8Standard 不一致（\(c.note)）
+                      Java(标准算法): \(expectedStd)
+                      Swift         : \(swiftStd)
+                    """))
+                }
+            }
+
             for (key, explicit, contentType) in CharsetDetectorGoldenComparisonTests.decodeCombos {
                 guard let expected = goldenValue(c, key) else { continue }
                 comparisons += 1
-                let swift = JsNetTextDecoder.decode(bytes: b, explicitCharset: explicit,
-                                                    contentTypeHeader: contentType)
+                let swift = javaTruncate(
+                    JsNetTextDecoder.decode(bytes: b, explicitCharset: explicit,
+                                            contentTypeHeader: contentType))
                 if swift != expected {
+                    // 已单独用标准算法校验过的 UTF-8 路径不再重复计入：Java 原生
+                    // `new String(bytes,"UTF-8")` 与标准算法的差异只出现在「输入含非法 UTF-8
+                    // 字节」时（连续非法字节的 U+FFFD 个数），此时 Java 值必然含 U+FFFD。
+                    // 无 U+FFFD 的用例两边必须逐字相同，所以只跳过含 U+FFFD 的那批。
+                    // 该平台差异已记入 README 差异表，不属于本移植的偏差。
+                    let isJavaUtf8Resync = (key == "decodedExplicitUtf8"
+                                            || key == "decodedContentTypeUtf8")
+                        && c.decodedExplicitUtf8Standard != nil
+                        && expected.unicodeScalars.contains(where: { $0.value == 0xFFFD })
+                    if isJavaUtf8Resync { continue }
                     failures.append(esc("""
                     [\(c.name)] \(key) 解码不一致（\(c.note)）
                       explicit=\(explicit ?? "-") contentType=\(contentType ?? "-")
@@ -307,6 +356,8 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
 
         // 用户要求：完整解码用例至少 40 条
         XCTAssertGreaterThanOrEqual(comparisons, 40, "完整解码对照应 ≥40 条")
+        XCTAssertGreaterThanOrEqual(standardUtf8Comparisons, 200,
+                                    "标准 UTF-8 解码对照应覆盖全部样本（≥200 条）")
 
         if !failures.isEmpty {
             XCTFail("解码链 golden 不一致 \(failures.count)/\(comparisons)：\n"
@@ -317,8 +368,16 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
     // MARK: - 4) 解码链优先级（独立于 golden 的结构性断言，锁定 Kotlin 顺序）
 
     /// Kotlin `ResponseBody.text(encode)` 的优先级：explicit > Content-Type > getHtmlEncode。
+    ///
+    /// 关于「无 meta 无头」这一级：**不能想当然认为检测器会把任意 GBK 字节认出 GB 系**。
+    /// ICU4J 的启发式打分对「字节很少」的输入会给 Big5/EUC-KR/EUC-JP/GB18030 同分（各 10），
+    /// 并按识别器列表的并列规则取 `Big5`。这一点已用真实 ICU4J（golden 侧的
+    /// `EncodingDetectGolden.getEncode`）实测确认：12 字节的 `中文测试内容`（GBK）
+    /// → `Big5`、conf=10；只有到 ~180 字节的成篇中文才稳定给出 `GB18030`、conf=100。
+    /// 本用例因此分别用「短样本」和「长样本」锁定这两段真实行为，而不是假设一个并不存在的
+    /// 「短样本也能认出 GBK」。
     func testDecodePriorityMatchesKotlin() {
-        // 硬编码的 GBK 字节（"中文测试内容" 的 GBK 编码）。
+        // 短样本：12 字节 GBK「中文测试内容」。
         // 不用 CoreFoundation 转码在测试里现算字节：那条路径依赖平台、且会掩盖「字节是否真的
         // 是 GBK」的问题；固定字节让本用例在 macOS 与 iOS 上完全确定。
         let gbkBytes: [UInt8] = [
@@ -340,9 +399,23 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
                                          contentTypeHeader: "text/html; charset=\"GBK\"")
         XCTAssertEqual(b2, "中文测试内容", "带引号的 charset 值应被正确解析（对齐 OkHttp MediaType.charset()）")
 
-        // 两者皆无时走 getHtmlEncode（检测器应认出 GBK/GB18030）
+        // 两者皆无时走 getHtmlEncode。短样本下 ICU4J 的并列规则给 Big5（见方法头注释），
+        // 因此这里锁定的是「与 Kotlin 完全一致」，而不是「认出中文」。
+        XCTAssertEqual(CharsetDetector.detect(gbkBytes), "Big5",
+                       "短 GBK 样本按 ICU4J 并列规则应判 Big5（与 Java golden 一致）")
         let c = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: nil, contentTypeHeader: nil)
-        XCTAssertEqual(c, "中文测试内容", "无 meta 无头时应由 ICU4J 检测器认出 GB 系编码")
+        XCTAssertEqual(c, JsNetTextDecoder.decode(Data(gbkBytes), charsetName: "Big5"),
+                       "无 meta 无头时应走检测器路径，且检测结果与 Kotlin（Big5）一致")
+
+        // 长样本：~187 字节成篇 GBK 中文，ICU4J 给出 GB18030/conf=100（与 golden 的
+        // gbk-chinese-3 完全相同），此时检测器路径才必须解出正确中文。
+        let longGbk = Self.gbkChinesePassage3
+        XCTAssertEqual(CharsetDetector.detect(longGbk), "GB18030",
+                       "长 GBK 样本应被 ICU4J 判为 GB18030（与 Java golden 一致）")
+        let longDecoded = JsNetTextDecoder.decode(bytes: longGbk, explicitCharset: nil,
+                                                  contentTypeHeader: nil)
+        XCTAssertTrue(longDecoded.contains("他的"),
+                      "长 GBK 样本经检测器解码后应是可读中文，实际=\(longDecoded.prefix(16))")
 
         // explicit 指向「不匹配的编码」时必须照用（不回落检测器），与 Java
         // `new String(bytes, charset)` 的替换字符语义一致。
@@ -351,6 +424,23 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         XCTAssertNotEqual(d, "中文测试内容", "explicit 指定 ISO-8859-1 时不应回落检测器拿到正确中文")
         XCTAssertEqual(d.count, gbkBytes.count, "ISO-8859-1 是单字节编码，字符数应等于字节数")
     }
+
+    /// golden 语料 `gbk-chinese-3` 的原始字节（187 字节 GBK 成篇中文），
+    /// ICU4J 判 `GB18030`/conf=100。硬编码以保证跨平台确定。
+    static let gbkChinesePassage3: [UInt8] = [
+        0xB5, 0xDA, 0xC6, 0xDF, 0xCA, 0xAE, 0xC6, 0xDF, 0xD5, 0xC2, 0x20, 0xBD, 0xA3, 0xC3, 0xF9, 0x0A,
+        0xBD, 0xA3, 0xB9, 0xE2, 0xC8, 0xE7, 0xC1, 0xB7, 0xA3, 0xAC, 0xC6, 0xC6, 0xBF, 0xD5, 0xB6, 0xF8,
+        0xD6, 0xC1, 0xA1, 0xA3, 0xC2, 0xFA, 0xD7, 0xF9, 0xBD, 0xE4, 0xBE, 0xEA, 0xA3, 0xAC, 0xCE, 0xA8,
+        0xD3, 0xD0, 0xCB, 0xFB, 0xD2, 0xC0, 0xBE, 0xC9, 0xB6, 0xCB, 0xD7, 0xF8, 0xB2, 0xBB, 0xB6, 0xAF,
+        0xA3, 0xAC, 0xB6, 0xCB, 0xC6, 0xF0, 0xB2, 0xE8, 0xD5, 0xBD, 0xC7, 0xE1, 0xC7, 0xE1, 0xC3, 0xF2,
+        0xC1, 0xCB, 0xD2, 0xBB, 0xBF, 0xDA, 0xA1, 0xA3, 0x0A, 0xA1, 0xB0, 0xD5, 0xE2, 0xD2, 0xBB, 0xBD,
+        0xA3, 0xA3, 0xAC, 0xCE, 0xD2, 0xD2, 0xD1, 0xBE, 0xAD, 0xB5, 0xC8, 0xC1, 0xCB, 0xBA, 0xDC, 0xB6,
+        0xE0, 0xC4, 0xEA, 0xA1, 0xA3, 0xA1, 0xB1, 0x0A, 0xE9, 0xDC, 0xCD, 0xE2, 0xB5, 0xC4, 0xD3, 0xEA,
+        0xBA, 0xF6, 0xC8, 0xBB, 0xCD, 0xA3, 0xC1, 0xCB, 0xA3, 0xAC, 0xD4, 0xC2, 0xB9, 0xE2, 0xD2, 0xBB,
+        0xB4, 0xE7, 0xD2, 0xBB, 0xB4, 0xE7, 0xB5, 0xD8, 0xC2, 0xFE, 0xBD, 0xF8, 0xCD, 0xA5, 0xD4, 0xBA,
+        0xA3, 0xAC, 0xD5, 0xD5, 0xD4, 0xDA, 0xC1, 0xBD, 0xC8, 0xCB, 0xD6, 0xAE, 0xBC, 0xE4, 0xB5, 0xC4,
+        0xC7, 0xE0, 0xCA, 0xAF, 0xB0, 0xE5, 0xC9, 0xCF, 0xA1, 0xA3, 0x0A,
+    ]
 
     /// UTF-8 BOM 必须被剥离（对应 Utf8BomUtils.removeUTF8BOM）。
     func testUTF8BOMStrippedBeforeDecode() {

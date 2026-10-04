@@ -195,9 +195,15 @@ enum JsNetEnvelope {
 /// 各级都按 Java `new String(bytes, charset)` 的 U+FFFD 替换语义解码。
 enum JsNetTextDecoder {
 
-    /// 剥离 UTF-8 BOM（对应 legado Utf8BomUtils.removeUTF8BOM 的等价物）。
+    /// 剥离 UTF-8 BOM（对应 legado `Utf8BomUtils.removeUTF8BOM(bytes)`）。
+    ///
+    /// ⚠️ 判定条件是 **`bytes.size > 3`（严格大于）**，不是 `>= 3`：
+    /// legado 的三处实现（`removeUTF8BOM(String)` / `removeUTF8BOM(ByteArray)` / `hasBom`）
+    /// 用的都是 `bytes.size > 3`，因此**恰好只有 BOM、没有正文字节的 3 字节输入不会被剥离**，
+    /// BOM 会原样留在解码结果里。本移植早期写成 `>= 3`，导致 `empty-only-bom` 这类样本
+    /// 与 Kotlin 不一致（golden 期望 `"\u{FEFF}"`，Swift 却给出 `""`）。已按 Kotlin 修正。
     static func removeUTF8BOM(_ bytes: [UInt8]) -> [UInt8] {
-        if bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
+        if bytes.count > 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
             return Array(bytes.dropFirst(3))
         }
         return bytes
@@ -242,22 +248,41 @@ enum JsNetTextDecoder {
     }
 
     /// 按字符集名解码（支持 UTF-8/UTF-16/GBK/GB2312/GB18030/Big5/ISO-8859-1/ASCII；
-    /// 其它名字返回 nil 走兜底）。GB 系/Big5 用 CFStringEncoding 映射（与 AnalyzeUrl.GBKBytes 同源）。
+    /// 其它名字返回 nil 走兜底）。
+    ///
+    /// **全部走容错解码**（`lossyString`），语义等同 Java `new String(bytes, charset)`：
+    /// 遇到目标编码里非法的字节序列插入 U+FFFD，而不是整体失败。
+    ///
+    /// ⚠️ 不要对这些分支改用 `String(data:encoding:)`：它在 Apple 平台与 Linux 上都是
+    /// **严格**的（非法字节 → nil）。一旦返回 nil，上层 `decode(bytes:...)` 会把它当作
+    /// 「该 charset 不可用」而**回落到下一级**，从而静默忽略 explicit charset / Content-Type
+    /// charset。实测的典型翻车：GBK 字节配 explicit=UTF-8，Kotlin 输出 UTF-8 乱码，
+    /// 而严格路径返回 nil → 回落检测器 → 反而输出「正确中文」，与 Kotlin 全面不符
+    /// （本地全量对照曾一次性暴露 820 处不一致）。
     static func decode(_ data: Data, charsetName: String) -> String? {
         let name = charsetName.uppercased().replacingOccurrences(of: "_", with: "-")
         switch name {
         case "UTF-8", "UTF8":
+            // 直接用 Swift 标准库的容错 UTF-8 解码（Unicode 最大子部分算法），
+            // **不要**走 `lossyString`：
+            //   - `NSString`/`CFString` 的 UTF-8 解码在 Linux 上会把「孤立的 BOM」吃掉
+            //     （`[EF BB BF]` → 空串），而 Java `new String(bytes,"UTF-8")` 与 Swift
+            //     `String(decoding:)` 都保留 `U+FEFF`。走 NSString 会让 `empty-only-bom`
+            //     这类样本与 Kotlin 不一致（golden 期望 "\u{FEFF}"）。
+            //   - `String(decoding:as:UTF8.self)` 在 Apple 与 Linux 上语义完全一致，
+            //     且替换字符个数与 Unicode 标准一致。
             return String(decoding: Array(data), as: UTF8.self)
         case "UTF-16", "UTF16":
-            return String(data: data, encoding: .utf16)
+            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding)
         case "UTF-16LE", "UTF16LE":
-            return String(data: data, encoding: .utf16LittleEndian)
+            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding)
         case "UTF-16BE", "UTF16BE":
-            return String(data: data, encoding: .utf16BigEndian)
+            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding)
         case "ISO-8859-1", "LATIN1", "ISO8859-1":
-            return String(data: data, encoding: .isoLatin1)
+            return Self.lossyString(data, nsEncoding: NSISOLatin1StringEncoding)
         case "US-ASCII", "ASCII":
-            return String(data: data, encoding: .ascii) ?? String(decoding: Array(data), as: UTF8.self)
+            // Java 的 US-ASCII 对 >0x7F 也是替换字符语义；这里同样用容错路径。
+            return Self.lossyString(data, nsEncoding: NSASCIIStringEncoding)
         default:
             break
         }
@@ -314,9 +339,35 @@ enum JsNetTextDecoder {
                 return created as String
             }
         }
+        // 编码在系统里不可用（cfEncoding == invalidId）或 CF 创建失败 → 落到下面的
+        // 通用容错路径，仍然返回字符串而不是 nil。
         #endif
-        // 非 Darwin 平台（供本地 Linux 语法/行为验证）或编码在系统里不可用时的退路。
-        return NSString(data: data, encoding: nsEncoding) as String?
+        // 非 Darwin 平台（供本地 Linux 语法/行为验证）或上述 CF 路径不可用时的退路。
+        // `NSString(data:encoding:)` 在 Linux/Apple 上都是严格的（非法字节 → nil），
+        // 所以这里必须自己按名分派到等价的容错路径，绝不能直接返回它的 nil。
+        if let s = NSString(data: data, encoding: nsEncoding) as String? {
+            return s
+        }
+        return lossyFallback(bytes, nsEncoding: nsEncoding)
+    }
+
+    /// 通用容错解码退路：对 Foundation 严格解码失败的字节，按「UTF-8 用 `String(decoding:)`
+    /// 的替换字符语义；其余单/双字节编码逐字节映射」产出字符串。
+    ///
+    /// 这条路径只会在 `CFStringCreateWithBytes` 与 `NSString(data:encoding:)` 都失败时进入
+    /// （Linux 本地验证、或系统缺该编码），目的只有一个：**永不返回 nil**，从而保持
+    /// Java `new String(bytes, charset)` 的语义，不触发上游静默回落。
+    private static func lossyFallback(_ bytes: [UInt8], nsEncoding: UInt) -> String? {
+        switch nsEncoding {
+        case NSUTF8StringEncoding:
+            // 与 Java 的 UTF-8 解码一致：非法序列插入 U+FFFD。
+            return String(decoding: bytes, as: UTF8.self)
+        case NSISOLatin1StringEncoding:
+            // ISO-8859-1 是全单字节映射：1 字节 = 1 个码位，永不失败。
+            return String(bytes.map { Character(UnicodeScalar(UInt32($0))!) })
+        default:
+            return nil
+        }
     }
 }
 

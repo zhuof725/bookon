@@ -1193,6 +1193,12 @@ JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通�
 | 6B-8 | 失败错误文本 | Java stackTraceStr | Swift 错误描述 | 对齐失败分支语义，文本不同 |
 | 6B-9 | 客户端自动头 | OkHttp 自动加 `host` / `connection` / `accept-encoding: gzip` / `user-agent: okhttp/5.3.2` / `content-length` | URLSession/CFNetwork 自动加 `Host` / `Accept` / `Accept-Language` / `Accept-Encoding: br, gzip, deflate` / `User-Agent: <CFNetwork/… Darwin/…>` / `Content-Length`，且 **不接受** 修改 `Host` | 见下方「URLSession 与 OkHttp 自动头差异」；书源**显式**写的头已由 `request_cases` 43 条逐条对照一致 |
 | 6B-10 | 线上 request-target 百分号编码 | 见 6A 差异 #4b | 同 | 已知差异，`HttpUrlRequestReplayTests.knownWireEncodingDivergences` 逐名钉住 |
+| 6B-11 | BOM 剥离阈值 | `Utf8BomUtils.removeUTF8BOM` 判定 `bytes.size > 3`（**严格大于**） | **已按 Kotlin 对齐**：`JsNetTextDecoder.removeUTF8BOM` 同样用 `count > 3` | 恰好 3 字节（只有 BOM、无正文）时**两边都不剥离**，BOM 保留在解码结果里。早期误写成 `>= 3`，被 golden 样本 `empty-only-bom` 抓出并修正 |
+| 6B-12 | UTF-8 容错解码的替换字符个数 | Java `new String(bytes,"UTF-8")` 对**连续非法字节**产生的 `U+FFFD` 个数有时少于 Unicode 标准（JDK `sun.nio.cs.UTF_8` 的 resync 行为） | Swift 用 `String(decoding:as:UTF8.self)`，遵循 Unicode **最大子部分**算法，与 Python `errors='replace'` 一致（**这是标准语义**） | 240 份样本中 18 份受影响（均为含非法 UTF-8 的乱码样本）。golden 额外输出 `decodedExplicitUtf8Standard`（标准算法结果），Swift 与该字段逐字符对比 **240/240 全等**；Java 原生结果 `decodedExplicitUtf8` 的差异属平台行为，不算移植偏差 |
+
+> **6B-11 / 6B-12 是本轮 golden 对照新抓出的两项**：前者是真实移植缺陷（已修），后者是
+> JDK 与 Unicode 标准的差异（本移植选标准语义，并在 golden 侧显式导出标准结果以便逐条对齐）。
+
 
 ### 字符集检测（legado icu4j 检测器全量移植 + 判定链接入）
 
@@ -1208,11 +1214,17 @@ JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通�
 `JsNetTextDecoder.decode` 逐级实现）：
 
 ```
-1. removeUTF8BOM          剥离 UTF-8 BOM
+1. removeUTF8BOM          剥离 UTF-8 BOM（阈值 count > 3，与 Kotlin 一致）
 2. explicitCharset        UrlOption.charset（书源里写的 charset）
-3. Content-Type charset   HTTP 头的 charset=
+3. Content-Type charset   HTTP 头的 charset=（按 OkHttp MediaType.charset() 语义，会剥成对引号）
 4. getHtmlEncode          <meta charset> / http-equiv → icu4j 检测器 → "UTF-8" 兜底
 ```
+
+每一级解码都用**容错**语义（非法字节 → `U+FFFD`），对齐 Java `new String(bytes, charset)`：
+`UTF-8` 走 `String(decoding:as:UTF8.self)`（Unicode 标准算法），其余编码走
+`CFStringCreateWithBytes(..., false)`（Darwin）并带通用退路。绝不能换成严格的
+`String(data:encoding:)`——它在 Apple 与 Linux 上遇非法字节都会返回 `nil`，会让上层
+误判为「该 charset 不可用」而静默回落，把 explicit charset 吞掉。
 
 ### golden 对照：字符集（`cases/charset_cases.json`，240 份样本）
 
@@ -1224,10 +1236,12 @@ golden 侧**直接编译 legado 自带的 icu4j 源码**（`scripts/golden/src/m
 覆盖：UTF-8 带/不带 BOM、GBK、GB2312、GB18030、Big5、EUC-KR、Shift_JIS、EUC-JP、
 ISO-8859-1、windows-1252、UTF-16 LE/BE、UTF-32、1–10 字节极短文本、HTML 带/不带 meta、
 中英混排、乱码字节、C1 控制区、空数据；其中 **45 份是合成的小说章节风格文本**（`syntheticNovelChapter: true` 标注）。
-每条输出检测字符集名、置信度、`detectAll` 全列表，以及 10 种解码组合的结果。
+每条输出检测字符集名、置信度、`detectAll` 全列表，以及 10 种解码组合的结果；
+另额外输出 `decodedExplicitUtf8Standard`（Unicode 标准算法的 UTF-8 解码，见差异表 6B-12）。
 
 Swift 侧由 `CharsetDetectorGoldenComparisonTests` 逐条比较字符集名与置信度、
-`getHtmlEncode` 结果、以及 ≥40 条完整解码用例；**CI 下 golden 文件缺失直接 `XCTFail`**。
+`getHtmlEncode` 结果、以及 ≥40 条完整解码用例（比较前按 Java 的 `substring(0,400)`
+UTF-16 单元截断）；**CI 下 golden 文件缺失直接 `XCTFail`**。
 
 ### golden 对照：请求与重定向（OkHttp 5.3.2 → `com.sun.net.httpserver`，104 条）
 
