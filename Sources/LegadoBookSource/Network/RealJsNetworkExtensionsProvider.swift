@@ -376,7 +376,7 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
         case "cacheFile":
             return try cacheFile(arguments: arguments)
         case "downloadFile":
-            return try downloadFile(arguments: arguments)
+            return try downloadFile(url: arguments.first ?? "")
         default:
             throw RuleEngineError.unsupported(
                 "java.\(method) 不在 JsNetworkExtensionsProvider 覆盖范围（6B 已覆盖 get/post/head/connect/ajaxAll/cacheFile/downloadFile）")

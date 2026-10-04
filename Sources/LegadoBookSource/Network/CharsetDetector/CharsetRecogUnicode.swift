@@ -92,7 +92,9 @@ final class CharsetRecogUTF16LE: CharsetRecognizer {
 }
 
 /// UTF-32 识别器公共逻辑（ICU4J `CharsetRecog_UTF_32`），端序由子类决定。
-private class CharsetRecogUTF32: CharsetRecognizer {
+/// UTF-32 共享识别器（Java `CharsetRecog_Unicode.CharsetRecog_UTF_32`）。
+/// 抽象基类：仅被子类继承（internal 而非 private，见 CharsetRecogEUC 注释）。
+class CharsetRecogUTF32: CharsetRecognizer {
     var name: String { "" }
 
     /// Java `getChar(input, index)`：取第 index 个 4 字节码点。

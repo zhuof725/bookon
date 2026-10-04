@@ -36,10 +36,14 @@ func match2022Sequences(text: [UInt8], textLen: Int, escapeSequences: [[UInt8]])
                     j += 1
                 }
                 hits += 1
-                // Java: i += seq.length - 1 后由 for 的 i++ 再 +1，净效果为跳过整个序列
-                i += seq.count
+                // 与 Java 逐行对齐：Java `i += seq.length - 1` 后 `continue scanInput`，
+                // 但带标签的 continue 会执行 for 的更新表达式 i++（JLS 14.16），
+                // 即循环末尾还会自增一次。这里不 continue，直接落到下方的移位符检查与
+                // i += 1，执行顺序与 Java 完全一致（命中后 i 指向序列末字节；
+                // 各转义序列末字节均非 0x0E/0x0F，移位符检查结果与 Java 相同）。
+                i += seq.count - 1
                 matched = true
-                continue scanInput
+                break checkEscapes
             }
             if !matched {
                 misses += 1
