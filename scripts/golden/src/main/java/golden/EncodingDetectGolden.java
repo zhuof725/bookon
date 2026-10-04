@@ -153,22 +153,25 @@ final class EncodingDetectGolden {
         return new String(responseBytes, java.nio.charset.Charset.forName(getHtmlEncode(responseBytes)));
     }
 
-    /** 对应 OkHttp <code>MediaType.charset()</code>：从 Content-Type 头取 charset 参数。 */
+    /**
+     * 对应 Kotlin {@code ResponseBody.contentType()?.charset()}，也就是 OkHttp
+     * {@link okhttp3.MediaType#charset()}。
+     *
+     * <p><b>必须直接调用真实 OkHttp</b>，不要手写字符串解析：OkHttp 对参数值做 token 化并
+     * <b>剥掉成对引号</b>，因此 {@code charset="UTF-8"} 与 {@code charset='GBK'} 都能正确取到值。
+     * 早期实现遇 {@code "} 即截断 → 返回 null → 错误地回落到检测器，进而把 GBK 字节的样本
+     * 解成「正确中文」，让 Swift 侧按 OkHttp 语义解出 UTF-8 乱码时误判为不一致。
+     */
     static String charsetFromContentType(String contentType) {
         if (contentType == null) return null;
-        int idx = indexOfIgnoreCase(contentType, "charset=");
-        if (idx < 0) return null;
-        String rest = contentType.substring(idx + "charset=".length()).trim();
-        int end = rest.length();
-        for (int i = 0; i < rest.length(); i++) {
-            char c = rest.charAt(i);
-            if (c == ';' || c == ' ' || c == '\t' || c == '"' || c == '\'') {
-                end = i;
-                break;
-            }
+        try {
+            okhttp3.MediaType mt = okhttp3.MediaType.parse(contentType);
+            if (mt == null) return null;
+            java.nio.charset.Charset cs = mt.charset();
+            return cs == null ? null : cs.name();
+        } catch (Throwable t) {
+            return null;
         }
-        String value = rest.substring(0, end).trim();
-        return value.isEmpty() ? null : value;
     }
 
     // ---- 小工具 ----

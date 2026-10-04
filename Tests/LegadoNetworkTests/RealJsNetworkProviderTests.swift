@@ -501,7 +501,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/dual", server)
         let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
         let v = try rule.evalJS("""
-        var r = java.connect('\\(target)');
+        var r = java.connect('\(target)');
         [r.body(), String(r.body), r.body + '!', (r.body === undefined ? 'undef' : 'def')].join('|')
         """)
         XCTAssertEqual(v.stringValue, "dual-body-content|dual-body-content|dual-body-content!|def",
@@ -516,7 +516,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/dual2", server)
         let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
         let v = try rule.evalJS("""
-        var r = java.get('\\(target)', {});
+        var r = java.get('\(target)', {});
         [r.body(), String(r.body), r.body.length, r.body().length, r.body.indexOf('connection')].join('|')
         """)
         XCTAssertEqual(v.stringValue, "connection-body|connection-body|15|15|0",
@@ -531,7 +531,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/dual3", server)
         let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
         let v = try rule.evalJS("""
-        var r = java.get('\\(target)', {});
+        var r = java.get('\(target)', {});
         [('x=' + r.body), r.body.includes('345'), r.body.slice(0, 3), r.body[0],
          String(r.body) === '0123456789', JSON.stringify(r.body)].join('|')
         """)
@@ -558,8 +558,8 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let rule = makeRule(provider: provider, ajaxProvider: RealAjaxProvider(client: makeRealClient()))
 
         let start = Date()
-        let v1 = try rule.evalJS("java.get('\\(target)', {}).body()")
-        let v2 = try rule.evalJS("java.get('\\(target)', {}).body()")
+        let v1 = try rule.evalJS("java.get('\(target)', {}).body()")
+        let v2 = try rule.evalJS("java.get('\(target)', {}).body()")
         let elapsed = Date().timeIntervalSince(start)
 
         XCTAssertEqual(v1.stringValue, "rl-ok")
@@ -578,8 +578,8 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let provider = makeProvider()
         let rule = makeRule(provider: provider, ajaxProvider: RealAjaxProvider(client: makeRealClient()))
         let start = Date()
-        _ = try rule.evalJS("java.get('\\(target)', {}).body()")
-        _ = try rule.evalJS("java.get('\\(target)', {}).body()")
+        _ = try rule.evalJS("java.get('\(target)', {}).body()")
+        _ = try rule.evalJS("java.get('\(target)', {}).body()")
         let elapsed = Date().timeIntervalSince(start)
         XCTAssertLessThan(elapsed, 0.9, "未接限速时不应有 1s 级延迟，实际 \(elapsed)s")
     }

@@ -587,7 +587,7 @@ public final class RequestGen {
             for (Map.Entry<String, String> e : r.explicitHeaders) {
                 JsonArray p = new JsonArray();
                 p.add(e.getKey());
-                p.add(e.getValue());
+                p.add(normalizeBoundaryHeader(e.getValue()));
                 ha.add(p);
             }
             j.add("explicitHeaders", ha);
@@ -912,11 +912,27 @@ public final class RequestGen {
         }
     }
 
-    /** multipart boundary 归一化：任何 {@code --xxx} 分隔符统一成 {@code --BOUNDARY--}。 */
+    /**
+     * multipart boundary 归一化：任何 {@code --xxx} 分隔符统一成 {@code --BOUNDARY--}。
+     *
+     * <p>OkHttp 用 {@code UUID.randomUUID()} 生成 boundary（形如
+     * {@code 6c8abd86-de0e-4499-b40b-7ad1d1c7a4a2}），含连字符；Swift 侧用的是固定
+     * 纯字母数字 boundary。因此字符类必须包含 {@code -}，否则 OkHttp 的 UUID 完全匹配不上，
+     * 归一化形同虚设、两边永远比不相等（曾导致 14 处 multipart 用例误报）。
+     *
+     * <p>比较时由 Java 与 Swift 两侧调用同一语义（Swift 见
+     * {@code RequestGoldenComparisonTests.normalizeBoundary}），正则需保持等价格式。
+     */
     static String normalizeBoundary(String body) {
         if (body == null) return "";
-        return body.replaceAll("(?m)--[0-9a-zA-Z]{16,}--", "--BOUNDARY----")
-                .replaceAll("(?m)--[0-9a-zA-Z]{16,}", "--BOUNDARY--");
+        return body.replaceAll("(?m)--[0-9a-zA-Z-]{16,}--", "--BOUNDARY----")
+                .replaceAll("(?m)--[0-9a-zA-Z-]{16,}", "--BOUNDARY--");
+    }
+
+    /** 与 {@link #normalizeBoundary} 同语义：把 Content-Type 头里的 boundary 参数归一。 */
+    static String normalizeBoundaryHeader(String value) {
+        if (value == null) return "";
+        return value.replaceAll("(?i)boundary=[0-9a-zA-Z-]{16,}", "boundary=BOUNDARY");
     }
 
     static Map<String, String> parseQuery(String raw) {

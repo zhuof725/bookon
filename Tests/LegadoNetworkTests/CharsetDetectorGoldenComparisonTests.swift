@@ -318,9 +318,12 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
 
     /// Kotlin `ResponseBody.text(encode)` 的优先级：explicit > Content-Type > getHtmlEncode。
     func testDecodePriorityMatchesKotlin() {
-        let gbkBytes: [UInt8] = Array("中文测试内容".data(using: String.Encoding(
-            rawValue: CFStringConvertEncodingToNSStringEncoding(
-                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))))!)
+        // 硬编码的 GBK 字节（"中文测试内容" 的 GBK 编码）。
+        // 不用 CoreFoundation 转码在测试里现算字节：那条路径依赖平台、且会掩盖「字节是否真的
+        // 是 GBK」的问题；固定字节让本用例在 macOS 与 iOS 上完全确定。
+        let gbkBytes: [UInt8] = [
+            0xD6, 0xD0, 0xCE, 0xC4, 0xB2, 0xE2, 0xCA, 0xD4, 0xC4, 0xDA, 0xC8, 0xDD,
+        ]
 
         // explicit charset 优先于 Content-Type
         let a = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: "GBK",
@@ -332,9 +335,21 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
                                         contentTypeHeader: "text/html; charset=GBK")
         XCTAssertEqual(b, "中文测试内容", "Content-Type charset 应被使用")
 
+        // OkHttp 语义：charset 值带引号也要能取到（MediaType.charset() 会剥引号）。
+        let b2 = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: nil,
+                                         contentTypeHeader: "text/html; charset=\"GBK\"")
+        XCTAssertEqual(b2, "中文测试内容", "带引号的 charset 值应被正确解析（对齐 OkHttp MediaType.charset()）")
+
         // 两者皆无时走 getHtmlEncode（检测器应认出 GBK/GB18030）
         let c = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: nil, contentTypeHeader: nil)
         XCTAssertEqual(c, "中文测试内容", "无 meta 无头时应由 ICU4J 检测器认出 GB 系编码")
+
+        // explicit 指向「不匹配的编码」时必须照用（不回落检测器），与 Java
+        // `new String(bytes, charset)` 的替换字符语义一致。
+        let d = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: "ISO-8859-1",
+                                        contentTypeHeader: nil)
+        XCTAssertNotEqual(d, "中文测试内容", "explicit 指定 ISO-8859-1 时不应回落检测器拿到正确中文")
+        XCTAssertEqual(d.count, gbkBytes.count, "ISO-8859-1 是单字节编码，字符数应等于字节数")
     }
 
     /// UTF-8 BOM 必须被剥离（对应 Utf8BomUtils.removeUTF8BOM）。

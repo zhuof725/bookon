@@ -265,21 +265,49 @@ enum JsNetTextDecoder {
         if name == "GBK" || name == "GB2312" || name == "GB-2312" || name == "GB18030" || name == "CP936" {
             let enc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
-            if enc != 0 && enc != UInt(kCFStringEncodingInvalidId) {
-                return String(data: data, encoding: String.Encoding(rawValue: enc))
-            }
+            if let s = Self.lossyString(data, cfEncoding: enc) { return s }
             return nil
         }
         // Big5
         if name == "BIG5" || name == "BIG-5" || name == "BIG5-HKSCS" {
             let enc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.big5.rawValue))
-            if enc != 0 && enc != UInt(kCFStringEncodingInvalidId) {
-                return String(data: data, encoding: String.Encoding(rawValue: enc))
-            }
+            if let s = Self.lossyString(data, cfEncoding: enc) { return s }
             return nil
         }
         return nil
+    }
+
+    /// 用 CFString 的容错解码把字节转成字符串，**永不返回 nil**。
+    ///
+    /// 这是 Java `new String(bytes, charset)` / Kotlin `String(bytes, Charset)` 的语义：
+    /// 遇到目标编码里非法的字节序列时插入 U+FFFD（替换字符），而不是整体解码失败。
+    ///
+    /// 必须如此，否则 `String(data:encoding:)` 返回 nil 会被上层当成「该 charset 不可用」
+    /// 而回落到下一级（Content-Type / 检测器），导致 **explicit charset 被静默忽略**——
+    /// 例如 golden 用例里 GBK 字节配 explicit=Big5，Kotlin 输出 Big5 乱码，而早期实现
+    /// 因 Big5 解码返回 nil 回落检测器，反而输出「正确的」GBK 中文，与 Kotlin 不符。
+    ///
+    /// `CFStringCreateWithBytes` 在 `isExternalRepresentation = false` 时即为此模式。
+    private static func lossyString(_ data: Data, cfEncoding: CFStringEncoding) -> String? {
+        guard cfEncoding != kCFStringEncodingInvalidId else { return nil }
+        let bytes = [UInt8](data)
+        if bytes.isEmpty { return "" }
+        let created: CFString? = bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return nil }
+            return CFStringCreateWithBytes(kCFAllocatorDefault,
+                                           base,
+                                           buf.count,
+                                           cfEncoding,
+                                           false)
+        }
+        if let created = created {
+            return created as String
+        }
+        // 极少数情况（如编码本身在当前系统不可用）：退回 Foundation 的编码表。
+        let nsEncoding = CFStringConvertEncodingToNSStringEncoding(cfEncoding)
+        guard nsEncoding != 0 else { return nil }
+        return String(data: data, encoding: String.Encoding(rawValue: nsEncoding))
     }
 }
 

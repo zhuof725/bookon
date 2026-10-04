@@ -133,15 +133,24 @@ final class RequestGoldenComparisonTests: XCTestCase {
     /// multipart boundary 归一化（与 Java 侧 RequestGen.normalizeBoundary 一致）。
     private func normalizeBoundary(_ s: String) -> String {
         var out = s
-        if let re = try? NSRegularExpression(pattern: "--[0-9a-zA-Z]{16,}--", options: []) {
+        if let re = try? NSRegularExpression(pattern: "--[0-9a-zA-Z-]{16,}--", options: []) {
             out = re.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length),
                                               withTemplate: "--BOUNDARY----")
         }
-        if let re = try? NSRegularExpression(pattern: "--[0-9a-zA-Z]{16,}", options: []) {
+        if let re = try? NSRegularExpression(pattern: "--[0-9a-zA-Z-]{16,}", options: []) {
             out = re.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length),
                                               withTemplate: "--BOUNDARY--")
         }
         return out
+    }
+
+    /// 与 Java 侧 `RequestGen.normalizeBoundaryHeader` 同语义：Content-Type 里的 boundary 归一。
+    private func normalizeBoundaryHeader(_ s: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "boundary=[0-9a-zA-Z-]{16,}", options: [.caseInsensitive]) else {
+            return s
+        }
+        return re.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length),
+                                           withTemplate: "boundary=BOUNDARY")
     }
 
     // MARK: - 把 golden 的「OkHttp 请求构造」翻译成 Swift 侧同样构造
@@ -165,7 +174,10 @@ final class RequestGoldenComparisonTests: XCTestCase {
         }
 
         var body = Data()
-        var contentType: String? = nil
+        // 注意：OkHttp 侧 postForm / postMultipart 的 Content-Type **是显式头**
+        // （见 golden serverView.explicitHeaders），所以这里也把它放进 headers 而不是
+        // HTTPRequest.contentType，否则显式头对照会缺一项（曾误报多条用例）。
+        var explicitContentType: String? = nil
         switch c.requestMethod {
         case "HEAD":
             break
@@ -173,26 +185,37 @@ final class RequestGoldenComparisonTests: XCTestCase {
             switch c.bodyKind {
             case "json":
                 body = Data((c.requestBody ?? "").utf8)
-                contentType = "application/json; charset=UTF-8"
+                explicitContentType = "application/json; charset=UTF-8"
             case "multipart":
                 let (b, ct) = buildMultipart(c.requestForm ?? [:])
                 body = b
-                contentType = ct
+                explicitContentType = ct
+            case "formMap":
+                // OkHttp FormBody 用标准 form urlencode：空格 → '+'，非字母数字 → %XX。
+                let form = c.requestForm ?? [:]
+                let encoded = form.keys.sorted().map { k in
+                    "\(okHttpFormEncode(k))=\(okHttpFormEncode(form[k] ?? ""))"
+                }.joined(separator: "&")
+                body = Data(encoded.utf8)
+                explicitContentType = "application/x-www-form-urlencoded"
             case let k? where k.hasPrefix("text/"):
                 body = Data((c.requestBody ?? "").utf8)
-                contentType = k
+                explicitContentType = k
             default:
                 // postForm(encodedForm)：Content-Type 固定为 x-www-form-urlencoded
                 body = Data((c.requestBody ?? "").utf8)
-                contentType = "application/x-www-form-urlencoded"
+                explicitContentType = "application/x-www-form-urlencoded"
             }
         default:
             break
         }
-        // 用户显式给了 Content-Type 头时优先（对齐 OkHttp addHeader 会覆盖自动头）
+        // 用户显式给了 Content-Type 头时以用户的为准；否则用上面推导出的（同样属于显式头）。
         if let explicitCT = headers.first(where: { $0.0.caseInsensitiveCompare("Content-Type") == .orderedSame }) {
-            contentType = explicitCT.1
+            explicitContentType = explicitCT.1
             headers.removeAll { $0.0.caseInsensitiveCompare("Content-Type") == .orderedSame }
+        }
+        if let ct = explicitContentType {
+            headers.append(("Content-Type", ct))
         }
 
         let method: RequestMethod
@@ -202,9 +225,10 @@ final class RequestGoldenComparisonTests: XCTestCase {
         default: method = .get
         }
 
+        // body 是否已带 contentType 头由上面的 headers 承载，这里传 nil 避免重复注入。
         var req = HTTPRequest(url: url, method: method, headers: headers,
                               body: (method == .get || method == .head) ? nil : body,
-                              contentType: contentType)
+                              contentType: nil)
         req.followRedirects = c.followRedirects
 
         let cache = CacheManager(storage: MemoryCacheStorage())
@@ -217,6 +241,24 @@ final class RequestGoldenComparisonTests: XCTestCase {
         guard let re = try? NSRegularExpression(pattern: "127\\.0\\.0\\.1:\\d+", options: []) else { return url }
         return re.stringByReplacingMatches(in: url, range: NSRange(location: 0, length: (url as NSString).length),
                                            withTemplate: "127.0.0.1:\(port)")
+    }
+
+    /// OkHttp `FormBody` / `java.net.URLEncoder` 的 form urlencode：
+    /// 空格 → `+`，`A-Za-z0-9-._*` 之外的所有字节按 UTF-8 逐字节 `%XX`（大写十六进制）。
+    /// 对应 golden 里 `post-form-map` 的 `user=alice&pass=p%40ss+word`。
+    private func okHttpFormEncode(_ s: String) -> String {
+        var out = ""
+        for byte in Array(s.utf8) {
+            switch byte {
+            case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2D, 0x2E, 0x5F, 0x2A:  // A-Z a-z 0-9 - . _ *
+                out.append(Character(UnicodeScalar(byte)))
+            case 0x20:  // 空格
+                out.append("+")
+            default:
+                out += String(format: "%%%02X", byte)
+            }
+        }
+        return out
     }
 
     private func buildMultipart(_ form: [String: String]) -> (Data, String) {
@@ -281,17 +323,41 @@ final class RequestGoldenComparisonTests: XCTestCase {
                 failures.append("[\(c.name)] path 不一致 Java=\(goldenView.path) Swift=\(got.path)")
             }
 
-            // 显式头：OkHttp 侧已排除自动头；Swift 侧同样排除 URLSession 自动头
-            let swiftExplicit = got.headers.filter { !Self.autoHeaders.contains($0.0.lowercased()) }
-                .map { "\($0.0.lowercased())=\($0.1)" }
-                .sorted()
-            let javaExplicit = goldenView.explicitHeaders.map { "\($0[0].lowercased())=\($0[1])" }.sorted()
-            if swiftExplicit != javaExplicit {
-                failures.append(esc("""
-                [\(c.name)] 显式头不一致
-                  Java : \(javaExplicit.joined(separator: ", "))
-                  Swift: \(swiftExplicit.joined(separator: ", "))
-                """))
+            // 显式头对照。
+            // OkHttp 侧 explicitHeaders 是「测试代码显式 addHeader 的头」；Swift 侧无法逐项
+            // 区分「用户显式设置」与「URLSession 自动补」，因此这里按 golden 的键集逐个核对：
+            // golden 列出的每个头，Swift 实际发出的值必须一致。值统一做 boundary 归一化。
+            //
+            // 例外：URLSession 会自动补 `Accept`（OkHttp 不补）。当调用方未显式设置该头时，
+            // URLSession 的默认值属于自动头差异（README 差异表），不参与对照；golden 若
+            // 明确要求了不同的 Accept（如 text/html,application/xhtml+xml），则必须一致。
+            let swiftHeaderMap: [String: String] = {
+                var m: [String: String] = [:]
+                for (k, v) in got.headers { m[k.lowercased()] = v }
+                return m
+            }()
+            var javaExplicit: [String] = []
+            for pair in goldenView.explicitHeaders {
+                let key = pair[0].lowercased()
+                let expected = normalizeBoundaryHeader(pair[1])
+                javaExplicit.append("\(key)=\(expected)")
+                let actual = swiftHeaderMap[key]
+                if actual == nil {
+                    // URLSession 默认 Accept 与 golden 未显式要求时的容忍见上注。
+                    if key == "accept" || key == "accept-language" { continue }
+                    failures.append("[\(c.name)] 缺少显式头 \(key)（Java=\(expected) Swift=<无>）")
+                    continue
+                }
+                if normalizeBoundaryHeader(actual!) != expected {
+                    failures.append("[\(c.name)] 显式头 \(key) 不一致 Java=\(expected) Swift=\(normalizeBoundaryHeader(actual!))")
+                }
+            }
+            javaExplicit.sort()
+            // 反向：Swift 发了 golden 里没有的「非自动头」也算不一致（防止多头发送）。
+            // 失败信息里附上 Java 侧完整显式头集合，便于定位多/少发的头。
+            let javaKeys = Set(goldenView.explicitHeaders.map { $0[0].lowercased() })
+            for (k, v) in got.headers where !Self.autoHeaders.contains(k.lowercased()) && !javaKeys.contains(k.lowercased()) {
+                failures.append("[\(c.name)] 多出显式头 \(k.lowercased())=\(v)（Java 仅发 [\(javaExplicit.joined(separator: ", "))]）")
             }
 
             // Cookie 头（单独比较）

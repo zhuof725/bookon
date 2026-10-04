@@ -267,19 +267,25 @@ class CharsetRecogEUC: CharsetRecogMBCS {
         let secondByte = it.nextByte(det)
         it.charValue = (it.charValue << 8) | Int64(secondByte)
 
+        // ⚠️ 下面所有「已确定字符类型」的出口都必须返回 `!it.done`，不能直接 `return true`：
+        // 对应 Java 源码里它们都是 `break buildChar`，最终统一走到方法末尾的
+        // `return (!it.done)`。若读第二个字节时越界，`nextByte` 会置 `it.done = true`，
+        // Java 因此返回 false（该字符不计入 totalCharCount / badCharCount），而早退的
+        // `return true` 会让它被计入——曾导致极短输入下 EUC-JP / EUC-KR 少一个
+        // confidence=10 的候选（golden 不一致）。
         if firstByte >= 0xA1 && firstByte <= 0xFE {
             // 双字节字符。
             if secondByte < 0xA1 {
                 it.error = true
             }
-            return true
+            return !it.done
         }
         if firstByte == 0x8E {
             // Code Set 2。
             if secondByte < 0xA1 {
                 it.error = true
             }
-            return true
+            return !it.done
         }
         if firstByte == 0x8F {
             // Code Set 3：三字节字符。
@@ -334,16 +340,19 @@ final class CharsetRecogGB18030: CharsetRecogMBCS {
 
         if firstByte <= 0x80 {
             // 单字节字符。
-            return true
+            return !it.done
         }
 
         let secondByte = it.nextByte(det)
         it.charValue = (it.charValue << 8) | Int64(secondByte)
 
+        // ⚠️ 同 EUC：Java 这些出口都是 `break buildChar` → 方法末尾统一 `return (!it.done)`。
+        // 读次/三/四字节越界时 `nextByte` 会置 `it.done = true`，必须让它们返回 false，
+        // 否则该字符会被错误计入 totalCharCount / doubleByteCharCount。
         if firstByte >= 0x81 && firstByte <= 0xFE {
             // 双字节字符（legado 写法 `secondByte >= 80` 为十进制 0x50，照搬）。
             if (secondByte >= 0x40 && secondByte <= 0x7E) || (secondByte >= 0x50 && secondByte <= 0xFE) {
-                return true
+                return !it.done
             }
 
             // 四字节字符：第二字节 0x30-0x39，第三字节 0x81-0xFE，第四字节 0x30-0x39。
@@ -353,7 +362,7 @@ final class CharsetRecogGB18030: CharsetRecogMBCS {
                     let fourthByte = it.nextByte(det)
                     if fourthByte >= 0x30 && fourthByte <= 0x39 {
                         it.charValue = (it.charValue << 16) | (Int64(thirdByte) << 8) | Int64(fourthByte)
-                        return true
+                        return !it.done
                     }
                 }
             }
