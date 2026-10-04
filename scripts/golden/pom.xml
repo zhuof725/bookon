@@ -129,6 +129,18 @@
               </sources>
             </configuration>
           </execution>
+          <!-- 编译修复：legado icu4j 源码引用的 Android/androidx 符号由 stubs/ 里的最小桩提供。
+               只新增这一个源码目录，不触碰其它配置。 -->
+          <execution>
+            <id>add-stubs-source</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>stubs</source>
+              </sources>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>

@@ -1,5 +1,6 @@
 // ⚠️ JVM 适配副本（golden 专用）：从 legado-E-main app/src/main/java/io/legado/app/lib/icu4j/CharsetDetector.java 复制，
-// 仅删除 Android 专属内容（setText(ParcelFileDescriptor)/setText(InputStream) 与 android/androidx import）以便在 JDK 上编译；
+// 仅删除 Android 专属内容（setText(ParcelFileDescriptor) 与 android/androidx import）以便在 JDK 上编译；
+// setText(InputStream) 重载已按 ICU4J 原逻辑恢复（纯 java.io，供 getReader(InputStream,...) 使用）；
 // 检测算法未做任何改动。原文件头：
 // © 2016 and later: Unicode, Inc. and others.
 // License & terms of use: http://www.unicode.org/copyright.html
@@ -113,6 +114,22 @@ public class CharsetDetector {
      * @return This CharsetDetector
      * @stable ICU 3.4
      */
+    public CharsetDetector setText(InputStream in) throws IOException {
+        // ICU4J 原逻辑：读入最多 kBufSize 字节，然后把流 reset 回原位。
+        // （getReader(InputStream,...) 的文档要求 markSupported() 为 true；此重载为
+        //  JVM 适配副本，仅恢复纯 java.io 部分，行为与 legado/ICU4J 原实现一致。）
+        fInputStream = in;
+        fInputStream.mark(kBufSize);
+        fRawInput = new byte[kBufSize];
+        fRawLength = 0;
+        int inputLength = 0;
+        while (fRawLength < kBufSize
+                && (inputLength = fInputStream.read(fRawInput, fRawLength, kBufSize - fRawLength)) != -1) {
+            fRawLength += inputLength;
+        }
+        fInputStream.reset();
+        return this;
+    }
 
     /**
      * Return the charset that best matches the supplied input data.
