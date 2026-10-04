@@ -1,355 +1,360 @@
-﻿2026-10-04T12:16:09.1020540Z Current runner version: '2.337.0'
-2026-10-04T12:16:09.1037863Z ##[group]Runner Image Provisioner
-2026-10-04T12:16:09.1038361Z Hosted Compute Agent
-2026-10-04T12:16:09.1038761Z Version: 20260901.588
-2026-10-04T12:16:09.1039133Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
-2026-10-04T12:16:09.1039573Z Build Date: 2026-09-01T19:56:44Z
-2026-10-04T12:16:09.1040019Z Worker ID: {13729bc0-4763-46bc-9cfc-f962dcad36ef}
-2026-10-04T12:16:09.1040417Z Azure Region: centralus
-2026-10-04T12:16:09.1040771Z ##[endgroup]
-2026-10-04T12:16:09.1041491Z ##[group]Operating System
-2026-10-04T12:16:09.1041862Z Ubuntu
-2026-10-04T12:16:09.1042316Z 24.04.5
-2026-10-04T12:16:09.1042609Z LTS
-2026-10-04T12:16:09.1042898Z ##[endgroup]
-2026-10-04T12:16:09.1043257Z ##[group]Runner Image
-2026-10-04T12:16:09.1043647Z Image: ubuntu-24.04
-2026-10-04T12:16:09.1044002Z Version: 20260927.320.1
-2026-10-04T12:16:09.1044712Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
-2026-10-04T12:16:09.1045547Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
-2026-10-04T12:16:09.1046122Z ##[endgroup]
-2026-10-04T12:16:09.1047102Z ##[group]GITHUB_TOKEN Permissions
-2026-10-04T12:16:09.1048377Z Contents: read
-2026-10-04T12:16:09.1048756Z Metadata: read
-2026-10-04T12:16:09.1049106Z Packages: read
-2026-10-04T12:16:09.1049413Z ##[endgroup]
-2026-10-04T12:16:09.1050980Z Secret source: Actions
-2026-10-04T12:16:09.1051507Z Cache mode: write
-2026-10-04T12:16:09.1052359Z Prepare workflow directory
-2026-10-04T12:16:09.1246201Z Prepare all required actions
-2026-10-04T12:16:09.1277834Z Getting action download info
-2026-10-04T12:16:09.3768446Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
-2026-10-04T12:16:09.4764991Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
-2026-10-04T12:16:10.0559759Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-2026-10-04T12:16:10.2379727Z Complete job name: golden
-2026-10-04T12:16:10.2799116Z ##[group]Run actions/checkout@v4
-2026-10-04T12:16:10.2799537Z with:
-2026-10-04T12:16:10.2799783Z   repository: zhuof725/bookon
-2026-10-04T12:16:10.2801788Z   token: ***
-2026-10-04T12:16:10.2802180Z   ssh-strict: true
-2026-10-04T12:16:10.2802427Z   ssh-user: git
-2026-10-04T12:16:10.2802678Z   persist-credentials: true
-2026-10-04T12:16:10.2802953Z   clean: true
-2026-10-04T12:16:10.2803204Z   sparse-checkout-cone-mode: true
-2026-10-04T12:16:10.2803494Z   fetch-depth: 1
-2026-10-04T12:16:10.2803735Z   fetch-tags: false
-2026-10-04T12:16:10.2803989Z   show-progress: true
-2026-10-04T12:16:10.2804247Z   lfs: false
-2026-10-04T12:16:10.2804485Z   submodules: false
-2026-10-04T12:16:10.2804738Z   set-safe-directory: true
-2026-10-04T12:16:10.2805019Z   allow-unsafe-pr-checkout: false
-2026-10-04T12:16:10.2805386Z ##[endgroup]
-2026-10-04T12:16:10.3421377Z Syncing repository: zhuof725/bookon
-2026-10-04T12:16:10.3422787Z ##[group]Getting Git version info
-2026-10-04T12:16:10.3423215Z Working directory is '/home/runner/work/bookon/bookon'
-2026-10-04T12:16:10.3423779Z [command]/usr/bin/git version
-2026-10-04T12:16:10.3511084Z git version 2.55.0
-2026-10-04T12:16:10.3526434Z ##[endgroup]
-2026-10-04T12:16:10.3537885Z Temporarily overriding HOME='/home/runner/work/_temp/9b61b7b1-5349-4beb-b7ab-72db120ba66e' before making global git config changes
-2026-10-04T12:16:10.3539564Z Adding repository directory to the temporary git global config as a safe directory
-2026-10-04T12:16:10.3541714Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
-2026-10-04T12:16:10.3586192Z Deleting the contents of '/home/runner/work/bookon/bookon'
-2026-10-04T12:16:10.3590019Z ##[group]Initializing the repository
-2026-10-04T12:16:10.3593570Z [command]/usr/bin/git init /home/runner/work/bookon/bookon
-2026-10-04T12:16:10.3697035Z hint: Using 'master' as the name for the initial branch. This default branch name
-2026-10-04T12:16:10.3698647Z hint: will change to "main" in Git 3.0. To configure the initial branch name
-2026-10-04T12:16:10.3699731Z hint: to use in all of your new repositories, which will suppress this warning,
-2026-10-04T12:16:10.3700597Z hint: call:
-2026-10-04T12:16:10.3701054Z hint:
-2026-10-04T12:16:10.3701623Z hint: 	git config --global init.defaultBranch <name>
-2026-10-04T12:16:10.3702447Z hint:
-2026-10-04T12:16:10.3702927Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-2026-10-04T12:16:10.3703559Z hint: 'development'. The just-created branch can be renamed via this command:
-2026-10-04T12:16:10.3704107Z hint:
-2026-10-04T12:16:10.3704491Z hint: 	git branch -m <name>
-2026-10-04T12:16:10.3704871Z hint:
-2026-10-04T12:16:10.3705398Z hint: Disable this message with "git config set advice.defaultBranchName false"
-2026-10-04T12:16:10.3706242Z Initialized empty Git repository in /home/runner/work/bookon/bookon/.git/
-2026-10-04T12:16:10.3708370Z [command]/usr/bin/git remote add origin https://github.com/zhuof725/bookon
-2026-10-04T12:16:10.3756814Z ##[endgroup]
-2026-10-04T12:16:10.3757406Z ##[group]Disabling automatic garbage collection
-2026-10-04T12:16:10.3760924Z [command]/usr/bin/git config --local gc.auto 0
-2026-10-04T12:16:10.3789169Z ##[endgroup]
-2026-10-04T12:16:10.3789825Z ##[group]Setting up auth
-2026-10-04T12:16:10.3794673Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2026-10-04T12:16:10.3821639Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2026-10-04T12:16:10.4107263Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2026-10-04T12:16:10.4134158Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2026-10-04T12:16:10.4296283Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-2026-10-04T12:16:10.4320744Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-2026-10-04T12:16:10.4480899Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-2026-10-04T12:16:10.4511126Z ##[endgroup]
-2026-10-04T12:16:10.4511800Z ##[group]Fetching the repository
-2026-10-04T12:16:10.4516991Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ce756b1abf6fc9b68e8ce26436340ba0d38dd19d:refs/remotes/origin/main
-2026-10-04T12:16:11.4925445Z From https://github.com/zhuof725/bookon
-2026-10-04T12:16:11.4927206Z  * [new ref]         ce756b1abf6fc9b68e8ce26436340ba0d38dd19d -> origin/main
-2026-10-04T12:16:11.4931073Z ##[endgroup]
-2026-10-04T12:16:11.4932736Z ##[group]Determining the checkout info
-2026-10-04T12:16:11.4934419Z ##[endgroup]
-2026-10-04T12:16:11.4936802Z [command]/usr/bin/git sparse-checkout disable
-2026-10-04T12:16:11.4983374Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-2026-10-04T12:16:11.5010108Z ##[group]Checking out the ref
-2026-10-04T12:16:11.5012676Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
-2026-10-04T12:16:11.5634688Z Switched to a new branch 'main'
-2026-10-04T12:16:11.5636386Z branch 'main' set up to track 'origin/main'.
-2026-10-04T12:16:11.5659828Z ##[endgroup]
-2026-10-04T12:16:11.5696682Z [command]/usr/bin/git log -1 --format=%H
-2026-10-04T12:16:11.5718204Z ce756b1abf6fc9b68e8ce26436340ba0d38dd19d
-2026-10-04T12:16:11.6045577Z ##[group]Run actions/setup-java@v4
-2026-10-04T12:16:11.6046245Z with:
-2026-10-04T12:16:11.6046727Z   distribution: temurin
-2026-10-04T12:16:11.6047275Z   java-version: 11
-2026-10-04T12:16:11.6047785Z   cache: maven
-2026-10-04T12:16:11.6048295Z   java-package: jdk
-2026-10-04T12:16:11.6048813Z   check-latest: false
-2026-10-04T12:16:11.6049488Z   server-id: github
-2026-10-04T12:16:11.6050025Z   server-username: GITHUB_ACTOR
-2026-10-04T12:16:11.6050657Z   server-password: GITHUB_TOKEN
-2026-10-04T12:16:11.6051278Z   overwrite-settings: true
-2026-10-04T12:16:11.6051860Z   job-status: success
-2026-10-04T12:16:11.6057198Z   token: ***
-2026-10-04T12:16:11.6057687Z ##[endgroup]
-2026-10-04T12:16:11.7072881Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
-2026-10-04T12:16:11.7082225Z ##[group]Installed distributions
-2026-10-04T12:16:11.7095599Z Resolved Java 11.0.32+1 from tool-cache
-2026-10-04T12:16:11.7096609Z Setting Java 11.0.32+1 as the default
-2026-10-04T12:16:11.7102156Z (node:2074) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-2026-10-04T12:16:11.7104356Z (Use `node --trace-deprecation ...` to show where the warning was created)
-2026-10-04T12:16:11.7105823Z Creating toolchains.xml for JDK version 11 from temurin
-2026-10-04T12:16:11.7142215Z Writing to /home/runner/.m2/toolchains.xml
-2026-10-04T12:16:11.7142913Z 
-2026-10-04T12:16:11.7143237Z Java configuration:
-2026-10-04T12:16:11.7144016Z   Distribution: temurin
-2026-10-04T12:16:11.7144815Z   Version: 11.0.32+1
-2026-10-04T12:16:11.7145861Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:11.7146817Z 
-2026-10-04T12:16:11.7147687Z ##[endgroup]
-2026-10-04T12:16:11.7161782Z Creating settings.xml with server-id: github
-2026-10-04T12:16:11.7183378Z Writing to /home/runner/.m2/settings.xml
-2026-10-04T12:16:11.8750003Z Cache hit for: setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e
-2026-10-04T12:16:11.8813714Z (node:2074) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-2026-10-04T12:16:12.7065700Z Received 27056378 of 27056378 (100.0%), 37.2 MBs/sec
-2026-10-04T12:16:12.7084209Z Cache Size: ~26 MB (27056378 B)
-2026-10-04T12:16:12.7084926Z [command]/usr/bin/tar -xf /home/runner/work/_temp/2fe36e8c-c838-4c94-b191-c8805abb8e57/cache.tzst -P -C /home/runner/work/bookon/bookon --use-compress-program unzstd
-2026-10-04T12:16:12.7597379Z Cache restored successfully
-2026-10-04T12:16:12.7613526Z Cache restored from key: setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e
-2026-10-04T12:16:12.7766937Z ##[group]Run mvn -B -ntp package
-2026-10-04T12:16:12.7767153Z [36;1mmvn -B -ntp package[0m
-2026-10-04T12:16:12.7978004Z shell: /usr/bin/bash -e {0}
-2026-10-04T12:16:12.7978160Z env:
-2026-10-04T12:16:12.7978332Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:12.7978598Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:12.7978799Z ##[endgroup]
-2026-10-04T12:16:14.9151801Z [INFO] Scanning for projects...
-2026-10-04T12:16:14.9618195Z [INFO] 
-2026-10-04T12:16:14.9652894Z [INFO] -----------------< io.legado.golden:golden-generator >------------------
-2026-10-04T12:16:14.9665233Z [INFO] Building golden-generator 1.0.0
-2026-10-04T12:16:14.9669165Z [INFO]   from pom.xml
-2026-10-04T12:16:14.9669718Z [INFO] --------------------------------[ jar ]---------------------------------
-2026-10-04T12:16:15.1169001Z [INFO] 
-2026-10-04T12:16:15.1173979Z [INFO] --- resources:3.4.0:resources (default-resources) @ golden-generator ---
-2026-10-04T12:16:15.2080175Z [INFO] Copying 1 resource from src/main/resources to target/classes
-2026-10-04T12:16:15.2107463Z [INFO] 
-2026-10-04T12:16:15.2107970Z [INFO] --- compiler:3.15.0:compile (default-compile) @ golden-generator ---
-2026-10-04T12:16:15.2983436Z [INFO] Recompiling the module because of changed source code.
-2026-10-04T12:16:15.3330877Z [INFO] Compiling 26 source files with javac [debug target 11] to target/classes
-2026-10-04T12:16:16.3023872Z [INFO] 
-2026-10-04T12:16:16.3050553Z [INFO] --- resources:3.4.0:testResources (default-testResources) @ golden-generator ---
-2026-10-04T12:16:16.3078875Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/test/resources
-2026-10-04T12:16:16.3093117Z [INFO] 
-2026-10-04T12:16:16.3113256Z [INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ golden-generator ---
-2026-10-04T12:16:16.3117879Z [INFO] No sources to compile
-2026-10-04T12:16:16.3167534Z [INFO] 
-2026-10-04T12:16:16.3183929Z [INFO] --- surefire:3.5.4:test (default-test) @ golden-generator ---
-2026-10-04T12:16:16.4015589Z [INFO] No tests to run.
-2026-10-04T12:16:16.4191943Z [INFO] 
-2026-10-04T12:16:16.4203020Z [INFO] --- jar:3.5.0:jar (default-jar) @ golden-generator ---
-2026-10-04T12:16:16.5613515Z [INFO] Building jar: /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar
-2026-10-04T12:16:16.6087862Z [INFO] 
-2026-10-04T12:16:16.6121932Z [INFO] --- shade:3.5.1:shade (default) @ golden-generator ---
-2026-10-04T12:16:16.6567771Z [INFO] Including org.mozilla:rhino:jar:1.8.1 in the shaded jar.
-2026-10-04T12:16:16.6582920Z [INFO] Including org.jsoup:jsoup:jar:1.16.2 in the shaded jar.
-2026-10-04T12:16:16.6612812Z [INFO] Including cn.wanghaomiao:JsoupXpath:jar:2.5.3 in the shaded jar.
-2026-10-04T12:16:16.6627787Z [INFO] Including org.apache.commons:commons-lang3:jar:3.18.0 in the shaded jar.
-2026-10-04T12:16:16.6628370Z [INFO] Including org.antlr:antlr4-runtime:jar:4.7.2 in the shaded jar.
-2026-10-04T12:16:16.6629015Z [INFO] Including org.slf4j:slf4j-api:jar:1.7.36 in the shaded jar.
-2026-10-04T12:16:16.6629536Z [INFO] Including com.google.code.gson:gson:jar:2.13.2 in the shaded jar.
-2026-10-04T12:16:16.6630089Z [INFO] Including com.google.errorprone:error_prone_annotations:jar:2.41.0 in the shaded jar.
-2026-10-04T12:16:16.6630673Z [INFO] Including com.jayway.jsonpath:json-path:jar:2.10.0 in the shaded jar.
-2026-10-04T12:16:16.6631201Z [INFO] Including net.minidev:json-smart:jar:2.6.0 in the shaded jar.
-2026-10-04T12:16:16.6631717Z [INFO] Including net.minidev:accessors-smart:jar:2.6.0 in the shaded jar.
-2026-10-04T12:16:16.6632516Z [INFO] Including org.ow2.asm:asm:jar:9.7.1 in the shaded jar.
-2026-10-04T12:16:16.6633226Z [INFO] Including org.apache.commons:commons-text:jar:1.13.1 in the shaded jar.
-2026-10-04T12:16:16.6633673Z [INFO] Including com.squareup.okhttp3:okhttp-jvm:jar:5.3.2 in the shaded jar.
-2026-10-04T12:16:16.6634132Z [INFO] Including com.squareup.okio:okio-jvm:jar:3.16.4 in the shaded jar.
-2026-10-04T12:16:16.6635049Z [INFO] Including org.jetbrains.kotlin:kotlin-stdlib:jar:2.2.21 in the shaded jar.
-2026-10-04T12:16:16.6635488Z [INFO] Including org.jetbrains:annotations:jar:13.0 in the shaded jar.
-2026-10-04T12:16:16.6635876Z [INFO] Including cn.hutool:hutool-crypto:jar:5.8.22 in the shaded jar.
-2026-10-04T12:16:16.6636265Z [INFO] Including cn.hutool:hutool-core:jar:5.8.22 in the shaded jar.
-2026-10-04T12:16:16.6636786Z [INFO] Including com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:jar:0.2.17 in the shaded jar.
-2026-10-04T12:16:16.6637493Z [INFO] Dependency-reduced POM written at: /home/runner/work/bookon/bookon/scripts/golden/dependency-reduced-pom.xml
-2026-10-04T12:16:16.7681406Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
-2026-10-04T12:16:16.8976810Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
-2026-10-04T12:16:17.2215343Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar define 2 overlapping resources: 
-2026-10-04T12:16:17.2215862Z [WARNING]   - META-INF/LICENSE.txt
-2026-10-04T12:16:17.2216112Z [WARNING]   - META-INF/NOTICE.txt
-2026-10-04T12:16:17.2216792Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, gson-2.13.2.jar, kotlin-stdlib-2.2.21.jar, okhttp-jvm-5.3.2.jar define 1 overlapping classes: 
-2026-10-04T12:16:17.2217502Z [WARNING]   - META-INF.versions.9.module-info
-2026-10-04T12:16:17.2219159Z [WARNING] JsoupXpath-2.5.3.jar, accessors-smart-2.6.0.jar, annotations-13.0.jar, antlr4-runtime-4.7.2.jar, asm-9.7.1.jar, commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, golden-generator.jar, gson-2.13.2.jar, hutool-core-5.8.22.jar, hutool-crypto-5.8.22.jar, json-path-2.10.0.jar, json-smart-2.6.0.jar, jsoup-1.16.2.jar, kotlin-stdlib-2.2.21.jar, okhttp-jvm-5.3.2.jar, okio-jvm-3.16.4.jar, quick-transfer-core-0.2.17.jar, rhino-1.8.1.jar, slf4j-api-1.7.36.jar define 1 overlapping resource: 
-2026-10-04T12:16:17.2221168Z [WARNING]   - META-INF/MANIFEST.MF
-2026-10-04T12:16:17.2221473Z [WARNING] maven-shade-plugin has detected that some files are
-2026-10-04T12:16:17.2221851Z [WARNING] present in two or more JARs. When this happens, only one
-2026-10-04T12:16:17.2222389Z [WARNING] single version of the file is copied to the uber jar.
-2026-10-04T12:16:17.2222786Z [WARNING] Usually this is not harmful and you can skip these warnings,
-2026-10-04T12:16:17.2223178Z [WARNING] otherwise try to manually exclude artifacts based on
-2026-10-04T12:16:17.2223562Z [WARNING] mvn dependency:tree -Ddetail=true and the above output.
-2026-10-04T12:16:17.2223980Z [WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
-2026-10-04T12:16:17.2277683Z [INFO] Replacing original artifact with shaded artifact.
-2026-10-04T12:16:17.2278664Z [INFO] Replacing /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar with /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator-1.0.0-shaded.jar
-2026-10-04T12:16:17.2279596Z [INFO] ------------------------------------------------------------------------
-2026-10-04T12:16:17.2280110Z [INFO] BUILD SUCCESS
-2026-10-04T12:16:17.2280426Z [INFO] ------------------------------------------------------------------------
-2026-10-04T12:16:17.2280760Z [INFO] Total time:  2.330 s
-2026-10-04T12:16:17.2280987Z [INFO] Finished at: 2026-10-04T12:16:17Z
-2026-10-04T12:16:17.2281293Z [INFO] ------------------------------------------------------------------------
-2026-10-04T12:16:17.2559475Z ##[group]Run set -e
-2026-10-04T12:16:17.2559650Z [36;1mset -e[0m
-2026-10-04T12:16:17.2559853Z [36;1mjava -jar target/golden-generator.jar cases out[0m
-2026-10-04T12:16:17.2560038Z [36;1mecho "=== 生成的文件 ==="[0m
-2026-10-04T12:16:17.2560169Z [36;1mls -la out[0m
-2026-10-04T12:16:17.2560303Z [36;1mCOUNT=$(ls out/*.json 2>/dev/null | wc -l)[0m
-2026-10-04T12:16:17.2560471Z [36;1mif [ "$COUNT" -eq 0 ]; then[0m
-2026-10-04T12:16:17.2560618Z [36;1m  echo "错误：未生成任何 golden 文件"[0m
-2026-10-04T12:16:17.2560753Z [36;1m  exit 1[0m
-2026-10-04T12:16:17.2560862Z [36;1mfi[0m
-2026-10-04T12:16:17.2610168Z shell: /usr/bin/bash -e {0}
-2026-10-04T12:16:17.2610300Z env:
-2026-10-04T12:16:17.2610469Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:17.2610733Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:17.2610933Z ##[endgroup]
-2026-10-04T12:16:17.5143457Z AnalyzeUrl 规则解析: 94 条（手工移植调度 + 真实 Rhino）
-2026-10-04T12:16:17.5283592Z 生成: analyze_url_cases.json
-2026-10-04T12:16:17.8985168Z 字符集检测: 240 条（真实 legado icu4j 检测器源码 + EncodingDetect 移植；其中合成小说章节文本 45 条）
-2026-10-04T12:16:17.9003110Z Cookie 纯函数: 47 条（手工移植 CookieStore/CookieManager）
-2026-10-04T12:16:17.9032579Z 生成: cookie_cases.json
-2026-10-04T12:16:17.9218643Z 生成: css_basic.json
-2026-10-04T12:16:17.9261637Z 生成: css_real_xiaoshuo2016.json
-2026-10-04T12:16:17.9693610Z URL 规范化: 170 条（真实 OkHttp 5.3.2 HttpUrl）
-2026-10-04T12:16:17.9702503Z 生成: http_url_cases.json
-2026-10-04T12:16:18.1177000Z JsExtensions 纯算法: 321 条用例（真实 hutool/quick-transfer/Java 标准库）
-2026-10-04T12:16:18.1184555Z Java MessageDigest: 2 条
-2026-10-04T12:16:18.1222701Z 生成: js_ext_cases.json
-2026-10-04T12:16:18.1513254Z Rhino 数字入参: 42 条（真实 Rhino 1.8.1 转换结果）
-2026-10-04T12:16:18.1520189Z 生成: js_number_args.json
-2026-10-04T12:16:18.1774776Z Rhino 1.8.1: 74 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）
-2026-10-04T12:16:18.1808943Z 生成: js_rhino.json
-2026-10-04T12:16:18.1926732Z SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-2026-10-04T12:16:18.1932853Z SLF4J: Defaulting to no-operation (NOP) logger implementation
-2026-10-04T12:16:18.1933493Z SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
-2026-10-04T12:16:18.2133807Z 生成: jsonpath_cases.json
-2026-10-04T12:16:18.3533644Z jsoup 替身对照: 91 条用例（同一 JS，真实 jsoup 1.16.2 + Rhino 1.8.1）
-2026-10-04T12:16:18.3556247Z 生成: jsoup_cases.json
-2026-10-04T12:16:18.4120302Z 生成: malformed_html.json
-2026-10-04T12:16:18.4200092Z 生成: regex_analyze.json
-2026-10-04T12:16:18.4229242Z 生成: regex_replace.json
-2026-10-04T12:16:18.7962986Z OkHttp 请求对照: 43 条（真实 OkHttp 5.3.2 → 本地 HttpServer）
-2026-10-04T12:16:21.3188864Z OkHttp 重定向/Cookie 链对照: 44 条
-2026-10-04T12:16:21.8740780Z OkHttp Cookie 对照: 13 条
-2026-10-04T12:16:21.8783911Z OkHttp 自动头清单: 4 条
-2026-10-04T12:16:21.9719239Z 生成: serializer_synthetic.json
-2026-10-04T12:16:21.9843358Z 生成: unescape_html4.json
-2026-10-04T12:16:21.9882716Z 生成: url_absolute.json
-2026-10-04T12:16:21.9920082Z URL 编码: 299 条（真实 hutool/URLEncoder）
-2026-10-04T12:16:21.9944293Z 生成: url_codec_cases.json
-2026-10-04T12:16:21.9972944Z UrlOption 解析: 84 条（真实 Gson + legado 定制适配器）
-2026-10-04T12:16:21.9973460Z 生成: url_option_cases.json
-2026-10-04T12:16:22.0145595Z line 1:10 token recognition error at: '%'
-2026-10-04T12:16:22.0152530Z line 1:11 token recognition error at: '%'
-2026-10-04T12:16:22.0303025Z 生成: xpath_basic.json
-2026-10-04T12:16:22.0328716Z 生成: xpath_real_caimoge.json
-2026-10-04T12:16:22.0329695Z 完成：处理 22 个用例文件，共 2271 条用例。
-2026-10-04T12:16:22.0560401Z === 生成的文件 ===
-2026-10-04T12:16:22.0574012Z total 1940
-2026-10-04T12:16:22.0574217Z drwxr-xr-x 2 runner runner    4096 Oct  4 12:16 .
-2026-10-04T12:16:22.0574642Z drwxr-xr-x 6 runner runner    4096 Oct  4 12:16 ..
-2026-10-04T12:16:22.0574962Z -rw-r--r-- 1 runner runner   25004 Oct  4 12:16 analyze_url_cases.json
-2026-10-04T12:16:22.0575340Z -rw-r--r-- 1 runner runner    4348 Oct  4 12:16 auto_header_cases.json
-2026-10-04T12:16:22.0576037Z -rw-r--r-- 1 runner runner 1143089 Oct  4 12:16 charset_cases.json
-2026-10-04T12:16:22.0576402Z -rw-r--r-- 1 runner runner    6249 Oct  4 12:16 cookie_cases.json
-2026-10-04T12:16:22.0576784Z -rw-r--r-- 1 runner runner   17657 Oct  4 12:16 css_basic.json
-2026-10-04T12:16:22.0577133Z -rw-r--r-- 1 runner runner    4656 Oct  4 12:16 css_real_xiaoshuo2016.json
-2026-10-04T12:16:22.0577366Z -rw-r--r-- 1 runner runner   27613 Oct  4 12:16 http_url_cases.json
-2026-10-04T12:16:22.0577580Z -rw-r--r-- 1 runner runner   72274 Oct  4 12:16 js_ext_cases.json
-2026-10-04T12:16:22.0577789Z -rw-r--r-- 1 runner runner    7615 Oct  4 12:16 js_number_args.json
-2026-10-04T12:16:22.0577990Z -rw-r--r-- 1 runner runner   15684 Oct  4 12:16 js_rhino.json
-2026-10-04T12:16:22.0578192Z -rw-r--r-- 1 runner runner   41164 Oct  4 12:16 jsonpath_cases.json
-2026-10-04T12:16:22.0578403Z -rw-r--r-- 1 runner runner   53659 Oct  4 12:16 jsoup_cases.json
-2026-10-04T12:16:22.0578609Z -rw-r--r-- 1 runner runner   16828 Oct  4 12:16 malformed_html.json
-2026-10-04T12:16:22.0578827Z -rw-r--r-- 1 runner runner  105525 Oct  4 12:16 redirect_cases.json
-2026-10-04T12:16:22.0579048Z -rw-r--r-- 1 runner runner    7921 Oct  4 12:16 regex_analyze.json
-2026-10-04T12:16:22.0579398Z -rw-r--r-- 1 runner runner    9501 Oct  4 12:16 regex_replace.json
-2026-10-04T12:16:22.0579725Z -rw-r--r-- 1 runner runner   63543 Oct  4 12:16 request_cases.json
-2026-10-04T12:16:22.0580067Z -rw-r--r-- 1 runner runner   20346 Oct  4 12:16 request_cookie_cases.json
-2026-10-04T12:16:22.0580427Z -rw-r--r-- 1 runner runner  152520 Oct  4 12:16 serializer_synthetic.json
-2026-10-04T12:16:22.0580780Z -rw-r--r-- 1 runner runner    5447 Oct  4 12:16 unescape_html4.json
-2026-10-04T12:16:22.0581110Z -rw-r--r-- 1 runner runner   10750 Oct  4 12:16 url_absolute.json
-2026-10-04T12:16:22.0581436Z -rw-r--r-- 1 runner runner   51763 Oct  4 12:16 url_codec_cases.json
-2026-10-04T12:16:22.0581753Z -rw-r--r-- 1 runner runner   27239 Oct  4 12:16 url_option_cases.json
-2026-10-04T12:16:22.0581975Z -rw-r--r-- 1 runner runner   24993 Oct  4 12:16 xpath_basic.json
-2026-10-04T12:16:22.0582433Z -rw-r--r-- 1 runner runner    4863 Oct  4 12:16 xpath_real_caimoge.json
-2026-10-04T12:16:22.0636437Z ##[group]Run actions/upload-artifact@v4
-2026-10-04T12:16:22.0636592Z with:
-2026-10-04T12:16:22.0636699Z   name: golden-data
-2026-10-04T12:16:22.0636821Z   path: scripts/golden/out/*.json
-2026-10-04T12:16:22.0636964Z   if-no-files-found: error
-2026-10-04T12:16:22.0637091Z   compression-level: 6
-2026-10-04T12:16:22.0637210Z   overwrite: false
-2026-10-04T12:16:22.0637327Z   include-hidden-files: false
-2026-10-04T12:16:22.0637455Z env:
-2026-10-04T12:16:22.0637628Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:22.0637881Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
-2026-10-04T12:16:22.0638077Z ##[endgroup]
-2026-10-04T12:16:22.1618149Z (node:2194) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-2026-10-04T12:16:22.1618531Z (Use `node --trace-deprecation ...` to show where the warning was created)
-2026-10-04T12:16:22.1674012Z With the provided path, there will be 25 files uploaded
-2026-10-04T12:16:22.1677167Z Artifact name is valid!
-2026-10-04T12:16:22.1677481Z Root directory input is valid!
-2026-10-04T12:16:22.4408140Z Beginning upload of artifact content to blob storage
-2026-10-04T12:16:22.4793467Z (node:2194) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-2026-10-04T12:16:22.7321110Z Uploaded bytes 222097
-2026-10-04T12:16:22.7721244Z Finished uploading artifact content to blob storage!
-2026-10-04T12:16:22.7721927Z SHA256 digest of uploaded artifact zip is 718c558d718ca9e0648432c8131c9d2ff6d15ffdd90b564a45d014d0ce3027c2
-2026-10-04T12:16:22.7722847Z Finalizing artifact upload
-2026-10-04T12:16:22.9693114Z Artifact golden-data.zip successfully finalized. Artifact ID 11303196256
-2026-10-04T12:16:22.9693589Z Artifact golden-data has been successfully uploaded! Final size is 222097 bytes. Artifact ID is 11303196256
-2026-10-04T12:16:22.9697956Z Artifact download URL: https://github.com/zhuof725/bookon/actions/runs/37201515364/artifacts/11303196256
-2026-10-04T12:16:22.9847468Z Post job cleanup.
-2026-10-04T12:16:23.0675956Z (node:2207) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-2026-10-04T12:16:23.0676562Z (Use `node --trace-deprecation ...` to show where the warning was created)
-2026-10-04T12:16:23.0679248Z Cache hit occurred on the primary key setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e, not saving cache.
-2026-10-04T12:16:23.0813258Z Post job cleanup.
-2026-10-04T12:16:23.1391113Z [command]/usr/bin/git version
-2026-10-04T12:16:23.1422298Z git version 2.55.0
-2026-10-04T12:16:23.1446585Z Temporarily overriding HOME='/home/runner/work/_temp/f9a2dc92-30b1-4afe-8971-a269d432a33a' before making global git config changes
-2026-10-04T12:16:23.1447112Z Adding repository directory to the temporary git global config as a safe directory
-2026-10-04T12:16:23.1450366Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
-2026-10-04T12:16:23.1479467Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2026-10-04T12:16:23.1504897Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2026-10-04T12:16:23.1698237Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2026-10-04T12:16:23.1725878Z http.https://github.com/.extraheader
-2026-10-04T12:16:23.1738396Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
-2026-10-04T12:16:23.1768507Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2026-10-04T12:16:23.1958551Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-2026-10-04T12:16:23.1996901Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-2026-10-04T12:16:23.2317288Z Cleaning up orphan processes
-2026-10-04T12:16:23.2491484Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+# CI run 37224878055 | job: golden | 来源: gh run view --log
+# 该次 CI 三个 job 全部 success（提交 500a7c9）
+# GitHub: https://github.com/zhuof725/bookon/actions/runs/37224878055
+
+﻿2026-10-04T18:33:21.0056088Z Current runner version: '2.337.0'
+2026-10-04T18:33:21.0083065Z ##[group]Runner Image Provisioner
+2026-10-04T18:33:21.0084143Z Hosted Compute Agent
+2026-10-04T18:33:21.0084753Z Version: 20260901.588
+2026-10-04T18:33:21.0085441Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-04T18:33:21.0086501Z Build Date: 2026-09-01T19:56:44Z
+2026-10-04T18:33:21.0087251Z Worker ID: {94514399-728e-49e2-85c8-48eee93c929a}
+2026-10-04T18:33:21.0088039Z Azure Region: westus
+2026-10-04T18:33:21.0088666Z ##[endgroup]
+2026-10-04T18:33:21.0090419Z ##[group]Operating System
+2026-10-04T18:33:21.0091129Z Ubuntu
+2026-10-04T18:33:21.0091709Z 24.04.5
+2026-10-04T18:33:21.0092289Z LTS
+2026-10-04T18:33:21.0092814Z ##[endgroup]
+2026-10-04T18:33:21.0093405Z ##[group]Runner Image
+2026-10-04T18:33:21.0094193Z Image: ubuntu-24.04
+2026-10-04T18:33:21.0094811Z Version: 20260927.320.1
+2026-10-04T18:33:21.0096193Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-04T18:33:21.0098001Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-04T18:33:21.0099053Z ##[endgroup]
+2026-10-04T18:33:21.0100311Z ##[group]GITHUB_TOKEN Permissions
+2026-10-04T18:33:21.0102657Z Contents: read
+2026-10-04T18:33:21.0103342Z Metadata: read
+2026-10-04T18:33:21.0104377Z Packages: read
+2026-10-04T18:33:21.0105048Z ##[endgroup]
+2026-10-04T18:33:21.0107736Z Secret source: Actions
+2026-10-04T18:33:21.0108835Z Cache mode: write
+2026-10-04T18:33:21.0109585Z Prepare workflow directory
+2026-10-04T18:33:21.0483792Z Prepare all required actions
+2026-10-04T18:33:21.0559263Z Getting action download info
+2026-10-04T18:33:21.4443300Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-04T18:33:21.5500357Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-04T18:33:22.0845895Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-04T18:33:22.3057108Z Complete job name: golden
+﻿2026-10-04T18:33:22.3935494Z ##[group]Run actions/checkout@v4
+2026-10-04T18:33:22.3936825Z with:
+2026-10-04T18:33:22.3937296Z   repository: zhuof725/bookon
+2026-10-04T18:33:22.3941313Z   token: ***
+2026-10-04T18:33:22.3941752Z   ssh-strict: true
+2026-10-04T18:33:22.3942195Z   ssh-user: git
+2026-10-04T18:33:22.3942641Z   persist-credentials: true
+2026-10-04T18:33:22.3943182Z   clean: true
+2026-10-04T18:33:22.3943618Z   sparse-checkout-cone-mode: true
+2026-10-04T18:33:22.3944145Z   fetch-depth: 1
+2026-10-04T18:33:22.3944575Z   fetch-tags: false
+2026-10-04T18:33:22.3945023Z   show-progress: true
+2026-10-04T18:33:22.3945473Z   lfs: false
+2026-10-04T18:33:22.3946169Z   submodules: false
+2026-10-04T18:33:22.3946637Z   set-safe-directory: true
+2026-10-04T18:33:22.3947148Z   allow-unsafe-pr-checkout: false
+2026-10-04T18:33:22.3948525Z ##[endgroup]
+2026-10-04T18:33:22.5007983Z Syncing repository: zhuof725/bookon
+2026-10-04T18:33:22.5010723Z ##[group]Getting Git version info
+2026-10-04T18:33:22.5011857Z Working directory is '/home/runner/work/bookon/bookon'
+2026-10-04T18:33:22.5013573Z [command]/usr/bin/git version
+2026-10-04T18:33:22.5072177Z git version 2.55.0
+2026-10-04T18:33:22.5095862Z ##[endgroup]
+2026-10-04T18:33:22.5112697Z Temporarily overriding HOME='/home/runner/work/_temp/b5c9886d-06dd-4873-b113-5d783e423ab9' before making global git config changes
+2026-10-04T18:33:22.5115784Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T18:33:22.5119431Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
+2026-10-04T18:33:22.5171453Z Deleting the contents of '/home/runner/work/bookon/bookon'
+2026-10-04T18:33:22.5180299Z ##[group]Initializing the repository
+2026-10-04T18:33:22.5187409Z [command]/usr/bin/git init /home/runner/work/bookon/bookon
+2026-10-04T18:33:22.5287853Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-04T18:33:22.5294772Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-04T18:33:22.5296897Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-04T18:33:22.5298862Z hint: call:
+2026-10-04T18:33:22.5300523Z hint:
+2026-10-04T18:33:22.5301806Z hint: 	git config --global init.defaultBranch <name>
+2026-10-04T18:33:22.5302932Z hint:
+2026-10-04T18:33:22.5303903Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-04T18:33:22.5305855Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-04T18:33:22.5307251Z hint:
+2026-10-04T18:33:22.5307986Z hint: 	git branch -m <name>
+2026-10-04T18:33:22.5308876Z hint:
+2026-10-04T18:33:22.5309802Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-04T18:33:22.5310798Z Initialized empty Git repository in /home/runner/work/bookon/bookon/.git/
+2026-10-04T18:33:22.5312510Z [command]/usr/bin/git remote add origin https://github.com/zhuof725/bookon
+2026-10-04T18:33:22.5379506Z ##[endgroup]
+2026-10-04T18:33:22.5380901Z ##[group]Disabling automatic garbage collection
+2026-10-04T18:33:22.5383860Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-04T18:33:22.5430673Z ##[endgroup]
+2026-10-04T18:33:22.5432061Z ##[group]Setting up auth
+2026-10-04T18:33:22.5439175Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T18:33:22.5475898Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T18:33:22.5890207Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T18:33:22.5947573Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T18:33:22.6176133Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T18:33:22.6215907Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T18:33:22.6448746Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-04T18:33:22.6492041Z ##[endgroup]
+2026-10-04T18:33:22.6493339Z ##[group]Fetching the repository
+2026-10-04T18:33:22.6502342Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +500a7c904d6c3445a717d0f4b3beb35036deb4c5:refs/remotes/origin/main
+2026-10-04T18:33:23.7727576Z From https://github.com/zhuof725/bookon
+2026-10-04T18:33:23.7729208Z  * [new ref]         500a7c904d6c3445a717d0f4b3beb35036deb4c5 -> origin/main
+2026-10-04T18:33:23.7731870Z ##[endgroup]
+2026-10-04T18:33:23.7732730Z ##[group]Determining the checkout info
+2026-10-04T18:33:23.7733643Z ##[endgroup]
+2026-10-04T18:33:23.7740183Z [command]/usr/bin/git sparse-checkout disable
+2026-10-04T18:33:23.7795896Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-04T18:33:23.7830151Z ##[group]Checking out the ref
+2026-10-04T18:33:23.7870402Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-04T18:33:23.8783401Z Switched to a new branch 'main'
+2026-10-04T18:33:23.8787297Z branch 'main' set up to track 'origin/main'.
+2026-10-04T18:33:23.8808056Z ##[endgroup]
+2026-10-04T18:33:23.8856157Z [command]/usr/bin/git log -1 --format=%H
+2026-10-04T18:33:23.8886903Z 500a7c904d6c3445a717d0f4b3beb35036deb4c5
+﻿2026-10-04T18:33:23.9276532Z ##[group]Run actions/setup-java@v4
+2026-10-04T18:33:23.9277144Z with:
+2026-10-04T18:33:23.9277536Z   distribution: temurin
+2026-10-04T18:33:23.9277957Z   java-version: 11
+2026-10-04T18:33:23.9278358Z   cache: maven
+2026-10-04T18:33:23.9278761Z   java-package: jdk
+2026-10-04T18:33:23.9279171Z   check-latest: false
+2026-10-04T18:33:23.9279814Z   server-id: github
+2026-10-04T18:33:23.9280229Z   server-username: GITHUB_ACTOR
+2026-10-04T18:33:23.9280689Z   server-password: GITHUB_TOKEN
+2026-10-04T18:33:23.9281152Z   overwrite-settings: true
+2026-10-04T18:33:23.9281590Z   job-status: success
+2026-10-04T18:33:23.9284515Z   token: ***
+2026-10-04T18:33:23.9284900Z ##[endgroup]
+2026-10-04T18:33:24.0990556Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-04T18:33:24.0998216Z ##[group]Installed distributions
+2026-10-04T18:33:24.1144419Z Resolved Java 11.0.32+1 from tool-cache
+2026-10-04T18:33:24.1145275Z Setting Java 11.0.32+1 as the default
+2026-10-04T18:33:24.1155685Z (node:2314) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T18:33:24.1156804Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T18:33:24.1160144Z Creating toolchains.xml for JDK version 11 from temurin
+2026-10-04T18:33:24.1241631Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-04T18:33:24.1242234Z 
+2026-10-04T18:33:24.1242482Z Java configuration:
+2026-10-04T18:33:24.1243106Z   Distribution: temurin
+2026-10-04T18:33:24.1243536Z   Version: 11.0.32+1
+2026-10-04T18:33:24.1244245Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:24.1244992Z 
+2026-10-04T18:33:24.1246159Z ##[endgroup]
+2026-10-04T18:33:24.1266889Z Creating settings.xml with server-id: github
+2026-10-04T18:33:24.1277664Z Writing to /home/runner/.m2/settings.xml
+2026-10-04T18:33:24.4521435Z Cache hit for: setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e
+2026-10-04T18:33:24.4634187Z (node:2314) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T18:33:25.7196916Z Received 6084858 of 27056378 (22.5%), 5.8 MBs/sec
+2026-10-04T18:33:26.1026831Z Received 27056378 of 27056378 (100.0%), 18.6 MBs/sec
+2026-10-04T18:33:26.1027955Z Cache Size: ~26 MB (27056378 B)
+2026-10-04T18:33:26.1162924Z [command]/usr/bin/tar -xf /home/runner/work/_temp/21088659-a177-4a85-a6bf-71736e911250/cache.tzst -P -C /home/runner/work/bookon/bookon --use-compress-program unzstd
+2026-10-04T18:33:26.2027898Z Cache restored successfully
+2026-10-04T18:33:26.2044207Z Cache restored from key: setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e
+﻿2026-10-04T18:33:26.2246671Z ##[group]Run mvn -B -ntp package
+2026-10-04T18:33:26.2247161Z [36;1mmvn -B -ntp package[0m
+2026-10-04T18:33:26.2498791Z shell: /usr/bin/bash -e {0}
+2026-10-04T18:33:26.2499214Z env:
+2026-10-04T18:33:26.2499635Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:26.2500242Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:26.2500723Z ##[endgroup]
+2026-10-04T18:33:32.4824478Z [INFO] Scanning for projects...
+2026-10-04T18:33:32.5811628Z [INFO] 
+2026-10-04T18:33:32.5812876Z [INFO] -----------------< io.legado.golden:golden-generator >------------------
+2026-10-04T18:33:32.5814014Z [INFO] Building golden-generator 1.0.0
+2026-10-04T18:33:32.5836479Z [INFO]   from pom.xml
+2026-10-04T18:33:32.5855069Z [INFO] --------------------------------[ jar ]---------------------------------
+2026-10-04T18:33:32.8582414Z [INFO] 
+2026-10-04T18:33:32.8633049Z [INFO] --- resources:3.4.0:resources (default-resources) @ golden-generator ---
+2026-10-04T18:33:33.0791675Z [INFO] Copying 1 resource from src/main/resources to target/classes
+2026-10-04T18:33:33.0843653Z [INFO] 
+2026-10-04T18:33:33.0844440Z [INFO] --- compiler:3.15.0:compile (default-compile) @ golden-generator ---
+2026-10-04T18:33:33.5125330Z [INFO] Recompiling the module because of changed source code.
+2026-10-04T18:33:33.5277788Z [INFO] Compiling 26 source files with javac [debug target 11] to target/classes
+2026-10-04T18:33:36.2611679Z [INFO] 
+2026-10-04T18:33:36.2637365Z [INFO] --- resources:3.4.0:testResources (default-testResources) @ golden-generator ---
+2026-10-04T18:33:36.2654822Z [INFO] skip non existing resourceDirectory /home/runner/work/bookon/bookon/scripts/golden/src/test/resources
+2026-10-04T18:33:36.2656373Z [INFO] 
+2026-10-04T18:33:36.2657396Z [INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ golden-generator ---
+2026-10-04T18:33:36.2726721Z [INFO] No sources to compile
+2026-10-04T18:33:36.2727815Z [INFO] 
+2026-10-04T18:33:36.2752456Z [INFO] --- surefire:3.5.4:test (default-test) @ golden-generator ---
+2026-10-04T18:33:36.4482599Z [INFO] No tests to run.
+2026-10-04T18:33:36.5362595Z [INFO] 
+2026-10-04T18:33:36.5363833Z [INFO] --- jar:3.5.0:jar (default-jar) @ golden-generator ---
+2026-10-04T18:33:36.9232297Z [INFO] Building jar: /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar
+2026-10-04T18:33:37.0380457Z [INFO] 
+2026-10-04T18:33:37.0381453Z [INFO] --- shade:3.5.1:shade (default) @ golden-generator ---
+2026-10-04T18:33:37.1192933Z [INFO] Including org.mozilla:rhino:jar:1.8.1 in the shaded jar.
+2026-10-04T18:33:37.1194159Z [INFO] Including org.jsoup:jsoup:jar:1.16.2 in the shaded jar.
+2026-10-04T18:33:37.1195394Z [INFO] Including cn.wanghaomiao:JsoupXpath:jar:2.5.3 in the shaded jar.
+2026-10-04T18:33:37.1198137Z [INFO] Including org.apache.commons:commons-lang3:jar:3.18.0 in the shaded jar.
+2026-10-04T18:33:37.1204038Z [INFO] Including org.antlr:antlr4-runtime:jar:4.7.2 in the shaded jar.
+2026-10-04T18:33:37.1205187Z [INFO] Including org.slf4j:slf4j-api:jar:1.7.36 in the shaded jar.
+2026-10-04T18:33:37.1206611Z [INFO] Including com.google.code.gson:gson:jar:2.13.2 in the shaded jar.
+2026-10-04T18:33:37.1208012Z [INFO] Including com.google.errorprone:error_prone_annotations:jar:2.41.0 in the shaded jar.
+2026-10-04T18:33:37.1209304Z [INFO] Including com.jayway.jsonpath:json-path:jar:2.10.0 in the shaded jar.
+2026-10-04T18:33:37.1210391Z [INFO] Including net.minidev:json-smart:jar:2.6.0 in the shaded jar.
+2026-10-04T18:33:37.1211560Z [INFO] Including net.minidev:accessors-smart:jar:2.6.0 in the shaded jar.
+2026-10-04T18:33:37.1212647Z [INFO] Including org.ow2.asm:asm:jar:9.7.1 in the shaded jar.
+2026-10-04T18:33:37.1216975Z [INFO] Including org.apache.commons:commons-text:jar:1.13.1 in the shaded jar.
+2026-10-04T18:33:37.1218336Z [INFO] Including com.squareup.okhttp3:okhttp-jvm:jar:5.3.2 in the shaded jar.
+2026-10-04T18:33:37.1219597Z [INFO] Including com.squareup.okio:okio-jvm:jar:3.16.4 in the shaded jar.
+2026-10-04T18:33:37.1234429Z [INFO] Including org.jetbrains.kotlin:kotlin-stdlib:jar:2.2.21 in the shaded jar.
+2026-10-04T18:33:37.1236445Z [INFO] Including org.jetbrains:annotations:jar:13.0 in the shaded jar.
+2026-10-04T18:33:37.1237517Z [INFO] Including cn.hutool:hutool-crypto:jar:5.8.22 in the shaded jar.
+2026-10-04T18:33:37.1238621Z [INFO] Including cn.hutool:hutool-core:jar:5.8.22 in the shaded jar.
+2026-10-04T18:33:37.1240162Z [INFO] Including com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:jar:0.2.17 in the shaded jar.
+2026-10-04T18:33:37.1249584Z [INFO] Dependency-reduced POM written at: /home/runner/work/bookon/bookon/scripts/golden/dependency-reduced-pom.xml
+2026-10-04T18:33:37.3107423Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+2026-10-04T18:33:37.5191879Z [WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+2026-10-04T18:33:38.0256553Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar define 2 overlapping resources: 
+2026-10-04T18:33:38.0257942Z [WARNING]   - META-INF/LICENSE.txt
+2026-10-04T18:33:38.0258505Z [WARNING]   - META-INF/NOTICE.txt
+2026-10-04T18:33:38.0259912Z [WARNING] commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, gson-2.13.2.jar, kotlin-stdlib-2.2.21.jar, okhttp-jvm-5.3.2.jar define 1 overlapping classes: 
+2026-10-04T18:33:38.0261417Z [WARNING]   - META-INF.versions.9.module-info
+2026-10-04T18:33:38.0265284Z [WARNING] JsoupXpath-2.5.3.jar, accessors-smart-2.6.0.jar, annotations-13.0.jar, antlr4-runtime-4.7.2.jar, asm-9.7.1.jar, commons-lang3-3.18.0.jar, commons-text-1.13.1.jar, error_prone_annotations-2.41.0.jar, golden-generator.jar, gson-2.13.2.jar, hutool-core-5.8.22.jar, hutool-crypto-5.8.22.jar, json-path-2.10.0.jar, json-smart-2.6.0.jar, jsoup-1.16.2.jar, kotlin-stdlib-2.2.21.jar, okhttp-jvm-5.3.2.jar, okio-jvm-3.16.4.jar, quick-transfer-core-0.2.17.jar, rhino-1.8.1.jar, slf4j-api-1.7.36.jar define 1 overlapping resource: 
+2026-10-04T18:33:38.0269019Z [WARNING]   - META-INF/MANIFEST.MF
+2026-10-04T18:33:38.0269727Z [WARNING] maven-shade-plugin has detected that some files are
+2026-10-04T18:33:38.0270547Z [WARNING] present in two or more JARs. When this happens, only one
+2026-10-04T18:33:38.0271368Z [WARNING] single version of the file is copied to the uber jar.
+2026-10-04T18:33:38.0272203Z [WARNING] Usually this is not harmful and you can skip these warnings,
+2026-10-04T18:33:38.0273062Z [WARNING] otherwise try to manually exclude artifacts based on
+2026-10-04T18:33:38.0273899Z [WARNING] mvn dependency:tree -Ddetail=true and the above output.
+2026-10-04T18:33:38.0274778Z [WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
+2026-10-04T18:33:38.0334377Z [INFO] Replacing original artifact with shaded artifact.
+2026-10-04T18:33:38.0357209Z [INFO] Replacing /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator.jar with /home/runner/work/bookon/bookon/scripts/golden/target/golden-generator-1.0.0-shaded.jar
+2026-10-04T18:33:38.0359334Z [INFO] ------------------------------------------------------------------------
+2026-10-04T18:33:38.0386344Z [INFO] BUILD SUCCESS
+2026-10-04T18:33:38.0396701Z [INFO] ------------------------------------------------------------------------
+2026-10-04T18:33:38.0398008Z [INFO] Total time:  5.592 s
+2026-10-04T18:33:38.0398731Z [INFO] Finished at: 2026-10-04T18:33:38Z
+2026-10-04T18:33:38.0400727Z [INFO] ------------------------------------------------------------------------
+﻿2026-10-04T18:33:38.0738964Z ##[group]Run set -e
+2026-10-04T18:33:38.0739280Z [36;1mset -e[0m
+2026-10-04T18:33:38.0739611Z [36;1mjava -jar target/golden-generator.jar cases out[0m
+2026-10-04T18:33:38.0739969Z [36;1mecho "=== 生成的文件 ==="[0m
+2026-10-04T18:33:38.0740220Z [36;1mls -la out[0m
+2026-10-04T18:33:38.0740473Z [36;1mCOUNT=$(ls out/*.json 2>/dev/null | wc -l)[0m
+2026-10-04T18:33:38.0740785Z [36;1mif [ "$COUNT" -eq 0 ]; then[0m
+2026-10-04T18:33:38.0741059Z [36;1m  echo "错误：未生成任何 golden 文件"[0m
+2026-10-04T18:33:38.0741318Z [36;1m  exit 1[0m
+2026-10-04T18:33:38.0741517Z [36;1mfi[0m
+2026-10-04T18:33:38.0809103Z shell: /usr/bin/bash -e {0}
+2026-10-04T18:33:38.0809378Z env:
+2026-10-04T18:33:38.0809708Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:38.0810241Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:38.0810647Z ##[endgroup]
+2026-10-04T18:33:38.6317269Z AnalyzeUrl 规则解析: 94 条（手工移植调度 + 真实 Rhino）
+2026-10-04T18:33:38.6537256Z 生成: analyze_url_cases.json
+2026-10-04T18:33:39.3993386Z 字符集检测: 240 条（真实 legado icu4j 检测器源码 + EncodingDetect 移植；其中合成小说章节文本 45 条）
+2026-10-04T18:33:39.4027688Z Cookie 纯函数: 47 条（手工移植 CookieStore/CookieManager）
+2026-10-04T18:33:39.4028836Z 生成: cookie_cases.json
+2026-10-04T18:33:39.4413996Z 生成: css_basic.json
+2026-10-04T18:33:39.4479276Z 生成: css_real_xiaoshuo2016.json
+2026-10-04T18:33:39.6097174Z URL 规范化: 170 条（真实 OkHttp 5.3.2 HttpUrl）
+2026-10-04T18:33:39.6116617Z 生成: http_url_cases.json
+2026-10-04T18:33:39.8469693Z JsExtensions 纯算法: 321 条用例（真实 hutool/quick-transfer/Java 标准库）
+2026-10-04T18:33:39.8496816Z Java MessageDigest: 2 条
+2026-10-04T18:33:39.8546511Z 生成: js_ext_cases.json
+2026-10-04T18:33:39.9103638Z Rhino 数字入参: 42 条（真实 Rhino 1.8.1 转换结果）
+2026-10-04T18:33:39.9126829Z 生成: js_number_args.json
+2026-10-04T18:33:39.9747791Z Rhino 1.8.1: 74 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）
+2026-10-04T18:33:39.9786446Z 生成: js_rhino.json
+2026-10-04T18:33:39.9996998Z SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+2026-10-04T18:33:40.0016436Z SLF4J: Defaulting to no-operation (NOP) logger implementation
+2026-10-04T18:33:40.0027123Z SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+2026-10-04T18:33:40.0423119Z 生成: jsonpath_cases.json
+2026-10-04T18:33:40.2670124Z jsoup 替身对照: 91 条用例（同一 JS，真实 jsoup 1.16.2 + Rhino 1.8.1）
+2026-10-04T18:33:40.2696396Z 生成: jsoup_cases.json
+2026-10-04T18:33:40.3632078Z 生成: malformed_html.json
+2026-10-04T18:33:40.3697696Z 生成: regex_analyze.json
+2026-10-04T18:33:40.3759550Z 生成: regex_replace.json
+2026-10-04T18:33:41.8183559Z OkHttp 请求对照: 43 条（真实 OkHttp 5.3.2 → 本地 HttpServer）
+2026-10-04T18:33:44.3907118Z OkHttp 重定向/Cookie 链对照: 44 条
+2026-10-04T18:33:44.9551205Z OkHttp Cookie 对照: 13 条
+2026-10-04T18:33:44.9621997Z OkHttp 自动头清单: 4 条
+2026-10-04T18:33:45.1383842Z 生成: serializer_synthetic.json
+2026-10-04T18:33:45.1590453Z 生成: unescape_html4.json
+2026-10-04T18:33:45.1615177Z 生成: url_absolute.json
+2026-10-04T18:33:45.1686654Z URL 编码: 299 条（真实 hutool/URLEncoder）
+2026-10-04T18:33:45.1751323Z 生成: url_codec_cases.json
+2026-10-04T18:33:45.1812350Z UrlOption 解析: 84 条（真实 Gson + legado 定制适配器）
+2026-10-04T18:33:45.1819645Z 生成: url_option_cases.json
+2026-10-04T18:33:45.2116791Z line 1:10 token recognition error at: '%'
+2026-10-04T18:33:45.2136314Z line 1:11 token recognition error at: '%'
+2026-10-04T18:33:45.2477253Z 生成: xpath_basic.json
+2026-10-04T18:33:45.2541959Z 生成: xpath_real_caimoge.json
+2026-10-04T18:33:45.2544735Z 完成：处理 22 个用例文件，共 2271 条用例。
+2026-10-04T18:33:45.2783855Z === 生成的文件 ===
+2026-10-04T18:33:45.2800722Z total 2040
+2026-10-04T18:33:45.2801185Z drwxr-xr-x 2 runner runner    4096 Oct  4 18:33 .
+2026-10-04T18:33:45.2801729Z drwxr-xr-x 6 runner runner    4096 Oct  4 18:33 ..
+2026-10-04T18:33:45.2802378Z -rw-r--r-- 1 runner runner   25004 Oct  4 18:33 analyze_url_cases.json
+2026-10-04T18:33:45.2803134Z -rw-r--r-- 1 runner runner    4348 Oct  4 18:33 auto_header_cases.json
+2026-10-04T18:33:45.2803855Z -rw-r--r-- 1 runner runner 1245937 Oct  4 18:33 charset_cases.json
+2026-10-04T18:33:45.2805110Z -rw-r--r-- 1 runner runner    6249 Oct  4 18:33 cookie_cases.json
+2026-10-04T18:33:45.2806114Z -rw-r--r-- 1 runner runner   17657 Oct  4 18:33 css_basic.json
+2026-10-04T18:33:45.2806844Z -rw-r--r-- 1 runner runner    4656 Oct  4 18:33 css_real_xiaoshuo2016.json
+2026-10-04T18:33:45.2807639Z -rw-r--r-- 1 runner runner   27613 Oct  4 18:33 http_url_cases.json
+2026-10-04T18:33:45.2808102Z -rw-r--r-- 1 runner runner   72274 Oct  4 18:33 js_ext_cases.json
+2026-10-04T18:33:45.2808525Z -rw-r--r-- 1 runner runner    7615 Oct  4 18:33 js_number_args.json
+2026-10-04T18:33:45.2808957Z -rw-r--r-- 1 runner runner   15684 Oct  4 18:33 js_rhino.json
+2026-10-04T18:33:45.2809376Z -rw-r--r-- 1 runner runner   41164 Oct  4 18:33 jsonpath_cases.json
+2026-10-04T18:33:45.2809782Z -rw-r--r-- 1 runner runner   53659 Oct  4 18:33 jsoup_cases.json
+2026-10-04T18:33:45.2810399Z -rw-r--r-- 1 runner runner   16828 Oct  4 18:33 malformed_html.json
+2026-10-04T18:33:45.2810961Z -rw-r--r-- 1 runner runner  105525 Oct  4 18:33 redirect_cases.json
+2026-10-04T18:33:45.2811379Z -rw-r--r-- 1 runner runner    7921 Oct  4 18:33 regex_analyze.json
+2026-10-04T18:33:45.2811781Z -rw-r--r-- 1 runner runner    9501 Oct  4 18:33 regex_replace.json
+2026-10-04T18:33:45.2812188Z -rw-r--r-- 1 runner runner   62985 Oct  4 18:33 request_cases.json
+2026-10-04T18:33:45.2812614Z -rw-r--r-- 1 runner runner   20346 Oct  4 18:33 request_cookie_cases.json
+2026-10-04T18:33:45.2813068Z -rw-r--r-- 1 runner runner  152520 Oct  4 18:33 serializer_synthetic.json
+2026-10-04T18:33:45.2813497Z -rw-r--r-- 1 runner runner    5447 Oct  4 18:33 unescape_html4.json
+2026-10-04T18:33:45.2813908Z -rw-r--r-- 1 runner runner   10750 Oct  4 18:33 url_absolute.json
+2026-10-04T18:33:45.2814309Z -rw-r--r-- 1 runner runner   51763 Oct  4 18:33 url_codec_cases.json
+2026-10-04T18:33:45.2814726Z -rw-r--r-- 1 runner runner   27239 Oct  4 18:33 url_option_cases.json
+2026-10-04T18:33:45.2815417Z -rw-r--r-- 1 runner runner   24993 Oct  4 18:33 xpath_basic.json
+2026-10-04T18:33:45.2816767Z -rw-r--r-- 1 runner runner    4863 Oct  4 18:33 xpath_real_caimoge.json
+﻿2026-10-04T18:33:45.2894288Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T18:33:45.2894617Z with:
+2026-10-04T18:33:45.2894820Z   name: golden-data
+2026-10-04T18:33:45.2895064Z   path: scripts/golden/out/*.json
+2026-10-04T18:33:45.2895339Z   if-no-files-found: error
+2026-10-04T18:33:45.2895888Z   compression-level: 6
+2026-10-04T18:33:45.2896138Z   overwrite: false
+2026-10-04T18:33:45.2896357Z   include-hidden-files: false
+2026-10-04T18:33:45.2896595Z env:
+2026-10-04T18:33:45.2896906Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:45.2897418Z   JAVA_HOME_11_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/11.0.32-1/x64
+2026-10-04T18:33:45.2897806Z ##[endgroup]
+2026-10-04T18:33:45.4566551Z (node:2439) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T18:33:45.4567953Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T18:33:45.4676843Z With the provided path, there will be 25 files uploaded
+2026-10-04T18:33:45.4677836Z Artifact name is valid!
+2026-10-04T18:33:45.4678243Z Root directory input is valid!
+2026-10-04T18:33:45.8527649Z Beginning upload of artifact content to blob storage
+2026-10-04T18:33:45.9211204Z (node:2439) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T18:33:46.4164815Z Uploaded bytes 224976
+2026-10-04T18:33:46.4890466Z Finished uploading artifact content to blob storage!
+2026-10-04T18:33:46.4891524Z SHA256 digest of uploaded artifact zip is 96cf791a0d6825b03cfa193eba204ab91d4c8f077bc7d21278c3ef5b30026915
+2026-10-04T18:33:46.4893269Z Finalizing artifact upload
+2026-10-04T18:33:46.7455769Z Artifact golden-data.zip successfully finalized. Artifact ID 11311109930
+2026-10-04T18:33:46.7457757Z Artifact golden-data has been successfully uploaded! Final size is 224976 bytes. Artifact ID is 11311109930
+2026-10-04T18:33:46.7464557Z Artifact download URL: https://github.com/zhuof725/bookon/actions/runs/37224878055/artifacts/11311109930
+﻿2026-10-04T18:33:46.7652996Z Post job cleanup.
+2026-10-04T18:33:46.9032749Z (node:2452) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T18:33:46.9033594Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T18:33:46.9039480Z Cache hit occurred on the primary key setup-java-Linux-x64-maven-0a6a93d0a8722e28836b1cf200a29f5a5fd29adaf01c95f1b393ac6a34d9789e, not saving cache.
+﻿2026-10-04T18:33:46.9220000Z Post job cleanup.
+2026-10-04T18:33:47.0196862Z [command]/usr/bin/git version
+2026-10-04T18:33:47.0236507Z git version 2.55.0
+2026-10-04T18:33:47.0269828Z Temporarily overriding HOME='/home/runner/work/_temp/f1f98f0e-2bdc-45bf-815a-c78034e7ecd7' before making global git config changes
+2026-10-04T18:33:47.0271547Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T18:33:47.0279078Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/bookon/bookon
+2026-10-04T18:33:47.0325057Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T18:33:47.0365060Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T18:33:47.0628293Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T18:33:47.0658744Z http.https://github.com/.extraheader
+2026-10-04T18:33:47.0672419Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-04T18:33:47.0715320Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T18:33:47.0973804Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T18:33:47.1016126Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+﻿2026-10-04T18:33:47.1413908Z Cleaning up orphan processes
+2026-10-04T18:33:47.1754921Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

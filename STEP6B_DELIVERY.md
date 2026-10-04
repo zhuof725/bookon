@@ -392,7 +392,13 @@ C8E7     FFFD FFFD     F831 (PUA)        FFFD            (PUA 被拒 → 缩短�
 | `98a9c27` | 修正 `lossyString` 类型错误，改用 Darwin `CFString` 容错解码 |
 | `038241a` | 修正 BOM 阈值与 UTF-8 容错解码；golden 补标准算法基线；修复表单字段顺序 |
 | `fe28d54` | `CFStringCreateWithBytes` 非容错 —— 改增量解码，修 macOS 上 Big5/EUC 返回 nil |
-| （本次） | 增量解码改「按字符边界逐字符」（修吞字节）；`decodedContentTypeQuoted` 并入 UTF-8 豁免；Big5 码表差异登记 6B-13 / GB 系 PUA 登记 6B-14 |
+| `e1a88f1` | 增量解码改「按字符边界逐字符」（修吞字节）；`decodedContentTypeQuoted` 并入 UTF-8 豁免；Big5 码表差异登记 6B-13 / GB 系 PUA 登记 6B-14 |
+| `c2449b5` | 修 golden 对照暴露的 5 类缺陷：GB2312 缺 u2 带（6B-21）、GB18030 四字节识别不到（6B-22）、UTF-16 逐字节拆散代理对（6B-23）、golden 前导 BOM 被 JSON 吞（6B-24）、GB 用户定义区判据放宽（6B-25） |
+| `3e687be` | 修 UTF-16 高代理 + 非低代理应 `MALFORMED[4]`（6B-26）；`lossyString` 整体捷径收紧为仅 `profile == nil` |
+| `eb9809f` | 新增 `unitWidth` 字段与 `utf16Profile`；新增 `U16Ex.java` / `G2312Prof.java` 两个全枚举探针 |
+| `8821963` | **修编译错误**：UTF-16 字节序改为调用点传参，彻底摆脱 Swift 里不可见的 `kCFStringEncodingUTF16LE` / `..BE`；`extract_macos_count.py` 放宽为「找不到也输出 0 并成功退出」 |
+| `8a38fe8` | 修 `ext-cn-3-utf-16be`（6B-28：**代理判定必须优先于 CF 试探**，CF 对孤立代理会「礼貌地」返回 `U+FFFD`）；删掉 golden 读取链路的 `JSONSerialization` 往返（6B-27）；通用 UTF-16/UTF-32 按 JDK 语义剥前导 BOM |
+| `500a7c9` | 修 `extractArraySegment` 必须取到配对 `]`（否则 `JSONDecoder` 报 `Unexpected character ','`）。**此提交 CI 全绿** |
 
 ### 9.2 CI 日志
 
@@ -400,8 +406,19 @@ C8E7     FFFD FFFD     F831 (PUA)        FFFD            (PUA 被拒 → 缩短�
 |---|---|
 | `ci_logs/step6b_mid_golden.log` | 首次 golden job 真实日志 |
 | `ci_logs/step6b_final_golden.log` | golden job 最终真实日志（22 文件 / **2271 条**） |
-| `ci_logs/step6b_final_macos.log` | `test-macos` 真实日志 |
-| `ci_logs/step6b_final_ios.log` | `test-ios-simulator` 真实日志 |
+| `ci_logs/step6b_final_macos.log` | `test-macos` 真实日志（**567** 个用例，0 失败） |
+| `ci_logs/step6b_final_ios.log` | `test-ios-simulator` 真实日志（**567** 个用例，0 失败） |
+
+三份日志取自 **CI run [`37224878055`](https://github.com/zhuof725/bookon/actions/runs/37224878055)（提交 `500a7c9`）—— 该次 CI 三个 job（`golden` / `test-macos` / `test-ios-simulator`）全部 `success`，是首次全绿**。
+
+### 9.2.1 CI 最终结果（run `37224878055`）
+
+| job | 结论 | 关键数字 |
+|---|---|---|
+| `golden` | ✅ success | 处理 **22** 个用例文件、共 **2271** 条用例；字符集检测 **240** 条（含合成小说章节 45 条） |
+| `test-macos` | ✅ success | `Executed 567 tests, with 1 test skipped and 0 failures` |
+| `test-ios-simulator` | ✅ success | **iOS 总数 = macOS 总数 = 567**，日志内含显式核对行：<br>`iOS 模拟器实际执行的测试总数: 567` / `macOS 测试总数（来自 artifact）: 567` / `✅ iOS 总数与 macOS 总数一致（均为 567）。` |
+| `live-smoke` | skipped（`workflow_dispatch` 触发才跑，符合预期） | — |
 
 ### 9.3 本地验证清单（无 Apple 平台时能做的全部）
 
@@ -416,3 +433,5 @@ C8E7     FFFD FFFD     F831 (PUA)        FFFD            (PUA 被拒 → 缩短�
 | `scripts/verify_functions.py` | Kotlin 272 个函数，未处理清单为空 |
 | `scripts/verify_fields.py` | Kotlin 225 个字段，未实现清单为空 |
 | README ↔ 代码逐条核对 | 16 源文件 + 11 测试文件 + 10 API 名 + 5 用例文件全部存在 |
+| `scripts/mbcs_parity` 全枚举对照 | GBK / **GB2312** / Big5 / Shift_JIS / EUC-KR / EUC-JP **六族各 240/240**（`Cross2`）、各 **65792/65792**（`Exhaust`）；EUC-JP `8F **` 三字节 **65536/65536**（`Ex3`）；UTF-16LE **65792/65792**（1+2 字节）与 **3250426/3250426**（高代理开头 4 字节）（`U16Ex`） |
+| **CI 三 job 全绿** | run `37224878055`（`500a7c9`）：`golden` ✅ / `test-macos` ✅ 567 用例 0 失败 / `test-ios-simulator` ✅ 567 用例 0 失败 |
