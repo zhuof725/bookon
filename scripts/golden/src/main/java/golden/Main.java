@@ -219,6 +219,26 @@ public class Main {
                             + " 条 JS 用例（getString + inline {{}}，保留 rawType/evalType）");
                 }
 
+                // 第 6 步 6B：字符集检测 golden。语料库在 CharsetCorpus 里代码生成
+                // （不需要 cases/*.json 提供输入），但为保持「每个 cases 文件 -> 一个 golden 文件」
+                // 的既有结构，入口由 cases/charset_cases.json 的空 marker 触发，
+                // 生成器内部自建语料并直接写出 charset_cases.json 的 charsetResults。
+                // 这里跳过常规的 output 写入，避免覆盖生成器写出的内容。
+                if (input.has("charsetCases")) {
+                    int n = CharsetGen.run(outDir);
+                    totalCases += n;
+                    continue;
+                }
+
+                // 第 6 步 6B：OkHttp 请求/重定向对照 golden（真实 OkHttp 5.3.2 + 本地
+                // com.sun.net.httpserver 服务器）。同样由 marker 文件触发，生成器自建用例
+                // 并直接写出 request_cases.json。
+                if (input.has("requestCases")) {
+                    int n = RequestGen.run(outDir);
+                    totalCases += n;
+                    continue;
+                }
+
                 String outName = path.getFileName().toString();
                 try (FileWriter w = new FileWriter(Paths.get(outDir, outName).toFile(), StandardCharsets.UTF_8)) {
                     gson.toJson(output, w);
@@ -232,6 +252,10 @@ public class Main {
             System.err.println("错误：没有生成任何用例结果！");
             System.exit(1);
         }
+        // 显式 exit(0)：即便有库（如 com.sun.net.httpserver 的某些内部线程）留下非守护线程，
+        // 也保证 JVM 立刻退出，不让 CI 的 golden job 卡在「进程不结束」上。
+        System.out.flush();
+        System.exit(0);
     }
 
     private static JsonObject runCssCase(JsonObject c, JsonObject htmls) {

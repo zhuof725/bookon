@@ -18,7 +18,7 @@
 //  1) get/post/head 返回「jsoup Connection.Response 替身」：
 //     | JS 方法                | Kotlin/jsoup 对应              | 语义 |
 //     |------------------------|-------------------------------|------|
-//     | body()                 | Connection.Response.body()     | 按 Content-Type/BOM/UTF-8 解码的响应体 |
+//     | body / body()          | Connection.Response.body()     | 完整解码链（BOM→charset→Content-Type→HTML meta→ICU4J 检测器）解出的响应体 |
 //     | statusCode()           | statusCode()                   | 状态码（不跟随重定向，3xx 原样返回） |
 //     | statusMessage()        | statusMessage()                | 状态短语（URLSession 无原话，用标准短语表） |
 //     | headers()              | headers()                      | {name: [values]}；带非枚举 get(name)（大小写不敏感，jsoup Headers 语义） |
@@ -29,10 +29,12 @@
 //     | contentType()          | contentType()                  | Content-Type 头（无则空串） |
 //
 //  2) connect 返回「StrResponse 替身」（Kotlin StrResponse.kt + jsHelp.md 文档的方法面）：
-//     body() / code() / message() / headers() / raw() / toString() / callTime() / url()
-//     ⚠️ 差异：Kotlin 的 StrResponse 是「JavaBean 属性 + 同名方法」双通道（.body 与 body()），
-//     Rhino 可两者并存；JS 对象上无法让同名的数据属性与方法并存，本移植只提供**同名方法**，
-//     `.body` 属性访问请改用 `.body()`。
+//     body / body() / code() / message() / headers() / raw() / toString() / callTime() / url()
+//     ✅ `.body`（属性）与 `.body()`（方法）**双通道均已支持**（与 Kotlin StrResponse 的
+//     `var body` + `fun body()` 一致）：JSJavaBridge 注入的 __installDualChannel 让属性返回
+//     一个「可调用 + 转发 String 原型」的 Proxy，`x.body`、`x.body()`、拼接/比较/`String(x)`/
+//     `JSON.stringify` / `x.body.length` / `x.body.indexOf(...)` 都与字符串语义一致。
+//     唯一残留差异：`typeof x.body` 为 "function"、严格 `===` 字符串比较为 false（已记入差异表 6B-6）。
 //
 //  3) ajaxAll 返回 StrResponse 替身数组（顺序与输入一致）。
 //  4) cacheFile 返回文件文本内容；downloadFile 返回相对缓存根的路径（带前导 "/"）。
@@ -60,16 +62,20 @@
 //  —— 与 Kotlin 的差异（README 6B 小节登记）——
 //   1. 缓存根目录：Kotlin 用 Context.externalCacheDir（/android/data/{pkg}/cache）；
 //      本移植默认用 FileManager Caches 目录下 "legado-js-cache"（可注入，测试传临时目录）；
-//   2. 文本解码：Kotlin 走 ResponseBody.text()（explicit charset → Content-Type → ICU4J
-//      EncodingDetect.getHtmlEncode）；本移植为最小解码链（BOM 剥离 → explicit → Content-Type →
-//      UTF-8 替换语义），ICU4J 检测链在 step6-6b-wip 分支 WIP(4)/(5)，尚未并入 main；
-//      读取本地缓存文件同理（Kotlin 用 EncodingDetect.getEncode(file) 检测）；
+//   2. 文本解码：与 Kotlin `ResponseBody.text(encode)`（OkHttpUtils.kt）逐级一致 ——
+//      BOM 剥离 → explicit charset（UrlOption.charset）→ Content-Type charset →
+//      EncodingDetect.getHtmlEncode（HTML meta → ICU4J 检测器 → "UTF-8" 兜底）。
+//      唯一差异：Kotlin 对「不可识别的 charset 名」抛 UnsupportedCharsetException，
+//      本移植回退到下一级（不崩溃）；读取本地缓存文件同理（Kotlin 用
+//      EncodingDetect.getEncode(file)，本移植在 EncodingDetect.getEncode(file:) 里实现同样的
+//      「只取负字节、上限 8000」语义）；
 //   3. headers 参数顺序：JS 对象经桥接 → JSON（Swift 侧按字典序），Kotlin 保持 JS 对象插入
 //      顺序（LinkedHashMap）；键唯一时不影响 HTTP 语义；
 //   4. get/post/head 的 Cookie：Kotlin 的 Jsoup.connect 用自建客户端（不带 legado CookieStore）；
 //      本移植经 URLSessionHTTPClient 会注入 CookieStore 的 Cookie（客户端既有差异 #5 不变）；
-//   5. get/post/head 的书源并发率：Kotlin 用 ConcurrentRateLimiter(getSource())；本移植 provider
-//      不携带书源，未接线（App 集成方可自行包装限速）；
+//   5. get/post/head 的书源并发率：与 Kotlin 一致，经 `AnalyzeUrl.withRateLimit` 接到
+//      `ConcurrentRateLimiter`（书源注入，见 RealJsNetworkExtensionsProvider.rateLimiter /
+//      RealAjaxProvider）；`skipRateLimit` 为 true 时跳过；
 //   6. 请求重试：Kotlin get/post/head 无重试（单次 execute）；ajax/connect 走 AnalyzeUrl retry；
 //      本移植一致；网络错误的分类/超时语义由 URLSessionHTTPClient 负责（既有差异见 6B 客户端文档）；
 //   7. cacheFile 的 saveTime：Kotlin CacheManager.put(key, path, saveTime) 带 TTL；本移植注入的
@@ -175,11 +181,18 @@ enum JsNetEnvelope {
     }
 }
 
-// MARK: - 最小响应文本解码（差异见文件头 #2）
+// MARK: - 响应文本解码（与 Kotlin ResponseBody.text(encode) 逐级一致）
 
-/// 响应字节 → 字符串的最小解码链，对应 Kotlin `ResponseBody.text(encode)` 的前三级
-/// （BOM 剥离 → 显式 charset → Content-Type charset），最后以 UTF-8 替换语义兜底
-/// （ICU4J 检测链未并入 main，见文件头差异 #2）。
+/// 响应字节 → 字符串的完整解码链，与 Kotlin `ResponseBody.text(encode)`（OkHttpUtils.kt）完全一致：
+///
+///   1. `Utf8BomUtils.removeUTF8BOM(bytes)` 剥离 UTF-8 BOM；
+///   2. 显式 charset（书源 `UrlOption.charset`，由调用方传入 `explicitCharset`）；
+///   3. OkHttp `MediaType.charset()`（即 `Content-Type` 头里的 charset 参数）；
+///   4. `EncodingDetect.getHtmlEncode(bytes)`：
+///        a. HTML `<meta charset>` / `<meta http-equiv=content-type content=...>`；
+///        b. 否则 `EncodingDetect.getEncode(bytes)` → ICU4J 检测器，无匹配时 Kotlin 兜底 "UTF-8"。
+///
+/// 各级都按 Java `new String(bytes, charset)` 的 U+FFFD 替换语义解码。
 enum JsNetTextDecoder {
 
     /// 剥离 UTF-8 BOM（对应 legado Utf8BomUtils.removeUTF8BOM 的等价物）。
@@ -204,8 +217,12 @@ enum JsNetTextDecoder {
         return nil
     }
 
-    /// bytes → String。explicitCharset（书源 charset）→ Content-Type charset → UTF-8。
+    /// bytes → String。完整链：BOM → explicitCharset（书源 charset）→ Content-Type charset
+    /// → EncodingDetect.getHtmlEncode（HTML meta → ICU4J 检测器 → "UTF-8" 兜底）。
     /// 不可解码字节按 Java `new String(bytes, charset)` 的 U+FFFD 替换语义处理。
+    ///
+    /// 与 Kotlin `ResponseBody.text(encode)` 逐级对应；Kotlin 对不可识别 charset 名会抛
+    /// `UnsupportedCharsetException`，这里回退到下一级（不崩溃，差异见 6B 差异表）。
     static func decode(bytes: [UInt8], explicitCharset: String?, contentTypeHeader: String?) -> String {
         let stripped = removeUTF8BOM(bytes)
         let data = Data(stripped)
@@ -217,6 +234,10 @@ enum JsNetTextDecoder {
         if let headerCharset = charsetFromContentTypeHeader(contentTypeHeader) {
             if let text = decode(data, charsetName: headerCharset) { return text }
         }
+        // 第 4/5 级：EncodingDetect.getHtmlEncode（HTML meta → ICU4J 检测器 → "UTF-8"）。
+        let detected = EncodingDetect.getHtmlEncode(stripped)
+        if let text = decode(data, charsetName: detected) { return text }
+        // 检测出的名字在本移植的解码表里不可用（极少见）：退回 UTF-8 替换语义。
         return String(decoding: stripped, as: UTF8.self)
     }
 
@@ -328,6 +349,12 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
     private let diagnostics: RuleEngineDiagnostics?
     private let maxConcurrent: Int
 
+    /// 书源的并发率限制器（对应 Kotlin `ConcurrentRateLimiter(getSource())`）。
+    /// get/post/head 在发起请求前经它 `withLimit`（Kotlin `withLimitBlocking`）；
+    /// 为 nil 时不限速。可由初始化参数注入（测试可传自定义时钟/存储），
+    /// 也可在拿到书源后通过 `setRateLimiterFromSource(_:)` 由书源构造。
+    private var rateLimiter: ConcurrentRateLimiter?
+
     /// 对应 Kotlin `getSource()?.enabledCookieJar`：为 true 时 get/post/head 追加 `CookieJar: 1` 头。
     /// ⚠️ 差异：Kotlin 从书源实时读取；本移植 provider 不携带书源，需显式设置（默认 false）。
     public var enabledCookieJar: Bool = false
@@ -337,13 +364,28 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
                 cacheManager: CacheManagerProtocol = InMemoryCacheManager(),
                 cacheDirectory: URL? = nil,
                 diagnostics: RuleEngineDiagnostics? = nil,
-                maxConcurrent: Int = RealJsNetworkExtensionsProvider.defaultMaxConcurrent) {
+                maxConcurrent: Int = RealJsNetworkExtensionsProvider.defaultMaxConcurrent,
+                rateLimiter: ConcurrentRateLimiter? = nil) {
         self.client = client ?? RealJsNetworkExtensionsProvider.makeDefaultClient()
         self.environment = environment
         self.cacheManager = cacheManager
         self.cacheDirectory = cacheDirectory ?? RealJsNetworkExtensionsProvider.defaultCacheDirectory()
         self.diagnostics = diagnostics
         self.maxConcurrent = max(1, maxConcurrent)
+        self.rateLimiter = rateLimiter
+    }
+
+    /// 用书源构造并发率限制器（对应 Kotlin `ConcurrentRateLimiter(getSource())`）。
+    /// 书源 `concurrentRate` 为空时内部等价于不限速。
+    /// 注意：`BookSource` 在 Swift 侧是 struct（`ConcurrentRateSource` 是 AnyObject 协议），
+    /// 因此这里直接取 `concurrentRate` 字符串与 `bookSourceKey`。
+    public func setRateLimiterFromSource(concurrentRate: String?, key: String?) {
+        rateLimiter = AnalyzeUrl.makeRateLimiter(concurrentRate: concurrentRate, key: key)
+    }
+
+    /// 直接注入限制器（测试用）。
+    public func setRateLimiter(_ limiter: ConcurrentRateLimiter?) {
+        rateLimiter = limiter
     }
 
     /// 默认客户端：URLSessionHTTPClient + 内存 CookieStore（对应 Kotlin HttpHelper.okHttpClient）。
@@ -406,8 +448,10 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
         // HTTPRequest.followRedirects = false，见 URLSessionHTTPClient 对应分支）。
         request.followRedirects = false
 
-        let response = try runBlockingNetwork { [client] in
-            try await client.execute(request)
+        let response = try runBlockingNetwork { [self] in
+            try await executeWithRateLimit { [client] in
+                try await client.execute(request)
+            }
         }
         let bodyText = Self.decodeBody(response, explicitCharset: nil)
         let cookies = Self.cookiesFromSetCookieHeaders(response.headers)
@@ -445,8 +489,10 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
         request.callTimeout = Int64(timeoutMs)
         request.followRedirects = false
 
-        let response = try runBlockingNetwork { [client] in
-            try await client.execute(request)
+        let response = try runBlockingNetwork { [self] in
+            try await executeWithRateLimit { [client] in
+                try await client.execute(request)
+            }
         }
         let decoded = Self.decodeBody(response, explicitCharset: nil)
         let cookies = Self.cookiesFromSetCookieHeaders(response.headers)
@@ -563,7 +609,7 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
         return readTxtFile(resolveCachePath(path))
     }
 
-    /// 对应 Kotlin `readTxtFile(path)`：文件不存在返回 ""；解码差异见文件头 #2。
+    /// 对应 Kotlin `readTxtFile(path)`：文件不存在返回 ""；解码链见文件头 #2。
     private func readTxtFile(_ fileURL: URL) -> String {
         guard let data = try? Data(contentsOf: fileURL) else { return "" }
         return JsNetTextDecoder.decode(bytes: Array(data), explicitCharset: nil, contentTypeHeader: nil)
@@ -605,6 +651,13 @@ public final class RealJsNetworkExtensionsProvider: JsNetworkExtensionsProvider 
     /// ⚠️ 与 Kotlin 相同的取舍：会阻塞调用线程（JS 回调线程），iOS 上不要在需要主线程的路径里调用。
     private func runBlockingNetwork<T>(_ operation: @escaping () async throws -> T) throws -> T {
         try JsNetSupport.runBlocking(operation)
+    }
+
+    /// get/post/head 的限速执行（对应 Kotlin `ConcurrentRateLimiter(getSource()).withLimitBlocking {}`）：
+    /// 注入了 rateLimiter 时先取限速令牌再发请求，否则直连。
+    private func executeWithRateLimit<T>(_ operation: @escaping () async throws -> T) async throws -> T {
+        guard let limiter = rateLimiter else { return try await operation() }
+        return try await limiter.withLimit(operation)
     }
 
     /// 单 URL 的 StrResponse 数据（connect 与 ajaxAll 共用）。
@@ -754,7 +807,7 @@ enum JsNetSupport {
 
     // MARK: 解码与解析
 
-    /// 响应体解码（最小链，见文件头差异 #2）。
+    /// 响应体解码（完整链：BOM → explicit → Content-Type → getHtmlEncode；见文件头 #2）。
     static func decodeBody(_ response: HTTPResponse, explicitCharset: String?) -> String {
         JsNetTextDecoder.decode(bytes: Array(response.body),
                                 explicitCharset: explicitCharset,

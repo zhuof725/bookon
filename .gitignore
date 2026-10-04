@@ -6,3 +6,17 @@ DerivedData/
 .swiftpm/
 __pycache__/
 *.pyc
+
+# scripts/golden：Maven 构建产物（jar 由 CI 用真实依赖现场编译，不入库）
+scripts/golden/target/
+scripts/golden/dependency-reduced-pom.xml
+
+# golden 生成结果（由 CI 的 golden job 现场生成并作为 artifact 传递）
+scripts/golden/out/
+scripts/golden/out2/
+
+# live-smoke 报告输出
+live-smoke-out/
+live_smoke_test.log
+macos_test_output.log
+macos_test_count.txt

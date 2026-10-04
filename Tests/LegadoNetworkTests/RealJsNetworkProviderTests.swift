@@ -489,4 +489,106 @@ final class RealJsNetworkProviderTests: XCTestCase {
         XCTAssertTrue(overridden.ajaxProviderValue is UnsupportedAjaxProvider)
         XCTAssertTrue(overridden.jsNetworkProviderValue is UnsupportedJsNetworkExtensionsProvider)
     }
+
+    // MARK: - 24. StrResponse 的 .body 属性与 .body() 方法双通道（6B-6）
+
+    /// Kotlin StrResponse 同时有 `var body: String?`（属性）与 `fun body()`（方法），
+    /// 书源里两种写法都存在。这里断言两种写法都能拿到响应体。
+    func testConnectStrResponseBodyPropertyAndMethodDualChannel() async throws {
+        let server = try startServer(handlers: [
+            "/dual": { _ in self.okBody("dual-body-content") }
+        ])
+        let target = url("/dual", server)
+        let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+        let v = try rule.evalJS("""
+        var r = java.connect('\\(target)');
+        [r.body(), String(r.body), r.body + '!', (r.body === undefined ? 'undef' : 'def')].join('|')
+        """)
+        XCTAssertEqual(v.stringValue, "dual-body-content|dual-body-content|dual-body-content!|def",
+                       ".body 属性与 .body() 方法应返回同一响应体")
+    }
+
+    /// get（jsoup Connection.Response 替身）同样支持 `.body` 与 `.body()`。
+    func testGetConnectionBodyPropertyAndMethodDualChannel() async throws {
+        let server = try startServer(handlers: [
+            "/dual2": { _ in self.okBody("connection-body") }
+        ])
+        let target = url("/dual2", server)
+        let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+        let v = try rule.evalJS("""
+        var r = java.get('\\(target)', {});
+        [r.body(), String(r.body), r.body.length, r.body().length, r.body.indexOf('connection')].join('|')
+        """)
+        XCTAssertEqual(v.stringValue, "connection-body|connection-body|15|15|0",
+                       ".body 属性应保持字符串语义（length/indexOf），.body() 亦可用")
+    }
+
+    /// 书源里常见的 `.body` 直接参与字符串操作（拼接 / includes / slice / JSON 序列化）。
+    func testBodyPropertyStringSemantics() async throws {
+        let server = try startServer(handlers: [
+            "/dual3": { _ in self.okBody("0123456789") }
+        ])
+        let target = url("/dual3", server)
+        let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+        let v = try rule.evalJS("""
+        var r = java.get('\\(target)', {});
+        [('x=' + r.body), r.body.includes('345'), r.body.slice(0, 3), r.body[0],
+         String(r.body) === '0123456789', JSON.stringify(r.body)].join('|')
+        """)
+        XCTAssertEqual(v.stringValue, "x=0123456789|true|012|0|true|\"0123456789\"")
+    }
+
+    // MARK: - 25. get/post/head 的书源并发率限速接线（6B-5）
+
+    /// get 途经注入的 ConcurrentRateLimiter：上限 1 次/每秒，第二次必须等待至少 ~1s。
+    func testGetHonoursInjectedRateLimiter() async throws {
+        let server = try startServer(handlers: [
+            "/rl": { _ in self.okBody("rl-ok") }
+        ])
+        let target = url("/rl", server)
+        let store = ConcurrentRecordStore()
+        let clock = SystemRateLimitClock()
+        let limiter = ConcurrentRateLimiter(concurrentRate: "1/1000", key: "test-source",
+                                            store: store, clock: clock)
+        let provider = RealJsNetworkExtensionsProvider(
+            client: makeRealClient(),
+            cacheManager: InMemoryCacheManager(),
+            cacheDirectory: makeTempDir(),
+            rateLimiter: limiter)
+        let rule = makeRule(provider: provider, ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+
+        let start = Date()
+        let v1 = try rule.evalJS("java.get('\\(target)', {}).body()")
+        let v2 = try rule.evalJS("java.get('\\(target)', {}).body()")
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(v1.stringValue, "rl-ok")
+        XCTAssertEqual(v2.stringValue, "rl-ok")
+        XCTAssertEqual(server.requests.count, 2)
+        XCTAssertGreaterThanOrEqual(elapsed, 0.9,
+                                    "限速 1/1000ms 下两次 get 应至少间隔 ~1s，实际 \(elapsed)s")
+    }
+
+    /// 未注入 rateLimiter 时不限速（两次请求应很快完成）。
+    func testGetWithoutRateLimiterIsNotThrottled() async throws {
+        let server = try startServer(handlers: [
+            "/free": { _ in self.okBody("free") }
+        ])
+        let target = url("/free", server)
+        let provider = makeProvider()
+        let rule = makeRule(provider: provider, ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+        let start = Date()
+        _ = try rule.evalJS("java.get('\\(target)', {}).body()")
+        _ = try rule.evalJS("java.get('\\(target)', {}).body()")
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 0.9, "未接限速时不应有 1s 级延迟，实际 \(elapsed)s")
+    }
+
+    /// setRateLimiterFromSource 用书源的 concurrentRate 字符串构造限制器。
+    func testSetRateLimiterFromSourceAcceptsConcurrentRateString() {
+        let provider = makeProvider()
+        provider.setRateLimiterFromSource(concurrentRate: "2/500", key: "src-1")
+        // 只断言不崩溃且之后请求仍可执行（限速器已注入）。
+        provider.setRateLimiter(ConcurrentRateLimiter(concurrentRate: nil, key: "src-1"))
+    }
 }

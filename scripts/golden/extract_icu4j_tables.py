@@ -9,8 +9,21 @@ import re
 import io
 import os
 
-ICU4J_DIR = "/var/minis/workspace/legado2/legado-E-main/app/src/main/java/io/legado/app/lib/icu4j"
-OUT = "/var/minis/workspace/bookon/bookon-main/Sources/LegadoBookSource/Network/CharsetDetector/CharsetTables.swift"
+# 路径改为相对脚本位置推导（原先硬编码到开发机绝对路径，CI/他机无法运行）：
+#   <repo>/scripts/golden/extract_icu4j_tables.py
+#   -> 仓库根 = 上两级
+#   -> icu4j 源码优先取仓库内 golden 侧副本 scripts/golden/src/main/java/legadoicu，
+#      回退到同级 legado 参考工程 reference/（若存在）。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.dirname(os.path.dirname(_HERE))
+_CANDIDATES = [
+    os.path.join(_REPO, "scripts", "golden", "src", "main", "java", "legadoicu"),
+    os.path.join(_REPO, "reference", "icu4j"),
+    "/var/minis/workspace/legado2/legado-E-main/app/src/main/java/io/legado/app/lib/icu4j",
+]
+ICU4J_DIR = next((d for d in _CANDIDATES if os.path.isdir(d)), _CANDIDATES[0])
+OUT = os.path.join(_REPO, "Sources", "LegadoBookSource", "Network", "CharsetDetector",
+                   "CharsetTables.swift")
 
 
 def strip_comments(src):

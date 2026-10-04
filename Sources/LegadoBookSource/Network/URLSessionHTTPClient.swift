@@ -49,7 +49,6 @@
 //
 
 import Foundation
-import CFNetwork
 
 /// `HTTPClient` 的真实实现：基于 URLSession（ephemeral 配置 + 手工管理 Cookie + 手工重定向）。
 ///

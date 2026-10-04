@@ -665,6 +665,15 @@ public final class AnalyzeUrl {
     public func withRateLimit<T>(_ block: () async throws -> T) async rethrows -> T {
         return try await rateLimiter.withLimit(block)
     }
+
+    /// 按书源构造并发率限制器（对应 Kotlin `ConcurrentRateLimiter(getSource())`，
+    /// 用于 get/post/head 这三条「不走 AnalyzeUrl」的 Jsoup.connect 分支）。
+    /// 传 nil / 空串时等价于不限速。
+    public static func makeRateLimiter(concurrentRate: String?, key: String? = nil,
+                                       store: ConcurrentRecordStore = .shared,
+                                       clock: RateLimitClock = SystemRateLimitClock()) -> ConcurrentRateLimiter {
+        return ConcurrentRateLimiter(concurrentRate: concurrentRate, key: key, store: store, clock: clock)
+    }
 }
 
 /// 书源是否启用 cookieJar（对应 Kotlin `BaseSource.enabledCookieJar`）。

@@ -117,3 +117,39 @@ jobs:
         run: xcrun simctl list devices available | grep -i iphone || true
       - name: Run tests on iOS Simulator (xcodebuild test)
         run: bash scripts/ios_sim_test.sh
+
+  # 第 6 步 6B（可选任务）：真实网络冒烟。
+  # 仅 workflow_dispatch 触发（push 不跑，避免外网站点抖动影响主链路）。
+  # 对仓库内真实书源配置（Tests/LegadoAnalyzeRuleTests/Resources/配置文件_7个.json）
+  # 用 AnalyzeUrl 解析搜索 URL（关键字「斗罗」）+ URLSessionHTTPClient 真实请求，
+  # 输出报告 artifact；**失败不算 CI 失败**（continue-on-error: true）。
+  live-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift version
+        run: swift --version
+      - name: Build
+        run: swift build -v
+      - name: Run live smoke (real network, keyword 斗罗)
+        continue-on-error: true
+        env:
+          LEGADO_LIVE_SMOKE: '1'
+          LEGADO_LIVE_SMOKE_OUT: live-smoke-out
+        run: |
+          mkdir -p live-smoke-out
+          set -o pipefail
+          swift test --filter LiveSmokeTests 2>&1 | tee live_smoke_test.log || true
+          echo "=== 报告内容 ==="
+          cat live-smoke-out/live_smoke_report.txt 2>/dev/null || echo "（未生成报告：可能全部书源都不可达）"
+      - name: Upload live smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-smoke-report
+          path: |
+            live-smoke-out/live_smoke_report.txt
+            live_smoke_test.log
+          if-no-files-found: warn

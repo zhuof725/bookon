@@ -101,7 +101,9 @@ let package = Package(
             dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoNetworkTests",
             resources: [
-                .copy("Resources/golden")
+                .copy("Resources/golden"),
+                // 6B 可选任务：live-smoke 用仓库内真实书源配置做一次真实网络搜索冒烟。
+                .copy("Resources/配置文件_7个.json")
             ]
         ),
         // 第 6 步 6A：网络层的纯 public 接口测试（普通 import，非 @testable）。

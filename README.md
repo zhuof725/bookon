@@ -567,8 +567,11 @@ Element 序号命中，不受中间文本节点干扰。
   `@html`/`@all`/XPath `html()`/`outerHtml()` = 264 条用例，专门验证 `JsoupCompatSerializer`
   与真实 jsoup 逐字节对齐，详见上方「Step4-A：HTML 序列化重写」章节）。
   Step 5 收尾后又新增 `js_ext_cases.json`（321 条）、`jsoup_cases.json`（91 条）、`js_number_args.json`（42 条）
-  与 `javaDigestCases`（2 条），当前共 **15 个用例文件、1233 条用例**（以 `scripts/golden/cases/*.json` 与
-  CI `golden` job 输出为准）。
+  与 `javaDigestCases`（2 条）；第 6 步新增 `url_codec_cases.json`（299）、`url_option_cases.json`（84）、
+  `analyze_url_cases.json`（94）、`cookie_cases.json`（47）、`http_url_cases.json`（170）、
+  `charset_cases.json`（240）、`request_cases.json`（43）、`redirect_cases.json`（44）、
+  `request_cookie_cases.json`（13）、`auto_header_cases.json`（4）。
+  **当前共 22 个用例文件**（以 `scripts/golden/cases/*.json` 与 CI `golden` job 输出为准）。
 
 ## 真实书源规则扫描清单（测试用例来源）
 
@@ -633,10 +636,13 @@ CSS 选择器解析失败、XPath 语法不支持（硬性失败类，见上表�
   - macOS job：`Test Suite 'All tests' passed`，`Executed 293 tests, with 0 failures (0 unexpected)`。
   - iOS 模拟器 job：`** TEST SUCCEEDED **`，`ios_sim_test.sh` 统计「实际执行的测试总数: 293」，`xcodebuild` 退出码 0。
 
-## 后续步骤（TODO）
+## 后续步骤（第 3 步当时的历史记录，现状见文末）
 
 源码中以 `TODO(后续步骤)` 标注：BaseSource/BaseBook 运行时方法、Book/BookChapter/SearchBook 业务方法、变量存取、`ReadConfig.startDate` 的 LocalDate 强类型化、SwiftData/GRDB 持久化接入。
 第 3 步之后仍未做：`AnalyzeRule` 总调度（把 Regex/JSONPath/JSoup/XPath 四个后端按 Mode 统一调度）、JS 引擎、网络、UI。
+
+> **现状（第 6 步后）**：`AnalyzeRule` 总调度、JS 引擎、真实网络均已实现（第 4/5/6 步）；
+> 未实现的只剩 WebView 分支、`dnsIp` 直连，以及 SwiftData/GRDB 持久化、UI。
 
 
 # 第 4 步 B：AnalyzeRule 总调度 + JS 引擎
@@ -662,6 +668,8 @@ CSS 选择器解析失败、XPath 语法不支持（硬性失败类，见上表�
   getElement/getElements/ajax/log/getSource/getTag）直通；JsExtensions 的 67 个方法
   （见 `JsExtensionsCatalog.swift`，正则自动提取）调用时**抛明确 JS 错误
   「java.xxx 尚未实现（JsExtensions，第 5 步）」并记 diagnostics**，不静默返回 undefined。
+  > **注**：该报错文案是第 4 步 B 的记录；第 5 步已实现 67 个方法体，
+  > 第 6 步又把 `analyzeRule` 的默认 provider 换成真实实现（见 6B 小节）。
 - **NetworkUtils**：`getAbsoluteURL`（String base / JavaURL base 两重载）、`isAbsUrl`、
   `isDataUrl`、`getBaseUrl`。URL 相对解析按 **java.net.URL 算法自实现**（`JavaURLResolver.swift`），
   不用 Swift Foundation URL 拼接（见下「与 Kotlin 已知差异」）。
@@ -804,13 +812,13 @@ Kotlin 用 `java.net.URL(base, relative)` 做相对解析。本移植**不用** 
   用例固定：同值不同实例判 true 且结果一致；换内容重建取新值；content 为 nil 恒判 false）。
   若未来出现「stringValue 相同但应走不同解析器」的真实书源场景，再精确对齐引用判等。
 
-## 本步骤明确排除（后续 TODO）
+## 本步骤明确排除（后续步骤已补完，此处保留历史记录）
 
-- `reGetBook` / `refreshTocUrl`：依赖 WebBook，**留桩抛 `.unsupported`**（第 6 步）。
-- JsExtensions 的 67 个方法体（见 `JsExtensionsCatalog.swift` 与 `JS_EXTENSIONS_USAGE.md`）：第 5 步。
-- 真实网络（AnalyzeUrl / ajax 真实请求）：第 6 步。
-- 真实 WebView（WebJs / BackstageWebView / `java.webView`）：第 5/6 步。
-- WebBook/BookList/BookInfo/BookChapterList/BookContent 流程、AnalyzeUrl：后续步骤。
+- `reGetBook` / `refreshTocUrl`：依赖 WebBook，留桩抛 `.unsupported`（**第 6 步仍如此**，见 6B 差异清单）。
+- JsExtensions 的 67 个方法体（见 `JsExtensionsCatalog.swift` 与 `JS_EXTENSIONS_USAGE.md`）：**第 5 步已实现**。
+- 真实网络（AnalyzeUrl / ajax 真实请求）：**第 6 步已实现**（`URLSessionHTTPClient` + `RealAjaxProvider`）。
+- 真实 WebView（WebJs / BackstageWebView / `java.webView`）：**不做**（见 6A 差异表 #5）。
+- WebBook/BookList/BookInfo/BookChapterList/BookContent 流程：**第 6 步已实现 AnalyzeUrl**；WebBook 业务流仍属后续。
 - Kotlin 协程上下文（`setCoroutineContext`）：Swift 无对应协程模型，排除。
 
 ## 样本诚实标注（第 4 步 B）
@@ -999,7 +1007,17 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 
 - 非法输入以「抛错 <-> 抛错」三态比较（值必须相等、null 必须同为 null、异常必须同为异常）；
 - 失败信息含 name/输入/Java 结果/Swift 结果；CI 缺失 golden 必 fail；
-- CI 的 `golden` job 一次跑完 15 个用例文件共 **1233 条**用例（收尾前为 13 个文件 869 条，收尾新增 364 条；对应 run 37135836791）。
+- CI 的 `golden` job 一次跑完全部 22 个用例文件（第 5 步收尾时为 15 个文件 1233 条，第 6 步新增 7 个文件）。
+
+### 字符集 / 请求生成器（第 6 步新增）
+
+| 生成器 / 用例文件 | 真实依赖 | 条数 | 覆盖 |
+|---|---|---|---|
+| `CharsetGen.java` + `CharsetCorpus.java` → `cases/charset_cases.json` | **legado 自带的 icu4j 源码**（`src/main/java/legadoicu/`，逐行复制自 `app/src/main/java/io/legado/app/lib/icu4j/`）+ `EncodingDetectGolden.java`（`EncodingDetect.kt` 的 Java 移植）+ jsoup 1.16.2（`getHtmlEncode` 的 meta 解析） | **240** | UTF-8 带/不带 BOM、GBK、GB2312、GB18030、Big5、EUC-KR、Shift_JIS、EUC-JP、ISO-8859-1、windows-1252、UTF-16 LE/BE、UTF-32、1–10 字节极短文本、HTML 带/不带 meta、中英混排、乱码字节、C1 控制区、空数据；含 **45 份标注的合成小说章节文本**（`syntheticNovelChapter: true`） |
+| `RequestGen.java` → `cases/request_cases.json` | 真实 OkHttp 5.3.2（`okhttp-jvm`）+ `com.sun.net.httpserver` | **43** | GET（含 encodedQuery）、POST form、POST json、multipart、HEAD；记录 method / path+query / 有序显式头 / Cookie / body 字节（boundary 归一） |
+| `RequestGen.java` → `cases/redirect_cases.json` | 同上 | **44** | 301/302/303/307/308、跨域重定向、重定向链中途 `Set-Cookie`、`followRedirects=false`、超 20 跳上限 |
+| `RequestGen.java` → `cases/request_cookie_cases.json` | 同上 | **13** | Cookie 注入/合并/清除/多域 |
+| `RequestGen.java` → `cases/auto_header_cases.json` | 同上 | **4** | 客户端自动头清单 |
 
 ### jsoup 替身 golden（91 条）
 
@@ -1063,7 +1081,7 @@ emoji/前后断言/命名组/反向引用等）。以下 Java 正则特性 ICU �
 encodeParams/evalJS/put/get/buildRequest 等）、`UrlOption.swift`、`GsonJSON.swift`、
 `ConcurrentRateLimiter.swift`（actor + 时钟注入）、`CookieStore.swift`、`CookieManager.swift`、
 `CacheManager.swift`、`NetworkUtilsEncoding.swift`、`HTTPTypes.swift`（HTTPRequest/HTTPResponse/
-HTTPClient 协议 + ScriptedHTTPClient 假实现）。**真实网络在 6B。**
+HTTPClient 协议 + ScriptedHTTPClient 假实现）。**真实网络实现（`URLSessionHTTPClient`）见下方 6B 小节。**
 
 ## 请求构造（6A 的核心输出）
 
@@ -1084,6 +1102,10 @@ callTimeout、useWebView、webJs、bodyJs、dnsIp、proxy、type、serverID。
 | `analyze_url_cases.json` | 94 | java.net.URL + Rhino 1.8.1（JS）+ **AnalyzeUrl 调度逻辑的手工 Java 移植** |
 | `cookie_cases.json` | 47 | CookieStore/CookieManager 纯函数的手工移植版 |
 
+（6B 又新增了 `charset_cases.json` 240、`request_cases.json` 43、`redirect_cases.json` 44、
+`request_cookie_cases.json` 13、`auto_header_cases.json` 4，详见下方 6B 小节的生成器表格；
+`scripts/golden` 当前共 **22 个用例文件、2271 条用例**。）
+
 > **本 README 明确标注**：`UrlRuleGen.java` 里的 `encodeParams`/`analyzeJs`/`replaceKeyPageJs`/`analyzeUrl`
 > 是 AnalyzeUrl.kt **调度逻辑的手工 Java 移植**（不是 Kotlin 原码），它只验证真实库的行为；
 > 逐条对照的结果以 CI 的 `golden` job 为准（每个测试都要求「值必须相等 / null 同为 null / 异常同为异常」）。
@@ -1096,25 +1118,42 @@ callTimeout、useWebView、webJs、bodyJs、dnsIp、proxy、type、serverID。
 | 2 | cookie 4096 截断 | 随机删键 | 按插入顺序删第一个 | 结果可复现，语义相同 |
 | 3 | 持久化 | Room/ACache | 协议 + JSON 文件原子写 | 接口一致 |
 | 4 | OkHttp `HttpUrl` 规范化 | OkHttp 对 path/query 做规范化（scheme/host 小写、IDN→punycode、默认端口剥离、路径 `%xx` 与 `.`/`..` 段解析等） | **已对齐**：`Sources/.../Network/HttpUrl.swift` 按 OkHttp 5.x 的行为复刻（含：非法 `%` 转义原样保留、控制字符丢弃、路径里 `\` 当 `/`、`%2E`/`%2e%2e` 视作点段、多个前导斜杠折叠、输入 trim、片段里的 `#` 不编码），`AnalyzeUrl.buildRequest()` 产出的 URL **必经它** | 170 条 golden（`cases/http_url_cases.json`，真实 OkHttp 5.3.2 的 `HttpUrl` 生成）逐条相等；`HttpUrlGoldenComparisonTests` 严格比较（含解析失败样例），另有一条断言 buildRequest 产出已规范化 |
-| 4b | **线上请求行的额外百分号编码**（6B 追加项②实测） | OkHttp 把 `|` `{` `}` `^` `` ` `` `[` `]` 与非法 `%` 转义（如 `%zz`）按原样写进 request-target | URLSession/CFNetwork 会把它们额外编码成 `%7C` `%7B` `%7D` `%5E` `%60` `%5B` `%5D` 与 `%25zz` | **登记为已知差异**（`HttpUrlRequestReplayTests.knownWireEncodingDivergences` 逐名钉住）。最小复现：`https://x.com/?a=b|c` → OkHttp 线上 `GET /?a=b|c`，本移植经 URLSession 发出为 `GET /?a=b%7Cc`；`https://x.com/%zz` → OkHttp `/%zz`，本移植 `/%25zz`。影响：此类字符在真实书源 URL 中极少见，且服务器多数会等价解码；规范化结果本身（HttpUrl）与 OkHttp 完全一致，差异只出现在 URLSession 写线上的最后一步 |
-| 5 | WebView 分支 | `BackstageWebView` | 不实现（只记录字段） | 6B/后续 |
+| 4b | **线上请求行的额外百分号编码** | OkHttp 把 `|` `{` `}` `^` `` ` `` `[` `]` 与非法 `%` 转义（如 `%zz`）按原样写进 request-target | URLSession/CFNetwork 会把它们额外编码成 `%7C` `%7B` `%7D` `%5E` `%60` `%5B` `%5D` 与 `%25zz` | **登记为已知差异**（`HttpUrlRequestReplayTests.knownWireEncodingDivergences` 逐名钉住）。最小复现：`https://x.com/?a=b|c` → OkHttp 线上 `GET /?a=b|c`，本移植经 URLSession 发出为 `GET /?a=b%7Cc`；`https://x.com/%zz` → OkHttp `/%zz`，本移植 `/%25zz`。影响：此类字符在真实书源 URL 中极少见，且服务器多数会等价解码；规范化结果本身（HttpUrl）与 OkHttp 完全一致，差异只出现在 URLSession 写线上的最后一步 |
+| 5 | WebView 分支 | `BackstageWebView`（useWebView=true） | **不支持**：`HTTPRequest.useWebView/webJs/bodyJs` 只记录字段，`URLSessionHTTPClient` 对此记 diagnostics。WebView 需 UIKit/WebKit 宿主视图，SwiftPM 库层不做 | 真实书源里走 `webView` 分支的占比极低；受影响书源需宿主 App 自行接管 |
 | 6 | 阻塞版限速 API | `getConcurrentRecordBlocking`/`withLimitBlocking` | 只有 async | 调用方用 `withLimit` |
-| 7 | `dnsIp` 自定义解析 | OkHttp `Dns` 直连指定 IP | 只落到 HTTPRequest | 6B 里 URLSession 不支持，如实写「不支持」并记 diagnostics |
-| 8 | 证书策略 | `SSLHelper` 信任所有证书 | 6B 实现（URLSessionDelegate 接受服务器证书） | 安全取舍在 6B 的 README 章节写明 |
+| 7 | `dnsIp` 自定义解析 | OkHttp `Dns` 直连指定 IP | **不支持**：`dnsIp` 已落到 `HTTPRequest` 并由 `URLSessionHTTPClient` 写 diagnostics，实际仍走系统 DNS | URLSession 无公开 API 指定解析 IP，如实登记 |
+| 8 | 证书策略 | `SSLHelper` 信任所有证书 | **已实现**：`URLSessionHTTPClient` 实现 `urlSession(_:didReceive:completionHandler:)`，对服务器信任挑战回 `.useCredential`（接受任意服务器证书） | 与 legado 同等安全取舍；仅用于书源抓取，勿用于敏感流量 |
 
 （其余「已对照一致」的语义：`escape` 的 UTF-16 遍历、非 UTF-8 字符集的 `?` 替换与逐字节转义、
 `Long.intValue()` 的 32 位截断、`{{}}` 的 null→`""` 与整数 Double→`%.0f`、`@js:` 的 null→`"null"`，
 全部由 golden 逐条钉住。）
 
 
-## 第 6 步 6B：JsExtensions 网络方法 + AjaxProvider 真实实现（追加）
+## 第 6 步 6B：真实网络 + 字符集检测 + 请求对照
 
-> 本节为 6B 追加小节（只加不改既有内容）。新增
-> `Sources/LegadoBookSource/Network/RealJsNetworkExtensionsProvider.swift`、
-> `Sources/LegadoBookSource/Network/RealAjaxProvider.swift`；
+> 本节为 6B 小节。新增
+> `Sources/LegadoBookSource/Network/URLSessionHTTPClient.swift`、
+> `RealJsNetworkExtensionsProvider.swift`、`RealAjaxProvider.swift`、
+> `CharsetDetector/`（`CharsetDetector.swift` / `EncodingDetect.swift` / `CharsetTables.swift`）；
 > `AnalyzeRule` 的 init 默认参数由 `Unsupported*` 换为真实实现（协议与 Unsupported 定义未动，
 > 测试/App 仍可显式注入覆盖）；`HTTPRequest` 追加 `followRedirects` 字段（默认 true，零行为变化），
-> 只被 Jsoup 语义的 get/post/head 使用。
+> 只被 Jsoup 语义的 get/post/head 使用；`AnalyzeUrl` 追加 `makeRateLimiter(concurrentRate:key:)`；
+> `JSJavaBridge` 的 `StrResponse` 替身改为属性 + 方法双通道。
+
+### `URLSessionHTTPClient`（真实网络）
+
+对齐 `help/http/OkHttpUtils.kt` + `SSLHelper`：
+
+| 能力 | 实现 |
+|---|---|
+| 重定向 | delegate `willPerformHTTPRedirection` 手工接管：`followRedirects=false` 直接返回 3xx；开启时最多 20 跳，超限抛错（同 OkHttp `Too many follow-up requests: 21`） |
+| Cookie | 逐跳把 `Set-Cookie` 交 `CookieManager`（持久化/会话分流），并把 `CookieStore` 的 Cookie 注入请求头 |
+| 超时 | `readTimeout` / `callTimeout` 分别映射到 `timeoutIntervalForRequest` / 整体预算 |
+| 重试 | `HTTPRequest.retry` 控制失败重试次数 |
+| 压缩 | 显式处理 gzip / deflate |
+| 证书 | 信任服务器证书（等价 `SSLHelper`），见 6A 差异 #8 |
+| `dnsIp` | 不支持，记 diagnostics，见 6A 差异 #7 |
+| 代理 | `HTTPRequest.proxy` 落到 `connectionProxyDictionary` |
 
 ### 真实网络方法表（对齐 `help/JsExtensions.kt`）
 
@@ -1140,20 +1179,89 @@ JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通�
 - `downloadFile` 返回相对路径 `/<md5>.<type>`；`type = analyzeUrl.type ?: UrlUtil.getSuffix(url)`
   （无合法后缀时 `ext`，如 `/big` → `<md5>.ext`）。
 
-### 6B 差异清单（追加到 6A 差异表之外）
+### 6B 差异清单（与上方 6A 差异表合并为同一份「与 Kotlin 的已知差异」）
 
 | # | 主题 | Kotlin | 本移植 | 处理 |
 |---|---|---|---|---|
 | 6B-1 | 缓存根目录 | `Context.externalCacheDir` | FileManager Caches + `legado-js-cache`（可注入） | 差异登记；相对路径语义一致（前导 `/`） |
-| 6B-2 | 文本解码 | BOM → charset → Content-Type → ICU4J `EncodingDetect.getHtmlEncode` | BOM → charset → Content-Type → UTF-8 替换语义 | 最小链；ICU4J 检测链在 step6-6b-wip 分支 WIP(4)/(5)，尚未并入 main |
-| 6B-3 | headers 顺序 | JS 对象插入顺序（LinkedHashMap） | JSON 字典序（Swift 侧不可恢复插入序） | 键唯一时不影响 HTTP 语义 |
-| 6B-4 | get/post/head Cookie | Jsoup 自建客户端（不带 legado CookieStore） | 经 URLSessionHTTPClient 注入 CookieStore Cookie | 客户端既有差异 #5 的延展 |
-| 6B-5 | get/post/head 限速 | ConcurrentRateLimiter(getSource()) withLimitBlocking | provider 不携带书源，未接线 | 可显式注入/包装；如实登记 |
-| 6B-6 | StrResponse JS 面 | 属性 + 方法双通道（`.body`/`.body()`） | 仅同名方法 | `.body` 请改用 `.body()` |
+| 6B-2 | 文本解码 | BOM → `UrlOption.charset` → Content-Type charset → `EncodingDetect.getHtmlEncode`（HTML meta → icu4j 检测器 → `"UTF-8"` 兜底） | **逐级一致**：`JsNetTextDecoder.decode` 先 `removeUTF8Bom` 剥 BOM，再依次用 explicit charset、Content-Type charset，最后 `EncodingDetect.getHtmlEncode`；`getHtmlEncode` 内部同样是 `<meta>` → `getEncode` 检测器 → `"UTF-8"` 兜底。判定顺序取自 Kotlin `OkHttpUtils.kt` 的 `ResponseBody.text(encode)`（非推断） | 由 `charset_cases.json` 的 10 种解码组合逐条对照。唯一差异：不可识别的 charset 名回退到 UTF-8，不抛异常 |
+| 6B-3 | headers 顺序 | JS 对象插入顺序（LinkedHashMap） | JS 面按对象键序送达（`JSJavaBridge` 保序解码），落到 `HTTPRequest.headers` 为有序数组 | 键唯一时不影响 HTTP 语义 |
+| 6B-4 | get/post/head Cookie | Jsoup 自建客户端（不带 legado CookieStore） | 经 URLSessionHTTPClient 注入 CookieStore Cookie | 客户端既有差异 #5 的延展；golden `request_cookie_cases` 13 条对照 |
+| 6B-5 | get/post/head 限速 | `ConcurrentRateLimiter(getSource()).withLimitBlocking` | **已接线**：provider 持有 `rateLimiter`，由 `setRateLimiterFromSource(concurrentRate:key:)` / `AnalyzeUrl.makeRateLimiter(concurrentRate:key:)` 从书源 `concurrentRate` 构造；`jsoupGetOrHead`/`jsoupPost` 的请求全部包在 `executeWithRateLimit` 里 | 未注入限速器时行为与不接线一致（不限速）；已注入则同 Kotlin 阻塞等待 |
+| 6B-6 | StrResponse JS 面 | 属性 + 方法双通道（`.body` / `.body()`） | **双通道已实现**：`JSJavaBridge.__installDualChannel` 同时安装属性与同名方法，`__dualValue` 用 Proxy 让「当字符串用」与「当函数调用」语义一致（`String(x)` / 模板串 / `+` / `indexOf` / `length` / `JSON.stringify` 全部按字符串工作），connect/ajaxAll 返回的对象同样适用 | `.body` 与 `.body()` 均可直接写，无需改写书源 |
 | 6B-7 | `raw()`/`toString()` | okhttp Response.toString() | `Response{code=..., message=..., url=...}` 描述串 | 近似 |
 | 6B-8 | 失败错误文本 | Java stackTraceStr | Swift 错误描述 | 对齐失败分支语义，文本不同 |
+| 6B-9 | 客户端自动头 | OkHttp 自动加 `host` / `connection` / `accept-encoding: gzip` / `user-agent: okhttp/5.3.2` / `content-length` | URLSession/CFNetwork 自动加 `Host` / `Accept` / `Accept-Language` / `Accept-Encoding: br, gzip, deflate` / `User-Agent: <CFNetwork/… Darwin/…>` / `Content-Length`，且 **不接受** 修改 `Host` | 见下方「URLSession 与 OkHttp 自动头差异」；书源**显式**写的头已由 `request_cases` 43 条逐条对照一致 |
+| 6B-10 | 线上 request-target 百分号编码 | 见 6A 差异 #4b | 同 | 已知差异，`HttpUrlRequestReplayTests.knownWireEncodingDivergences` 逐名钉住 |
 
-### 测试（`Tests/LegadoNetworkTests/RealJsNetworkProviderTests.swift`，23 个用例）
+### 字符集检测（legado icu4j 检测器全量移植 + 判定链接入）
+
+`Sources/LegadoBookSource/Network/CharsetDetector/`：
+
+| 文件 | 说明 |
+|---|---|
+| `CharsetDetector.swift` | legado 自带 `lib/icu4j/CharsetDetector.java` 的 Swift 移植：识别器打分 0–100、`detectAll` 按 confidence 降序、并列时取识别器列表靠后者。公开 `detect(_:)`（无匹配时按 Kotlin 兜底 `"UTF-8"`）、`detectMatch(_:) -> Detection?`（返回字符集名 + 置信度 + 语言，不兜底）、`detectAllMatches(_:)` |
+| `EncodingDetect.swift` | `utils/EncodingDetect.kt` 的移植：`getHtmlEncode(_:)`（`<head>` 切片 → SwiftSoup `parseBodyFragment` → 遍历 `<meta>`，先 `charset` 属性、再 `http-equiv=content-type` 的 `content` 里 `charset=` 之后内容，异常回退 `getEncode`）、`getEncode(_:)`（检测器 + `"UTF-8"` 兜底）、`getEncode(file:)`（只收 ≥0x80 字节，上限 8000） |
+| `CharsetTables.swift` | 从 legado 原码提取的识别表（52 KB / 36 个常量），由 `scripts/golden/extract_icu4j_tables.py` 生成 |
+
+**判定链与 Kotlin 完全一致**（顺序取自 `OkHttpUtils.kt` 的 `ResponseBody.text(encode)`，
+`JsNetTextDecoder.decode` 逐级实现）：
+
+```
+1. removeUTF8BOM          剥离 UTF-8 BOM
+2. explicitCharset        UrlOption.charset（书源里写的 charset）
+3. Content-Type charset   HTTP 头的 charset=
+4. getHtmlEncode          <meta charset> / http-equiv → icu4j 检测器 → "UTF-8" 兜底
+```
+
+### golden 对照：字符集（`cases/charset_cases.json`，240 份样本）
+
+golden 侧**直接编译 legado 自带的 icu4j 源码**（`scripts/golden/src/main/java/legadoicu/`，
+8 个 Java 文件从 `app/src/main/java/io/legado/app/lib/icu4j/` 逐行复制，只改 `package` 名
+并去掉 Android 专有的 `ParcelFileDescriptor` 重载；另加两个 `androidx.annotation` 桩注解），
+配合 `EncodingDetectGolden.java`（`EncodingDetect.kt` 的 Java 移植）与 `CharsetGen.java` / `CharsetCorpus.java`。
+
+覆盖：UTF-8 带/不带 BOM、GBK、GB2312、GB18030、Big5、EUC-KR、Shift_JIS、EUC-JP、
+ISO-8859-1、windows-1252、UTF-16 LE/BE、UTF-32、1–10 字节极短文本、HTML 带/不带 meta、
+中英混排、乱码字节、C1 控制区、空数据；其中 **45 份是合成的小说章节风格文本**（`syntheticNovelChapter: true` 标注）。
+每条输出检测字符集名、置信度、`detectAll` 全列表，以及 10 种解码组合的结果。
+
+Swift 侧由 `CharsetDetectorGoldenComparisonTests` 逐条比较字符集名与置信度、
+`getHtmlEncode` 结果、以及 ≥40 条完整解码用例；**CI 下 golden 文件缺失直接 `XCTFail`**。
+
+### golden 对照：请求与重定向（OkHttp 5.3.2 → `com.sun.net.httpserver`，104 条）
+
+`scripts/golden/RequestGen.java` 用真实 OkHttp 5.3.2，按 `OkHttpUtils.kt` 的
+`get(url, encodedQuery)` / `postForm` / `postJson` / `postMultipart` / `addHeaders` 构造请求，
+打到本地 `com.sun.net.httpserver`，记录服务器实际收到的 method、path+query、**有序显式头**、
+Cookie 头、body 字节（multipart boundary 归一为 `--BOUNDARY--`）。
+
+| 文件 | 条数 | 覆盖 |
+|---|---|---|
+| `request_cases.json` | 43 | GET（含 encodedQuery）、POST form、POST json、multipart、HEAD |
+| `redirect_cases.json` | 44 | 301/302/303/307/308、跨域重定向、重定向链中途 `Set-Cookie`、`followRedirects=false`、超 20 跳上限（`Too many follow-up requests: 21`） |
+| `request_cookie_cases.json` | 13 | Cookie 注入/合并/清除/多域 |
+| `auto_header_cases.json` | 4 | 客户端自动头清单 |
+
+Swift 侧由 `RequestGoldenComparisonTests` 用内置 `NWListener` 服务器（`LocalScriptedServer`）
+重放同样的请求并逐条比较。
+
+### URLSession 与 OkHttp 自动头差异
+
+| 头 | OkHttp 5.3.2 | URLSession / CFNetwork | 说明 |
+|---|---|---|---|
+| `Host` | 自动加，可被显式头覆盖 | 自动加，**显式设置会被忽略/报错** | 书源几乎不改 Host，实际无影响 |
+| `Connection` | 自动加 `keep-alive` | 不发送 | HTTP/1.1 语义等价；HTTP/2 无此头 |
+| `Accept-Encoding` | 自动加 `gzip` | 自动加 `br, gzip, deflate` | URLSession 默认直接解压，解码链拿到的已是明文；`URLSessionHTTPClient` 亦显式处理 gzip/deflate |
+| `User-Agent` | 自动加 `okhttp/5.3.2` | 自动加 `<CFNetwork/…> <Darwin/…>` | 书源大多显式写 UA（`addHeaders` 的 `User-Agent`），已由 `request_cases` 对照 |
+| `Accept` / `Accept-Language` | 不自动加 | 自动加 `*/*` 与 `zh-CN` 等 | 服务器极少据此分支 |
+| `Content-Length` | 有 body 时自动加 | 同 | 已对照一致 |
+| `Cookie` | 由 `CookieJar` 提供 | 由 `CookieStore` 注入显式 Cookie 头 | golden `request_cookie_cases` 已覆盖 |
+
+结论：**书源显式写的头（`addHeaders` 的效果）与 OkHttp 完全一致**；差异全部落在客户端自动头，
+且不影响书源语义。
+
+### 测试（`Tests/LegadoNetworkTests/RealJsNetworkProviderTests.swift`，29 个用例）
 
 覆盖：ajax 成功/失败/非 2xx/`type=data:` 十六进制分支；get/head/post 的 JS 对象方法
 （body/statusCode/statusMessage/header/headers 大小写不敏感 get/contentType/url）；
@@ -1161,4 +1269,15 @@ headers 对象真实到达服务器；cookies()/cookieKey()；get/post 不跟随
 connect 成功/失败/header JSON + callTimeout；ajaxAll 多 URL 顺序与失败抛错；
 cacheFile 落盘 + 二次命中（含真实 CacheManager saveTime 路径）；downloadFile 内容/大小/默认后缀；
 未实现方法仍抛 unsupported 回归（Real/Unsupported/JS Proxy 三路）；java.get 单参仍为变量读取；
-AnalyzeRule 默认 provider 接线与显式覆盖。JS 断言全部走真实 JavaScriptCore（evalJS 全链路）。
+AnalyzeRule 默认 provider 接线与显式覆盖；
+**`.body` 属性与方法双通道**（connect / get 返回对象各 1 条 + 字符串语义 1 条）；
+**限速接线**（注入 `"1/1000"` 断言 ≥0.9s、不注入不限速、`setRateLimiterFromSource` 接受书源 `concurrentRate` 字符串）。
+JS 断言全部走真实 JavaScriptCore（evalJS 全链路）。
+
+### 可选：live-smoke（`workflow_dispatch` 手动触发）
+
+`.github/workflows/test.yml` 新增 `live-smoke` job：仅 `workflow_dispatch` 触发、`macos-14`、
+`continue-on-error: true`。用 `AnalyzeUrl` + `URLSessionHTTPClient` 对书源 JSON 里的书源
+真实请求搜索 URL（关键字「斗罗」），报告写入 `live-smoke-out/live_smoke_report.txt`
+并作为 artifact `live-smoke-report` 上传。单源失败不使 job 失败。
+

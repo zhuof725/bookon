@@ -1,0 +1,4 @@
+{
+  "_comment": "第 6 步 6B OkHttp 请求/重定向对照 golden 的触发 marker。用例由 golden.RequestGen 在代码中构造：用真实 OkHttp 5.3.2 按 legado OkHttpUtils.kt 的方式（get/postForm/postJson/postMultipart/addHeaders）打本地 com.sun.net.httpserver，记录服务器收到的 method/path+query/有序显式头/Cookie/body。生成结果写入 outDir 的 request_cases.json、redirect_cases.json、request_cookie_cases.json、auto_header_cases.json。",
+  "requestCases": []
+}

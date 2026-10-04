@@ -108,8 +108,7 @@ final class JSJavaBridge {
           function __makeConnection(d){
             var hm = __headerMap(d.headers || []);
             var cm = __cookieMap(d.cookies || []);
-            return {
-              body: function(){ return d.body; },
+            var conn = {
               statusCode: function(){ return d.status; },
               statusMessage: function(){ return d.message; },
               headers: function(){ return hm; },
@@ -127,10 +126,15 @@ final class JSJavaBridge {
               url: function(){ return d.url; },
               contentType: function(){ return d.contentType; }
             };
+            // 6B-6：jsoup Connection.Response 在 Kotlin 里是 Java 对象，`.body` 与 `.body()` 都可用
+            // （Rhino 对 Java getter 既支持属性也支持方法调用）。这里用「同名 getter 返回可调用的
+            // 函数字符串」模拟：读 `.body` 得到该字符串（与 body() 的返回值内容一致），
+            // 调用 `.body()` 也得到同一内容 —— 两种写法都拿到响应体。
+            __installDualChannel(conn, 'body', function(){ return d.body; });
+            return conn;
           }
           function __makeStrResponse(d){
-            return {
-              body: function(){ return d.body; },
+            var res = {
               code: function(){ return d.code; },
               message: function(){ return d.message; },
               headers: function(){ return __headerMap(d.headers || []); },
@@ -139,6 +143,46 @@ final class JSJavaBridge {
               callTime: function(){ return d.callTime; },
               url: function(){ return d.url; }
             };
+            // 6B-6：Kotlin `StrResponse` 同时有 `var body: String?`（属性）与 `fun body()`（方法），
+            // 书源里两种写法都存在。这里同时支持 `.body` 与 `.body()`（见 __installDualChannel）。
+            __installDualChannel(res, 'body', function(){ return d.body; });
+            return res;
+          }
+          // 双重通道安装器：让 `.name`（属性）与 `.name()`（方法）都返回同一个值。
+          // Kotlin 侧 `StrResponse` 同时定义了 `var body: String?`（属性）与 `fun body()`（方法），
+          // 书源里两种写法都存在；Rhino 对 Java getter 也同时支持属性与方法调用。
+          //
+          // JS 实现：属性 getter 返回一个 Proxy —— 它是可调用对象（`x()` 返回字符串），
+          // 同时把 String 原型上的方法与属性转发出去（`x.length` / `x.indexOf(...)` /
+          // `x.slice(...)` / `x.includes(...)` / 索引访问 / 解构都成立），
+          // `toString`/`valueOf`/`toJSON` 也返回原字符串，因此拼接、比较（==）、
+          // `String(x)`、`JSON.stringify` 均与字符串语义一致。
+          // 唯一差异：`typeof x` 为 "function"、严格 `===` 字符串为 false（已记入差异表 6B-6）。
+          function __dualValue(v){
+            if (typeof v !== 'string') { return v; }
+            var str = new String(v);
+            var callable = function(){ return v; };
+            return new Proxy(callable, {
+              get: function(t, prop){
+                if (prop === 'toString' || prop === 'valueOf' || prop === 'toJSON') {
+                  return function(){ return v; };
+                }
+                if (prop === 'length') { return v.length; }
+                if (prop in t) { return t[prop]; }
+                var sv = str[prop];
+                return (typeof sv === 'function') ? sv.bind(str) : sv;
+              },
+              apply: function(){ return v; },
+              has: function(t, prop){ return prop in t || prop in str; }
+            });
+          }
+          function __installDualChannel(obj, name, getter){
+            Object.defineProperty(obj, name, {
+              enumerable: true,
+              configurable: true,
+              get: function(){ return __dualValue(getter()); },
+              set: function(){ /* Kotlin 侧 body 为 private set，外部不可写 */ }
+            });
           }
           function __javaUnwrap(v){
             if (typeof v !== 'string') { return v; }

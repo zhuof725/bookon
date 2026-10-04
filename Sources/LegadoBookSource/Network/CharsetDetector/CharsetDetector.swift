@@ -27,6 +27,23 @@ import Foundation
 /// 对应 Kotlin：`io.legado.app.utils.EncodingDetect.getEncode`
 public struct CharsetDetector {
 
+    /// 一次检测的结果（字符集名 + 置信度），对应 Java `CharsetMatch` 的
+    /// `getName()` / `getConfidence()`。用于 golden 逐条比对（字符集名与置信度都要一致）。
+    public struct Detection: Equatable {
+        /// 检测出的字符集名（Java `CharsetMatch.getName()`，如 "UTF-8"/"GB18030"）。
+        public let name: String
+        /// 匹配置信度，0-100（Java `CharsetMatch.getConfidence()`）。
+        public let confidence: Int
+        /// 语言（Java `CharsetMatch.getLanguage()`，无语言时为 ""）。
+        public let language: String
+
+        public init(name: String, confidence: Int, language: String) {
+            self.name = name
+            self.confidence = confidence
+            self.language = language
+        }
+    }
+
     /// 检测字节数据的字符集，返回字符集名（如 "UTF-8" / "GB18030" / "Big5" / "EUC-KR" / "Shift_JIS" / "ISO-8859-1"）。
     ///
     /// - Parameter bytes: 原始响应字节（未做任何预处理）。
@@ -42,6 +59,25 @@ public struct CharsetDetector {
     public static func detectAll(_ bytes: [UInt8]) -> [String] {
         let engine = CharsetDetectorEngine(bytes: bytes)
         return engine.detectAll().map { $0.name }
+    }
+
+    /// 返回检测到的首选匹配（含置信度）；无匹配时返回 nil（**不做** "UTF-8" 兜底，
+    /// 以便调用方区分「真的检测到 UTF-8」与「检测器无结论」，与 Java `detect()` 语义一致）。
+    ///
+    /// 对应 Java `CharsetDetector().setText(bytes).detect()`。
+    public static func detectMatch(_ bytes: [UInt8]) -> Detection? {
+        let engine = CharsetDetectorEngine(bytes: bytes)
+        guard let m = engine.detect() else { return nil }
+        return Detection(name: m.name, confidence: m.confidence, language: m.language)
+    }
+
+    /// 返回全部置信度 > 0 的候选（含置信度），顺序与 `detectAll` 一致（置信度降序，
+    /// 并列时识别器列表靠后者优先）。对应 Java `CharsetDetector.detectAll()`。
+    public static func detectAllMatches(_ bytes: [UInt8]) -> [Detection] {
+        let engine = CharsetDetectorEngine(bytes: bytes)
+        return engine.detectAll().map {
+            Detection(name: $0.name, confidence: $0.confidence, language: $0.language)
+        }
     }
 }
 
