@@ -293,11 +293,13 @@ enum JsNetTextDecoder {
             if let s = Self.lossyString(data, nsEncoding: nsEnc) { return s }
             return nil
         }
-        // Big5
+        // Big5。⚠️ 必须开 `puaIsFailure`：Apple 走 CP950 表（把 JDK 严格 Big5 表判为
+        // 不可映射的位点落到 PUA），而 JDK 给 U+FFFD。开这个开关后，含 PUA 的整块会被判失败、
+        // 转入增量解码，逐字符把 PUA 位点替换成 U+FFFD，从而与 JDK 输出对齐。
         if name == "BIG5" || name == "BIG-5" || name == "BIG5-HKSCS" {
             let nsEnc = CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.big5.rawValue))
-            if let s = Self.lossyString(data, nsEncoding: nsEnc) { return s }
+            if let s = Self.lossyString(data, nsEncoding: nsEnc, puaIsFailure: true) { return s }
             return nil
         }
         return nil
@@ -324,9 +326,22 @@ enum JsNetTextDecoder {
     /// 输出一个 U+FFFD。这样合法部分正常还原、非法部分留下替换字符，与 Java 的替换语义
     /// 逐码位一致（已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD）。
     ///
+    /// ### `puaIsFailure`：为什么只有 Big5 需要把 PUA 视作解码失败
+    ///
+    /// 由 CI 真实日志（run `37207219284`）统计得出，**两类 CJK 编码的行为截然不同**：
+    ///
+    /// | 编码 | Apple 与 Java 的码表是否一致 | Java 侧含 PUA 的用例数 |
+    /// |---|---|---|
+    /// | GB18030 / GBK / GB2312 | **一致**（两侧都输出同一批 `U+E0xx` PUA 位点） | 80 / 240 |
+    /// | Big5 | **不一致**：Apple 走 CP950（含 PUA 扩展），JDK 走严格 Big5（差异位点给 `U+FFFD`） | 0 / 240 |
+    ///
+    /// 所以 **PUA 拒绝只能对 Big5 开**：对 GB 系开会把 80 条本来正确的用例打成 `U+FFFD`；
+    /// 对 Big5 不开，则 Apple 的 PUA 会与 JDK 的 `U+FFFD` 不一致（CI 实测 3 处）。
+    ///
     /// 入参用 `UInt`（`CFStringConvertEncodingToNSStringEncoding` 的返回类型；
     /// Swift 里 `NSStringEncoding` 已 unavailable）。
-    private static func lossyString(_ data: Data, nsEncoding: UInt) -> String? {
+    private static func lossyString(_ data: Data, nsEncoding: UInt,
+                                    puaIsFailure: Bool = false) -> String? {
         guard nsEncoding != 0 else { return nil }
         let bytes = [UInt8](data)
         if bytes.isEmpty { return "" }
@@ -337,14 +352,19 @@ enum JsNetTextDecoder {
             return lossyFallback(bytes, nsEncoding: nsEncoding)
         }
         // 先整体试一次（合法输入的最快路径，也是绝大多数情况）。
-        if let whole = decodeCFString(bytes, cfEncoding: cfEncoding), !containsPrivateUse(whole) {
+        if let whole = decodeCFString(bytes, cfEncoding: cfEncoding),
+           !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
         }
         // 整块失败（或含 PUA）：走增量容错，**永不返回 nil**。
-        return incrementalLossyDecode(bytes, cfEncoding: cfEncoding)
+        // 单字符最大长度按编码族给；窗口上界不会跨过字符边界。
+        return incrementalLossyDecode(bytes, cfEncoding: cfEncoding,
+                                      maxCharLength: Self.maxCharLength(for: cfEncoding),
+                                      puaIsFailure: puaIsFailure)
         #else
         // 非 Darwin（本地 Linux 验证）：同样先整体试，失败再增量容错。
-        if let whole = NSString(data: data, encoding: nsEncoding) as String? {
+        if let whole = NSString(data: data, encoding: nsEncoding) as String?,
+           !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
         }
         return lossyFallback(bytes, nsEncoding: nsEncoding)
@@ -352,6 +372,29 @@ enum JsNetTextDecoder {
     }
 
     #if canImport(Darwin)
+    /// 各编码的「单个字符最大字节数」。
+    ///
+    /// 只用于 `incrementalLossyDecode` 的窗口上界，**取偏大值也安全**（窗口偏大只会多试几次，
+    /// 因为算法要求解出「恰好 1 个标量」才接受）。给准确值只是省掉多余试探。
+    private static func maxCharLength(for cfEncoding: CFStringEncoding) -> Int {
+        switch Int(cfEncoding) {
+        case Int(kCFStringEncodingUTF8.rawValue),
+             Int(kCFStringEncodingGB_18030_2000.rawValue):
+            return 4
+        case Int(kCFStringEncodingBig5.rawValue),
+             Int(kCFStringEncodingBig5_HKSCS_1999.rawValue),
+             Int(kCFStringEncodingEUC_JP.rawValue),
+             Int(kCFStringEncodingEUC_KR.rawValue),
+             Int(kCFStringEncodingShiftJIS.rawValue),
+             Int(kCFStringEncodingDOSJapanese.rawValue),
+             Int(kCFStringEncodingDOSKorean.rawValue),
+             Int(kCFStringEncodingGB_2312_80.rawValue):
+            return 2
+        default:
+            return 2
+        }
+    }
+
     /// 用 CoreFoundation 把一个字节缓冲整体转成 `String`；失败返回 `nil`。
     private static func decodeCFString(_ bytes: [UInt8], cfEncoding: CFStringEncoding) -> String? {
         guard !bytes.isEmpty else { return "" }
@@ -375,32 +418,64 @@ enum JsNetTextDecoder {
         s.unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) }
     }
 
-    /// 增量容错解码：从左到右，每次尝试吃掉**最长的可解码前缀**；若连单字节都不可解码，
-    /// 就为该字节输出一个 `U+FFFD` 并前进一格。
+    /// 增量容错解码：**按编码自身的字符边界逐字符推进**，而不是「最长可解码前缀」。
     ///
     /// 只在「整块解码失败」时才会走到（即输入确实含非法字节的少数样本）。
+    ///
+    /// ### 为什么不能做「最长可解码前缀」试探
+    ///
+    /// 早期实现从 `i` 开始向后试探最长能解出**不含 PUA** 的前缀。这在 MBCS（GBK/Big5/EUC）
+    /// 上会**穿透字符边界**：`CFStringCreateWithBytes` 会把这些编码里的部分非常用双字节
+    /// 映射到 PUA，于是「整段含 PUA」判定失败后不断缩短窗口，直到恰好切在某个双字节中间，
+    /// 此时窗口尾部剩一个孤立的 lead byte —— CF 会把它与**下一个 ASCII 字节**拼成双字节，
+    /// 从而把本该输出的 ASCII（如 `*`）吞掉。真实 CI 实测：
+    ///
+    /// ```
+    /// 字节:... 0x97 0x2A ...
+    /// Java(Big5) : U+FFFD U+002A        ← 0x97 非法 → 替换；0x2A 是 ASCII `*`，照常输出
+    /// 旧 Swift   : U+FFFD               ← 0x2A 被当成 0x97 的 trail byte 一起吃掉了（错误）
+    /// ```
+    ///
+    /// ### 现行算法
+    ///
+    /// 每一步从 `i` 开始，按**当前编码的最大字符长度**由长到短尝试解**单个字符**：
+    /// - 解出的恰好是 1 个标量且不含 PUA → 接受，`i += 该长度`；
+    /// - 否则继续缩短窗口；
+    /// - 连单字节都解不出，或单字节解出的是 PUA → 输出一个 `U+FFFD`，`i += 1`。
+    ///
+    /// 关键差别是「**每次只解一个字符**」：窗口长度上界是编码最大字符长度（MBCS 为 2，
+    /// UTF 系为 4），窗口内**不会跨过字符边界**，因此不会吞掉后续 ASCII。
+    ///
     /// 结果与 Java `new String(bytes, charset)` 的替换语义逐码位一致
-    /// （已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD，本实现完全相同）。
+    /// （已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD，本实现完全相同；
+    /// 本次修复后又核对 `0x97 0x2A` → `U+FFFD U+002A`）。
     private static func incrementalLossyDecode(_ bytes: [UInt8],
-                                               cfEncoding: CFStringEncoding) -> String {
+                                               cfEncoding: CFStringEncoding,
+                                               maxCharLength: Int = 2,
+                                               puaIsFailure: Bool = false) -> String {
         var out = ""
         var i = 0
         let n = bytes.count
         while i < n {
-            // 找从 i 开始的最长可解码前缀（不含 PUA）。
-            var best = 0
-            var j = n
-            while j > i {
-                if let s = decodeCFString(Array(bytes[i..<j]), cfEncoding: cfEncoding),
-                   !containsPrivateUse(s) {
-                    best = j - i
+            var consumed = 0
+            var decoded: String?
+            // 从「最长」往「最短」试，但窗口**不超过单个字符的最大长度**，不跨字符边界。
+            let upper = min(maxCharLength, n - i)
+            var len = upper
+            while len >= 1 {
+                let slice = Array(bytes[i..<(i + len)])
+                if let s = decodeCFString(slice, cfEncoding: cfEncoding),
+                   s.unicodeScalars.count == 1,
+                   !(puaIsFailure && containsPrivateUse(s)) {
+                    consumed = len
+                    decoded = s
                     break
                 }
-                j -= 1
+                len -= 1
             }
-            if best > 0, let s = decodeCFString(Array(bytes[i..<(i + best)]), cfEncoding: cfEncoding) {
+            if let s = decoded {
                 out += s
-                i += best
+                i += consumed
             } else {
                 out += "\u{FFFD}"
                 i += 1

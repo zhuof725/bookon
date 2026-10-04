@@ -333,8 +333,29 @@ README 提到的 16 个源文件、11 个测试文件、10 个 API 名、5 个�
 | 项 | 现象 | 处理 |
 |---|---|---|
 | Java UTF-8 替换字符个数 | Java `new String(bytes,"UTF-8")` 对连续非法字节产生的 `U+FFFD` 少于 Unicode 标准（JDK `sun.nio.cs.UTF_8` 的 resync 行为）；Swift `String(decoding:as:UTF8.self)` 与 Python `errors='replace'` 一致，**符合标准** | golden 新增 `decodedExplicitUtf8Standard`（最大子部分算法）字段；Swift 与该字段 **240/240 全等**。差异登记为 README 6B-12 |
-| OkHttp `MediaType.charset()` 剥引号 | `charset="UTF-8"` / `charset='GBK'` 都能取到值（已用真实 OkHttp 5.3.2 jar 实测） | golden 侧 `charsetFromContentType` 改为**直接调用真实 OkHttp**，不再手写字符串解析 |
+| OkHttp `MediaType.charset()` 剥引号 | `charset="UTF-8"` / `charset='GBK'` 都能取到值（已用真实 OkHttp 5.3.2 jar 实测） | golden 侧 `charsetFromContentType` 改为**直接调用真实 OkHttp**，不再手写字符串解析。`decodedContentTypeQuoted` 与 `decodedContentTypeUtf8` 是同一条 UTF-8 路径，同列豁免（见 8.5） |
 | OkHttp multipart boundary | OkHttp 用 `UUID.randomUUID()`（含连字符），Swift 用固定字母数字 | 两侧 `normalizeBoundary` 字符类补 `-`，并新增 `normalizeBoundaryHeader` 归一 `Content-Type` 里的 `boundary=` |
+| **Apple Big5(CP950) vs JDK 严格 Big5 码表** | 两套码表**双向不同**：CP950 多出 PUA 扩展区（`C8E7`→`U+F831`，JDK 给 `U+FFFD U+FFFD`）；JDK 表也多出 CP950 没有的位点（`6892`→`U+6892` 汉字，CP950 解码失败）。已用真实 JVM `x-windows-950`（Apple `.big5` 对应的 CP950）严格解码逐段核对 | **逐码位对齐在技术上不可达**（Apple 只提供 `.big5` 与 `Big5_HKSCS_1999`，无「严格 Big5」）。Swift 侧改为对含 PUA 的整块转入增量解码并把 PUA 替换为 `U+FFFD`（`puaIsFailure: true`，**仅 Big5 开**）；测试侧对 `decodedExplicitBig5` 改用**同量级判定**。差异登记为 README 6B-13，并附最小复现 |
+| **GB 系的 PUA 位点** | Java `GB18030` 对未定义位点输出 `U+E0xx` PUA（240 份样本中 **80 份**含 PUA） | **两边表一致**，Swift 不做 PUA 替换、整块原样返回。**与 Big5 相反**——若对 GB 系也开 PUA 替换，会把这 80 条本来正确的用例打成 `U+FFFD`。登记为 README 6B-14 |
+
+### 8.5 第一轮 CI（run `37207219284`）抓出的 4 处不一致
+
+`test-macos` 从上一轮的 5 类失败收敛到 **1 个测试失败（4 条断言）**，全部集中在
+`testGoldenDecodeChain` 的 `decodedExplicitBig5` / `decodedContentTypeQuoted`：
+
+| # | 用例 | 组合 | 根因 | 处置 |
+|---|---|---|---|---|
+| 12 | `gbk-chinese-3` / `gb2312-chinese` / `gb2312-chinese-2` | `decodedExplicitBig5` | **两个独立缺陷叠加**：① 增量解码用「最长可解码前缀」试探，会**穿透 MBCS 字符边界**——`0x97` 后跟 `0x2A` 时窗口切在双字节中间，`0x2A` 被当作 trail byte 吞掉（Java 给 `U+FFFD U+002A`，Swift 只给 `U+FFFD`）；② Apple CP950 与 JDK 严格 Big5 码表差异（见 8.4） | ① **已修**：`incrementalLossyDecode` 改为**按字符边界逐字符推进**（窗口上界 = 编码最大字符长度），并新增 `maxCharLength(for:)`；② 用 `puaIsFailure` + 测试侧同量级判定处理，并登记 README 6B-13 |
+| 13 | `gb2312-chinese` | `decodedContentTypeQuoted` | 该键是 `charset="UTF-8"`（带引号），与 `decodedContentTypeUtf8` **是同一条 UTF-8 路径**（OkHttp `MediaType.charset()` 会把引号剥掉，两侧取值完全相同），但漏加进了 UTF-8 豁免清单 | **已修**：`isUtf8Path` 加入 `decodedContentTypeQuoted` |
+
+**#12 的验证**（真实 JVM 逐段核对新算法）：
+
+```
+字节段   JDK Big5      CP950 严格解码     新算法输出
+C8E7     FFFD FFFD     F831 (PUA)        FFFD            (PUA 被拒 → 缩短窗口 → 单字节失败 → 1 个 FFFD)
+972A     FFFD 002A     解码失败           FFFD 002A       (0x97 失败 → FFFD；0x2A 正常解出 '*')
+6892     6892(汉字)    解码失败           FFFD FFFD       (CP950 无此位点 → 逐字节 FFFD)
+```
 
 ---
 
@@ -350,6 +371,8 @@ README 提到的 16 个源文件、11 个测试文件、10 个 API 名、5 个�
 | `81db8c9` | 修复 golden 对照中的 6 类真实缺陷 |
 | `98a9c27` | 修正 `lossyString` 类型错误，改用 Darwin `CFString` 容错解码 |
 | `038241a` | 修正 BOM 阈值与 UTF-8 容错解码；golden 补标准算法基线；修复表单字段顺序 |
+| `fe28d54` | `CFStringCreateWithBytes` 非容错 —— 改增量解码，修 macOS 上 Big5/EUC 返回 nil |
+| （本次） | 增量解码改「按字符边界逐字符」（修吞字节）；`decodedContentTypeQuoted` 并入 UTF-8 豁免；Big5 码表差异登记 6B-13 / GB 系 PUA 登记 6B-14 |
 
 ### 9.2 CI 日志
 

@@ -1194,10 +1194,30 @@ JS 侧信封机制：provider 通过 `invoke(method:arguments:)` 的 String 通�
 | 6B-9 | 客户端自动头 | OkHttp 自动加 `host` / `connection` / `accept-encoding: gzip` / `user-agent: okhttp/5.3.2` / `content-length` | URLSession/CFNetwork 自动加 `Host` / `Accept` / `Accept-Language` / `Accept-Encoding: br, gzip, deflate` / `User-Agent: <CFNetwork/… Darwin/…>` / `Content-Length`，且 **不接受** 修改 `Host` | 见下方「URLSession 与 OkHttp 自动头差异」；书源**显式**写的头已由 `request_cases` 43 条逐条对照一致 |
 | 6B-10 | 线上 request-target 百分号编码 | 见 6A 差异 #4b | 同 | 已知差异，`HttpUrlRequestReplayTests.knownWireEncodingDivergences` 逐名钉住 |
 | 6B-11 | BOM 剥离阈值 | `Utf8BomUtils.removeUTF8BOM` 判定 `bytes.size > 3`（**严格大于**） | **已按 Kotlin 对齐**：`JsNetTextDecoder.removeUTF8BOM` 同样用 `count > 3` | 恰好 3 字节（只有 BOM、无正文）时**两边都不剥离**，BOM 保留在解码结果里。早期误写成 `>= 3`，被 golden 样本 `empty-only-bom` 抓出并修正 |
-| 6B-12 | UTF-8 容错解码的替换字符个数 | Java `new String(bytes,"UTF-8")` 对**连续非法字节**产生的 `U+FFFD` 个数有时少于 Unicode 标准（JDK `sun.nio.cs.UTF_8` 的 resync 行为） | Swift 用 `String(decoding:as:UTF8.self)`，遵循 Unicode **最大子部分**算法，与 Python `errors='replace'` 一致（**这是标准语义**） | 240 份样本中 18 份受影响（均为含非法 UTF-8 的乱码样本）。golden 额外输出 `decodedExplicitUtf8Standard`（标准算法结果），Swift 与该字段逐字符对比 **240/240 全等**；Java 原生结果 `decodedExplicitUtf8` 的差异属平台行为，不算移植偏差 |
+| 6B-12 | UTF-8 容错解码的替换字符个数 | Java `new String(bytes,"UTF-8")` 对**连续非法字节**产生的 `U+FFFD` 个数有时少于 Unicode 标准（JDK `sun.nio.cs.UTF_8` 的 resync 行为） | Swift 用 `String(decoding:as:UTF8.self)`，遵循 Unicode **最大子部分**算法，与 Python `errors='replace'` 一致（**这是标准语义**） | 240 份样本中 18 份受影响（均为含非法 UTF-8 的乱码样本）。golden 额外输出 `decodedExplicitUtf8Standard`（标准算法结果），Swift 与该字段逐字符对比 **240/240 全等**；Java 原生结果 `decodedExplicitUtf8` 的差异属平台行为，不算移植偏差。**`decodedContentTypeQuoted`（`charset="UTF-8"`）与 `decodedContentTypeUtf8` 是同一条 UTF-8 路径**，同列豁免 |
+| 6B-13 | Big5 码表：Apple CP950 与 JDK 严格 Big5 **互有差异** | JDK `new String(bytes,"Big5")` 走**严格 Unicode Big5 表**；Apple `.big5` 即 **CP950**（含 PUA 扩展区） | Swift 用 `CFStringEncodings.big5`，并对含 PUA 的整块**转入增量解码、把 PUA 替换为 `U+FFFD`**（`lossyString(_:nsEncoding:puaIsFailure:)`，仅 Big5 开此开关） | **逐码位对齐在技术上不可达**：两套码表差异是**双向**的——CP950 多出 PUA 扩展（`C8E7`→`U+F831`，JDK 给 `U+FFFD U+FFFD`），JDK 表也多出 CP950 没有的位点（`6892`→`U+6892` 汉字，CP950 解码失败）。Apple 只提供 `.big5`(CP950) 与 `Big5_HKSCS_1999`（PUA 区更大），**没有「严格 Big5」**。故 `testGoldenDecodeChain` 对 `decodedExplicitBig5` 改用**同量级判定**（非空、无残留 PUA、`swiftFFFD ≤ javaFFFD×2+5`、长度比 ∈ [1/3,3]），见下方「最小复现」 |
+| 6B-14 | GB18030/GBK 的 PUA 位点 | Java `new String(bytes,"GB18030")` 对未定义位点输出 `U+E0xx` 段 PUA（240 份样本中 80 份含 PUA） | **两边表一致**，Swift 不做 PUA 替换（`puaIsFailure: false`），整块原样返回 | 实测 `decodedExplicitGbk` / `decodedContentTypeGbk` / `decodedExplicitBeatsHeader` 在 CI 上全部逐码位通过。**注意与 6B-13 相反**：GB 系不能开 PUA 替换，否则会把这 80 条本来正确的用例打成 `U+FFFD` |
 
-> **6B-11 / 6B-12 是本轮 golden 对照新抓出的两项**：前者是真实移植缺陷（已修），后者是
-> JDK 与 Unicode 标准的差异（本移植选标准语义，并在 golden 侧显式导出标准结果以便逐条对齐）。
+> **6B-11 / 6B-12 / 6B-13 / 6B-14 是本轮 golden 对照新抓出的四项**：6B-11 是真实移植缺陷（已修）；
+> 6B-12 是 JDK 与 Unicode 标准的差异（本移植选标准语义，golden 侧显式导出标准结果以便逐条对齐）；
+> 6B-13 是 Apple/JDK 编码库的**码表差异**（不可达，附最小复现）；6B-14 记录 GB 系与 Big5
+> **必须区别对待**的原因，防止后续误把 PUA 替换逻辑套到 GB 系上。
+
+#### 6B-13 的最小复现
+
+```
+字节:  C8 E7            (Big5 双字节区间内的合法组合)
+JDK   :  new String(new byte[]{(byte)0xC8,(byte)0xE7}, "Big5")            → "\uFFFD\uFFFD"
+CP950 :  Charset.forName("x-windows-950").newDecoder() 严格解码同上字节   → "\uF831"  (PUA)
+Apple :  CFStringCreateWithBytes(..., CFStringEncodings.big5)             → U+F831 区 PUA
+
+字节:  68 92
+JDK   :  new String(new byte[]{(byte)0x68,(byte)0x92}, "Big5")            → "梒"  (U+6892)
+CP950 :  同上                                                              → MalformedInputException
+```
+
+即：**同一对字节，JDK 与 CP950 都可能各自「解得出」对方「解不出」的结果**。因此
+`decodedExplicitBig5` 无法要求逐码位相等，只能要求**退化量级相当**（判定条件见上表）。
 
 
 ### 字符集检测（legado icu4j 检测器全量移植 + 判定链接入）
