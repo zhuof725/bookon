@@ -361,7 +361,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let cacheManager = InMemoryCacheManager()
         let provider = makeProvider(cacheDirectory: cacheDir, cacheManager: cacheManager)
 
-        let first = try provider.invoke("cacheFile", [target])
+        let first = try provider.invoke(method: "cacheFile", arguments: [target])
         XCTAssertEqual(first, "var a = 1;")
         XCTAssertEqual(server.requests.count, 1)
 
@@ -372,7 +372,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         // Kotlin: CacheManager.put(key, path, saveTime) → get(key) 返回相对路径
         XCTAssertEqual(cacheManager.get(md5), "/" + md5 + ".js")
 
-        let second = try provider.invoke("cacheFile", [target])
+        let second = try provider.invoke(method: "cacheFile", arguments: [target])
         XCTAssertEqual(second, "var a = 1;")
         XCTAssertEqual(server.requests.count, 1, "二次调用应命中缓存，不再发请求")
     }
@@ -386,9 +386,9 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/js2", server)
         let provider = makeProvider(cacheDirectory: makeTempDir(),
                                     cacheManager: CacheManager(storage: MemoryCacheStorage()))
-        let first = try provider.invoke("cacheFile", [target, "60"])
+        let first = try provider.invoke(method: "cacheFile", arguments: [target, "60"])
         XCTAssertEqual(first, "console.log(2)")
-        let second = try provider.invoke("cacheFile", [target, "60"])
+        let second = try provider.invoke(method: "cacheFile", arguments: [target, "60"])
         XCTAssertEqual(second, "console.log(2)")
         XCTAssertEqual(server.requests.count, 1)
     }
@@ -403,7 +403,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/d.js", server)
         let cacheDir = makeTempDir()
         let provider = makeProvider(cacheDirectory: cacheDir)
-        let path = try provider.invoke("downloadFile", [target])
+        let path = try provider.invoke(method: "downloadFile", arguments: [target])
         let md5 = JsExtensionsCore.md5Encode16(target)
         XCTAssertEqual(path, "/" + md5 + ".js")
         let data = try Data(contentsOf: cacheDir.appendingPathComponent(md5 + ".js"))
@@ -425,7 +425,7 @@ final class RealJsNetworkProviderTests: XCTestCase {
         let target = url("/big", server)
         let cacheDir = makeTempDir()
         let provider = makeProvider(cacheDirectory: cacheDir)
-        let path = try provider.invoke("downloadFile", [target])
+        let path = try provider.invoke(method: "downloadFile", arguments: [target])
         let md5 = JsExtensionsCore.md5Encode16(target)
         XCTAssertEqual(path, "/" + md5 + ".ext", "无合法后缀（/big）→ UrlUtil.getSuffix 的 \"ext\"")
         let data = try Data(contentsOf: cacheDir.appendingPathComponent(md5 + ".ext"))
@@ -438,13 +438,13 @@ final class RealJsNetworkProviderTests: XCTestCase {
 
     func testUnsupportedMethodsStillThrow() throws {
         let provider = makeProvider()
-        XCTAssertThrowsError(try provider.invoke("unzipFile", ["x"])) { error in
+        XCTAssertThrowsError(try provider.invoke(method: "unzipFile", arguments: ["x"])) { error in
             guard let ruleError = error as? RuleEngineError, case .unsupported = ruleError else {
                 return XCTFail("应为 unsupported，实际 \(error)")
             }
         }
         // 默认 Unsupported 实现保持不变（既有定义未改动，回归）
-        XCTAssertThrowsError(try UnsupportedJsNetworkExtensionsProvider().invoke("get", ["http://x/"])) { error in
+        XCTAssertThrowsError(try UnsupportedJsNetworkExtensionsProvider().invoke(method: "get", arguments: ["http://x/"])) { error in
             guard let ruleError = error as? RuleEngineError, case .unsupported = ruleError else {
                 return XCTFail("应为 unsupported，实际 \(error)")
             }
