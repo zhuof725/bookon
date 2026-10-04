@@ -94,7 +94,7 @@ extension CharsetRecogMBCS {
         var confidence = 0
         let iter = IteratedChar()
 
-        detectBlock: {
+        detectBlock: do {
             iter.reset()
             while nextChar(iter, det) {
                 totalCharCount += 1
@@ -239,7 +239,10 @@ final class CharsetRecogBig5: CharsetRecogMBCS {
 ///  - firstByte 0x8E：Code Set 2（EUC-JP 半角片假名，第二字节 < 0xA1 判非法）；
 ///  - firstByte 0x8F：Code Set 3（EUC-JP JIS X 0212 三字节，第三字节 < 0xA1 判非法）；
 ///  - firstByte 0x90-0xA0 落入以上区间之外时不判非法（与 Java 一致，见 Java 源码）。
-private class CharsetRecogEUC: CharsetRecogMBCS {
+/// EUC-JP/EUC-KR 共享的 EUC 识别器（Java `CharsetRecog_mbcs.CharsetRecog_euc`）。
+/// 抽象基类：仅被子类继承，不直接参与识别（internal 而非 private——Swift 中子类
+/// 访问级别不能高于基类，而 EUC-JP/EUC-KR 子类需被 allRecognizers 内部使用）。
+class CharsetRecogEUC: CharsetRecogMBCS {
     var name: String { "" }
     var language: String { "" }
 

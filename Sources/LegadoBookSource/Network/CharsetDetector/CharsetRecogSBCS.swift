@@ -387,7 +387,8 @@ final class CharsetRecogKOI8R: CharsetRecogSBCS {
 
 /// IBM-424（希伯来语）识别器基类（Java `CharsetRecog_sbcs.CharsetRecog_IBM424_he`）。
 /// 空格符为 0x40（IBM 码页的空格位）；协议一致性由子类声明。
-private class CharsetRecogIBM424 {
+/// internal 而非 private：子类需被 allRecognizers 使用且 language 需满足协议要求。
+class CharsetRecogIBM424 {
     var name: String { "" }
     var language: String { "he" }
 }
@@ -417,8 +418,9 @@ final class CharsetRecogIBM424HE_LTR: CharsetRecogIBM424, CharsetRecogSBCS {
 }
 
 /// IBM-420（阿拉伯语）识别器基类（Java `CharsetRecog_sbcs.CharsetRecog_IBM420_ar`）。
-/// 协议一致性由子类声明。
-private class CharsetRecogIBM420 {
+/// 协议一致性由子类声明。internal 而非 private：子类需被 allRecognizers 使用
+/// 且 language 需满足协议要求。
+class CharsetRecogIBM420 {
     var name: String { "" }
     var language: String { "ar" }
 }
