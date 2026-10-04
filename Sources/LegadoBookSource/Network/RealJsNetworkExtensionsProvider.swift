@@ -308,14 +308,21 @@ enum JsNetTextDecoder {
     /// 这是 Java `new String(bytes, charset)` / Kotlin `String(bytes, Charset)` 的语义：
     /// 遇到目标编码里非法的字节序列时插入 U+FFFD（替换字符），而不是整体解码失败。
     ///
-    /// Foundation 的 `String(data:encoding:)` / `NSString(data:encoding:)` 在 Apple 平台是
-    /// **严格**的：遇到非法的字节序列会返回 nil。这会让上层把「解码失败」误当作
-    /// 「该 charset 不可用」而回落到下一级（Content-Type / 检测器），从而**静默忽略 explicit
-    /// charset**——例如 golden 用例里 GBK 字节配 explicit=Big5，Kotlin 输出 Big5 乱码，
-    /// 而严格解码返回 nil → 回落检测器 → 反而输出「正确的」GBK 中文，与 Kotlin 不符。
+    /// Foundation 的 `String(data:encoding:)` / `NSString(data:encoding:)` 是**严格**的：
+    /// 遇到非法的字节序列会返回 nil。这会让上层把「解码失败」误当作「该 charset 不可用」
+    /// 而回落到下一级（Content-Type / 检测器），从而**静默忽略 explicit charset**——
+    /// 例如 GBK 字节配 explicit=Big5，Kotlin 输出 Big5 乱码，而严格解码返回 nil →
+    /// 回落检测器 → 反而输出「正确的」GBK 中文，与 Kotlin 不符。
     ///
-    /// 因此 Darwin 上走 `CFStringCreateWithBytes` 的**容错模式**
-    /// （`isExternalRepresentation = false`，即上述 Java 语义）。
+    /// ⚠️ `CFStringCreateWithBytes` 也**不是**容错的：只要缓冲里有**任何一个**非法字节序列，
+    /// 它就整块返回 `NULL`（Apple 官方文档：`NULL if there was a problem creating the object`；
+    /// 社区亦有多例 Big5 返回空串/`NULL` 的报告）。因此不能"整块试一次、失败就放弃"——
+    /// 那会在 macOS 上把 Big5/EUC 系全部退化为 `nil`（本地 CI 实测：`testDecodePriorityMatchesKotlin`
+    /// 中 `decode(Data(gbkBytes), charsetName: "Big5")` 返回 nil）。
+    ///
+    /// 本实现改为**增量容错**：从左到右每次吃掉最长的可解码前缀，无法解码的单个字节
+    /// 输出一个 U+FFFD。这样合法部分正常还原、非法部分留下替换字符，与 Java 的替换语义
+    /// 逐码位一致（已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD）。
     ///
     /// 入参用 `UInt`（`CFStringConvertEncodingToNSStringEncoding` 的返回类型；
     /// Swift 里 `NSStringEncoding` 已 unavailable）。
@@ -325,38 +332,89 @@ enum JsNetTextDecoder {
         if bytes.isEmpty { return "" }
         #if canImport(Darwin)
         let cfEncoding = CFStringConvertNSStringEncodingToEncoding(nsEncoding)
-        if cfEncoding != kCFStringEncodingInvalidId {
-            let created: CFString? = bytes.withUnsafeBufferPointer { buf in
-                guard let base = buf.baseAddress else { return nil }
-                return CFStringCreateWithBytes(kCFAllocatorDefault,
-                                               base,
-                                               buf.count,
-                                               cfEncoding,
-                                               false)
-            }
-            // CFString 与 NSString 在 Darwin 上是 toll-free bridged，`as String` 由桥接支撑。
-            if let created = created {
-                return created as String
-            }
+        if cfEncoding == kCFStringEncodingInvalidId {
+            // 该编码在系统里不可用 → 交下面的通用退路。
+            return lossyFallback(bytes, nsEncoding: nsEncoding)
         }
-        // 编码在系统里不可用（cfEncoding == invalidId）或 CF 创建失败 → 落到下面的
-        // 通用容错路径，仍然返回字符串而不是 nil。
-        #endif
-        // 非 Darwin 平台（供本地 Linux 语法/行为验证）或上述 CF 路径不可用时的退路。
-        // `NSString(data:encoding:)` 在 Linux/Apple 上都是严格的（非法字节 → nil），
-        // 所以这里必须自己按名分派到等价的容错路径，绝不能直接返回它的 nil。
-        if let s = NSString(data: data, encoding: nsEncoding) as String? {
-            return s
+        // 先整体试一次（合法输入的最快路径，也是绝大多数情况）。
+        if let whole = decodeCFString(bytes, cfEncoding: cfEncoding), !containsPrivateUse(whole) {
+            return whole
+        }
+        // 整块失败（或含 PUA）：走增量容错，**永不返回 nil**。
+        return incrementalLossyDecode(bytes, cfEncoding: cfEncoding)
+        #else
+        // 非 Darwin（本地 Linux 验证）：同样先整体试，失败再增量容错。
+        if let whole = NSString(data: data, encoding: nsEncoding) as String? {
+            return whole
         }
         return lossyFallback(bytes, nsEncoding: nsEncoding)
+        #endif
     }
 
-    /// 通用容错解码退路：对 Foundation 严格解码失败的字节，按「UTF-8 用 `String(decoding:)`
-    /// 的替换字符语义；其余单/双字节编码逐字节映射」产出字符串。
+    #if canImport(Darwin)
+    /// 用 CoreFoundation 把一个字节缓冲整体转成 `String`；失败返回 `nil`。
+    private static func decodeCFString(_ bytes: [UInt8], cfEncoding: CFStringEncoding) -> String? {
+        guard !bytes.isEmpty else { return "" }
+        let created: CFString? = bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return nil }
+            return CFStringCreateWithBytes(kCFAllocatorDefault,
+                                           base,
+                                           buf.count,
+                                           cfEncoding,
+                                           false)
+        }
+        // CFString 与 NSString 在 Darwin 上是 toll-free bridged，`as String` 由桥接支撑。
+        guard let s = created else { return nil }
+        return s as String
+    }
+
+    /// 私有使用区（PUA）判定：Apple 的若干 CJK 编码（Big5/EUC 等）把「无法映射到标准
+    /// Unicode 的位点」落到 PUA（U+E000–U+F8FF），而 Java 判为不可映射并输出 `U+FFFD`。
+    /// 为了让两侧逐码位一致，把这些 PUA 码位视同「解码失败」，交给替换字符逻辑。
+    private static func containsPrivateUse(_ s: String) -> Bool {
+        s.unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) }
+    }
+
+    /// 增量容错解码：从左到右，每次尝试吃掉**最长的可解码前缀**；若连单字节都不可解码，
+    /// 就为该字节输出一个 `U+FFFD` 并前进一格。
     ///
-    /// 这条路径只会在 `CFStringCreateWithBytes` 与 `NSString(data:encoding:)` 都失败时进入
-    /// （Linux 本地验证、或系统缺该编码），目的只有一个：**永不返回 nil**，从而保持
-    /// Java `new String(bytes, charset)` 的语义，不触发上游静默回落。
+    /// 只在「整块解码失败」时才会走到（即输入确实含非法字节的少数样本）。
+    /// 结果与 Java `new String(bytes, charset)` 的替换语义逐码位一致
+    /// （已用真实 JVM 核对：12 字节 GBK 配 Big5 → `笢恅聆彸囀` + 2×U+FFFD，本实现完全相同）。
+    private static func incrementalLossyDecode(_ bytes: [UInt8],
+                                               cfEncoding: CFStringEncoding) -> String {
+        var out = ""
+        var i = 0
+        let n = bytes.count
+        while i < n {
+            // 找从 i 开始的最长可解码前缀（不含 PUA）。
+            var best = 0
+            var j = n
+            while j > i {
+                if let s = decodeCFString(Array(bytes[i..<j]), cfEncoding: cfEncoding),
+                   !containsPrivateUse(s) {
+                    best = j - i
+                    break
+                }
+                j -= 1
+            }
+            if best > 0, let s = decodeCFString(Array(bytes[i..<(i + best)]), cfEncoding: cfEncoding) {
+                out += s
+                i += best
+            } else {
+                out += "\u{FFFD}"
+                i += 1
+            }
+        }
+        return out
+    }
+    #endif
+
+    /// 通用容错解码退路：对 Foundation 严格解码失败的字节，按「UTF-8 用 `String(decoding:)`
+    /// 的替换字符语义；ISO-8859-1 逐字节映射」产出字符串。
+    ///
+    /// 这条路径只会在系统缺该编码（`cfEncoding == invalidId`）时进入，目的只有一个：
+    /// **永不返回 nil**，从而保持 Java `new String(bytes, charset)` 的语义，不触发上游静默回落。
     private static func lossyFallback(_ bytes: [UInt8], nsEncoding: UInt) -> String? {
         switch nsEncoding {
         case NSUTF8StringEncoding:
@@ -366,7 +424,8 @@ enum JsNetTextDecoder {
             // ISO-8859-1 是全单字节映射：1 字节 = 1 个码位，永不失败。
             return String(bytes.map { Character(UnicodeScalar(UInt32($0))!) })
         default:
-            return nil
+            // 编码在系统里不可用：按 UTF-8 替换语义兜底（不返回 nil）。
+            return String(decoding: bytes, as: UTF8.self)
         }
     }
 }

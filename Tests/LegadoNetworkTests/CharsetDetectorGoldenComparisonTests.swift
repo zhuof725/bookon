@@ -403,19 +403,24 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         // 因此这里锁定的是「与 Kotlin 完全一致」，而不是「认出中文」。
         XCTAssertEqual(CharsetDetector.detect(gbkBytes), "Big5",
                        "短 GBK 样本按 ICU4J 并列规则应判 Big5（与 Java golden 一致）")
+        // 检测器路径：解码结果必须等于「用检测出的 charset 直接解码」。而且整体必须
+        // **非 nil 且非空**——即便字节在 Big5 里非法，也应走 U+FFFD 替换语义产出乱码串，
+        // 绝不能因为解码失败而返回空/nil（那会让上层误判编码不可用）。
         let c = JsNetTextDecoder.decode(bytes: gbkBytes, explicitCharset: nil, contentTypeHeader: nil)
-        XCTAssertEqual(c, JsNetTextDecoder.decode(Data(gbkBytes), charsetName: "Big5"),
-                       "无 meta 无头时应走检测器路径，且检测结果与 Kotlin（Big5）一致")
+        XCTAssertFalse(c.isEmpty, "无 meta 无头时应走检测器路径并产出结果，不能为空")
+        XCTAssertEqual(c, JsNetTextDecoder.decode(Data(gbkBytes), charsetName: "Big5") ?? "",
+                       "无 meta 无头时应走检测器路径，且其结果与直接用检测出的 Big5 解码一致")
 
-        // 长样本：~187 字节成篇 GBK 中文，ICU4J 给出 GB18030/conf=100（与 golden 的
+        // 长样本：187 字节成篇 GBK 中文，ICU4J 给出 GB18030/conf=100（与 golden 的
         // gbk-chinese-3 完全相同），此时检测器路径才必须解出正确中文。
         let longGbk = Self.gbkChinesePassage3
         XCTAssertEqual(CharsetDetector.detect(longGbk), "GB18030",
                        "长 GBK 样本应被 ICU4J 判为 GB18030（与 Java golden 一致）")
         let longDecoded = JsNetTextDecoder.decode(bytes: longGbk, explicitCharset: nil,
                                                   contentTypeHeader: nil)
-        XCTAssertTrue(longDecoded.contains("他的"),
-                      "长 GBK 样本经检测器解码后应是可读中文，实际=\(longDecoded.prefix(16))")
+        // 该段落首行是「第七十七章 剑鸣」，用它做可读性判据（此前误用了不在本段里的「他的」）。
+        XCTAssertTrue(longDecoded.hasPrefix("第七十七章"),
+                      "长 GBK 样本经检测器解码后应还原出可读中文，实际=\(longDecoded.prefix(16))")
 
         // explicit 指向「不匹配的编码」时必须照用（不回落检测器），与 Java
         // `new String(bytes, charset)` 的替换字符语义一致。
