@@ -302,18 +302,32 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         ///
         /// 这样：`A6DB` → JDK `U+E78F` / Apple `U+FE11`（都在非标准区，1 处不同）→ 豁免；
         /// 而增量解码若吞字节（长度变化）或整段崩坏（差异面大）→ 不豁免，照报。
-        func differencesAreCompatMapOnly(_ a: String, _ b: String) -> Bool {
+        ///
+        /// 返回 `(是否豁免, 诊断描述)`——诊断串用于失败时定位（走 stdout）。
+        func compatMapVerdict(_ a: String, _ b: String) -> (Bool, String) {
             let x = Array(a.unicodeScalars), y = Array(b.unicodeScalars)
-            guard x.count == y.count, !x.isEmpty else { return false }
+            guard x.count == y.count else {
+                return (false, "长度不同 swift=\(x.count) java=\(y.count)")
+            }
+            guard !x.isEmpty else { return (false, "两侧都为空") }
             var diff = 0
+            var firstBad: String? = nil
             for i in 0..<x.count where x[i] != y[i] {
-                guard isNonStandardScalar(x[i].value), isNonStandardScalar(y[i].value) else {
-                    return false
+                let sv = x[i].value, jv = y[i].value
+                guard isNonStandardScalar(sv), isNonStandardScalar(jv) else {
+                    if firstBad == nil {
+                        firstBad = "位置\(i) 非非标准区: swift=U+\(String(format: "%04X", sv))"
+                            + " java=U+\(String(format: "%04X", jv))"
+                    }
+                    return (false, firstBad!)
                 }
                 diff += 1
             }
-            guard diff > 0 else { return false }
-            return diff <= 30 && Double(diff) <= Double(x.count) * 0.2
+            guard diff > 0 else { return (false, "逐字相等（不应进入本分支）") }
+            guard diff <= 30, Double(diff) <= Double(x.count) * 0.2 else {
+                return (false, "差异面过大: \(diff)/\(x.count)")
+            }
+            return (true, "码表差异 \(diff)/\(x.count) 位")
         }
 
 
@@ -411,7 +425,7 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
                     // 两侧**互有对方没有的位点**，且 Apple 不提供「严格 Big5 / 严格 GBK」编码，
                     // 因此**逐码位对齐在技术上不可达**，属平台编码库差异而非移植缺陷。
                     //
-                    // 判据（`differencesAreCompatMapOnly`，**全部满足**才豁免）：
+                    // 判据（`compatMapVerdict`，**全部满足**才豁免）：
                     // 1) 标量个数完全相同——字节消耗边界必须一致；
                     // 2) 每个不相同的位置，两侧码位**都**落在非标准文本区（PUA / CJK 兼容 /
                     //    竖排标点 / 半全角 / 变体选择符 / U+FFFD）；
@@ -419,14 +433,15 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
                     //
                     // 这样「`U+E78F` ↔ `U+FE11`」这类一对一的码表取舍会被豁免，而
                     // 增量解码若吞字节（长度变化）或整段崩坏（差异面大）会照常报错。
-                    if differencesAreCompatMapOnly(swift, expected) {
+                    let verdict = compatMapVerdict(swift, expected)
+                    if verdict.0 {
                         compatMapDifferences += 1
                         continue
                     }
-
                     failures.append(esc("""
                     [\(c.name)] \(key) 解码不一致（\(c.note)）
                       explicit=\(explicit ?? "-") contentType=\(contentType ?? "-")
+                      判定: \(verdict.1)
                       Java : \(expected)
                       Swift: \(swift)
                     """))
@@ -438,11 +453,16 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(comparisons, 40, "完整解码对照应 ≥40 条")
         XCTAssertGreaterThanOrEqual(standardUtf8Comparisons, 200,
                                     "标准 UTF-8 解码对照应覆盖全部样本（≥200 条）")
-        // 码表差异是**已登记的已知差异**（README 6B-13 / 6B-15），只统计、不作为通过条件：
-        // 每条被豁免的用例都已满足 `differencesAreCompatMapOnly` 的三条硬约束。
-        // 这里只做一个「对照确实跑起来了」的下界留痕。
-        XCTAssertGreaterThan(compatMapDifferences, 0,
-                             "码表差异豁免数为 0，说明对照没有真正跑到 CJK 路径")
+
+        // 诊断输出走 stdout（`print`）：**不依赖 XCTest 的消息通道**。
+        // 实测在 macOS runner 上，`XCTFail` 的多行消息有时不会出现在 `swift test` 日志里
+        // （CI run 37210336449：测试失败但失败详情整段缺失），而 stdout 一定会被采集。
+        print("[charset-decode-chain] comparisons=\(comparisons) "
+              + "standardUtf8=\(standardUtf8Comparisons) "
+              + "compatMapExempt=\(compatMapDifferences) failures=\(failures.count)")
+        for f in failures.prefix(15) {
+            print("[charset-decode-chain-FAIL] " + f.replacingOccurrences(of: "\n", with: " \\n "))
+        }
 
         if !failures.isEmpty {
             XCTFail("解码链 golden 不一致 \(failures.count)/\(comparisons)：\n"
