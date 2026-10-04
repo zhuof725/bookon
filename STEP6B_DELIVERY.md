@@ -328,7 +328,27 @@ README 提到的 16 个源文件、11 个测试文件、10 个 API 名、5 个�
 **#11 的修法**：新增 `formFieldOrder(fromGoldenBody:)`，从 golden 自己的期望 body
 派生字段顺序；`buildMultipart` 同步支持 `order:` 参数。本地验证 **7/7** 全匹配。
 
-### 8.4 顺带发现并登记的平台差异（不是移植 bug）
+### 8.6 第二轮 CI（run `37208235718` / `37209884314`）抓出的问题
+
+`37208235718`：**编译失败**——`maxCharLength(for:)` 里用了 `kCFStringEncodingUTF8` 等 10 个常量，
+Swift 里并非全局可见。已改为由调用点直接传 `maxCharLength`（GB18030=4、Big5/UTF-16 系=2、
+Latin/ASCII=1），函数内不再反查 CF 常量。
+
+`37209884314`：**编译通过**，`test-macos` 收敛到 1 个失败测试、4 条断言。这里有两类：
+
+| # | 用例 | 组合 | 根因 | 处置 |
+|---|---|---|---|---|
+| 14 | `shift-jis-japanese` / `-2` | `decodedDefault`、`decodedContentTypeNoCharset` | **真实缺陷**：`decode(_:charsetName:)` **完全没有日韩编码分支**，`Shift_JIS`/`EUC-JP`/`EUC-KR` 全部落到末尾 `return nil` → 上层误判「charset 不可用」→ 回落 UTF-8 兜底。实测 Java 给 `第一章 旅立ち`、Swift 给 `���� ������` | **已修**：补 `SHIFT-JIS`/`SHIFTJIS`/`SJIS`/`MS-KANJI`/`WINDOWS-31J`/`CP932`、`EUC-JP`、`EUC-KR`/`CP949`/`KSC5601` 三个分支。登记 README 6B-16 |
+| 15 | `big5-traditional-3` | `decodedContentTypeGbk`、`decodedExplicitBeatsHeader` | **码表差异**：字节 `A6DB` 落在 GBK 用户定义区。JDK `GB18030`/`GBK`/`x-mswin-936` 同给 `U+E78F`(PUA)，Apple `GB_18030_2000` 给 `U+FE11`(竖排标点)。整串 43 个码位只有这 1 位不同，长度完全相同 | **不可修**：登记 README 6B-15，并入统一的码表差异判据 |
+
+**Big5 的 3 条（8.5 的 #12）在 37209884314 已全部通过** —— 逐字符增量解码修好了吞字节问题，
+且测试耗时从 115.8s 降到 4.2s（旧算法的最长前缀试探是 O(n²)）。
+
+**#15 的统一判据**：测试侧不再对具体编码特判，改用 `differencesAreCompatMapOnly`——
+要求①两侧标量个数完全相同、②每个不同位两侧码位都落在「非标准文本区」（PUA / CJK 兼容 /
+竖排标点 / 变体选择符 / 半全角 / U+FFFD）、③不同位数 ≤20% 且 ≤30。
+
+### 8.7 顺带发现并登记的平台差异（不是移植 bug）
 
 | 项 | 现象 | 处理 |
 |---|---|---|

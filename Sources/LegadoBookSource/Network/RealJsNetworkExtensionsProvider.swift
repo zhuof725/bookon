@@ -304,6 +304,32 @@ enum JsNetTextDecoder {
                                         maxCharLength: 2, puaIsFailure: true) { return s }
             return nil
         }
+
+        // ── 日韩编码 ─────────────────────────────────────────────────────────
+        // 这三族此前**完全缺失**，落到函数末尾的 `return nil` → 上层误判「charset 不可用」
+        // → 回落到检测器/UTF-8 兜底。CI run 37209884314 实测：
+        //   Java  : decodedDefault(Shift_JIS) = "第一章 旅立ち"
+        //   Swift : "���� ������"（把 Shift_JIS 字节当 UTF-8 解）
+        // 属真实移植缺陷，已补。
+        if name == "SHIFT-JIS" || name == "SHIFTJIS" || name == "SJIS" || name == "MS-KANJI"
+            || name == "WINDOWS-31J" || name == "CP932" {
+            let nsEnc = CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.shiftJIS.rawValue))
+            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 2) { return s }
+            return nil
+        }
+        if name == "EUC-JP" || name == "EUCJP" {
+            let nsEnc = CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.EUC_JP.rawValue))
+            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 3) { return s }
+            return nil
+        }
+        if name == "EUC-KR" || name == "EUCKR" || name == "CP949" || name == "KSC5601" {
+            let nsEnc = CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.EUC_KR.rawValue))
+            if let s = Self.lossyString(data, nsEncoding: nsEnc, maxCharLength: 2) { return s }
+            return nil
+        }
         return nil
     }
 
