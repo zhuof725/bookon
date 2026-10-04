@@ -182,41 +182,66 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         // 还把 `NSNull`、控制字符、孤立代理等一并改写。CI run `37223557235` 实测仍有 16 处
         // 「swift=129 java=128」——正是这些 BOM 值。
         //
-        // 现在改成：**先把顶层结构里的 `charsetResults` 摘出来，只对这一段做一次转义 + 解码**。
+        // 现在改成：**先把顶层结构里的 `charsetResults` 数组整段摘出来，只对它做一次转义 + 解码**。
         // 摘取用字节级扫描（不经过 Foundation 的 JSON），因此 golden 原始字节里
         // 「`"` 紧跟 `EF BB BF`」的位置一个不丢。
-        let start = try firstArrayContentStart(in: rawData, key: "charsetResults")
-        let escaped = repairingLeadingBomEscapes(rawData.subdata(in: start..<rawData.count))
+        let segment = try extractArraySegment(in: rawData, key: "charsetResults")
+        let escaped = repairingLeadingBomEscapes(segment)
         return try JSONDecoder().decode([CharsetCase].self, from: escaped)
     }
 
-    /// 在 golden 原始字节里定位 `"<key>"` 之后那个 `[` 的位置，返回**紧跟其后**的偏移。
+    /// 在 golden 原始字节里摘出 `"<key>"` 对应的那个 **完整 JSON 数组**（含两端方括号）。
     ///
     /// 纯字节扫描，不引入任何 JSON 解析，从而不会触发 Foundation 的前导 BOM 剥离。
-    private func firstArrayContentStart(in data: Data, key: String) throws -> Int {
-        let needle = Array("\"\(key)\"".utf8)
+    ///
+    /// ⚠️ 必须取到**配对的 `]`**，不能从 `[` 一路截到文件尾：golden 顶层是
+    /// `{ "charsetResults": [ … ], "other": … }`，从 `[` 截到结尾会带上 `],` 等残渣，
+    /// `JSONDecoder` 直接报 `Unexpected character ',' after top-level value`
+    /// （CI run `37224564989` 实测，3 个检测类用例全挂）。
+    /// 括号计数时需跳过字符串内部的 `[` / `]` 与转义字符。
+    private func extractArraySegment(in data: Data, key: String) throws -> Data {
         let src = [UInt8](data)
-        guard src.count > needle.count else {
-            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（找不到 \(key)）") }
-            throw XCTSkip("charset_cases.json 结构异常（找不到 \(key)）。")
-        }
-        var idx = -1
+        let needle = Array("\"\(key)\"".utf8)
+        guard src.count > needle.count else { throw skipOrFail(key) }
+        var found = -1
         outer: for i in 0...(src.count - needle.count) where src[i] == needle[0] {
             for j in 0..<needle.count where src[i + j] != needle[j] { continue outer }
-            idx = i
+            found = i
             break
         }
-        guard idx >= 0 else {
-            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（找不到 \(key)）") }
-            throw XCTSkip("charset_cases.json 结构异常（找不到 \(key)）。")
-        }
-        var k = idx + needle.count
+        guard found >= 0 else { throw skipOrFail(key) }
+        var k = found + needle.count
         while k < src.count, src[k] != 0x5B { k += 1 }   // '['
-        guard k < src.count else {
-            if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（\(key) 之后没有数组）") }
-            throw XCTSkip("charset_cases.json 结构异常（\(key) 之后没有数组）。")
+        guard k < src.count else { throw skipOrFail(key) }
+        let start = k
+        var depth = 0
+        var inString = false
+        var escapedChar = false
+        while k < src.count {
+            let c = src[k]
+            if inString {
+                if escapedChar { escapedChar = false }
+                else if c == 0x5C { escapedChar = true }        // '\'
+                else if c == 0x22 { inString = false }          // '"'
+            } else if c == 0x22 {
+                inString = true
+            } else if c == 0x5B || c == 0x7B {                  // '[' '{'
+                depth += 1
+            } else if c == 0x5D || c == 0x7D {                  // ']' '}'
+                depth -= 1
+                if depth == 0 { return data.subdata(in: start..<(k + 1)) }
+            }
+            k += 1
         }
-        return k + 1
+        throw skipOrFail(key)
+    }
+
+    /// 统一的「CI 失败 / 本地跳过」错误构造。
+    private func skipOrFail(_ key: String) -> Error {
+        if isRunningInCI() {
+            XCTFail("CI 环境下 golden 结构异常（找不到 \(key) 数组）")
+        }
+        return XCTSkip("charset_cases.json 结构异常（找不到 \(key) 数组）。")
     }
 
     private func bytes(fromBase64 b64: String) -> [UInt8] {
