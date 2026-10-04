@@ -365,12 +365,13 @@ final class RealJsNetworkProviderTests: XCTestCase {
         XCTAssertEqual(first, "var a = 1;")
         XCTAssertEqual(server.requests.count, 1)
 
-        // 落盘文件名 = md5Encode16(url).js
+        // 落盘文件名 = md5Encode16(url).ext：URL 无后缀时 Kotlin UrlUtil.getSuffix 返回 "ext"
+        // （JsExtensions.kt:426-450 downloadFile + utils/UrlUtil.kt:157-171）。
         let md5 = JsExtensionsCore.md5Encode16(target)
-        let fileURL = cacheDir.appendingPathComponent(md5 + ".js")
+        let fileURL = cacheDir.appendingPathComponent(md5 + ".ext")
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
         // Kotlin: CacheManager.put(key, path, saveTime) → get(key) 返回相对路径
-        XCTAssertEqual(cacheManager.get(md5), "/" + md5 + ".js")
+        XCTAssertEqual(cacheManager.get(md5), "/" + md5 + ".ext")
 
         let second = try provider.invoke(method: "cacheFile", arguments: [target])
         XCTAssertEqual(second, "var a = 1;")
@@ -457,7 +458,14 @@ final class RealJsNetworkProviderTests: XCTestCase {
     // MARK: - 22. java.get 单参仍是变量读取（重载决议回归）
 
     func testJavaGetOneArgStaysVariableGetter() throws {
-        let rule = makeRule(provider: makeProvider(), ajaxProvider: RealAjaxProvider(client: makeRealClient()))
+        // Kotlin 重载决议：AnalyzeRule.kt:808 的成员 fun get(key: String) 是 1 参命中；
+        // JsExtensions.kt:483/487 的网络 get(url, headers[, timeout]) 至少 2 参。
+        // Kotlin put 的四层回退链（AnalyzeRule.kt:786-798）需要至少一个 store，测试显式注入 ruleData。
+        let ruleData = InMemoryRuleData()
+        let rule = AnalyzeRule(ruleData: ruleData,
+                               ajaxProvider: RealAjaxProvider(client: makeRealClient()),
+                               jsNetworkProvider: makeProvider(),
+                               diagnostics: RuleEngineDiagnostics())
         let v = try rule.evalJS("java.put('k1','v1'); java.get('k1')")
         XCTAssertEqual(v.stringValue, "v1")
     }

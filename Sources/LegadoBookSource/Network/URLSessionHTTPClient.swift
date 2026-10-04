@@ -372,20 +372,34 @@ public final class URLSessionHTTPClient: NSObject, HTTPClient, @unchecked Sendab
     ///
     /// 差异：allHeaderFields 不保留原始顺序且非 Set-Cookie 的重复头会被折叠
     /// （OkHttp Headers 保序且允许重复），这里按 key 排序保证确定性；Set-Cookie 的重复项
-    /// Foundation 会保留为同 key 多条（个别系统版本可能用换行拼接，这里按换行拆开兜底）。
+    /// Foundation 会保留为同 key 多条（个别系统版本可能按逗号或换行合并成一条），这里
+    /// 对 String/数组两种形态都展开成多条，并按逗号/换行拆开兜底。
     static func orderedHeaders(from http: HTTPURLResponse) -> [(String, String)] {
         var out: [(String, String)] = []
         let fields = http.allHeaderFields
         let keys = fields.keys.compactMap { $0 as? String }
             .sorted { $0.lowercased() < $1.lowercased() }
         for key in keys {
-            guard let value = fields[key] as? String else { continue }
+            guard let raw = fields[key] else { continue }
             if key.caseInsensitiveCompare("Set-Cookie") == .orderedSame {
-                for line in value.components(separatedBy: "\n") {
-                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty { out.append(("Set-Cookie", trimmed)) }
+                let values: [String]
+                if let s = raw as? String {
+                    values = [s]
+                } else if let a = raw as? [String] {
+                    values = a
+                } else if let a = raw as? [Any] {
+                    values = a.compactMap { $0 as? String }
+                } else {
+                    values = []
+                }
+                for value in values {
+                    for part in value.components(separatedBy: CharacterSet(charactersIn: ",\n")) {
+                        let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty { out.append(("Set-Cookie", trimmed)) }
+                    }
                 }
             } else {
+                guard let value = raw as? String else { continue }
                 out.append((key, value))
             }
         }

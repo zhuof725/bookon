@@ -771,18 +771,19 @@ enum JsNetSupport {
         return out
     }
 
-    /// Set-Cookie 头 → [(name, value)]（对齐 jsoup Response.cookies()：第一个 name=value 段）。
+    /// Set-Cookie 头 → [(name, value)]（对齐 jsoup 1.16.2 Response.processResponseHeaders：
+    /// 逐条 Set-Cookie 取第一个 name=value 段，重名只保留第一个；Foundation 可能按逗号/换行
+    /// 合并多条，这里先按逗号/换行拆开再解析）。
     static func cookiesFromSetCookieHeaders(_ headers: [(String, String)]) -> [(String, String)] {
         var result: [(String, String)] = []
+        var seen = Set<String>()
         for (name, value) in headers where name.caseInsensitiveCompare("Set-Cookie") == .orderedSame {
-            let first = value.components(separatedBy: ";").first ?? ""
-            guard let eq = first.firstIndex(of: "=") else { continue }
-            let key = String(first[first.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
-            let val = String(first[first.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
-            guard !key.isEmpty else { continue }
-            if let idx = result.firstIndex(where: { $0.0 == key }) {
-                result[idx].1 = val
-            } else {
+            for part in value.components(separatedBy: CharacterSet(charactersIn: ",\n")) {
+                let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, let eq = trimmed.firstIndex(of: "=") else { continue }
+                let key = String(trimmed[trimmed.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
+                let val = String(trimmed[trimmed.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
+                guard !key.isEmpty, seen.insert(key).inserted else { continue }
                 result.append((key, val))
             }
         }
