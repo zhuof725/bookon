@@ -780,9 +780,10 @@ enum JsNetSupport {
         for (name, value) in headers where name.caseInsensitiveCompare("Set-Cookie") == .orderedSame {
             for part in value.components(separatedBy: CharacterSet(charactersIn: ",\n")) {
                 let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty, let eq = trimmed.firstIndex(of: "=") else { continue }
-                let key = String(trimmed[trimmed.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
-                let val = String(trimmed[trimmed.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
+                let firstSegment = trimmed.components(separatedBy: ";").first ?? ""
+                guard !firstSegment.isEmpty, let eq = firstSegment.firstIndex(of: "=") else { continue }
+                let key = String(firstSegment[firstSegment.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
+                let val = String(firstSegment[firstSegment.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
                 guard !key.isEmpty, seen.insert(key).inserted else { continue }
                 result.append((key, val))
             }
