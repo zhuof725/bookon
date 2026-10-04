@@ -8,7 +8,7 @@ public class Cross2 {
         java.nio.file.Path.of(System.getProperty("golden","/tmp/golden_out/charset_cases.json"))),
         java.nio.charset.StandardCharsets.UTF_8);
     JsonArray arr = JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("charsetResults");
-    String[] css = {"EUC-JP","SHIFT-JIS","EUC-KR","GBK","BIG5","GB18030"};
+    String[] css = {"EUC-JP","SHIFT-JIS","EUC-KR","GBK","GB2312","BIG5","GB18030"};
     Map<String,int[]> stat = new LinkedHashMap<>();
     for (String cs: css) stat.put(cs, new int[]{0,0});
     for (JsonElement e : arr) {

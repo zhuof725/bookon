@@ -273,11 +273,14 @@ enum JsNetTextDecoder {
             //     且替换字符个数与 Unicode 标准一致。
             return String(decoding: Array(data), as: UTF8.self)
         case "UTF-16", "UTF16":
-            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16StringEncoding,
+                                    profile: Self.utf16Profile)
         case "UTF-16LE", "UTF16LE":
-            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16LittleEndianStringEncoding,
+                                    profile: Self.utf16Profile)
         case "UTF-16BE", "UTF16BE":
-            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding)
+            return Self.lossyString(data, nsEncoding: NSUTF16BigEndianStringEncoding,
+                                    profile: Self.utf16Profile)
         case "UTF-32", "UTF32":
             return Self.lossyString(data, nsEncoding: NSUTF32StringEncoding)
         case "UTF-32LE", "UTF32LE":
@@ -467,17 +470,23 @@ enum JsNetTextDecoder {
             return lossyFallback(bytes, nsEncoding: nsEncoding)
         }
         // 先整体试一次（合法输入的最快路径，也是绝大多数情况）。
-        // ⚠️ MBCS（profile != nil）**不能**走这条捷径：Apple 的 CF 会把非法字节悄悄跳过/替换，
-        // 且消耗字节数与 JDK 不同（见 `incrementalLossyDecode` 的文档）。
-        if profile == nil,
+        // ⚠️ 变长 MBCS（profile != nil 且 unitWidth == 0）**不能**走这条捷径：
+        // Apple 的 CF 会把非法字节悄悄跳过/替换，且消耗字节数与 JDK 不同
+        //（见 `incrementalLossyDecode` 的文档）。
+        //
+        // 定宽码元（UTF-16，unitWidth == 2）**可以**走捷径：对完全合法的 UTF-16 输入，
+        // CF 的整体解码与 JDK 逐码元解码结果一致，代理对也能正确合并；只有含孤立代理等
+        // 非法输入时才会落到下面的增量路径（此时按码元推进，见 `utf16Profile`）。
+        let isVariableWidthMBCS = (profile != nil && profile!.unitWidth == 0)
+        if !isVariableWidthMBCS,
            let whole = decodeCFString(bytes, cfEncoding: cfEncoding),
            !(puaIsFailure && containsPrivateUse(whole)) {
             return whole
         }
-        // 整块失败（或含 PUA，或 MBCS）：走增量容错，**永不返回 nil**。
-        // 非 MBCS（profile == nil，即 UTF-16/ISO-8859-1/ASCII）用「逐字节」画像：
-        // 每个字节单独试解，失败记 1 个 U+FFFD —— 这正是 ISO-8859-1 / ASCII / UTF-16 的
-        // JDK 语义（单字节编码永不 MALFORMED；UTF-16 的孤立尾字节亦然）。
+        // 整块失败（或含 PUA，或变长 MBCS）：走增量容错，**永不返回 nil**。
+        // 非 MBCS（profile == nil，即 ISO-8859-1/ASCII）用「逐字节」画像：
+        // 每个字节单独试解，失败记 1 个 U+FFFD —— 这正是 ISO-8859-1 / ASCII 的
+        // JDK 语义（单字节编码永不 MALFORMED）。UTF-16 用 `utf16Profile`（按 2 字节码元）。
         return incrementalLossyDecode(bytes, cfEncoding: cfEncoding,
                                       profile: profile ?? Self.byteWiseProfile,
                                       puaIsFailure: puaIsFailure)
@@ -788,6 +797,16 @@ enum JsNetTextDecoder {
         /// 其它编码族为 `false`（GB 系 Apple 与 JDK 码表一致，见 README 差异 6B-13/6B-14）。
         let useJdkBig5Table: Bool
 
+        /// **固定码元宽度**（字节）。`0` 表示「变长，按 lead/trail 结构推进」（所有 MBCS）。
+        ///
+        /// 目前只有 UTF-16 用它（值 `2`）。原因（CI run `37219082032` 的
+        /// `ext-cn-3-utf-16be`）：UTF-16 的最小单元是 **2 字节码元**，一对合法的
+        /// 高/低代理（`D800-DBFF` + `DC00-DFFF`）必须**整体**解成 1 个补充平面标量。
+        /// 早期把它当成 `byteWiseProfile`（逐**字节**）推进，代理对被拆成两个孤立的
+        /// 半码元各解一次，于是 Java 41 个标量的样本在 Swift 侧变成 42 个
+        /// （Java `…U+A060 U+A060…` vs Swift 多出 1 个），被 golden 对照判为不一致。
+        let unitWidth: Int
+
         func isLead(_ b: UInt8) -> Bool { leadRanges.contains { $0.contains(b) } }
         func isTrail(_ b: UInt8) -> Bool { trailRanges.contains { $0.contains(b) } }
         func isU2Trail(_ b: UInt8) -> Bool { u2TrailRanges.contains { $0.contains(b) } }
@@ -822,12 +841,24 @@ enum JsNetTextDecoder {
             // 且 trail 只有 `A1–FE`（无 `40–7E` 区）。JVM 探针实测另有 7 个 lead 在
             // 映射区内部开洞（`A2`/`A4`/`A5`/`A6`/`A7`/`A8`/`A9`）。
             // 早期实现误让它复用 GBK 画像，导致 112/240 与 Java 不符（本地镜像实测）。
+            //
+            // ⚠️ `u2TrailRanges` **不能为空**（CI run `37219082032` 的
+            // `html-meta-content-only`）：`G2312Prof` 对真实 JDK 全枚举 87 个 lead × 256 个
+            // trail，得到统一分带 `MAL1[00-7F] U2[80-A0] <映射区含洞> U2[FF-FF]` ——
+            // 即 **lead 后面只要不是低位字节（`00-7F`），JDK 一律按整段消耗**：
+            //   - `lo ∈ 80-A0 ∪ FF`（非 trail 但非低位）→ `UNMAPPABLE[2]` 吃 **2**；
+            //   - `lo ∈ A1-FE` 且在映射区 → MAP 吃 2；在洞内 → `MALFORMED[1]` 吃 1；
+            //   - `lo ∈ 00-7F`（含空格 `20`）→ `MALFORMED[1]` 吃 1。
+            //
+            // 早期 `u2TrailRanges: []` 让 `BA 8E` / `E9 90` 这类组合各吃 1 字节，
+            // 于是 259 字节的样本解出 226 个标量，而 JDK 是 213（每个这样的位置多 1 个
+            // `U+FFFD`，共 13 处）。
             return MBCSProfile(
                 singleByteMax: 0x7F,
                 singleByteExtra: nil,
                 leadRanges: ranges((0xA1, 0xA9), (0xB0, 0xF7)),
                 trailRanges: ranges((0xA1, 0xFE)),
-                u2TrailRanges: [],
+                u2TrailRanges: ranges((0x80, 0xA0), (0xFF, 0xFF)),
                 m2TrailRanges: [],
                 malformedExceptions: [
                     0xA2: ranges((0xA1, 0xA9), (0xB0, 0xB0), (0xE3, 0xE4), (0xEF, 0xF0)),
@@ -841,7 +872,8 @@ enum JsNetTextDecoder {
                 unmappableExceptions: [:],
                 threeByteLead: [],
                 fourByteDigitRange: nil,
-                useJdkBig5Table: false)
+                useJdkBig5Table: false,
+                unitWidth: 0)
         case "GBK", "CP936", "GB18030":
             // GB18030 的 4 字节形式：b1(81-FE) b2(30-39) b3(81-FE) b4(30-39)。
             // 探针实测：GBK / GB18030 的 lead **零例外**，纯区间规则即 100% 吻合。
@@ -857,7 +889,8 @@ enum JsNetTextDecoder {
                 unmappableExceptions: [:],
                 threeByteLead: [],
                 fourByteDigitRange: four,
-                useJdkBig5Table: false)
+                useJdkBig5Table: false,
+                unitWidth: 0)
         case "BIG5", "BIG-5", "BIG5-HKSCS":
             // lead 为 A1-F9，但 **`C8` 是彻底无效的 lead**：JVM 探针实测 `C8` + 任意 trail
             // 全部报 `MALFORMED[1]`（吃 1 字节），且 JDK 严格 Big5 表里 `C8` 区**零映射**。
@@ -881,7 +914,8 @@ enum JsNetTextDecoder {
                 unmappableExceptions: [:],
                 threeByteLead: [],
                 fourByteDigitRange: nil,
-                useJdkBig5Table: true)
+                useJdkBig5Table: true,
+                unitWidth: 0)
         case "SHIFT-JIS", "SHIFTJIS", "SJIS", "MS-KANJI", "WINDOWS-31J", "CP932":
             // 0xA1-0xDF 是半角片假名（单字节）；lead 为 81-9F / E0-FC。
             // u2 带为 FD-FF；JIS X 0208 的 81/82/83/84/88/98/EA 区在映射区开洞。
@@ -912,7 +946,8 @@ enum JsNetTextDecoder {
                 ],
                 threeByteLead: [],
                 fourByteDigitRange: nil,
-                useJdkBig5Table: false)
+                useJdkBig5Table: false,
+                unitWidth: 0)
         case "EUC-KR", "EUCKR", "CP949", "KSC5601":
             // u2 带为 80-A0 与 FF；13 个 lead 在映射区开洞。
             return MBCSProfile(
@@ -943,7 +978,8 @@ enum JsNetTextDecoder {
                 ],
                 threeByteLead: [],
                 fourByteDigitRange: nil,
-                useJdkBig5Table: false)
+                useJdkBig5Table: false,
+                unitWidth: 0)
         case "EUC-JP", "EUCJP":
             // 结构：`A1-FE` 双字节（JIS X 0208）；`8E`+1 字节（JIS X 0201 片假名）；
             // `8F`+2 字节（JIS X 0212）。后两者在 `incrementalLossyDecode` 里单独处理。
@@ -1007,7 +1043,8 @@ enum JsNetTextDecoder {
                 ],
                 threeByteLead: [0x8E, 0x8F],
                 fourByteDigitRange: nil,
-                useJdkBig5Table: false)
+                useJdkBig5Table: false,
+                unitWidth: 0)
         default:
             return nil
         }
@@ -1253,14 +1290,37 @@ enum JsNetTextDecoder {
     }
 
     /// 「逐字节」画像：单字节上界覆盖全部取值，因而 `isSingle` 恒为 `true`，
-    /// `incrementalLossyDecode` 会逐字节推进。用于 UTF 系与单字节系
-    /// （UTF-16/ISO-8859-1/ASCII）——它们的 JDK 语义就是「每字节独立」。
+    /// `incrementalLossyDecode` 会逐字节推进。用于单字节系（ISO-8859-x / ASCII / KOI8-R）
+    /// 与 UTF-8 —— 它们的 JDK 语义就是「每字节独立」。
+    ///
+    /// ⚠️ **UTF-16 / UTF-32 不能用它**（见 `utf16Profile`）：它们的码元是 2 / 4 字节宽，
+    /// 逐字节推进会拆散代理对，导致标量个数与 Java 不符。
     static let byteWiseProfile = MBCSProfile(
         singleByteMax: 0xFF, singleByteExtra: nil,
         leadRanges: [], trailRanges: [], u2TrailRanges: [], m2TrailRanges: [],
         malformedExceptions: [:],
         unmappableExceptions: [:],
-        threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false)
+        threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false,
+        unitWidth: 0)
+
+    /// UTF-16 画像：**按 2 字节码元**推进。
+    ///
+    /// 语义对齐 JDK `new String(bytes, "UTF-16LE"/"UTF-16BE"/"UTF-16")`：
+    ///   - 每 2 字节构成 1 个码元；
+    ///   - 高代理（`D800-DBFF`）+ 紧随的低代理（`DC00-DFFF`）→ 合并成 1 个补充平面标量；
+    ///   - 孤立代理 → 1 个 `U+FFFD`（**该侧仍是 1 个码元、2 字节**）；
+    ///   - 末尾不足 2 字节 → 1 个 `U+FFFD`。
+    ///
+    /// 与 `byteWiseProfile` 的唯一差别是 `unitWidth: 2`，但影响实质：CI run `37219082032`
+    /// 的 `ext-cn-3-utf-16be`（`decodedDefault` / `decodedContentTypeNoCharset`）
+    /// 因逐字节推进把代理对拆开，Java 41 个标量在 Swift 侧变成 42 个。
+    static let utf16Profile = MBCSProfile(
+        singleByteMax: 0xFF, singleByteExtra: nil,
+        leadRanges: [], trailRanges: [], u2TrailRanges: [], m2TrailRanges: [],
+        malformedExceptions: [:],
+        unmappableExceptions: [:],
+        threeByteLead: [], fourByteDigitRange: nil, useJdkBig5Table: false,
+        unitWidth: 2)
 
     /// JIS X 0208 码表（ISO-2022-JP 的 `ESC $ B` / `ESC $ @` 双字节区）。
     ///
@@ -2063,6 +2123,33 @@ enum JsNetTextDecoder {
         }
         while i < n {
             let b = bytes[i]
+            // ⓪ 固定码元宽度（UTF-16 = 2 字节）：整体解 1 个码元。
+            //
+            // JDK 语义（`new String(bytes, "UTF-16LE")`）：
+            //   - 每 `unitWidth` 字节为 1 个码元；高代理 + 低代理 → 1 个补充平面标量；
+            //   - 孤立代理 → 1 个 U+FFFD（仍占满 1 个码元）；
+            //   - 末尾不足 `unitWidth` 字节 → 1 个 U+FFFD。
+            //
+            // ⚠️ 必须**先于**下面的逐字节路径处理，否则代理对会被拆成两个半码元
+            //（CI run `37219082032` 的 `ext-cn-3-utf-16be` 即因此多出 1 个标量）。
+            if profile.unitWidth > 0 {
+                let w = profile.unitWidth
+                let avail = n - i
+                if avail >= w {
+                    let take = min(2 * w, avail)   // 尝试「码元对」以合并代理
+                    if let s = tryDecode(i, take), s.unicodeScalars.count == 1 {
+                        out += s; i += take; continue
+                    }
+                    if let s = tryDecode(i, w), s.unicodeScalars.count == 1 {
+                        out += s; i += w; continue
+                    }
+                    // 该码元非法（孤立代理等）→ 1 个 U+FFFD，吃掉 1 个码元。
+                    out += "\u{FFFD}"; i += w; continue
+                } else {
+                    // 末尾残字节（不足 1 个完整码元）→ 1 个 U+FFFD，全部吃掉。
+                    out += "\u{FFFD}"; i = n; continue
+                }
+            }
             // ① 单字节
             if profile.isSingle(b) {
                 if let s = tryDecode(i, 1) { out += s; i += 1; continue }
@@ -2089,23 +2176,32 @@ enum JsNetTextDecoder {
                             // 与上面的 `MALFORMED[1]` 唯一区别就是消耗字节数。EUC-JP 用它。
                             out += "\u{FFFD}"; i += 2; continue
                         }
-                        // GB18030 的 4 字节形式优先。
-                        if let digit = profile.fourByteDigitRange, digit.contains(t),
-                           i + 3 < n,
-                           profile.isLead(bytes[i + 2]), digit.contains(bytes[i + 3]) {
-                            seqLen = 4
-                        } else {
-                            seqLen = 2
-                        }
+                        seqLen = 2
                     } else if profile.isU2Trail(t) {
                         // trail 落 UNMAPPABLE 带 → 吃整段 2 字节，出 1 个 U+FFFD。
                         seqLen = 2
                         isUnmappableSeq = true
                     } else if profile.isM2Trail(t) {
-                        // GB18030 的 `hi + 30-39`：本应是 4 字节序列的前两字节，
-                        // 但后续不构成合法 4 字节 → JDK 报 MALFORMED[2]，吃 2 字节。
-                        seqLen = 2
-                        isUnmappableSeq = true
+                        // GB18030 的 `hi + 30-39`。
+                        //
+                        // ⚠️ 4 字节判定必须放在**这里**，不能放在 `isTrail(t)` 分支里：
+                        // `30-39` 是数字，**不在 trail 区间**（trail 为 `40-7E`/`80-FE`），
+                        // 所以 `isTrail(t)` 恒为 false。早期把它写在 trail 分支内，
+                        // 导致 4 字节序列永远识别不出，被当成 `MALFORMED[2]` 吃掉 2 字节，
+                        // 后续 `82 36` 等字节又各自失败 → 整段 `𠀀` 变成一个 6 连 U+FFFD
+                        // （CI run `37219082032` 的 `gb18030-rare-han`/`decodedDefault`：
+                        // Java `历史地名：𠀀𠀁𠀂 …` 20 码位 vs Swift 23 码位）。
+                        //
+                        // 命中条件 `b1 + b2(digit) + b3(lead) + b4(digit)` 时吃 4 字节；
+                        // 否则（后续不构成合法 4 字节）JDK 报 `MALFORMED[2]`，吃 2 字节。
+                        if let digit = profile.fourByteDigitRange,
+                           i + 3 < n,
+                           profile.isLead(bytes[i + 2]), digit.contains(bytes[i + 3]) {
+                            seqLen = 4
+                        } else {
+                            seqLen = 2
+                            isUnmappableSeq = true
+                        }
                     }
                 }
             }

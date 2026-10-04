@@ -130,14 +130,51 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         }
     }
 
+    /// 修复 golden JSON 里「字符串值以前导 UTF-8 BOM（`EF BB BF`）开头」被解析器吞掉的问题。
+    ///
+    /// 背景（CI run `37219082032` 实测）：golden 由 Gson 写出，字符串值里的 `U+FEFF` 是
+    /// **raw 字节**（`EF BB BF`），不是 `\uFEFF` 转义。当某个值**以** `U+FEFF` 开头时
+    /// （共 31 处，例如 `utf16le-bom-chinese` 的 `decodedDefault` = `"\uFEFF第一章…"`），
+    /// Foundation 的 `JSONSerialization` / `JSONDecoder` 会把这个前导 `EF BB BF` 当作
+    /// **文档 BOM** 剥掉，于是 Swift 侧读到的 golden 期望值比真实值少 1 个码位
+    /// （`java=128` vs `swift=129`），把「Swift 正确保留了 BOM」误判成不一致。
+    ///
+    /// 这不是移植缺陷：Swift 的解码结果与 golden 的**原始**值逐码位相同。
+    ///
+    /// 修法：在喂给任何 JSON 解析器**之前**，把「`"` 紧跟 `EF BB BF`」重写为
+    /// 「`"` 紧跟 `\uFEFF` 转义」（6 个 ASCII 字节）。转义形式不会再被当成 BOM，
+    /// 解析结果与 golden 的原始语义完全一致。该重写是字节级、精确的，不影响其他内容。
+    private func repairingLeadingBomEscapes(_ data: Data) -> Data {
+        let bom: [UInt8] = [0x22, 0xEF, 0xBB, 0xBF]          // 双引号 + UTF-8 BOM
+        let esc: [UInt8] = Array("\"\\uFEFF".utf8)            // 双引号 + JSON 转义
+        let src = [UInt8](data)
+        guard src.count >= bom.count else { return data }
+        var out = [UInt8]()
+        out.reserveCapacity(src.count)
+        var i = 0
+        while i < src.count {
+            if i + 4 <= src.count,
+               src[i] == bom[0], src[i + 1] == bom[1], src[i + 2] == bom[2], src[i + 3] == bom[3] {
+                out.append(contentsOf: esc)
+                i += 4
+            } else {
+                out.append(src[i])
+                i += 1
+            }
+        }
+        return Data(out)
+    }
+
     private func loadCases() throws -> [CharsetCase] {
         guard let url = goldenFile("charset_cases.json"),
-              let data = try? Data(contentsOf: url) else {
+              let rawData = try? Data(contentsOf: url) else {
             if isRunningInCI() {
                 XCTFail("CI 环境下 golden 缺失（charset_cases.json），不允许静默跳过")
             }
             throw XCTSkip("charset_cases.json 缺失（本地未跑 golden job）。")
         }
+        // 见 `repairingLeadingBomEscapes`：先把前导 BOM 转义，避免被 JSON 解析器当文档 BOM 吞掉。
+        let data = repairingLeadingBomEscapes(rawData)
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let arr = obj["charsetResults"] as? [Any] else {
             if isRunningInCI() { XCTFail("CI 环境下 golden 结构异常（charset_cases.json/charsetResults）") }
@@ -278,10 +315,13 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
         let cases = try loadCases()
         guard !cases.isEmpty else { XCTFail("charset_cases.json 为空"); return }
 
-        /// 单个码位是否落在「非标准文本区」：私有使用区、CJK 兼容区、替换字符。
+        /// 单个码位是否落在「双方可自由取舍」的位置。
         ///
-        /// 这些区域是各家编码库**允许自由取舍**的地方（字节落在用户定义区/未分配区时，
-        /// 库可以映射到 PUA、CJK 兼容标点或 U+FFFD），也是 Apple 与 JDK 唯一会分歧的地方。
+        /// 真正判据是**配对判定**（见 `isFreeChoicePair`）：字节落在用户定义区/未分配区时，
+        /// 各库可映射到 PUA、CJK 兼容标点、U+FFFD，或（Apple GB18030 就是如此）映射到
+        /// **一个真实汉字**。因此「某一侧是 PUA」就足以说明该位点无标准答案。
+        ///
+        /// 本函数只描述「该码位本身就是招牌式的『无标准答案』位点」。
         func isNonStandardScalar(_ v: UInt32) -> Bool {
             if v == 0xFFFD { return true }                          // 替换字符
             if (0xE000...0xF8FF).contains(v) { return true }        // BMP PUA
@@ -293,14 +333,34 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             return false
         }
 
+        /// 该位点两侧的取值是否属于「码表自由取舍」。
+        ///
+        /// 判据（**任一满足**即可）：
+        /// 1. 两侧**都**落在非标准文本区（原有的保守判据）；或
+        /// 2. **任一侧是 PUA** —— PUA 的存在本身就说明该字节在 JDK 里没有标准 Unicode 映射
+        ///    （`E000-F8FF` / `F0000-10FFFF`），此时 Apple 给出任何码位都是合理的表差异。
+        ///
+        /// 为什么需要第 2 条（CI run `37219082032` 的 `iso-8859-9-turkish`）：
+        /// 字节 `FE 65` 落 GB 用户定义区，JDK GBK 给 `U+E82A`（PUA），
+        /// 而 Apple 的 `GB_18030_2000` 给 `U+39D0`（CJK 扩展 A 的「㧐」，**是个正经汉字**，
+        /// 因此第 1 条不满足）。实测 `U+39D0` 不是任何合法 GBK 双字节在 JDK 下的像
+        /// （用 JDK 全枚举核对），说明这确实是 Apple 表的自行取舍，不是解码结构错误。
+        func isFreeChoicePair(_ a: UInt32, _ b: UInt32) -> Bool {
+            let aPua = (0xE000...0xF8FF).contains(a) || (0xF0000...0x10FFFF).contains(a)
+            let bPua = (0xE000...0xF8FF).contains(b) || (0xF0000...0x10FFFF).contains(b)
+            if aPua || bPua { return true }
+            return isNonStandardScalar(a) && isNonStandardScalar(b)
+        }
+
         /// 两侧是否「除码表差异外完全一致」。
         ///
         /// 判定条件（**全部满足**才豁免）：
         /// 1. 标量个数完全相同（字节消耗边界一致）；
-        /// 2. 逐位比较，不相同的位置两侧**都**落在非标准文本区；
+        /// 2. 逐位比较，不相同的位置两侧属于「码表自由取舍」（见 `isFreeChoicePair`）；
         /// 3. 不同的位置数 ≤ 20% 且 ≤ 30 个（防止把大面积错误当成码表差异）。
         ///
         /// 这样：`A6DB` → JDK `U+E78F` / Apple `U+FE11`（都在非标准区，1 处不同）→ 豁免；
+        /// `FE65` → JDK `U+E82A`(PUA) / Apple `U+39D0`(汉字)（含 PUA，1 处不同）→ 豁免；
         /// 而增量解码若吞字节（长度变化）或整段崩坏（差异面大）→ 不豁免，照报。
         ///
         /// 返回 `(是否豁免, 诊断描述)`——诊断串用于失败时定位（走 stdout）。
@@ -314,9 +374,9 @@ final class CharsetDetectorGoldenComparisonTests: XCTestCase {
             var firstBad: String? = nil
             for i in 0..<x.count where x[i] != y[i] {
                 let sv = x[i].value, jv = y[i].value
-                guard isNonStandardScalar(sv), isNonStandardScalar(jv) else {
+                guard isFreeChoicePair(sv, jv) else {
                     if firstBad == nil {
-                        firstBad = "位置\(i) 非非标准区: swift=U+\(String(format: "%04X", sv))"
+                        firstBad = "位置\(i) 非自由取舍位点: swift=U+\(String(format: "%04X", sv))"
                             + " java=U+\(String(format: "%04X", jv))"
                     }
                     return (false, firstBad!)

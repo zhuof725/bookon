@@ -3,7 +3,7 @@ import java.nio.charset.*; import java.lang.reflect.*;
 public class Exhaust {
   public static void main(String[] a) throws Exception {
     Method M=Mir.class.getDeclaredMethod("decode", byte[].class, String.class); M.setAccessible(true);
-    String[] css={"GBK","BIG5","SHIFT-JIS","EUC-KR","EUC-JP"};
+    String[] css={"GBK","GB2312","BIG5","SHIFT-JIS","EUC-KR","EUC-JP"};
     for(String cs: css){
       int bad=0, tot=0; String firstMsg=null;
       // 1 字节

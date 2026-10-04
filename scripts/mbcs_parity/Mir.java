@@ -10,23 +10,24 @@ public class Mir {
   // ---- 与 Swift MBCSProfile 一一对应的画像 ----
   record P(int singleMax, int sbLo, int sbHi, int sbExtraLo, int sbExtraHi,
            int[][] lead, int[][] trail, int[][] u2, int[][] m2,
-           Map<Integer,int[][]> exc, Map<Integer,int[][]> exc2, int[] three, Integer digit, boolean jdkBig5) {}
+           Map<Integer,int[][]> exc, Map<Integer,int[][]> exc2, int[] three, Integer digit, boolean jdkBig5,
+           int unitWidth) {}
 
   static P profile(String name) {
     switch (name) {
       case "GBK": case "GB2312": case "CP936":
         return new P(0x7F,0,0,0,-1, new int[][]{{0x81,0xFE}}, new int[][]{{0x40,0x7E},{0x80,0xFE}},
-                     new int[][]{{0xFF,0xFF}}, new int[][]{}, Map.of(), Map.of(), new int[]{}, null, false);
+                     new int[][]{{0xFF,0xFF}}, new int[][]{}, Map.of(), Map.of(), new int[]{}, null, false, 0);
       case "GB18030":
         return new P(0x7F,0,0,0,-1, new int[][]{{0x81,0xFE}}, new int[][]{{0x40,0x7E},{0x80,0xFE}},
-                     new int[][]{{0xFF,0xFF}}, new int[][]{{0x30,0x39}}, Map.of(), Map.of(), new int[]{}, 0x30, false);
+                     new int[][]{{0xFF,0xFF}}, new int[][]{{0x30,0x39}}, Map.of(), Map.of(), new int[]{}, 0x30, false, 0);
       case "BIG5":
         Map<Integer,int[][]> exc = new HashMap<>();
         exc.put(0xA1,new int[][]{{0xC3,0xC3},{0xC5,0xC5}});
         exc.put(0xA3,new int[][]{{0xC0,0xC7},{0xC9,0xF9}});
         exc.put(0xF9,new int[][]{{0xD6,0xF9}});
         return new P(0x7F,0,0,0,-1, new int[][]{{0xA1,0xC7},{0xC9,0xF9}}, new int[][]{{0x40,0x7E},{0xA1,0xFE}},
-                     new int[][]{{0x80,0xA0},{0xFF,0xFF}}, new int[][]{}, exc, Map.of(), new int[]{}, null, true);
+                     new int[][]{{0x80,0xA0},{0xFF,0xFF}}, new int[][]{}, exc, Map.of(), new int[]{}, null, true, 0);
       default: return null;
     }
   }
@@ -35,19 +36,33 @@ public class Mir {
   static P profile2(String name) {
     switch (name) {
       case "GB2312":
-        return new P(0x7F,0,0,0,-1, new int[][]{{0x81,0xFE}}, new int[][]{{0x40,0x7E},{0x80,0xFE}},
-                     new int[][]{{0xFF,0xFF}}, new int[][]{}, Map.of(), Map.of(), new int[]{}, null, false);
+        // 与 Swift 的 GB2312 画像逐字段一致（G2312Prof 全枚举导出）。
+        // 注意 u2 = 80-A0 ∪ FF，且 lead 为 A1-A9 ∪ B0-F7（AA-AF 不是 lead）。
+        return new P(0x7F,0,0,0,-1, new int[][]{{0xA1,0xA9},{0xB0,0xF7}}, new int[][]{{0xA1,0xFE}},
+                     new int[][]{{0x80,0xA0},{0xFF,0xFF}}, new int[][]{}, gb2312Holes(), Map.of(), new int[]{}, null, false, 0);
       case "SHIFT-JIS":
         return new P(0x7F,0,0,0xA1,0xDF, new int[][]{{0x81,0x84},{0x88,0x9F},{0xE0,0xEA}}, new int[][]{{0x40,0x7E},{0x80,0xFC}},
-                     new int[][]{{0xFD,0xFF}}, new int[][]{}, sjisMal(), sjisUn(), new int[]{}, null, false);
+                     new int[][]{{0xFD,0xFF}}, new int[][]{}, sjisMal(), sjisUn(), new int[]{}, null, false, 0);
       case "EUC-KR":
         return new P(0x7F,0,0,0,-1, new int[][]{{0xA1,0xAC},{0xB0,0xC8},{0xCA,0xFD}}, new int[][]{{0xA1,0xFE}},
-                     new int[][]{{0x80,0xA0},{0xFF,0xFF}}, new int[][]{}, krMal(), krUn(), new int[]{}, null, false);
+                     new int[][]{{0x80,0xA0},{0xFF,0xFF}}, new int[][]{}, krMal(), krUn(), new int[]{}, null, false, 0);
       case "EUC-JP":
         return new P(0x7F,0,0,0,-1, new int[][]{{0x80,0xFF}}, new int[][]{{0xA1,0xFE}},
-                     new int[][]{{0x00,0xA0},{0xFF,0xFF}}, new int[][]{}, Map.of(), eucJpHoles(), new int[]{0x8E,0x8F}, null, false);
+                     new int[][]{{0x00,0xA0},{0xFF,0xFF}}, new int[][]{}, Map.of(), eucJpHoles(), new int[]{0x8E,0x8F}, null, false, 0);
       default: return profile(name);
     }
+  }
+
+  static Map<Integer,int[][]> gb2312Holes() {
+    Map<Integer,int[][]> m = new HashMap<>();
+    m.put(0xA2, new int[][]{{0xA1,0xA9},{0xB0,0xB0},{0xE3,0xE4},{0xEF,0xF0}});
+    m.put(0xA4, new int[][]{{0xF4,0xF7}});
+    m.put(0xA5, new int[][]{{0xF7,0xF7}});
+    m.put(0xA6, new int[][]{{0xB9,0xC0},{0xD9,0xF7}});
+    m.put(0xA7, new int[][]{{0xC2,0xD0},{0xF2,0xF7}});
+    m.put(0xA8, new int[][]{{0xBB,0xC4},{0xEA,0xF7}});
+    m.put(0xA9, new int[][]{{0xA1,0xA3},{0xF0,0xF7}});
+    return m;
   }
 
   static Map<Integer,int[][]> eucJpHoles() {
