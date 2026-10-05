@@ -134,7 +134,10 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
+          echo "xcodegen 退出码: $?"
+          ls -la BookonDebug.xcodeproj
           bash scripts/verify_xcodeproj_format.sh BookonDebug.xcodeproj
+          echo "工程格式校验退出码: $?"
           xcodebuild build \
             -project BookonDebug.xcodeproj \
             -scheme BookonDebug \

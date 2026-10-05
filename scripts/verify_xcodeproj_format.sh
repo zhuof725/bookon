@@ -20,9 +20,15 @@ if [ ! -f "$PBXPROJ" ]; then
   exit 1
 fi
 
-OBJ_VER=$(grep -m1 -oE 'objectVersion = [0-9]+' "${PBXPROJ}" | grep -oE '[0-9]+' || true)
+# 用 awk 提取 objectVersion。
+# ⚠️ 不要用 `grep -m1 … | grep -oE …`：在 macOS runner 上（BSD grep + 系统 locale），
+# 对 pbxproj 这种含非 UTF-8 注释字节的文件，`grep -m1` 提前退出会让下游 grep 收到
+# 断管/异常输入从而 **SIGABRT（退出码 134）**，且发生在任何 echo 之前，日志里完全看不到
+# 本脚本的输出（CI run 37303878102 即此现象）。awk 无管道、按行读、locale 安全。
+OBJ_VER=$(awk -F'[ =;]+' '/objectVersion/ { print $2; exit }' "${PBXPROJ}")
+OBJ_VER=$(printf '%s' "${OBJ_VER}" | tr -cd '0-9')
 if [ -z "${OBJ_VER}" ]; then
-  echo "错误：无法从 ${PBXPROJ} 解析 objectVersion"
+  echo "错误：无法从 ${PBXPROJ} 解析 objectVersion（awk 结果为空）"
   exit 1
 fi
 
