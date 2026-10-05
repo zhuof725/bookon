@@ -110,8 +110,9 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | [37310649613](https://github.com/zhuof725/bookon/actions/runs/37310649613) | `7ad1589` | ✅ 4 job 全绿（上表数据来源） |
 | [37312666887](https://github.com/zhuof725/bookon/actions/runs/37312666887) | `489fbed` | ✅ 4 job 全绿（仅文档/日志变更） |
 | [37313519896](https://github.com/zhuof725/bookon/actions/runs/37313519896) | `315b58e` | ✅ 4 job 全绿（含 HtmlFormatter 去强解包改动） |
+| [37314891664](https://github.com/zhuof725/bookon/actions/runs/37314891664) | `8e988aa` | ✅ 4 job 全绿（文档补充） |
 
-> 三次连续全绿说明修复稳定、非偶发。`live-smoke` 仅在 `workflow_dispatch` 时运行，push 下为 skipped（预期）。
+> **四次连续全绿**说明修复稳定、非偶发。`live-smoke` 仅在 `workflow_dispatch` 时运行，push 下为 skipped（预期）。
 
 ### 收敛过程（11 轮 CI，56 → 0 失败）
 
