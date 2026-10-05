@@ -57,7 +57,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 `<usehtml>` 须由规则直接选中该元素；`BookChapter` 是 struct（值传递），副作用留在内部副本；
 `fetchSubContent` 成功时不打日志；`exportResultJSON` 用 `.prettyPrinted` 输出 `"records" : []`（冒号带空格）。
 
-## 二之三、CI 第二轮暴露并已修复的缺陷（第三次 CI）
+## 二之三、CI 逐轮暴露并已修复的缺陷（第 3–11 轮 CI 收敛）
 
 | # | 缺陷 | 影响面 | 修复 |
 |---|---|---|---|
@@ -67,6 +67,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | 6 | 测试对 `Book.type` 默认值的假设有误 | 副文歌词/弹幕分支根本不可达（用例假绿/假红） | `Book.type` 默认是 `BookType.text`（8，Kotlin `Book.kt:74`），`addType(audio)` 得 `8\|32=40`，`isOnLineTxt` 仍为 true，于是命中 Kotlin `BookContent.kt:132` 的 `if (book.isOnLineTxt) { add(raw); return }` **早返回分支**。要覆盖音频/弹幕分支必须先 `removeAllBookType()` 构造纯 audio/video 书 |
 | 7 | XcodeGen 默认工程格式 `objectVersion = 77` 与 Xcode 15.4 不兼容 | `test-ios-simulator` 与 `build-ipa` **整段失败**（`Unable to read project`） | XcodeGen 2.44+ 默认 `projectFormat = xcode16_0`（objectVersion 77），而 macos-14 runner 的 Xcode 15.4 读不了（77 需 Xcode 16.0+）。在 `project.yml` 的 `options` 显式设 `projectFormat: xcode15_3` → objectVersion 降为 **63**（需 Xcode 15.3+，15.4 可读）；并新增 `scripts/verify_xcodeproj_format.sh` 在 `xcodegen generate` 后、`xcodebuild` 前**显式校验** objectVersion 与当前 Xcode 的兼容性（按 CocoaPods/Xcodeproj 权威映射把 objectVersion 映射到「所需最低 Xcode」，再与当前 Xcode 做 major/minor 比较），失败时给出可执行的修复提示 |
 | 8 | 硬编码 scheme `LegadoBookSource` 在「多 product 包」下不带 test action | `test-ios-simulator` 失败：`Scheme LegadoBookSource is not currently configured for the test action`（退出码 66） | 第 2 步时本包只有 1 个 library product，Xcode 为 SwiftPM 包自动生成的唯一 scheme 就叫 `LegadoBookSource` 且**带 test action**（`commit 30c78f9` 据此写死）。第 7 步 B 段给 `Package.swift` 加了第二个 product `BookonDebugKit` 后，Xcode 的 scheme 生成策略改变：出现 `BookonDebugKit` / `LegadoBookSource` / **`LegadoBookSource-Package`** 三个 scheme，其中**带 test action 的聚合 scheme 是 `LegadoBookSource-Package`**，`LegadoBookSource` 退化为纯 library scheme。修复：`ios_sim_test.sh` **不再硬编码**，改为用 `xcodebuild -list -json` 优先探测 `<包名>-Package`、回退到 `<包名>`，并对找不到的情况明确报错；同时把「跑测试」步骤排到 `xcodegen generate` **之前**（避免 `.xcodeproj` 存在时 scheme 集合再变），测试前 `rm -rf BookonDebug.xcodeproj` 兜底 |
+| 9 | `verify_xcodeproj_format.sh` 用 `grep -m1 … \| grep -oE …` 提取 objectVersion 在 macOS 上 SIGABRT | `test-ios-simulator` 的「Build App target」失败，退出码 **134（SIGABRT）**：`xcodegen generate` 打印 "Created project at …" 后，本脚本**连一行输出都没有**就直接 abort | macOS runner 的 BSD grep + 系统 locale 下，对 pbxproj 这种含非 UTF-8 注释字节的文件，`grep -m1` 提前退出会让下游 grep 收到断管/异常输入从而 SIGABRT(134)；且发生在任何 echo 之前，日志里看不到本脚本输出，极难定位。修复：改用 **awk 按行提取**（无管道、locale 安全）+ `tr -cd '0-9'` 兜底去非数字：<br>`OBJ_VER=$(awk -F'[ =;]+' '/objectVersion/ { print $2; exit }' "$PBXPROJ")`<br>`OBJ_VER=$(printf '%s' "$OBJ_VER" \| tr -cd '0-9')` |
 
 > 缺陷 3 之所以本地全绿：该分支只在 `.elements([单元素])` 作为 content 时触发，
 > 既有测试路径未覆盖「`getElement` 取单元素再 `setContent`」这一组合，Linux 本地 typecheck 也只看类型不看值。

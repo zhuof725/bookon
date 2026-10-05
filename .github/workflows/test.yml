@@ -132,18 +132,24 @@ jobs:
           bash scripts/ios_sim_test.sh
       - name: Build App target (XcodeGen + iOS Simulator)
         run: |
+          # 分步执行 + 显式回显每步退出码：任何一步失败都能一眼看出是哪一步、退出码多少
+          # （此前 xcodegen 成功、下一命令却 SIGABRT(134) 且无输出，靠这组回显才定位到）。
           brew install xcodegen
+          echo "== xcodegen generate =="
           xcodegen generate
           echo "xcodegen 退出码: $?"
           ls -la BookonDebug.xcodeproj
+          echo "== 校验工程格式 =="
           bash scripts/verify_xcodeproj_format.sh BookonDebug.xcodeproj
           echo "工程格式校验退出码: $?"
+          echo "== xcodebuild build =="
           xcodebuild build \
             -project BookonDebug.xcodeproj \
             -scheme BookonDebug \
             -configuration Debug \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          echo "xcodebuild 退出码: $?"
 
   # 第 7 步 C 段：构建「书源调试」App 并打包 IPA（无签名，供侧载/分发调试）。
   build-ipa:
