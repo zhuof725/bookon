@@ -922,6 +922,17 @@ public final class NSRegularExpressionCache: @unchecked Sendable {
         return regex.firstMatch(in: string, options: [],
                                 range: NSRange(location: 0, length: (string as NSString).length))
     }
+
+    /// 第 7 步 A 段新增：供 HtmlFormatter 等做「全局字面量替换」。
+    /// 编译失败时返回原串（绝不崩溃）。
+    public func stringByReplacingMatches(
+        in string: String,
+        range: NSRange,
+        withTemplate template: String
+    ) -> String {
+        guard let regex = regex else { return string }
+        return regex.stringByReplacingMatches(in: string, options: [], range: range, withTemplate: template)
+    }
 }
 
 /// 逐标量编码（对齐 Java `String.getBytes(charset)` / URLEncoder 的 REPLACE 语义：

@@ -1,0 +1,16 @@
+{
+  "_provenance": "synthetic（全部为合成 HTML，非真实站点数据；仅用于流程层分支测试）",
+  "search_basic": "<html><body><div class=\"list\">\n<div class=\"item\"><h3><a href=\"/book/1\">书名一</a></h3><p class=\"author\">作者甲</p><p class=\"intro\">简介甲</p><p class=\"kind\">玄幻</p><p class=\"wc\">100万字</p><p class=\"last\">第一章</p><img src=\"/cover/1.jpg\"></div>\n<div class=\"item\"><h3><a href=\"/book/2\">书名二</a></h3><p class=\"author\">作者乙</p><p class=\"intro\">简介乙</p><p class=\"kind\">都市</p><p class=\"wc\">200万字</p><p class=\"last\">第二章</p><img src=\"/cover/2.jpg\"></div>\n</div></body></html>",
+  "search_reverse": "<html><body><div class=\"list\">\n<div class=\"item\"><h3><a href=\"/r/1\">第一</a></h3><p class=\"author\">甲</p></div>\n<div class=\"item\"><h3><a href=\"/r/2\">第二</a></h3><p class=\"author\">乙</p></div>\n<div class=\"item\"><h3><a href=\"/r/3\">第三</a></h3><p class=\"author\">丙</p></div>\n</div></body></html>",
+  "search_empty": "<html><body><div class=\"empty\">无结果</div></body></html>",
+  "detail_basic": "<html><body><h1>书名一</h1>\n<p class=\"author\">作者甲</p><p class=\"intro\">简介甲</p><p class=\"kind\">玄幻</p>\n<p class=\"last\">最新章</p><p class=\"wc\">100万字</p><img src=\"/cover/1.jpg\">\n<div class=\"toc\"><a href=\"/toc/1\">目录</a></div></body></html>",
+  "detail_webfile": "<html><body><h1>下载书</h1>\n<div class=\"dl\"><a href=\"/dl/1.txt\">下载1</a><a href=\"/dl/2.txt\">下载2</a></div></body></html>",
+  "toc_basic": "<html><body><div class=\"chapters\">\n<li><a href=\"/c/1\">第一章</a></li><li><a href=\"/c/2\">第二章</a></li><li><a href=\"/c/3\">第三章</a></li>\n</div></body></html>",
+  "toc_multipage_p1": "<html><body><div class=\"chapters\">\n<li><a href=\"/c/1\">第一章</a></li><li><a href=\"/c/2\">第二章</a></li>\n</div><div class=\"next\"><a href=\"/toc/2\">下一页</a></div></body></html>",
+  "toc_multipage_p2": "<html><body><div class=\"chapters\">\n<li><a href=\"/c/3\">第三章</a></li><li><a href=\"/c/4\">第四章</a></li>\n</div></body></html>",
+  "content_basic": "<html><body><div class=\"content\">这是正文内容第一段。<br>第二段。</div></body></html>",
+  "content_multipage_p1": "<html><body><div class=\"content\">第一页内容</div>\n<div class=\"next\"><a href=\"/c/1?p=2\">下一页</a></div></body></html>",
+  "content_multipage_p2": "<html><body><div class=\"content\">第二页内容</div></body></html>",
+  "content_with_lyric": "<html><body><div class=\"content\">正文</div>\n<div class=\"lyric\">[00:01]歌词行</div><h2>章节标题</h2></body></html>",
+  "content_with_title": "<html><body><div class=\"content\">正文</div>\n<h2>标题名</h2></body></html>"
+}

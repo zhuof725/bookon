@@ -53,6 +53,8 @@ jobs:
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
           mkdir -p Tests/LegadoNetworkTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
+          mkdir -p Tests/LegadoWebBookTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoWebBookTests/Resources/golden/
       - name: List golden files
         run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift version
@@ -96,6 +98,8 @@ jobs:
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
           mkdir -p Tests/LegadoNetworkTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
+          mkdir -p Tests/LegadoWebBookTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoWebBookTests/Resources/golden/
       - name: Download macOS test count artifact
         uses: actions/download-artifact@v4
         with:
@@ -115,8 +119,38 @@ jobs:
         run: python3 scripts/verify_functions.py
       - name: List available iOS simulators
         run: xcrun simctl list devices available | grep -i iphone || true
+      - name: Build App target (XcodeGen + iOS Simulator)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild build \
+            -project BookonDebug.xcodeproj \
+            -scheme BookonDebug \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
       - name: Run tests on iOS Simulator (xcodebuild test)
         run: bash scripts/ios_sim_test.sh
+
+  # 第 7 步 C 段：构建「书源调试」App 并打包 IPA（无签名，供侧载/分发调试）。
+  build-ipa:
+    runs-on: macos-14
+    needs: [golden, test-macos]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build IPA (archive → Payload → ipa，注入 commit/run_id)
+        env:
+          GIT_COMMIT: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+        run: bash scripts/build_ipa.sh
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookon-debug-ipa
+          path: build/BookonDebug.ipa
+          if-no-files-found: error
 
   # 第 6 步 6B（可选任务）：真实网络冒烟。
   # 仅 workflow_dispatch 触发（push 不跑，避免外网站点抖动影响主链路）。

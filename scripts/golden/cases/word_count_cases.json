@@ -1,0 +1,144 @@
+{
+ "wordCountCases": [
+  {
+   "name": "wc_int_0",
+   "input": "0"
+  },
+  {
+   "name": "wc_int_1",
+   "input": "1"
+  },
+  {
+   "name": "wc_int_5",
+   "input": "5"
+  },
+  {
+   "name": "wc_int_10",
+   "input": "10"
+  },
+  {
+   "name": "wc_int_99",
+   "input": "99"
+  },
+  {
+   "name": "wc_int_100",
+   "input": "100"
+  },
+  {
+   "name": "wc_int_999",
+   "input": "999"
+  },
+  {
+   "name": "wc_int_1000",
+   "input": "1000"
+  },
+  {
+   "name": "wc_int_5000",
+   "input": "5000"
+  },
+  {
+   "name": "wc_int_9999",
+   "input": "9999"
+  },
+  {
+   "name": "wc_int_10000",
+   "input": "10000"
+  },
+  {
+   "name": "wc_int_10001",
+   "input": "10001"
+  },
+  {
+   "name": "wc_int_12345",
+   "input": "12345"
+  },
+  {
+   "name": "wc_int_20000",
+   "input": "20000"
+  },
+  {
+   "name": "wc_int_50000",
+   "input": "50000"
+  },
+  {
+   "name": "wc_int_99999",
+   "input": "99999"
+  },
+  {
+   "name": "wc_int_100000",
+   "input": "100000"
+  },
+  {
+   "name": "wc_int_123456",
+   "input": "123456"
+  },
+  {
+   "name": "wc_int_1000000",
+   "input": "1000000"
+  },
+  {
+   "name": "wc_int_8888888",
+   "input": "8888888"
+  },
+  {
+   "name": "wc_str_0",
+   "input": "0"
+  },
+  {
+   "name": "wc_str_1",
+   "input": "1"
+  },
+  {
+   "name": "wc_str_2",
+   "input": "12"
+  },
+  {
+   "name": "wc_str_3",
+   "input": "123"
+  },
+  {
+   "name": "wc_str_4",
+   "input": "-5"
+  },
+  {
+   "name": "wc_str_5",
+   "input": "-1"
+  },
+  {
+   "name": "wc_str_6",
+   "input": "abc"
+  },
+  {
+   "name": "wc_str_7",
+   "input": "1.5"
+  },
+  {
+   "name": "wc_str_8",
+   "input": "一万"
+  },
+  {
+   "name": "wc_str_9",
+   "input": ""
+  },
+  {
+   "name": "wc_str_10",
+   "input": " 123"
+  },
+  {
+   "name": "wc_str_11",
+   "input": "123字"
+  },
+  {
+   "name": "wc_str_12",
+   "input": "10,000"
+  },
+  {
+   "name": "wc_null",
+   "input": null
+  },
+  {
+   "name": "wc_zero_pad",
+   "input": "000123"
+  }
+ ]
+}

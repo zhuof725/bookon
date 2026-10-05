@@ -1388,3 +1388,100 @@ JS 断言全部走真实 JavaScriptCore（evalJS 全链路）。
 真实请求搜索 URL（关键字「斗罗」），报告写入 `live-smoke-out/live_smoke_report.txt`
 并作为 artifact `live-smoke-report` 上传。单源失败不使 job 失败。
 
+
+---
+
+# 第 7 步：WebBook 流程层 + BookonDebugKit + 书源调试 App
+
+## 第 7 步 A：WebBook 流程层（搜索 / 详情 / 目录 / 正文 / 发现 / 调试）
+
+把 legado 的 `model/webBook/{WebBook,BookList,BookInfo,BookChapterList,BookContent}.kt` +
+`model/Debug.kt`（**仅书源调试，不做 RSS**）移植为 Swift（async/await）。
+
+- 流程函数：`WebBook.searchBookAwait` / `exploreBookAwait` / `getBookInfoAwait` /
+  `getChapterListAwait` / `getContentAwait` / `preciseSearchAwait` / `runPreUpdateJs`。
+- 解析函数：`BookList.analyzeBookList`（含 getInfoItem/getSearchItem/checkExploreJson）、
+  `BookInfo.analyzeBookInfo` ×2、`BookChapterList.analyzeChapterList` ×2 + `upChapterInfo`、
+  `BookContent.analyzeContent` ×2。
+- `Debug.startDebug(bookSource:key:)` 五路分发：绝对地址→详情；`::`→发现；`++`→目录；
+  `--`→正文；其它→搜索；搜索/发现成功后链式 详情→目录→正文。
+- 日志符号 `⇒ ︾ ︽ ┌ └ ◇ ≡`、状态码 `-1/1/10/20/30/40/1000`、时间前缀 `[mm:ss.SSS]`
+  由 `RuleEngine/DebugLogger.swift` 提供（协议注入）。
+- 每个阶段最后响应（URL/状态码/头/原始 body）经 `captureResponse` 留存（A 段第 4 点）。
+
+函数覆盖自动校验（`scripts/verify_functions.py` 已扩展 webBook/*.kt + Debug.kt）：
+**「Kotlin 有但 Swift 没实现的函数」清单为空**；WebBook 的 6 个 `runBlocking` 同步包装、
+Debug 的 RSS/校验书源函数明确排除（理由见脚本 EXCLUDED）。详见 `FUNCTION_MAPPING.md`。
+
+### 测试（`Tests/LegadoWebBookTests`，154 用例 + `LegadoWebBookPublicAPITests`，5 用例）
+
+覆盖搜索/发现/详情/目录/正文/调试全部分支，输入全部为合成书源规则 + 合成 HTML
+（`synthetic_` 前缀 + `配置文件_14个.json` 的 `_fixtureProvenance` 标记）；
+端到端用例用 7 个**真实书源规则文本** + 合成响应（标注「规则真实、数据合成」）。
+本地合成服务器用 `NWListener`（仅 Apple 平台编译）。
+
+### golden（手工 Java 移植）
+
+- `HtmlFormatter.format` / `formatKeepImg`：85 条（真实 JDK `java.util.regex`，逐行对照 Kotlin）。
+- `wordCountFormat`：35 条（真实 `DecimalFormat("#.#")`）。
+- 由 `scripts/golden` 的 `HtmlFormatterGen` / `WordCountGen` 生成，CI golden job 现场产出
+  `html_formatter_cases.json` / `word_count_cases.json`，`WebBookGoldenTests` 逐条比对。
+
+## 第 7 步 B：BookonDebugKit（与界面无关的调试内核，@Observable）
+
+新增 `Sources/BookonDebugKit` target（依赖 `LegadoBookSource`，Observation 框架）：
+
+| 组件 | 职责 |
+|---|---|
+| `BookSourceRepository` | 书源导入（粘贴/文件/URL/剪贴板文本）+ 持久化 `Documents/sources.json`（原子写）+ 启用开关 + 搜索过滤 |
+| `DebugSession` | 5 种 key 形式调试 + 取消 + 计时 + 阶段追踪 + 结果导出 JSON |
+| `DebugLogStore` | 日志持久化 `Documents/logs/时间戳-书源名.txt`（写后即刷、保留 50）+ 日志导出（头 + 正文 + 可选书源规则前 N 字符） |
+| `DebugSettings` | 连接/读取/总超时、记录响应体、详细级别（UserDefaults 持久化） |
+| `DebugEnvironment` | 清 Cookie（`CookieStore.clear`）+ 清缓存（`CacheManager.clearAll`，第 6 步实现） |
+
+测试：`Tests/BookonDebugKitTests`，**82 个用例**（macOS/iOS 数量一致）。
+
+## 第 7 步 C：SwiftUI App「书源调试」（iOS 17）
+
+- App 源码：`App/`（`BookonDebugApp` / `ContentView` / `SourceListView` / `DebugView` / `SettingsView`）。
+  **界面只做装配，业务逻辑全部委托 BookonDebugKit**。
+- XcodeGen 工程：`project.yml`（`xcodegen generate` 生成 `BookonDebug.xcodeproj`）。
+- `App/Info.plist`：`NSAllowsArbitraryLoads`、`UIFileSharingEnabled`、
+  `LSSupportsOpeningDocumentsInPlace`、显示名「书源调试」、bundle id `com.bookon.debug`、
+  `MinimumOSVersion 17.0`。
+- CI 新增 `build-ipa` job（macos-14）：archive → `Payload/BookonDebug.app` → zip 成 `BookonDebug.ipa`
+  → upload-artifact；注入 `GIT_COMMIT`/`CI_RUN_ID`；`plutil` 校验 `MinimumOSVersion == 17.0`。
+- `test-ios-simulator` job 额外 `xcodegen generate` + 构建 App target（iOS 模拟器）。
+- Release 不依赖 DEBUG 宏（App/BookonDebugKit 无 `#if DEBUG`）；无新增第三方依赖。
+
+### 如何在手机上使用
+
+1. 在 GitHub Actions 手动触发 workflow，或直接下载 `build-ipa` job 的 artifact
+   `bookon-debug-ipa`（`BookonDebug.ipa`）。
+2. 把 `BookonDebug.ipa` 通过 AirDrop / 隔空投送 / 数据线 传到 iPhone（iOS 17+）。
+3. 用 Xcode 的「Devices and Simulators」或 Apple Configurator / 爱思助手 / 巨魔商店等
+   侧载工具安装（未签名 IPA 需开发者证书重签或使用支持侧载的工具）。
+4. 打开「书源调试」：
+   - **书源** 页：右上角导入（粘贴书源 JSON），支持文件分享导入（`UIFileSharingEnabled` 开启后
+     可在「文件」App 里直接放入书源 JSON），长按/左滑可启用/禁用，顶部搜索过滤。
+   - **调试** 页：选书源 → 输入关键字（绝对地址 / `::发现` / `++目录` / `--正文` / 搜索词）→
+     开始调试 → 查看分阶段日志与耗时 → 导出日志（存到「文件」App 的 `logs/` 目录）。
+   - **设置** 页：调整超时、记录响应体、日志级别，清除 Cookie 与缓存。
+
+## 第 7 步与 Kotlin 的已知差异（README 差异表登记）
+
+| 项 | Kotlin | 本移植 | 影响 |
+|---|---|---|---|
+| Book/SearchBook/BookChapter 语义 | class（引用） | struct（值）+ `BookBox`/`SearchBookBox`/`BookChapterBox` | `analyzeContent` 对章节 title/imgUrl 的改动经日志呈现，返回值与 Kotlin 一致 |
+| WebBook 同步包装 | `runBlocking` 包装 | 只用 async/await，不提供同步阻塞包装 | 无（verify_functions EXCLUDED） |
+| Debug 的 RSS/校验书源 | 完整实现 | 不做（只做书源调试） | 无（EXCLUDED） |
+| 书架持久化（needSave/upChapterInfo DB 回填） | App 层 DB | 规则引擎层只记日志，App 层负责 | 无（默认 tocCountWords=false 时 early-return，与 Kotlin 一致） |
+| 正文 sourceRegex/webJs | 真实网络路径应用 | Mock 直接供给已变换 body；Live 路径在 `LiveWebBookNetwork` 应用 | 无（测试语义一致） |
+
+## 第 7 步明确不做（「不做」清单）
+
+- RSS 调试（`sortDebug` / `rssContentDebug`）。
+- 「校验书源」功能（`startChecking` / `finishChecking` / `getRespondTime` / `updateFinalMessage`）。
+- 书架/阅读器/缓存/ContentProcessor 的替换规则与 DB 持久化。
+- 真实 WebView（WebJs / BackstageWebView）。
+- 书源编辑/分享的 UI 细节（App 仅提供导入/调试/设置最小可用界面）。
