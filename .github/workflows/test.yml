@@ -53,6 +53,8 @@ jobs:
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
           mkdir -p Tests/LegadoNetworkTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
+          mkdir -p Tests/LegadoWebBookTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoWebBookTests/Resources/golden/
       - name: List golden files
         run: ls -la Tests/LegadoHTMLEngineTests/Resources/golden
       - name: Show Swift version
@@ -61,6 +63,8 @@ jobs:
         run: python3 scripts/verify_fields.py
       - name: Verify function coverage
         run: python3 scripts/verify_functions.py
+      - name: Verify platform-only API usage
+        run: python3 scripts/verify_platform_apis.py
       - name: Build
         run: swift build -v
       - name: Run tests (macOS, swift test)
@@ -96,6 +100,8 @@ jobs:
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoAnalyzeRuleTests/Resources/golden/
           mkdir -p Tests/LegadoNetworkTests/Resources/golden
           cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoNetworkTests/Resources/golden/
+          mkdir -p Tests/LegadoWebBookTests/Resources/golden
+          cp Tests/LegadoHTMLEngineTests/Resources/golden/*.json Tests/LegadoWebBookTests/Resources/golden/
       - name: Download macOS test count artifact
         uses: actions/download-artifact@v4
         with:
@@ -115,8 +121,55 @@ jobs:
         run: python3 scripts/verify_functions.py
       - name: List available iOS simulators
         run: xcrun simctl list devices available | grep -i iphone || true
+      # 注意执行顺序：**先跑测试、再 xcodegen generate**（`ios_sim_test.sh` 依赖
+      # SwiftPM 包模式下的 `LegadoBookSource-Package` scheme；一旦根目录出现
+      # BookonDebug.xcodeproj，xcodebuild 会转去解析该工程，scheme 集合随之改变）。
+      # 原因详见 scripts/ios_sim_test.sh 顶部说明与 CI run 37303016669。
       - name: Run tests on iOS Simulator (xcodebuild test)
-        run: bash scripts/ios_sim_test.sh
+        run: |
+          # 双保险：清掉任何可能残留的 .xcodeproj，确保走 SwiftPM 包模式。
+          rm -rf BookonDebug.xcodeproj
+          bash scripts/ios_sim_test.sh
+      - name: Build App target (XcodeGen + iOS Simulator)
+        run: |
+          # 分步执行 + 显式回显每步退出码：任何一步失败都能一眼看出是哪一步、退出码多少
+          # （此前 xcodegen 成功、下一命令却 SIGABRT(134) 且无输出，靠这组回显才定位到）。
+          brew install xcodegen
+          echo "== xcodegen generate =="
+          xcodegen generate
+          echo "xcodegen 退出码: $?"
+          ls -la BookonDebug.xcodeproj
+          echo "== 校验工程格式 =="
+          bash scripts/verify_xcodeproj_format.sh BookonDebug.xcodeproj
+          echo "工程格式校验退出码: $?"
+          echo "== xcodebuild build =="
+          xcodebuild build \
+            -project BookonDebug.xcodeproj \
+            -scheme BookonDebug \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          echo "xcodebuild 退出码: $?"
+
+  # 第 7 步 C 段：构建「书源调试」App 并打包 IPA（无签名，供侧载/分发调试）。
+  build-ipa:
+    runs-on: macos-14
+    needs: [golden, test-macos]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build IPA (archive → Payload → ipa，注入 commit/run_id)
+        env:
+          GIT_COMMIT: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+        run: bash scripts/build_ipa.sh
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookon-debug-ipa
+          path: build/BookonDebug.ipa
+          if-no-files-found: error
 
   # 第 6 步 6B（可选任务）：真实网络冒烟。
   # 仅 workflow_dispatch 触发（push 不跑，避免外网站点抖动影响主链路）。

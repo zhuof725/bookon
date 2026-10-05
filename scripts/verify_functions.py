@@ -79,6 +79,26 @@ MAPPING = {
         "Sources/LegadoBookSource/RuleEngine/JsExtensionsCore.swift",
         "Sources/LegadoBookSource/RuleEngine/JsExtensionsRuntime.swift",
     ],
+    # —— 第 7 步 A 段：WebBook 流程层（搜索/详情/目录/正文/发现/调试）——
+    "webBook/BookList.kt": [
+        "Sources/LegadoBookSource/WebBook/BookList.swift",
+    ],
+    "webBook/BookInfo.kt": [
+        "Sources/LegadoBookSource/WebBook/BookInfo.swift",
+    ],
+    "webBook/BookChapterList.kt": [
+        "Sources/LegadoBookSource/WebBook/BookChapterList.swift",
+    ],
+    "webBook/BookContent.kt": [
+        "Sources/LegadoBookSource/WebBook/BookContent.swift",
+    ],
+    "webBook/WebBook.kt": [
+        "Sources/LegadoBookSource/WebBook/WebBook.swift",
+    ],
+    "Debug.kt": [
+        "Sources/LegadoBookSource/WebBook/Debug.swift",
+        "Sources/LegadoBookSource/RuleEngine/DebugLogger.swift",
+    ],
 }
 
 # 明确排除的 Kotlin 函数（本步骤范围外 / Swift 以不同形态实现），每项必须给理由。
@@ -244,6 +264,27 @@ EXCLUDED = {
         "digestBase64Str": "书源未使用；Proxy 抛错",
         "HMacHex": "书源未使用；Proxy 抛错",
         "HMacBase64": "书源未使用；Proxy 抛错",
+    },
+    # —— 第 7 步 A 段：WebBook 流程层排除项 ——
+    "webBook/WebBook.kt": {
+        # Kotlin 用 runBlocking 提供同步包装，Swift 只用 async/await，不提供同步阻塞包装。
+        "searchBook": "Swift 只用 async/await（searchBookAwait），不提供 runBlocking 同步包装",
+        "exploreBook": "同上（exploreBookAwait）",
+        "getBookInfo": "同上（getBookInfoAwait）",
+        "getChapterList": "同上（getChapterListAwait）",
+        "getContent": "同上（getContentAwait）",
+        "preciseSearch": "同上（preciseSearchAwait）",
+    },
+    "Debug.kt": {
+        # RSS 调试（第 7 步 A 段明确只做「书源调试」，不做 RSS）。
+        "sortDebug": "RSS 源调试，非本步骤范围（只做书源调试）",
+        "rssContentDebug": "RSS 源调试，非本步骤范围",
+        # 「校验书源」是独立于 startDebug 调试流程的功能（校验进度/响应耗时/最终消息），
+        # 属 App 层 UI 校验，非流程层 debug 5-way 分发，本步骤不移植。
+        "startChecking": "校验书源功能（非调试流程），本步骤范围外",
+        "finishChecking": "校验书源功能，本步骤范围外",
+        "getRespondTime": "校验书源耗时统计，本步骤范围外",
+        "updateFinalMessage": "校验书源结果消息，本步骤范围外",
     },
 }
 

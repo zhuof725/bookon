@@ -36,6 +36,15 @@ public final class AnalyzeByJSoup {
         if let el = doc as? Element {
             return el
         }
+        // ⚠️ SwiftSoup `Elements` 没有重写 `toString()`（默认打印 "SwiftSoup.Elements"），
+        // 而 Kotlin/JSoup 的 `Elements.toString()` = `outerHtml()`（各元素 outerHtml 拼接）。
+        // `AnalyzeRule.ruleValueToDoc` 会把 `.elements([...])` 原样传成 `Elements`，若不在此
+        // 展开就会把 "SwiftSoup.Elements" 当 HTML 解析 → 解析结果为空，规则全部取不到值。
+        // 因此这里显式对齐 Kotlin 语义：多个元素时用拼接后的 HTML 文本重新解析。
+        if let els = doc as? Elements {
+            let html = els.array().map { (try? $0.outerHtml()) ?? "" }.joined()
+            return try parseHTML(html)
+        }
         // Kotlin 还处理 JXNode 入参（来自 XPath 结果）；本移植 XPath 结果为 XPathNode，
         // 若传入 XPathNode 则取其底层 Element 或其 HTML 文本。
         if let node = doc as? XPathNode {
