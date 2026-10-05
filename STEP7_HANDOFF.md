@@ -103,6 +103,16 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 **artifact**（run 37310649613）：`golden-data`（227,811 B）、`macos-test-count`（160 B，内容 `809`）、`bookon-debug-ipa`（1,806,528 B）。
 
+### 复现确认（后续两次推送同样全绿）
+
+| run | commit | 结果 |
+|---|---|---|
+| [37310649613](https://github.com/zhuof725/bookon/actions/runs/37310649613) | `7ad1589` | ✅ 4 job 全绿（上表数据来源） |
+| [37312666887](https://github.com/zhuof725/bookon/actions/runs/37312666887) | `489fbed` | ✅ 4 job 全绿（仅文档/日志变更） |
+| [37313519896](https://github.com/zhuof725/bookon/actions/runs/37313519896) | `315b58e` | ✅ 4 job 全绿（含 HtmlFormatter 去强解包改动） |
+
+> 三次连续全绿说明修复稳定、非偶发。`live-smoke` 仅在 `workflow_dispatch` 时运行，push 下为 skipped（预期）。
+
 ### 收敛过程（11 轮 CI，56 → 0 失败）
 
 `test-macos` 从 56 项失败逐轮收敛到 0（43 项 `\s` 语义 + 14 项测试期望 + 2 项 `Book.type` 位假设）；
