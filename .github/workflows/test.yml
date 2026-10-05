@@ -125,6 +125,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
+          bash scripts/verify_xcodeproj_format.sh BookonDebug.xcodeproj
           xcodebuild build \
             -project BookonDebug.xcodeproj \
             -scheme BookonDebug \

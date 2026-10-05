@@ -65,6 +65,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | 4 | `HtmlFormatter` 的 `\s` 正则语义 | **43 条 golden 失败**：缩进被叠加成 4 个全角空格 | Java `\s` = `[ \t\n\x0B\f\r]`（6 个 ASCII 空白），不含 U+3000；ICU/NSRegularExpression 的 `\s` 含 U+3000。改用显式字符类 `[ \t\n\x0B\f\r]`（`javaASCIISpace`），`indent1Regex/indent2Regex/lastRegex` 三处 |
 | 5 | `BookChapter.getAbsoluteURL()` 未实现 | 相对章节 url 不绝对化 | 核对 Kotlin 后确认：`BookChapterList` **本就不绝对化**（`BookChapterList.kt:239` 原样存），绝对化发生在取正文时（`WebBook.kt:400/448`）。测试期望写错，改为断言 `url == "/c/1"` + `baseUrl` 记录目录页 + `NetworkUtils.getAbsoluteURL(baseUrl, url)` 能解析出绝对地址 |
 | 6 | 测试对 `Book.type` 默认值的假设有误 | 副文歌词/弹幕分支根本不可达（用例假绿/假红） | `Book.type` 默认是 `BookType.text`（8，Kotlin `Book.kt:74`），`addType(audio)` 得 `8\|32=40`，`isOnLineTxt` 仍为 true，于是命中 Kotlin `BookContent.kt:132` 的 `if (book.isOnLineTxt) { add(raw); return }` **早返回分支**。要覆盖音频/弹幕分支必须先 `removeAllBookType()` 构造纯 audio/video 书 |
+| 7 | XcodeGen 默认工程格式 `objectVersion = 77` 与 Xcode 15.4 不兼容 | `test-ios-simulator` 与 `build-ipa` **整段失败**（`Unable to read project`） | XcodeGen 2.44+ 默认 `projectFormat = xcode16_0`（objectVersion 77），而 macos-14 runner 的 Xcode 15.4 读不了（≤60）。在 `project.yml` 的 `options` 显式设 `projectFormat: xcode15_3`；并新增 `scripts/verify_xcodeproj_format.sh` 在 `xcodegen generate` 后、`xcodebuild` 前**显式校验** objectVersion 与当前 Xcode 的兼容性，失败时给出可执行的修复提示 |
 
 > 缺陷 3 之所以本地全绿：该分支只在 `.elements([单元素])` 作为 content 时触发，
 > 既有测试路径未覆盖「`getElement` 取单元素再 `setContent`」这一组合，Linux 本地 typecheck 也只看类型不看值。
@@ -114,16 +115,20 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 **C 段**
 - `App/`（5 个 SwiftUI 文件 + Info.plist）
-- `project.yml`、`scripts/build_ipa.sh`
+- `project.yml`（`options.projectFormat: xcode15_3`，固定工程格式以兼容 Xcode 15.4 runner）
+- `scripts/build_ipa.sh`
 
 **测试**
-- `Tests/LegadoWebBookTests/`（16 个文件，154 用例）
+- `Tests/LegadoWebBookTests/`（16 个文件，155 用例）
 - `Tests/LegadoWebBookPublicAPITests/`（1 个文件，5 用例）
 - `Tests/BookonDebugKitTests/`（8 个文件，82 用例）+ `Resources/{配置文件_14个,malformed_sources}.json`
 - `Tests/LegadoWebBookTests/Resources/{配置文件_14个,synthetic_flow_pages}.json`
 
 **验收/文档/CI**
 - `scripts/verify_functions.py`（扩展 webBook/*.kt + Debug.kt）
+- `scripts/verify_platform_apis.py`（String.Encoding 成员名误用门禁）
+- `scripts/verify_html_formatter_golden.sh`（真实 HtmlFormatter.swift 跑 85 条 golden）
+- `scripts/verify_xcodeproj_format.sh`（工程 objectVersion 与 Xcode 版本兼容性门禁）
 - `scripts/local_typecheck.sh`、`scripts/local_typecheck_tests.sh`、`scripts/local_typecheck_bookon.sh`
 - `scripts/golden/src/main/java/golden/{HtmlFormatterGen,WordCountGen}.java` + `Main.java`
 - `scripts/golden/cases/{html_formatter_cases,word_count_cases}.json`

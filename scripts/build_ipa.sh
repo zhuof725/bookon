@@ -12,6 +12,9 @@ CI_RUN_ID="${CI_RUN_ID:-local}"
 
 echo "== 1/4 生成 Xcode 工程 =="
 xcodegen generate
+# 校验工程格式能被当前 Xcode 读取（防止 XcodeGen 默认 xcode16_0 格式在 Xcode 15 runner 上报
+# 「future Xcode project file format」这类不指向 project.yml 的晦涩错误）。
+bash scripts/verify_xcodeproj_format.sh BookonDebug.xcodeproj
 
 echo "== 2/4 归档（Release，无签名）=="
 xcodebuild archive \
