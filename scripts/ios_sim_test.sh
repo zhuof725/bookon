@@ -10,7 +10,18 @@
 set -euo pipefail
 
 # 固定 scheme（不取列表第一个）。本 SwiftPM 包被 xcodebuild 打开时，
-# 自动生成的唯一 scheme 名等于 package/library 名 "LegadoBookSource"。
+# 自动生成的唯一 scheme 名等于 package/library 名 "LegadoBookSource"，且带 test action。
+#
+# ⚠️ 前置条件：运行本脚本时仓库根目录**不能存在** BookonDebug.xcodeproj。
+# 若存在（例如已跑过 `xcodegen generate`），xcodebuild 会转而解析该 .xcodeproj，
+# 其中的 `LegadoBookSource` 是 library scheme、没有 test action，会报：
+#   xcodebuild: error: Scheme LegadoBookSource is not currently configured for the test action.
+# 因此 CI 中本步骤必须排在 `xcodegen generate` 之前（见 .github/workflows/test.yml）。
+if [ -d "BookonDebug.xcodeproj" ]; then
+  echo "错误：检测到 BookonDebug.xcodeproj，会覆盖 SwiftPM 包 scheme。"
+  echo "      请在本步骤之前不要运行 xcodegen generate，或先删除该 .xcodeproj。"
+  exit 1
+fi
 SCHEME="LegadoBookSource"
 echo "使用 scheme: ${SCHEME}"
 echo "可用 scheme 列表（供核对）："
