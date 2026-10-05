@@ -44,16 +44,26 @@ final class WebBookContentTests: XCTestCase {
     func testSubContentAudioStoredInResourceUrl() async throws {
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">[00:01]歌词</div></body></html>"
         let logger = DebugLogger()
-        // 关键：Kotlin `Debug.log` 与 Swift 实现都在 `callback == null` 时**提前 return**，
+        // 关键 1：Kotlin `Debug.log` 与 Swift 实现都在 `callback == null` 时**提前 return**，
         // 连 records 都不会落（DebugLogger.swift:114）。所以断言日志必须先装 sink，
         // 并用 withExtendedLifetime 把弱引用的 sink 保活到 await 结束之后。
+        //
+        // 关键 2：`Book.type` 是**按位**标记，且新建 Book 的默认值就是 `BookType.text`（8，
+        // 见 Book.swift TextTypeDefault / Kotlin Book.kt:74 `type = BookType.text`）。
+        // 若只调 addType(audio) 会得到 8|32 = 40，`isOnLineTxt` 仍为 true，
+        // 于是命中 Kotlin BookContent.kt:132 的 `if (book.isOnLineTxt) { add(raw); return }`
+        // **早返回分支**，音频歌词分支根本不可达——这是 Kotlin 的真实语义。
+        // 要覆盖音频分支，必须先清空类型位，构造**纯音频**书（type == 32）。
         let sink = RecordingSink()
         logger.callback = sink
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
+        book.removeAllBookType()
         book.addType(BookType.audio)
+        XCTAssertTrue(book.isAudio)
+        XCTAssertFalse(book.isOnLineTxt, "纯音频书不应命中 onLineTxt 早返回分支")
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
         defer { withExtendedLifetime(sink) {} }
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
@@ -70,7 +80,11 @@ final class WebBookContentTests: XCTestCase {
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
+        // 同上：先清空默认的 text 位，构造纯视频书，才能命中弹幕分支。
+        book.removeAllBookType()
         book.addType(BookType.video)
+        XCTAssertTrue(book.isVideo)
+        XCTAssertFalse(book.isOnLineTxt, "纯视频书不应命中 onLineTxt 早返回分支")
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
         defer { withExtendedLifetime(sink) {} }
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
@@ -97,15 +111,23 @@ final class WebBookContentTests: XCTestCase {
             "http://synthetic.test/lyric/1": WebBookResponse(url: "http://synthetic.test/lyric/1", status: 200, body: lyricHtml)
         ])
         let logger = DebugLogger()
+        // 装 sink 才有日志（Kotlin/Swift 在 callback == nil 时提前 return）。
+        let sink = RecordingSink()
+        logger.callback = sink
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let opts = WebBookOptions(logger: logger, network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
+        // 副文地址抓取（fetchSubContent）只在**非 onLineTxt** 分支才走；
+        // 而 Book 默认类型含 text，若不先清空就会命中 onLineTxt 早返回，
+        // 根本不会去 fetch。这里构造纯音频书以确保覆盖抓取路径。
+        book.removeAllBookType()
         book.addType(BookType.audio)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
+        defer { withExtendedLifetime(sink) {} }
         let content = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
         XCTAssertTrue(content.contains("正文"), "主正文应正常返回，实际：\(content)")
-        XCTAssertFalse(logger.records.contains { $0.raw.contains("获取副文出错") },
-                       "副文地址应抓取成功，不应出现失败日志：\(logger.records.map(\.raw))")
+        XCTAssertFalse(sink.contains("获取副文出错"),
+                       "副文地址应抓取成功，不应出现失败日志：\(sink.messages)")
     }
 
     func testTitleRuleExtractsTitle() async throws {
