@@ -121,13 +121,10 @@ jobs:
         run: python3 scripts/verify_functions.py
       - name: List available iOS simulators
         run: xcrun simctl list devices available | grep -i iphone || true
-      # 注意执行顺序：必须**先跑测试、再 xcodegen generate**。
-      # 原因（CI run 37301725529）：ios_sim_test.sh 依赖 SwiftPM 包自动生成的 scheme
-      # `LegadoBookSource`（它带 test action）。一旦仓库根目录出现 BookonDebug.xcodeproj，
-      # xcodebuild 就会解析该 .xcodeproj，而其中的 `LegadoBookSource` 是 library scheme、
-      # **没有 test action**，于是报：
-      #   xcodebuild: error: Scheme LegadoBookSource is not currently configured for the test action.
-      # 把测试步骤放在 xcodegen generate 之前即可让 xcodebuild 继续走 SwiftPM 包模式。
+      # 注意执行顺序：**先跑测试、再 xcodegen generate**（`ios_sim_test.sh` 依赖
+      # SwiftPM 包模式下的 `LegadoBookSource-Package` scheme；一旦根目录出现
+      # BookonDebug.xcodeproj，xcodebuild 会转去解析该工程，scheme 集合随之改变）。
+      # 原因详见 scripts/ios_sim_test.sh 顶部说明与 CI run 37303016669。
       - name: Run tests on iOS Simulator (xcodebuild test)
         run: |
           # 双保险：清掉任何可能残留的 .xcodeproj，确保走 SwiftPM 包模式。
