@@ -3,14 +3,21 @@ import PackageDescription
 
 let package = Package(
     name: "LegadoBookSource",
+    // 第 7 步版本约定：全仓库统一 iOS 17.0 / macOS 14。
+    // 升级只放宽下限，不改任何既有行为（前六步测试数量与结果保持不变）。
     platforms: [
-        .macOS(.v12),
-        .iOS(.v15)
+        .iOS(.v17),
+        .macOS(.v14)
     ],
     products: [
         .library(
             name: "LegadoBookSource",
             targets: ["LegadoBookSource"]
+        ),
+        // 第 7 步 B 段：与界面无关的调试内核（App target 依赖它）。
+        .library(
+            name: "BookonDebugKit",
+            targets: ["BookonDebugKit"]
         )
     ],
     dependencies: [
@@ -26,6 +33,14 @@ let package = Package(
                 // Step 5: quick-chinese-transfer 0.2.17 原始简繁词典（见 Resources/Chinese/PROVENANCE.md）。
                 .process("Resources")
             ]
+        ),
+        // 第 7 步 B 段：调试内核（书源仓库 / 调试会话 / 日志持久化与导出 / 设置）。
+        // 用 Observation 框架的 @Observable（不用 ObservableObject / @Published）。
+        // 全部非界面逻辑放这里，使测试在 macOS 14 与 iOS 模拟器上数量一致。
+        .target(
+            name: "BookonDebugKit",
+            dependencies: ["LegadoBookSource"],
+            path: "Sources/BookonDebugKit"
         ),
         .testTarget(
             name: "LegadoBookSourceTests",
@@ -117,6 +132,35 @@ let package = Package(
             name: "LegadoAnalyzeRulePublicAPITests",
             dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoAnalyzeRulePublicAPITests"
+        ),
+        // 第 7 步 A 段：WebBook 流程层（搜索/详情/目录/正文/发现）的 @testable 单元测试。
+        // 用本地 NWListener 合成服务器 + 手工构造的合成页面逐分支测试（≥150 用例）。
+        .testTarget(
+            name: "LegadoWebBookTests",
+            dependencies: ["LegadoBookSource", "SwiftSoup"],
+            path: "Tests/LegadoWebBookTests",
+            resources: [
+                .copy("Resources/配置文件_14个.json"),
+                .copy("Resources/synthetic_flow_pages.json"),
+                // 第 7 步 A：HtmlFormatter/wordCountFormat golden（真实 Java 移植产出的期望值）。
+                .copy("Resources/golden")
+            ]
+        ),
+        // 第 7 步 A 段：流程层的纯 public 接口测试（普通 import，非 @testable）。
+        .testTarget(
+            name: "LegadoWebBookPublicAPITests",
+            dependencies: ["LegadoBookSource"],
+            path: "Tests/LegadoWebBookPublicAPITests"
+        ),
+        // 第 7 步 B 段：BookonDebugKit 的 @testable 单元测试（≥80 用例，macOS/iOS 数量一致）。
+        .testTarget(
+            name: "BookonDebugKitTests",
+            dependencies: ["BookonDebugKit", "LegadoBookSource"],
+            path: "Tests/BookonDebugKitTests",
+            resources: [
+                .copy("Resources/配置文件_14个.json"),
+                .copy("Resources/malformed_sources.json")
+            ]
         )
     ]
 )

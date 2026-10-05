@@ -7,11 +7,46 @@
 #   - iOS 这边用 xcodebuild，按「每个 *.xctest bundle 的顶层 Executed」求和得出 iOS 总数。
 #   - 若 macOS 总数文件存在，则 iOS 总数必须与它相等，否则判定为「有 target 没跑」并让 job 失败。
 #   - 若该文件不存在（例如本地单独运行、未经 macOS job），则跳过相等性核对，仅保证 iOS 总数 > 0。
+#
+# scheme 选择：不硬编码，自动在 `<包名>-Package` / `<包名>` 之间挑选实际存在的那个
+# （第 7 步加入 project.yml 的本地包引用后，带 test action 的 scheme 变成了
+#  `LegadoBookSource-Package`，硬编码 `LegadoBookSource` 会因「library scheme 无 test action」失败）。
 set -euo pipefail
 
-# 固定 scheme（不取列表第一个）。本 SwiftPM 包被 xcodebuild 打开时，
-# 自动生成的唯一 scheme 名等于 package/library 名 "LegadoBookSource"。
-SCHEME="LegadoBookSource"
+# ⚠️ 前置条件：运行本脚本时仓库根目录**不能存在** BookonDebug.xcodeproj。
+# 若存在（例如已跑过 `xcodegen generate`），xcodebuild 会转而解析该 .xcodeproj，
+# 其中的 `LegadoBookSource` 是 library scheme、没有 test action。
+# 因此 CI 中本步骤必须排在 `xcodegen generate` 之前（见 .github/workflows/test.yml）。
+if [ -d "BookonDebug.xcodeproj" ]; then
+  echo "错误：检测到 BookonDebug.xcodeproj，会覆盖 SwiftPM 包 scheme。"
+  echo "      请在本步骤之前不要运行 xcodegen generate，或先删除该 .xcodeproj。"
+  exit 1
+fi
+
+# ── scheme 探测 ───────────────────────────────────────────────────────────────
+# 本仓库是 SwiftPM 包，xcodebuild 打开时自动生成的**带 test action** 的 scheme 名，
+# 随「是否引入本地包依赖」而变：
+#   · 第 4–6 步：无 project.yml → 唯一 scheme 是 `LegadoBookSource`（带 test action）。
+#   · 第 7 步：project.yml 里 `packages: BookonDebugKit: path: .` 引用本包，xcodebuild
+#     会枚举出包图，scheme 变为 `BookonDebugKit` / `LegadoBookSource` /
+#     `LegadoBookSource-Package`，而**带 test action 的是 `LegadoBookSource-Package`**
+#     （SwiftPM 生成的 *-Package scheme），`LegadoBookSource` 只是想 library scheme。
+# 因此这里**不硬编码** scheme，而是优先取 `<包名>-Package`，回退到包名本身，
+# 并用 `xcodebuild -list -json` 校验其确实存在。
+PKG_NAME="LegadoBookSource"
+SCHEME=""
+# 优先 *-Package（SwiftPM 自动生成的、带 test action 的 scheme）
+if xcodebuild -list -json 2>/dev/null | grep -q "\"${PKG_NAME}-Package\""; then
+  SCHEME="${PKG_NAME}-Package"
+elif xcodebuild -list -json 2>/dev/null | grep -q "\"${PKG_NAME}\""; then
+  SCHEME="${PKG_NAME}"
+fi
+if [ -z "${SCHEME}" ]; then
+  echo "错误：在可用 scheme 里找不到 ${PKG_NAME} 或 ${PKG_NAME}-Package。"
+  echo "可用 scheme 列表（供核对）："
+  xcodebuild -list || true
+  exit 1
+fi
 echo "使用 scheme: ${SCHEME}"
 echo "可用 scheme 列表（供核对）："
 xcodebuild -list || true

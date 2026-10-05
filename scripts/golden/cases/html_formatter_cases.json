@@ -1,0 +1,447 @@
+{
+ "htmlFormatterCases": [
+  {
+   "name": "fmt_plain",
+   "html": "纯文本内容",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_nbsp",
+   "html": "前面&nbsp;&nbsp;后面",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_ensp",
+   "html": "前&ensp;后",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_emsp",
+   "html": "前&emsp;后",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_thinsp",
+   "html": "前&thinsp;后",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_zwnj",
+   "html": "前&zwnj;后",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_zwj",
+   "html": "前&zwj;后",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_div",
+   "html": "<div>内容</div>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_p",
+   "html": "<p>段落一</p><p>段落二</p>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_br",
+   "html": "第一行<br>第二行",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_hr",
+   "html": "上<hr>下",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_h1",
+   "html": "<h1>标题</h1>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_article",
+   "html": "<article>正文</article>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_comment",
+   "html": "前面<!-- 注释 -->后面",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_span",
+   "html": "<span>文本</span>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_strong",
+   "html": "<strong>加粗</strong>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_em",
+   "html": "<em>强调</em>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_ul_li",
+   "html": "<ul><li>项一</li><li>项二</li></ul>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_a",
+   "html": "<a href=\"http://x\">链接</a>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_img_removed",
+   "html": "图<img src=\"http://x/a.jpg\">文",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_multi_newline",
+   "html": "第一段\n\n\n第二段",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_leading_ws",
+   "html": "\n\n  开头内容",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_trailing_ws",
+   "html": "结尾内容  \n\n",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_mixed",
+   "html": "<div>一</div><br><p>二</p>&nbsp;三&ensp;四",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_wrap_and_indent",
+   "html": "<p>第一段</p>\n<p>第二段</p>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_nested",
+   "html": "<div><p>嵌套</p></div>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_upper_tag",
+   "html": "<DIV>大写标签</DIV>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_selfclose",
+   "html": "<br/><hr/>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_script",
+   "html": "<script>var a=1;</script>正文",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_style",
+   "html": "<style>.a{}</style>正文",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_special_space",
+   "html": "a b‌c‍d",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_entity",
+   "html": "&amp;&lt;&gt;",
+   "mode": "format"
+  },
+  {
+   "name": "img_src_double",
+   "html": "图<img src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_src_single",
+   "html": "图<img src='http://x/a.jpg'>文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_data_src",
+   "html": "图<img data-src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_data_original",
+   "html": "图<img data-original=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_relative",
+   "html": "图<img src=\"/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/dir/page.html"
+  },
+  {
+   "name": "img_relative2",
+   "html": "图<img src=\"a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/dir/"
+  },
+  {
+   "name": "img_alt_attr",
+   "html": "图<img alt=\"alt\" src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_class_attr",
+   "html": "图<img class=\"c\" src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_two",
+   "html": "图一<img src=\"http://x/1.jpg\">图二<img src=\"http://x/2.jpg\">",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_no_redirect",
+   "html": "图<img src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": null
+  },
+  {
+   "name": "img_mixed_text",
+   "html": "开头<img src=\"http://x/a.jpg\">中间<img src=\"http://x/b.jpg\">结尾",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_in_div",
+   "html": "<div>图<img src=\"http://x/a.jpg\">文</div>",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_uppercase",
+   "html": "图<IMG SRC=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_template_url",
+   "html": "图<img src=\"http://x/{a,b}.jpg,{c:1}\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_data_srcset",
+   "html": "图<img data-srcset=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "fmt_var_1",
+   "html": "<div>第1段</div><p>内容1</p>&nbsp;尾巴1",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_2",
+   "html": "<div>第2段</div><p>内容2</p>&nbsp;尾巴2",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_3",
+   "html": "<div>第3段</div><p>内容3</p>&nbsp;尾巴3",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_4",
+   "html": "<div>第4段</div><p>内容4</p>&nbsp;尾巴4",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_5",
+   "html": "<div>第5段</div><p>内容5</p>&nbsp;尾巴5",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_6",
+   "html": "<div>第6段</div><p>内容6</p>&nbsp;尾巴6",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_7",
+   "html": "<div>第7段</div><p>内容7</p>&nbsp;尾巴7",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_8",
+   "html": "<div>第8段</div><p>内容8</p>&nbsp;尾巴8",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_9",
+   "html": "<div>第9段</div><p>内容9</p>&nbsp;尾巴9",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_10",
+   "html": "<div>第10段</div><p>内容10</p>&nbsp;尾巴10",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_11",
+   "html": "<div>第11段</div><p>内容11</p>&nbsp;尾巴11",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_12",
+   "html": "<div>第12段</div><p>内容12</p>&nbsp;尾巴12",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_13",
+   "html": "<div>第13段</div><p>内容13</p>&nbsp;尾巴13",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_14",
+   "html": "<div>第14段</div><p>内容14</p>&nbsp;尾巴14",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_15",
+   "html": "<div>第15段</div><p>内容15</p>&nbsp;尾巴15",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_16",
+   "html": "<div>第16段</div><p>内容16</p>&nbsp;尾巴16",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_17",
+   "html": "<div>第17段</div><p>内容17</p>&nbsp;尾巴17",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_18",
+   "html": "<div>第18段</div><p>内容18</p>&nbsp;尾巴18",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_19",
+   "html": "<div>第19段</div><p>内容19</p>&nbsp;尾巴19",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_20",
+   "html": "<div>第20段</div><p>内容20</p>&nbsp;尾巴20",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_21",
+   "html": "<div>第21段</div><p>内容21</p>&nbsp;尾巴21",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_22",
+   "html": "<div>第22段</div><p>内容22</p>&nbsp;尾巴22",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_23",
+   "html": "<div>第23段</div><p>内容23</p>&nbsp;尾巴23",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_24",
+   "html": "<div>第24段</div><p>内容24</p>&nbsp;尾巴24",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_25",
+   "html": "<div>第25段</div><p>内容25</p>&nbsp;尾巴25",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_26",
+   "html": "<div>第26段</div><p>内容26</p>&nbsp;尾巴26",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_27",
+   "html": "<div>第27段</div><p>内容27</p>&nbsp;尾巴27",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_var_28",
+   "html": "<div>第28段</div><p>内容28</p>&nbsp;尾巴28",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_br_wrap",
+   "html": "行一<br>行二<br>行三",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_p_attrs",
+   "html": "<p class=\"x\">带属性段落</p>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_div_attrs",
+   "html": "<div id=\"y\">带属性块</div>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_mixed_entities",
+   "html": "&nbsp;一&ensp;二&emsp;三",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_comment_only",
+   "html": "<!-- 只注释 -->",
+   "mode": "format"
+  },
+  {
+   "name": "img_src_no_quote",
+   "html": "图<img src=http://x/a.jpg>文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "img_relative_root",
+   "html": "图<img src=\"/root/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/dir/page.html"
+  },
+  {
+   "name": "img_lazy_data_src",
+   "html": "图<img class=\"lazy\" data-src=\"http://x/a.jpg\">文",
+   "mode": "formatKeepImg",
+   "redirectUrl": "http://base/"
+  },
+  {
+   "name": "fmt_br_and_div",
+   "html": "<div>一<br>二</div><p>三</p>",
+   "mode": "format"
+  },
+  {
+   "name": "fmt_deep_nested",
+   "html": "<div><p><span>深嵌套</span></p></div>",
+   "mode": "format"
+  }
+ ]
+}

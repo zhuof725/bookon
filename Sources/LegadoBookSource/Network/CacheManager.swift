@@ -241,4 +241,10 @@ public final class CacheManager: CacheManagerProtocol, @unchecked Sendable {
     }
 
     public func clearMemory() { try? memory.deleteAll() }
+
+    /// 清空全部缓存（内存 + 磁盘）。对应第 7 步 B 段「清除缓存」设置项。
+    public func clearAll() {
+        try? memory.deleteAll()
+        try? storage.deleteAll()
+    }
 }

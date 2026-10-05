@@ -208,6 +208,27 @@ public class Main {
                     System.out.println("Cookie 纯函数: " + outArr.size() + " 条（手工移植 CookieStore/CookieManager）");
                 }
 
+                // ---- 第 7 步 A：HtmlFormatter.format/formatKeepImg 手工移植 golden ----
+                if (input.has("htmlFormatterCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("htmlFormatterCases")) {
+                        outArr.add(HtmlFormatterGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("htmlFormatterResults", outArr);
+                    System.out.println("HtmlFormatter: " + outArr.size() + " 条（format/formatKeepImg 手工 Java 移植）");
+                }
+                // ---- 第 7 步 A：wordCountFormat 手工移植 golden ----
+                if (input.has("wordCountCases")) {
+                    JsonArray outArr = new JsonArray();
+                    for (JsonElement el : input.getAsJsonArray("wordCountCases")) {
+                        outArr.add(WordCountGen.run(el.getAsJsonObject()));
+                        totalCases++;
+                    }
+                    output.add("wordCountResults", outArr);
+                    System.out.println("wordCountFormat: " + outArr.size() + " 条（手工 Java 移植）");
+                }
+
                 if (input.has("jsCases")) {
                     JsonArray outArr = new JsonArray();
                     for (JsonElement el : input.getAsJsonArray("jsCases")) {

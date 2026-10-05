@@ -23,3 +23,9 @@ macos_test_count.txt
 
 # SwiftPM 依赖解析结果（本地生成，不入库）
 Package.resolved
+
+# 第 7 步 C：App 构建产物（CI 由 project.yml 现场生成，不入库）
+/build/
+BookonDebug.xcodeproj/
+*.xcarchive
+*.ipa

@@ -469,3 +469,77 @@
   第 5/6 步接入后补成功路径。
 - NetworkUtils 相对解析的含空格/中文、`file:`、越根 `..` 等边角：待 C 部分 golden（真实
   java.net.URL 对照）验证。
+
+---
+
+# 第 7 步 A 段：WebBook 流程层函数 / 分支对照清单
+
+> 自动校验：`scripts/verify_functions.py` 已扩展覆盖 `webBook/BookList.kt`、`webBook/BookInfo.kt`、
+> `webBook/BookChapterList.kt`、`webBook/BookContent.kt`、`webBook/WebBook.kt`、`Debug.kt`。
+> **「Kotlin 有但 Swift 没实现的函数」清单：空**。Kotlin 参考副本在
+> `reference/kotlin/analyzeRule/webBook/*.kt` 与 `reference/kotlin/analyzeRule/Debug.kt`。
+>
+> 明确排除（`verify_functions.py` EXCLUDED 登记，理由见脚本）：WebBook 的 6 个 `runBlocking` 同步包装
+> （`searchBook`/`exploreBook`/`getBookInfo`/`getChapterList`/`getContent`/`preciseSearch`，Swift 只用
+> async/await）；Debug 的 RSS 调试（`sortDebug`/`rssContentDebug`）与「校验书源」功能
+> （`startChecking`/`finishChecking`/`getRespondTime`/`updateFinalMessage`，App 层 UI 校验，非调试流程）。
+
+## 函数覆盖（6 个 Kotlin 文件）
+
+| Kotlin 文件 | Kotlin fun | Swift 对应 |
+|---|---|---|
+| webBook/BookList.kt | analyzeBookList | `BookList.analyzeBookList(...)`（async throws） |
+| | getInfoItem | `BookList.getInfoItem(...)`（private） |
+| | getSearchItem | `BookList.getSearchItem(...)`（private） |
+| | checkExploreJson | `BookList.checkExploreJson(...)`（private） |
+| webBook/BookInfo.kt | analyzeBookInfo（两个重载） | `BookInfo.analyzeBookInfo(...)` × 2（async throws） |
+| webBook/BookChapterList.kt | analyzeChapterList（两个重载） | `BookChapterList.analyzeChapterList(...)` × 2（async throws） |
+| | upChapterInfo | `BookChapterList.upChapterInfo(...)`（private） |
+| webBook/BookContent.kt | analyzeContent（两个重载） | `BookContent.analyzeContent(...)` × 2（async throws） |
+| webBook/WebBook.kt | searchBookAwait/exploreBookAwait/getBookInfoAwait/getChapterListAwait/getContentAwait/preciseSearchAwait | `WebBook.*Await(...)` |
+| | runPreUpdateJs | `WebBook.runPreUpdateJs(...)` |
+| | checkRedirect | `WebBook.checkRedirect(...)`（private） |
+| Debug.kt | startDebug（bookSource 重载） | `Debug.startDebug(bookSource:key:options:)`（async） |
+| | exploreDebug/searchDebug/infoDebug/tocDebug/contentDebug | `Debug.*`（private async） |
+| | log（两个重载）/ cancelDebug | `DebugLogger.log(...)` / `DebugLogger.cancelDebug(...)` |
+
+## 分支 → 测试 对照表
+
+| 分支 | 测试（LegadoWebBookTests） |
+|---|---|
+| 搜索列表解析 / 多字段 / 相对书地址 / 去重 | WebBookFlowTests.testSearch*、WebBookBookListTests.testRelativeBookUrlResolved/testSearchMissingCoverUrl |
+| bookList "-" 反序 / "+" 去前缀 | WebBookFlowTests.testSearchBookListReversePrefix、WebBookBookListTests.testBookListPlusPrefixDropsPlus |
+| bookUrlPattern 命中 → 详情页分支 | WebBookFlowTests.testSearchBookUrlPatternDetailBranch、WebBookFinalTests.testSearchBookUrlPatternDetailReturnsSingle |
+| 列表为空且无 bookUrlPattern → 详情页 | WebBookFlowTests.testSearchEmptyThrows |
+| getInfoItem 书名空/过滤拒绝 | WebBookBookListTests.testGetInfoItemNameEmptyReturnsNil、WebBookFinalTests.testInfoItemFilterRejects |
+| 发现页 / checkExploreJson（规范与不规范 JSON） | WebBookFlowTests.testExploreBookListPlusPrefix/testCheckExploreJsonInvalidDoesNotCrash、WebBookBookListTests.testCheckExploreJsonValidNoCrash |
+| 发现规则空 → 回退搜索规则 | WebBookBookListTests.testExploreUsesSearchRuleWhenExploreRuleEmpty |
+| 详情页各字段（名/作者/分类/字数/最新章节/简介/封面/目录链接） | WebBookBookInfoTests.testName*/testAuthor*/testKind*/testWordCount*/testLastChapter*/testIntro*/testCoverUrl*/testTocUrl* |
+| canReName 逻辑 / init 规则 / `<usehtml>`/`<md>`/`<useweb>` 前缀 | WebBookBookInfoTests.testNameEmptyDoesNotOverwrite*/testCanReName*/testInitRule*/testIntroUseHtmlPrefix*、WebBookEdgeCaseTests.testIntroMd/UseWebPrefix |
+| webFile 下载链接 / 下载链接空抛错 | WebBookFlowTests.testBookInfoWebFileDownloads、WebBookBookInfoTests.testDownloadUrls*/testDownloadUrlsEmptyThrows |
+| 目录列表解析 / 反序 / 多页(1) / 多页(并发) / 去重 / 相对地址 / 空标题跳过 | WebBookFlowTests.testChapterList*、WebBookChapterListTests.testDedupByUrl/testChapterWithoutUrlUsesBaseUrl/testEmptyTitleChapterSkipped、WebBookEdgeCaseTests.testTocNextUrlManyConcurrent |
+| isVip/isPay/isVolume/updateTime | WebBookChapterListTests.testIsVipAndIsPay/testIsVolumeWithUpdateTime/testUpdateTimeAsTagWhenNotVolume |
+| tocCountWords 字数提取（FlowConfig） | WebBookTocCountWordsTests.testTocCountWords* |
+| formatJs 标题变换 | WebBookChapterListTests.testFormatJsIdentity、WebBookAdditionalTests.testFormatJsTransformsTitle |
+| preUpdateJs | WebBookEdgeCaseTests.testRunPreUpdateJs*/testRunPreUpdateJsEmptyDoesNothing |
+| 目录为空抛错 / body nil 抛错 | WebBookFlowTests.testChapterListEmptyThrows、WebBookTocCountWordsTests.testChapterListBodyNilThrows |
+| 正文解析 / 多页(1) / 多页终止判定 / 空规则/分卷短路/空正文抛错 | WebBookFlowTests.testContent*、WebBookURLProcessingTests.testContentNextPageTerminatesAtNextChapter、WebBookAdditionalTests.testGetContentVolumeWithTag |
+| replaceRegex / subContent(onLineTxt/audio/video/http) / title+imgRegex / formatKeepImg | WebBookContentTests.testReplaceRegex*/testSubContent*/testTitleRule*、WebBookAdditionalTests.testContentKeepsImgTag |
+| Debug.startDebug 五路分发 + 链式 + 错误不崩溃 | WebBookFlowTests.testStartDebug*、WebBookDebugTests.testStartDebug*、WebBookEdgeCaseTests.testExploreDebugEmptyResultLogged/testSearchDebugEmptyResultLogged |
+| DebugLogger 日志格式/符号/状态码/时间前缀/生命周期/响应留存 | WebBookDebugLoggerTests.test*、WebBookDebugTests.testLogger*、WebBookAdditionalTests.testCapturedResponsesForAllStages |
+| LiveWebBookNetwork（buildRequest→解码→重定向→留存） | WebBookLiveNetworkTests.test* |
+| 本地合成服务器（NWListener，Apple 平台） | WebBookLocalServerTests.testSearchOverLocalHTTPServer |
+| 端到端（规则真实、数据合成，7 个真实书源） | WebBookEndToEndTests.testDeqixsSearchEndToEnd/testShuduguSearchEndToEnd/testTaiwanSearchEndToEnd/testRealSources* |
+| HtmlFormatter.format/formatKeepImg golden（≥80） | WebBookGoldenTests.testHtmlFormatterGolden |
+| wordCountFormat golden（≥30） | WebBookGoldenTests.testWordCountFormatGolden |
+| 纯 public 接口可见性（非 @testable） | LegadoWebBookPublicAPITests.WebBookPublicAPITests.test* |
+
+## 说明：流程层的 Swift 值语义适配（README 差异表登记）
+
+- `Book`/`SearchBook`/`BookChapter` 在 Kotlin 是 class（引用语义），Swift 是 struct（值语义）。
+  流程函数用 `BookBox`/`SearchBookBox`/`BookChapterBox` 承载可变状态；`analyzeContent` 里对
+  `bookChapter` 的 title/imgUrl/resourceUrl 变更作用在本地副本上，通过日志输出呈现
+  （「┌获取章节名称/└标题」），返回值为解析后的正文字符串（与 Kotlin 返回值一致）。
+- 书架持久化（`needSave`、`upChapterInfo` 的 DB 回填、`BookHelp.saveContent`）不在规则引擎范围内，
+  默认 `FlowConfig.tocCountWords=false` 时 `upChapterInfo` 直接 early-return（与 Kotlin 一致），
+  仅记日志、不静默。
