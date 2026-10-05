@@ -45,11 +45,41 @@ public enum HtmlFormatter {
     /// Kotlin: "</?[a-zA-Z]+(?=[ >])[^<>]*>".toRegex()  —— format 默认
     public static let otherHtmlRegex = "</?[a-zA-Z]+(?=[ >])[^<>]*>"
     /// Kotlin: "\\s*\\n+\\s*".toRegex()
-    public static let indent1Regex = "\\s*\\n+\\s*"
+    ///
+    /// ⚠️ `\s` 已显式展开为 Java 的 **ASCII 空白集** `[ \t\n\x0B\f\r]`，原因见
+    /// `javaASCIISpace` 的文档：ICU（NSRegularExpression）的 `\s` **包含全角空格 U+3000**，
+    /// 而 Java 的不包含，两者对 `　` 的处置不同，会导致缩进被重复叠加。
+    public static let indent1Regex = "[\(javaASCIISpace)]*\\n+[\(javaASCIISpace)]*"
     /// Kotlin: "^[\\n\\s]+".toRegex()
-    public static let indent2Regex = "^[\\n\\s]+"
+    public static let indent2Regex = "^[\\n\(javaASCIISpace)]+"
     /// Kotlin: "[\\n\\s]+$".toRegex()
-    public static let lastRegex = "[\\n\\s]+$"
+    public static let lastRegex = "[\\n\(javaASCIISpace)]+$"
+
+    /// Java `\s` 的等价**字符类内容**（**不含**全角空格 U+3000、不含 U+00A0）。
+    ///
+    /// Java 的 `\s` 定义就是 `[ \t\n\x0B\f\r]` 这 6 个 ASCII 空白；而 ICU 正则
+    /// （NSRegularExpression / Swift 的 `\s`）把 Unicode 空白也算进去，**首当其冲就是
+    /// 全角空格 U+3000**。这个差异在本移植里会造成真实行为分歧：
+    ///
+    /// 以 `<div>内容</div>` 为例（两边的第 1–3 步完全一致，都得到 `"\n　　内容\n　　"`）：
+    ///
+    /// | 步骤 | Java（Kotlin 真实行为） | ICU（`\s` 未展开时） |
+    /// |---|---|---|
+    /// | 4. `^[\n\s]+` 匹配 | 只吃 `\n`（长度 1）→ `"　　　　内容\n　　"` | 吃 `\n　　`（长度 3）→ `"　　内容\n　　"` |
+    /// | 5. `[\n\s]+$` | 匹配尾部 `\n　　` → 清掉 | 匹配不到（`\n` 后的 `　` 非 `\s`）→ 残留 |
+    ///
+    /// 即 ICU 会让第 3 步刚插入的缩进被第 4 步**再叠加一次**（应为 4 个全角空格 → 只剩 2 个）。
+    /// 实测证据（Java 20）：`"　".matches("\\s") == false`，而 Swift/ICU 侧为 true。
+    ///
+    /// 参考：本缺陷由 CI `HtmlFormatter` golden 的 43 条用例一次性暴露。
+    ///
+    /// ⚠️ 这里必须嵌入**真实字符**而不是 `\u{0B}` 之类的转义：`\u{...}` 是 Swift 的字符串
+    /// 插值语法，写进正则串会变成字面量 `u{0B}` 从而让 `NSRegularExpression` 直接报
+    /// `NSCocoaErrorDomain 2048`（实测）。
+    private static let javaASCIISpace: String = {
+        let verticalTab = String(UnicodeScalar(0x0B)!)
+        return " \t\n" + verticalTab + "\u{0C}\r"
+    }()
 
     /// Kotlin 的 formatImagePattern（Pattern.CASE_INSENSITIVE）。
     /// 注意第 4 个分支前的 `|` 处于顶层的「熔断」语义：Kotlin 依赖交替匹配取第一个成功分支。

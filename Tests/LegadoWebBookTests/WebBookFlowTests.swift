@@ -254,16 +254,17 @@ final class WebBookFlowTests: XCTestCase {
         XCTAssertEqual(result[1].name, "书名二")
     }
 
-    func testSearchEmptyThrows() async {
+    func testSearchEmptyReturnsEmpty() async throws {
+        // Kotlin WebBook.searchBookAwait 直接 `return BookList.analyzeBookList(...)`，
+        // **空结果不抛异常**；BookList.kt:100 在「列表为空且 bookUrlPattern 为空」时
+        // 退回详情页解析（getInfoItem），失败也只是不加条目。
+        // （"未搜索到 xxx 书籍" 的 NoStackTraceException 出自按书名找书的另一条链路
+        //  BookHelp/Book.kt，与 searchBookAwait 无关。）
         let src = SynthSources.basic()
         let net = MockWebBookNetwork(["http://synthetic.test/search": WebBookResponse(url: "http://synthetic.test/search", status: 200, body: Fixtures.searchEmpty)])
         let opts = WebBookOptions(network: net)
-        do {
-            _ = try await WebBook.searchBookAwait(bookSource: src, key: "无", options: opts)
-            XCTFail("空列表且无 bookUrlPattern 应抛异常")
-        } catch {
-            // 期望失败（正文/列表为空）
-        }
+        let result = try await WebBook.searchBookAwait(bookSource: src, key: "无", options: opts)
+        XCTAssertTrue(result.isEmpty, "空列表且无 bookUrlPattern 时应返回空数组，实际：\(result.count)")
     }
 
     func testSearchBookListReversePrefix() async throws {
@@ -472,7 +473,10 @@ final class WebBookFlowTests: XCTestCase {
         let net = MockWebBookNetwork([:])
         let opts = WebBookOptions(network: net)
         let book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
-        var chapter = BookChapter(url: "http://synthetic.test/v/1", title: "第一卷")
+        // Kotlin WebBook.kt:390 —— 短路条件是 `isVolume && url.startsWith(title)`。
+        // 卷章节的 url 由 BookChapterList 用 `title + index` 生成（见 BookChapterList.kt:260），
+        // 所以这里的 url 必须以 title 开头才会命中该分支；否则会照常走网络抓取。
+        var chapter = BookChapter(url: "第一卷", title: "第一卷")
         chapter.isVolume = true
         let content = try await WebBook.getContentAwait(bookSource: src, book: book, bookChapter: chapter, options: opts)
         XCTAssertEqual(content, "")

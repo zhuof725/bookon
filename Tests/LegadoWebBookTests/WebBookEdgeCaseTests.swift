@@ -32,13 +32,18 @@ final class WebBookEdgeCaseTests: XCTestCase {
     }
 
     func testIntroMdPrefixKeptRaw() async throws {
-        let book = try await runInfo(BookInfoRule(intro: "class.intro@html"), html: "<html><body><div class=\"intro\"><md># 标题</md></div></body></html>")
-        XCTAssertTrue(book.intro?.hasPrefix("<md>") == true)
+        // Kotlin BookInfo.kt:125 —— `intro.trimStart().startsWith("<md>")` 时原样保留。
+        // 规则须直接选中 <md> 元素本身（tag.md@html），选父容器会带上 <div ...> 前缀。
+        let book = try await runInfo(BookInfoRule(intro: "tag.md@html"), html: "<html><body><div class=\"intro\"><md># 标题</md></div></body></html>")
+        XCTAssertTrue(book.intro?.hasPrefix("<md>") == true,
+                      "应原样保留 <md> 片段，实际得到：\(book.intro ?? "nil")")
     }
 
     func testIntroUseWebPrefixKeptRaw() async throws {
-        let book = try await runInfo(BookInfoRule(intro: "class.intro@html"), html: "<html><body><div class=\"intro\"><useweb>内容</useweb></div></body></html>")
-        XCTAssertTrue(book.intro?.hasPrefix("<useweb>") == true)
+        // 同上：`intro.trimStart().startsWith("<useweb>")` 时原样保留。
+        let book = try await runInfo(BookInfoRule(intro: "tag.useweb@html"), html: "<html><body><div class=\"intro\"><useweb>内容</useweb></div></body></html>")
+        XCTAssertTrue(book.intro?.hasPrefix("<useweb>") == true,
+                      "应原样保留 <useweb> 片段，实际得到：\(book.intro ?? "nil")")
     }
 
     func testNameWhitespaceStripped() async throws {
@@ -181,16 +186,23 @@ final class WebBookEdgeCaseTests: XCTestCase {
         XCTAssertTrue(content.contains("A&B") || content.contains("&amp;"))
     }
 
-    func testReplaceRegexOnLineTxtAddsIndent() async throws {
+    func testReplaceRegexOnLineTxtReplacesWithoutEmptying() async throws {
+        // replaceRegex "##正文##文本" 语义（Kotlin AnalyzeRule.kt:500）：
+        // 第一个 ## 之后是 match、"##" 之后是 replacement，即把「正文」替换为「文本」。
+        // 注意：若 replacement 留空（如 "##正文"），整段正文会被清空，
+        // 而 Kotlin BookContent.kt:204 对「非卷章节且内容 isBlank」会抛
+        // ContentEmptyException("内容为空")—— 那是**正确**行为，不是本用例要测的点。
+        // 这里保留非空结果，验证 replaceRegex 在 onLineTxt 分支确实生效。
         let html = "<html><body><div class=\"content\">正文</div></body></html>"
-        let src = contentSource(ContentRule(content: "class.content@html", replaceRegex: "##正文"))
+        let src = contentSource(ContentRule(content: "class.content@html", replaceRegex: "##正文##文本"))
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
         book.addType(BookType.text)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
         let content = try await WebBook.getContentAwait(bookSource: src, book: book, bookChapter: chapter, options: opts)
-        XCTAssertFalse(content.contains("正文"))
+        XCTAssertFalse(content.contains("正文"), "「正文」应已被替换掉，实际：\(content)")
+        XCTAssertTrue(content.contains("文本"), "应替换为「文本」，实际：\(content)")
     }
 
     func testSourceRegexFieldPresentButNotAppliedInMock() async throws {

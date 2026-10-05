@@ -72,6 +72,11 @@ final class WebBookURLProcessingTests: XCTestCase {
     }
 
     func testRelativeChapterUrlResolvedAgainstTocUrl() async throws {
+        // Kotlin BookChapterList.kt:239 —— `bookChapter.url = analyzeRule.getString(urlRule)`，
+        // **不做绝对化**；相对地址原样存入，真正的绝对化发生在取正文时
+        // （WebBook.kt:400/448 用 `bookChapter.getAbsoluteURL()`，其 baseUrl 就是目录页地址）。
+        // 因此 `getChapterListAwait` 的返回值里 url 仍是 "/c/1"，而 baseUrl 记录了目录页
+        // "http://synthetic.test/toc/1" —— 这正是后续能解析成绝对地址的依据。
         let html = "<html><body><div class=\"chapters\"><li><a href=\"/c/1\">第一章</a></li></div></body></html>"
         let src = BookSource(
             bookSourceUrl: "http://synthetic.test",
@@ -84,7 +89,12 @@ final class WebBookURLProcessingTests: XCTestCase {
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
         let chapters = try await WebBook.getChapterListAwait(bookSource: src, book: &book, options: opts)
         XCTAssertEqual(chapters.count, 1)
-        XCTAssertEqual(chapters[0].url, "http://synthetic.test/c/1")
+        // 相对地址原样保留（与 Kotlin 一致）
+        XCTAssertEqual(chapters[0].url, "/c/1")
+        // baseUrl 记录目录页 → 后续 getAbsoluteURL() 可解析为 http://synthetic.test/c/1
+        XCTAssertEqual(chapters[0].baseUrl, "http://synthetic.test/toc/1")
+        XCTAssertEqual(NetworkUtils.getAbsoluteURL(chapters[0].baseUrl, chapters[0].url),
+                       "http://synthetic.test/c/1")
     }
 
     func testContentNextPageTerminatesAtNextChapter() async throws {

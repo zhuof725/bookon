@@ -42,15 +42,17 @@ final class WebBookLiveNetworkTests: XCTestCase {
         XCTAssertTrue(sink.contains("≡检测到重定向"))
     }
 
-    func testLiveNetworkNotFoundThrows() async {
-        let client = ScriptedHTTPClient(entries: [], defaultResponse: HTTPResponse(url: "", status: 404))
+    func testLiveNetworkNotFoundReturnsEmpty() async throws {
+        // 404 由 LiveWebBookNetwork 转成一个 status=404、body 为空的 WebBookResponse
+        // （fetch 只在**网络层异常**时抛错，见 WebBookNetwork.swift:106-110）。
+        // 空 body 后续在 BookList 里解析出空列表并原样返回 —— 与 Kotlin 一致：
+        // searchBookAwait 对「空结果」不抛异常（抛错只发生在按书名找书的另一条链路）。
+        let client = ScriptedHTTPClient(entries: [], defaultResponse: HTTPResponse(url: "http://synthetic.test/search", status: 404))
         let net = LiveWebBookNetwork(client: client)
         let src = SynthSources.basic()
         let opts = WebBookOptions(network: net)
-        do {
-            _ = try await WebBook.searchBookAwait(bookSource: src, key: "x", options: opts)
-            XCTFail("404 无响应应抛错")
-        } catch { /* 期望失败 */ }
+        let result = try await WebBook.searchBookAwait(bookSource: src, key: "x", options: opts)
+        XCTAssertTrue(result.isEmpty, "404 空响应应得到空列表，实际：\(result.count)")
     }
 
     func testLiveNetworkCapturesResponseHeaders() async throws {

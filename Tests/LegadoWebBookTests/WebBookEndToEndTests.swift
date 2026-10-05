@@ -87,7 +87,9 @@ final class WebBookEndToEndTests: XCTestCase {
         <div class="itemtxt"><p><a>唐家三少</a></p></div>
         </div>
         """
-        let net = MockWebBookNetwork(["https://www.shudugu.org/i/sor.aspx?key=%E6%96%97%E7%BD%97": WebBookResponse(url: "https://www.shudugu.org/i/sor.aspx?key=%E6%96%97%E7%BD%97", status: 200, body: html)])
+        // Mock 的键必须与实际请求 URL 完全一致：Kotlin AnalyzeUrl 的 `{{key}}` 替换后
+        // 不做百分号编码，因此请求 URL 里是**原始** "斗罗"，不是 "%E6%96%97%E7%BD%97"。
+        let net = MockWebBookNetwork(["https://www.shudugu.org/i/sor.aspx?key=斗罗": WebBookResponse(url: "https://www.shudugu.org/i/sor.aspx?key=斗罗", status: 200, body: html)])
         let opts = WebBookOptions(network: net)
         let result = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
         XCTAssertFalse(result.isEmpty)
@@ -100,7 +102,8 @@ final class WebBookEndToEndTests: XCTestCase {
         let html = """
         <ul><li><a href="https://www.twkan.cc/book/1.html">测试书名</a></li></ul>
         """
-        let net = MockWebBookNetwork(["https://www.twkan.cc/search/%E6%B5%8B%E8%AF%95/1.html": WebBookResponse(url: "https://www.twkan.cc/search/%E6%B5%8B%E8%AF%95/1.html", status: 200, body: html)])
+        // 同上：请求 URL 使用原始 "测试"，不做百分号编码。
+        let net = MockWebBookNetwork(["https://www.twkan.cc/search/测试/1.html": WebBookResponse(url: "https://www.twkan.cc/search/测试/1.html", status: 200, body: html)])
         let opts = WebBookOptions(network: net)
         let result = try await WebBook.searchBookAwait(bookSource: src, key: "测试", options: opts)
         // 台湾小说网 ruleSearch.bookList 为 CSS/其它规则；此处只断言不崩溃、能返回（可能为空列表）。

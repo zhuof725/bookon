@@ -44,32 +44,38 @@ final class WebBookContentTests: XCTestCase {
     func testSubContentAudioStoredInResourceUrl() async throws {
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">[00:01]歌词</div></body></html>"
         let logger = DebugLogger()
-        // 用 logger.records（logger 自身强持有）而非 weak callback 的 sink：
-        // callback 是 weak，局部 sink 在 await 跨挂起点时容易被 ARC 提前回收，
-        // 断言会随优化等级飘忽。records 只反映「日志是否真的记了这一条」。
+        // 关键：Kotlin `Debug.log` 与 Swift 实现都在 `callback == null` 时**提前 return**，
+        // 连 records 都不会落（DebugLogger.swift:114）。所以断言日志必须先装 sink，
+        // 并用 withExtendedLifetime 把弱引用的 sink 保活到 await 结束之后。
+        let sink = RecordingSink()
+        logger.callback = sink
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
         book.addType(BookType.audio)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
+        defer { withExtendedLifetime(sink) {} }
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
-        XCTAssertTrue(logger.records.contains { $0.raw.contains("┌获取副文歌词") },
-                      "音频书的副文应走歌词分支，实际记录：\(logger.records.map(\.raw))")
+        XCTAssertTrue(sink.contains("┌获取副文歌词"),
+                      "音频书的副文应走歌词分支，实际记录：\(sink.messages)")
     }
 
     func testSubContentVideoStoredInResourceUrl() async throws {
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">弹幕</div></body></html>"
         let logger = DebugLogger()
+        let sink = RecordingSink()
+        logger.callback = sink
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
         var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
         book.addType(BookType.video)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
+        defer { withExtendedLifetime(sink) {} }
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
-        XCTAssertTrue(logger.records.contains { $0.raw.contains("┌获取副文弹幕") },
-                      "视频书的副文应走弹幕分支，实际记录：\(logger.records.map(\.raw))")
+        XCTAssertTrue(sink.contains("┌获取副文弹幕"),
+                      "视频书的副文应走弹幕分支，实际记录：\(sink.messages)")
     }
 
     func testSubContentHttpFetched() async throws {

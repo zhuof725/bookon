@@ -24,14 +24,19 @@ final class BookonDebugKitFinalTests: XCTestCase {
         XCTAssertNotNil(try? JSONSerialization.jsonObject(with: Data(json.utf8)))
     }
 
-    func testExportResultJSONEmptySession() {
+    func testExportResultJSONEmptySession() throws {
         let session = DebugSession()
         let json = session.exportResultJSON()
-        // `exportResultJSON` 用 LegadoJSON.prettyEncoder（对应 Gson setPrettyPrinting），
-        // 输出形如 `"records" : []`（冒号两侧带空格），且空数组会展开成两行。
-        // 因此不能断言紧凑写法 `"records":[]`。
-        XCTAssertTrue(json.contains("\"records\""), "导出 JSON 应含 records 字段：\(json)")
-        XCTAssertTrue(json.contains("[]"), "空会话的 records/stages 应为空数组：\(json)")
+        // `exportResultJSON` 用 LegadoJSON.prettyEncoder（对应 Gson setPrettyPrinting）：
+        //   · 键值对写作 `"records" : [...]`（冒号两侧带空格）；
+        //   · **空数组**被展开成多行（`[\n\n  ]`），不会出现紧凑的 `[]`。
+        // 因此不能用 `contains("[]")` 之类的字符串匹配判断「空数组」——那是在断言
+        // 一个编码器不会产生的字面量。这里改为解析 JSON 后做语义断言。
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        let records = try XCTUnwrap(obj["records"] as? [Any])
+        let stages = try XCTUnwrap(obj["stages"] as? [Any])
+        XCTAssertTrue(records.isEmpty, "空会话的 records 应为空数组：\(json)")
+        XCTAssertTrue(stages.isEmpty, "空会话的 stages 应为空数组：\(json)")
     }
 
     func testCancelKeepsCollectedRecords() {
