@@ -1,19 +1,20 @@
 # 第 7 步 交付说明（STEP7_HANDOFF）
 
-> 本文件为第 7 步（A/B/C 段）最终交付状态说明。CI 三 job 全绿 + build-ipa artifact 需推送
-> GitHub 后由 Actions 运行产出（本地沙箱无法触发），其余交付物均已就绪并经本地校验。
+> 本文件为第 7 步（A/B/C 段）最终交付状态说明。**CI 四 job 已在 GitHub 全绿**
+> （run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)），
+> 真实日志留存于 `ci_logs/step7_final_*.log`，`bookon-debug-ipa` artifact 已产出。
 
 ## 一、交付内容总览
 
 | 段落 | 内容 | 状态 |
 |---|---|---|
 | A | WebBook 流程层源码移植（搜索/详情/目录/正文/发现/调试） | ✅ 完成，typecheck 通过 |
-| A | 流程层测试（154 @testable + 5 public）+ 端到端（7 真实规则） | ✅ 完成 |
+| A | 流程层测试（155 @testable + 5 public）+ 端到端（7 真实规则） | ✅ CI 809 tests / 0 failures |
 | A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ 完成，本地已生成验证 |
 | B | BookonDebugKit（@Observable：仓库/会话/日志/设置/清 Cookie 缓存） | ✅ 完成 |
 | B | BookonDebugKitTests（82 用例） | ✅ 完成 |
 | C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成 |
-| C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ 完成（配置就绪） |
+| C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，artifact 已上传 |
 | D | README 差异表 / 不做清单 / 手机使用说明 / FUNCTION_MAPPING | ✅ 完成 |
 
 ## 二、本地校验结果（Linux 沙箱，可复现）
@@ -37,8 +38,8 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | LegadoWebBookPublicAPITests（流程层，非 @testable） | 5 |
 | BookonDebugKitTests（B 段） | 82 |
 
-> 说明：以上为**本地 typecheck + 逻辑推演 + golden 本地生成**验证。155/5/82 个测试的
-> **运行时通过**、iOS==macOS 用例数相等、golden 逐条比对，需 macOS CI 执行确认。
+> 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；155/5/82 个测试的
+> **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，已由 macOS CI 全部确认（见第三节）。
 
 ## 二之二、CI 首轮暴露并已修复的缺陷（Linux 本地测不到的盲区）
 
@@ -67,7 +68,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | 6 | 测试对 `Book.type` 默认值的假设有误 | 副文歌词/弹幕分支根本不可达（用例假绿/假红） | `Book.type` 默认是 `BookType.text`（8，Kotlin `Book.kt:74`），`addType(audio)` 得 `8\|32=40`，`isOnLineTxt` 仍为 true，于是命中 Kotlin `BookContent.kt:132` 的 `if (book.isOnLineTxt) { add(raw); return }` **早返回分支**。要覆盖音频/弹幕分支必须先 `removeAllBookType()` 构造纯 audio/video 书 |
 | 7 | XcodeGen 默认工程格式 `objectVersion = 77` 与 Xcode 15.4 不兼容 | `test-ios-simulator` 与 `build-ipa` **整段失败**（`Unable to read project`） | XcodeGen 2.44+ 默认 `projectFormat = xcode16_0`（objectVersion 77），而 macos-14 runner 的 Xcode 15.4 读不了（77 需 Xcode 16.0+）。在 `project.yml` 的 `options` 显式设 `projectFormat: xcode15_3` → objectVersion 降为 **63**（需 Xcode 15.3+，15.4 可读）；并新增 `scripts/verify_xcodeproj_format.sh` 在 `xcodegen generate` 后、`xcodebuild` 前**显式校验** objectVersion 与当前 Xcode 的兼容性（按 CocoaPods/Xcodeproj 权威映射把 objectVersion 映射到「所需最低 Xcode」，再与当前 Xcode 做 major/minor 比较），失败时给出可执行的修复提示 |
 | 8 | 硬编码 scheme `LegadoBookSource` 在「多 product 包」下不带 test action | `test-ios-simulator` 失败：`Scheme LegadoBookSource is not currently configured for the test action`（退出码 66） | 第 2 步时本包只有 1 个 library product，Xcode 为 SwiftPM 包自动生成的唯一 scheme 就叫 `LegadoBookSource` 且**带 test action**（`commit 30c78f9` 据此写死）。第 7 步 B 段给 `Package.swift` 加了第二个 product `BookonDebugKit` 后，Xcode 的 scheme 生成策略改变：出现 `BookonDebugKit` / `LegadoBookSource` / **`LegadoBookSource-Package`** 三个 scheme，其中**带 test action 的聚合 scheme 是 `LegadoBookSource-Package`**，`LegadoBookSource` 退化为纯 library scheme。修复：`ios_sim_test.sh` **不再硬编码**，改为用 `xcodebuild -list -json` 优先探测 `<包名>-Package`、回退到 `<包名>`，并对找不到的情况明确报错；同时把「跑测试」步骤排到 `xcodegen generate` **之前**（避免 `.xcodeproj` 存在时 scheme 集合再变），测试前 `rm -rf BookonDebug.xcodeproj` 兜底 |
-| 9 | `verify_xcodeproj_format.sh` 用 `grep -m1 … \| grep -oE …` 提取 objectVersion 在 macOS 上 SIGABRT | `test-ios-simulator` 的「Build App target」失败，退出码 **134（SIGABRT）**：`xcodegen generate` 打印 "Created project at …" 后，本脚本**连一行输出都没有**就直接 abort | macOS runner 的 BSD grep + 系统 locale 下，对 pbxproj 这种含非 UTF-8 注释字节的文件，`grep -m1` 提前退出会让下游 grep 收到断管/异常输入从而 SIGABRT(134)；且发生在任何 echo 之前，日志里看不到本脚本输出，极难定位。修复：改用 **awk 按行提取**（无管道、locale 安全）+ `tr -cd '0-9'` 兜底去非数字：<br>`OBJ_VER=$(awk -F'[ =;]+' '/objectVersion/ { print $2; exit }' "$PBXPROJ")`<br>`OBJ_VER=$(printf '%s' "$OBJ_VER" \| tr -cd '0-9')` |
+| 9 | `verify_xcodeproj_format.sh` 在 macOS 上 SIGABRT 且日志全丢 | `test-ios-simulator` 的「Build App target」失败，退出码 **134（SIGABRT）**：`xcodegen generate` 打印 "Created project at …"（退出码 0）后，本脚本**连一行输出都没有**就直接 abort | 脚本内两个高风险点：① `grep -m1 … \| grep -oE …` 管道（macOS BSD grep + pbxproj 的非 UTF-8 注释字节）；② 调用 `xcodebuild -version`（非交互/首次运行场景可能直接 abort）；且 stdout 满缓冲，进程 abort 时缓冲未 flush → 日志全丢。修复：重写为「**宁可退化为不检查，也绝不 abort 整个 CI 步骤**」——objectVersion 改用 **awk 单命令按行取**（无管道）+ `tr -cd '0-9'` 兜底；Xcode 版本改用 **`plutil` 读 `$DEVELOPER_DIR/Contents/version.plist` 的 `CFBundleShortVersionString`**（不再调用 xcodebuild），拿不到就 WARN + `exit 0`；`set -u` 但**不** `set -e`，每条探测都 `\|\| VAR=""`；全脚本 ASCII-only 输出 + 统一 `[verify_xcodeproj_format]` 前缀 |
 
 > 缺陷 3 之所以本地全绿：该分支只在 `.elements([单元素])` 作为 content 时触发，
 > 既有测试路径未覆盖「`getElement` 取单元素再 `setContent`」这一组合，Linux 本地 typecheck 也只看类型不看值。
@@ -88,22 +89,25 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 > 缺陷 6 打印出 `book.type = 40 isAudio=true isOnLineTxt=true`（未清类型位）与
 > `book.type = 32 isAudio=true isOnLineTxt=false`（清位后，歌词分支命中）。
 
-## 三、CI 三 job + build-ipa（需推送 GitHub 触发）
+## 三、CI 三 job + build-ipa —— ✅ 已在 GitHub 全绿
 
-`.github/workflows/test.yml` 现有 4 个 job：
+`.github/workflows/test.yml` 现有 4 个 job（+ 1 个 `live-smoke` 默认 skipped）：
 
-1. **golden**（ubuntu-latest）：Maven 构建 golden 生成器 → 生成全部 golden JSON → upload-artifact。
-2. **test-macos**（macos-14，needs golden）：`swift test` + 提取测试总数 → upload-artifact。
-3. **test-ios-simulator**（macos-14，needs golden+test-macos）：`xcodebuild test`（iOS 17 模拟器）
-   + **构建 App target** + iOS==macOS 用例数核对。
-4. **build-ipa**（macos-14，needs golden+test-macos）：`xcodegen generate` → `xcodebuild archive`
-   （Release、无签名、注入 `GIT_COMMIT`/`CI_RUN_ID`）→ 校验 `MinimumOSVersion == 17.0` →
-   `Payload/BookonDebug.app` zip 成 `BookonDebug.ipa` → upload-artifact `bookon-debug-ipa`。
+| job | runner | 实测结果（run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)，commit `7ad1589`） | 日志 |
+|---|---|---|---|
+| **golden** | ubuntu-latest | ✅ success —— **24 个用例文件 / 2391 条**（HtmlFormatter 85、wordCount 35、UrlOption 84、URL 编码 299、OkHttp 系列、jsoup 91、Rhino 74、Java MessageDigest 2、Rhino 数字入参 42 …） | `ci_logs/step7_final_golden.log` |
+| **test-macos** | macos-14 | ✅ success —— **Executed 809 tests, 0 failures**（1 skipped） | `ci_logs/step7_final_macos.log` |
+| **test-ios-simulator** | macos-14 | ✅ success —— scheme `LegadoBookSource-Package`，**809 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 809）`；App target 构建通过；`[verify_xcodeproj_format] Xcode=15.4 objectVersion=63 → OK` | `ci_logs/step7_final_ios.log` |
+| **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,810,407 B），artifact `bookon-debug-ipa`（1,806,528 B）已上传 | `ci_logs/step7_final_build_ipa.log` |
+| live-smoke | ubuntu-latest | skipped（默认不跑真实网络） | — |
 
-**验收需在 GitHub 上**：
-- 推送本仓库到远端（`git push`），观察 4 个 job 全绿。
-- 下载 `bookon-debug-ipa` artifact 与 golden artifact。
-- 把真实日志留存到 `ci_logs/step7_final_*.log`（golden / macOS swift test / iOS xcodebuild test）。
+**artifact**（run 37310649613）：`golden-data`（227,811 B）、`macos-test-count`（160 B，内容 `809`）、`bookon-debug-ipa`（1,806,528 B）。
+
+### 收敛过程（11 轮 CI，56 → 0 失败）
+
+`test-macos` 从 56 项失败逐轮收敛到 0（43 项 `\s` 语义 + 14 项测试期望 + 2 项 `Book.type` 位假设）；
+iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、scheme 无 test action（缺陷 8）、
+校验脚本 SIGABRT（缺陷 9）。全部根因与修复见「二之三」表。
 
 ## 四、关键文件清单（本次新增/修改）
 
@@ -130,16 +134,25 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 - `scripts/verify_functions.py`（扩展 webBook/*.kt + Debug.kt）
 - `scripts/verify_platform_apis.py`（String.Encoding 成员名误用门禁）
 - `scripts/verify_html_formatter_golden.sh`（真实 HtmlFormatter.swift 跑 85 条 golden）
-- `scripts/verify_xcodeproj_format.sh`（工程 objectVersion 与 Xcode 版本兼容性门禁）
+- `scripts/verify_xcodeproj_format.sh`（工程 objectVersion 与 Xcode 版本兼容性门禁；awk + plutil，无管道、不依赖 xcodebuild）
+- `scripts/ios_sim_test.sh`（iOS 模拟器测试；自动探测 `<包名>-Package` 聚合 scheme，并与 macOS 用例数核对）
+- `scripts/build_ipa.sh`（xcodegen → archive → 校验 MinimumOSVersion → 打包 ipa）
 - `scripts/local_typecheck.sh`、`scripts/local_typecheck_tests.sh`、`scripts/local_typecheck_bookon.sh`
 - `scripts/golden/src/main/java/golden/{HtmlFormatterGen,WordCountGen}.java` + `Main.java`
 - `scripts/golden/cases/{html_formatter_cases,word_count_cases}.json`
 - `reference/kotlin/analyzeRule/webBook/*.kt`、`reference/kotlin/analyzeRule/Debug.kt`
 - `.github/workflows/test.yml`、`Package.swift`、`README.md`、`FUNCTION_MAPPING.md`、`.gitignore`
+- `ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`（run 37310649613 的真实 CI 日志）
 
-## 五、未完成 / 需人工
+## 五、已完成 / 仍需人工
 
-- CI 四 job 实际运行与日志留存（需 GitHub Actions）。
-- `build-ipa` 运行链接 / artifact 确认（需 GitHub）。
-- App 的 SwiftUI 界面运行时验证（Linux 无法编译 SwiftUI，需 macOS/iOS）。
-- 书源编辑/分享等 UI 细节（README「不做」清单已声明）。
+**已完成（本次在 GitHub 上跑通并留存证据）**
+- ✅ CI 四 job 全绿：run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)（golden / test-macos / test-ios-simulator / build-ipa）。
+- ✅ 真实日志已留存：`ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`。
+- ✅ `bookon-debug-ipa` artifact 已产出并确认（1,806,528 B）；`MinimumOSVersion = 17.0 ✓`。
+- ✅ iOS == macOS 用例数相等（均为 **809**）；golden **24 文件 / 2391 条**全部通过。
+
+**仍需人工**
+- App 的 SwiftUI 界面**运行时**验证（Linux 无法编译/运行 SwiftUI，需在 macOS / 真机 / 模拟器上手点）。
+- 书源编辑/分享等 UI 细节（README「不做」清单已声明，超出本步范围）。
+- 如需安装到真机：`bookon-debug-ipa` 为**无签名**包，需自行重签或用 AltStore/侧载工具。
