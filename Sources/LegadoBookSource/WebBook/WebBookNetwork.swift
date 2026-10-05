@@ -134,40 +134,34 @@ public final class LiveWebBookNetwork: WebBookNetwork {
     private func applyWebJs(_ js: String, _ body: String) -> String { body }
     private func applySourceRegex(_ regex: String, _ body: String) -> String { body }
 
+    /// 响应体解码。
+    ///
+    /// 委托给 `JsNetTextDecoder`（与 AnalyzeUrl 路径**共用同一套解码器**），语义对齐
+    /// Kotlin `AnalyzeUrl.getStrResponseAwait()` 里 `String(body, charset)` 的**容错**行为：
+    /// 非法字节序列替换为 `U+FFFD`，而不是整体失败。
+    ///
+    /// ⚠️ 不要退回 `String(data:encoding:)` / `String.Encoding` 手写映射：
+    ///   1. `String.Encoding` 在 Darwin 上**没有** `gbk` / `gb18030` / `big5` 成员
+    ///      （它们只存在于 CoreFoundation 的 `CFStringEncoding` 层面），写了就编译不过；
+    ///   2. `String(data:encoding:)` 是**严格**的，非法字节返回 nil，会让整段响应体
+    ///      静默退化成 UTF-8 乱码。
+    ///   3. `JsNetTextDecoder.decode` 自带 BOM → explicit charset → Content-Type →
+    ///       EncodingDetect 的完整回退链，并覆盖 GBK/GB2312/GB18030/Big5/Shift_JIS/
+    ///      EUC-JP/EUC-KR 及单字节族，均经 golden 逐字节比对。
+    ///
+    /// 注意 `decode(bytes:)` 的显式 charset 参数只吃**规范名**（`GBK` / `BIG5` /
+    /// `SHIFT-JIS`…），因此这里把 charset 名做一次归一：大写、`_` → `-`。
     private func decodeBody(_ data: Data, charset: String?) -> String {
-        if let charset = charset?.lowercased(),
-           let encoding = String.Encoding(stringIOSuffix: charset) {
-            return String(data: data, encoding: encoding) ?? String(decoding: data, as: UTF8.self)
-        }
-        // 默认 UTF-8
-        if let s = String(data: data, encoding: .utf8) { return s }
-        return String(decoding: data, as: UTF8.self)
+        JsNetTextDecoder.decode(bytes: [UInt8](data),
+                                explicitCharset: Self.normalizedCharsetName(charset),
+                                contentTypeHeader: nil)
     }
-}
 
-private extension String.Encoding {
-    /// 粗略将 charset 名映射到 String.Encoding（覆盖常用情况）。
-    /// macOS/iOS 支持 gbk/big5 等；Linux corelibs Foundation 不具备这些编码，
-    /// 仅在 Apple 平台启用全量映射，Linux 回退到 UTF-8（仅影响真实网络解码路径，不影响规则解析）。
-    #if os(macOS) || os(iOS)
-    init?(stringIOSuffix suffix: String) {
-        switch suffix {
-        case "utf-8", "utf8": self = .utf8
-        case "gbk": self = .gbk
-        case "gb2312", "gb18030": self = .gb18030
-        case "big5": self = .big5
-        case "iso-8859-1", "latin1": self = .isoLatin1
-        case "ascii": self = .ascii
-        case "utf-16", "utf16": self = .utf16
-        case "utf-32", "utf32": self = .utf32
-        default: return nil
-        }
+    /// 把 charset 名归一为解码器认得的规范形式（大写、下划线转连字符）。
+    /// 空串或全空白视为「未指定」。
+    private static func normalizedCharsetName(_ charset: String?) -> String? {
+        guard let charset = charset?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !charset.isEmpty else { return nil }
+        return charset.uppercased().replacingOccurrences(of: "_", with: "-")
     }
-    #else
-    init?(stringIOSuffix suffix: String) {
-        let s = suffix.lowercased()
-        if s == "utf-8" || s == "utf8" || s == "ascii" { self = .utf8 }
-        else { return nil }
-    }
-    #endif
 }
