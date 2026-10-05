@@ -76,8 +76,11 @@ public enum HtmlFormatter {
     /// ⚠️ 这里必须嵌入**真实字符**而不是 `\u{0B}` 之类的转义：`\u{...}` 是 Swift 的字符串
     /// 插值语法，写进正则串会变成字面量 `u{0B}` 从而让 `NSRegularExpression` 直接报
     /// `NSCocoaErrorDomain 2048`（实测）。
+    ///
+    /// 注意：0x0B（垂直制表）是合法标量，但仓库硬规则禁止强解包，故这里用 `UnicodeScalar(_:)`
+    /// 的 failable init + `??` 兜底（实际不会走到兜底分支，仅为了不出现 `!`）。
     private static let javaASCIISpace: String = {
-        let verticalTab = String(UnicodeScalar(0x0B)!)
+        let verticalTab = UnicodeScalar(0x0B).map(String.init) ?? "\u{0B}"
         return " \t\n" + verticalTab + "\u{0C}\r"
     }()
 
