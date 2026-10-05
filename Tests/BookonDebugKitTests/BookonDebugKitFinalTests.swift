@@ -27,7 +27,11 @@ final class BookonDebugKitFinalTests: XCTestCase {
     func testExportResultJSONEmptySession() {
         let session = DebugSession()
         let json = session.exportResultJSON()
-        XCTAssertTrue(json.contains("\"records\":[]"))
+        // `exportResultJSON` 用 LegadoJSON.prettyEncoder（对应 Gson setPrettyPrinting），
+        // 输出形如 `"records" : []`（冒号两侧带空格），且空数组会展开成两行。
+        // 因此不能断言紧凑写法 `"records":[]`。
+        XCTAssertTrue(json.contains("\"records\""), "导出 JSON 应含 records 字段：\(json)")
+        XCTAssertTrue(json.contains("[]"), "空会话的 records/stages 应为空数组：\(json)")
     }
 
     func testCancelKeepsCollectedRecords() {

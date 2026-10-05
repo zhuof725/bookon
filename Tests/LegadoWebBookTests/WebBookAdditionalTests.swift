@@ -118,6 +118,10 @@ final class WebBookAdditionalTests: XCTestCase {
         var chapter = BookChapter(url: "http://synthetic.test/v/1", title: "第一卷")
         chapter.isVolume = true
         chapter.tag = "分卷描述"
+        // 对应 Kotlin WebBook.kt:391 —— 分卷且 chapter.url 以 chapter.title 开头时
+        // 直接返回 chapter.tag，不解析正文规则。
+        // 上面的 url 不满足 hasPrefix(title)，需按语义构造。
+        chapter.url = "第一卷::http://synthetic.test/v/1"
         let content = try await WebBook.getContentAwait(bookSource: src, book: book, bookChapter: chapter, options: opts)
         XCTAssertEqual(content, "分卷描述")
     }

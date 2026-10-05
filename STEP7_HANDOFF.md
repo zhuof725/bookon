@@ -31,12 +31,29 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 | target | 用例数 |
 |---|---|
-| LegadoWebBookTests（流程层，@testable） | 154 |
+| LegadoWebBookTests（流程层，@testable） | 155 |
 | LegadoWebBookPublicAPITests（流程层，非 @testable） | 5 |
 | BookonDebugKitTests（B 段） | 82 |
 
-> 说明：以上为**本地 typecheck + 逻辑推演 + golden 本地生成**验证。154/5/82 个测试的
+> 说明：以上为**本地 typecheck + 逻辑推演 + golden 本地生成**验证。155/5/82 个测试的
 > **运行时通过**、iOS==macOS 用例数相等、golden 逐条比对，需 macOS CI 执行确认。
+
+## 二之二、CI 首轮暴露并已修复的缺陷（Linux 本地测不到的盲区）
+
+| # | 缺陷 | 影响 | 修复 |
+|---|---|---|---|
+| 1 | `WebBookNetwork.decodeBody` 用了 `String.Encoding.gbk/.gb18030/.big5` | **编译失败**，test-macos 的 Build 步骤直接挂 | 这三个成员在 Foundation 里不存在（只在 CF `CFStringEncoding` 层面）。改走 `JsNetTextDecoder.decode(bytes:explicitCharset:contentTypeHeader:)`，与 AnalyzeUrl 共用同一套经 golden 验证的解码器；同时把「严格解码 + 静默退化成 UTF-8 乱码」纠正为 Kotlin 的「容错解码 → U+FFFD」 |
+| 2 | `Book.isWebFile/isOnLineTxt/isAudio/isVideo` 用 `type == BookType.x` | **行为不一致**：组合类型书（如 文本+音频）在 Kotlin 判 true、Swift 判 false，副文歌词/弹幕分支被整段跳过 | Kotlin 是 `type and bookType > 0` 位测试。新增 `Book.isType(_:)`，四个属性全部改用它 |
+
+> 缺陷 1 之所以本地全绿：那段映射被 `#if os(macOS) || os(iOS)` 包着，Linux 走 `#else`，
+> **Darwin 分支根本没被编译过**。
+> 防回归：新增 `scripts/verify_platform_apis.py`（静态扫描 `String.Encoding` 的不存在成员），
+> 已接入 CI `test-macos` 的 `Verify platform-only API usage` 步骤。
+
+其余首轮失败均为**测试期望写错**（产品代码与 Kotlin 逐行一致），已按真实语义修正：
+`canReName` 是「规则非空白即允许改名」而非「字面值判定」；`init` 规则选中的元素会成为新解析根；
+`<usehtml>` 须由规则直接选中该元素；`BookChapter` 是 struct（值传递），副作用留在内部副本；
+`fetchSubContent` 成功时不打日志；`exportResultJSON` 用 `.prettyPrinted` 输出 `"records" : []`（冒号带空格）。
 
 ## 三、CI 三 job + build-ipa（需推送 GitHub 触发）
 

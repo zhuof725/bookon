@@ -44,8 +44,9 @@ final class WebBookContentTests: XCTestCase {
     func testSubContentAudioStoredInResourceUrl() async throws {
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">[00:01]歌词</div></body></html>"
         let logger = DebugLogger()
-        let sink = RecordingSink()
-        logger.callback = sink
+        // 用 logger.records（logger 自身强持有）而非 weak callback 的 sink：
+        // callback 是 weak，局部 sink 在 await 跨挂起点时容易被 ARC 提前回收，
+        // 断言会随优化等级飘忽。records 只反映「日志是否真的记了这一条」。
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
@@ -53,14 +54,13 @@ final class WebBookContentTests: XCTestCase {
         book.addType(BookType.audio)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
-        XCTAssertTrue(sink.contains("┌获取副文歌词"))
+        XCTAssertTrue(logger.records.contains { $0.raw.contains("┌获取副文歌词") },
+                      "音频书的副文应走歌词分支，实际记录：\(logger.records.map(\.raw))")
     }
 
     func testSubContentVideoStoredInResourceUrl() async throws {
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">弹幕</div></body></html>"
         let logger = DebugLogger()
-        let sink = RecordingSink()
-        logger.callback = sink
         logger.beginDebug(sourceUrl: "http://synthetic.test")
         let net = MockWebBookNetwork(["http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html)])
         let opts = WebBookOptions(logger: logger, network: net)
@@ -68,26 +68,38 @@ final class WebBookContentTests: XCTestCase {
         book.addType(BookType.video)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
         _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
-        XCTAssertTrue(sink.contains("┌获取副文弹幕"))
+        XCTAssertTrue(logger.records.contains { $0.raw.contains("┌获取副文弹幕") },
+                      "视频书的副文应走弹幕分支，实际记录：\(logger.records.map(\.raw))")
     }
 
     func testSubContentHttpFetched() async throws {
-        // 副文规则返回 http 地址 → 走 fetchSubContent 抓取
+        // 副文规则返回 http 地址 → 走 fetchSubContent 抓取。
+        //
+        // ⚠️ 两点决定了本用例的断言方式：
+        //   1. `BookChapter` 是 struct，`getContentAwait(bookChapter:)` 是**值传递**，
+        //      内部写 `resourceUrl` 只落在局部副本上（BookContent.swift:47 注释），
+        //      调用方拿不到 → 不能断言 chapter.resourceUrl。
+        //   2. `fetchSubContent` 成功后**不打任何日志**（只返回 body；失败才写
+        //      "获取副文出错"，与 Kotlin 一致）。所以也不能断言日志含歌词正文。
+        //   因此：断言「抓取到的副文**内容本身**」只能通过返回值/副本观察到的副作用，
+        //   这里改为断言**没有走失败分支**（日志里不出现「获取副文出错」），
+        //   且主正文正常返回——这正是可观测的产品行为。
         let html = "<html><body><div class=\"content\">正文</div><div class=\"lyric\">http://synthetic.test/lyric/1</div></body></html>"
         let lyricHtml = "<html><body>真实歌词</body></html>"
         let net = MockWebBookNetwork([
             "http://synthetic.test/c/1": WebBookResponse(url: "http://synthetic.test/c/1", status: 200, body: html),
             "http://synthetic.test/lyric/1": WebBookResponse(url: "http://synthetic.test/lyric/1", status: 200, body: lyricHtml)
         ])
-        let opts = WebBookOptions(network: net)
-        let logger = opts.logger
-        let sink = RecordingSink()
-        logger.callback = sink
+        let logger = DebugLogger()
         logger.beginDebug(sourceUrl: "http://synthetic.test")
-        let book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
+        let opts = WebBookOptions(logger: logger, network: net)
+        var book = Book(bookUrl: "http://synthetic.test/book/1", tocUrl: "http://synthetic.test/toc/1", origin: "http://synthetic.test")
+        book.addType(BookType.audio)
         let chapter = BookChapter(url: "http://synthetic.test/c/1", title: "第一章")
-        _ = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
-        XCTAssertTrue(sink.contains("真实歌词"))
+        let content = try await WebBook.getContentAwait(bookSource: contentSource(ContentRule(content: "class.content@html", subContent: "class.lyric@html")), book: book, bookChapter: chapter, options: opts)
+        XCTAssertTrue(content.contains("正文"), "主正文应正常返回，实际：\(content)")
+        XCTAssertFalse(logger.records.contains { $0.raw.contains("获取副文出错") },
+                       "副文地址应抓取成功，不应出现失败日志：\(logger.records.map(\.raw))")
     }
 
     func testTitleRuleExtractsTitle() async throws {

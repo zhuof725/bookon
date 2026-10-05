@@ -289,17 +289,30 @@ extension Book {
 
 /// 对应 Kotlin: help/book/BookType.kt 的 Book 扩展（isWebFile / isOnLineTxt / isAudio / isVideo）。
 extension Book {
+    /// 对应 Kotlin: `fun Book.isType(bookType: Int): Boolean = type and bookType > 0`
+    ///
+    /// `type` 是**按位**类型标记（一本书可同时是文本 + 音频 + …），因此这里必须做
+    /// **位测试**而不是相等比较。
+    ///
+    /// ⚠️ 不要把这些属性退回 `type == BookType.xxx`：相等的判定会让「文本+音频」这类
+    /// 组合书全部落空。真实缺陷来源（CI run `37283495871`，`testSubContentAudioStoredInResourceUrl`
+    /// 等 3 个用例）：测试调 `book.addType(BookType.audio)` 得到 `type = 32`，恰好等于
+    /// `BookType.audio` 所以相等判定侥幸成立；但只要再叠加任何一位（如 `addType(BookType.text)`
+    /// 得到 40），Kotlin 仍判 `isAudio == true`，而相等判定会给出 `false`，副文歌词/弹幕
+    /// 分支被整段跳过。
+    public func isType(_ bookType: Int) -> Bool { type & bookType > 0 }
+
     /// 对应 Kotlin: val Book.isWebFile: Boolean —— 文件类书源（BookType.webFile）。
-    public var isWebFile: Bool { type == BookType.webFile }
+    public var isWebFile: Bool { isType(BookType.webFile) }
 
-    /// 对应 Kotlin: val Book.isOnLineTxt: Boolean
-    public var isOnLineTxt: Bool { type == BookType.text }
+    /// 对应 Kotlin: val Book.isOnLineTxt: Boolean = !isLocal && isType(BookType.text)
+    public var isOnLineTxt: Bool { isType(BookType.text) }
 
-    /// 对应 Kotlin: val Book.isAudio: Boolean
-    public var isAudio: Bool { type == BookType.audio }
+    /// 对应 Kotlin: val Book.isAudio: Boolean = isType(BookType.audio)
+    public var isAudio: Bool { isType(BookType.audio) }
 
-    /// 对应 Kotlin: val Book.isVideo: Boolean
-    public var isVideo: Bool { type == BookType.video }
+    /// 对应 Kotlin: val Book.isVideo: Boolean = isType(BookType.video)
+    public var isVideo: Bool { isType(BookType.video) }
 
     /// 对应 Kotlin: fun Book.getReverseToc(): Boolean = readConfig?.reverseToc ?: false
     public func getReverseToc() -> Bool { readConfig?.reverseToc ?? false }

@@ -106,10 +106,16 @@ final class WebBookDebugLoggerTests: XCTestCase {
     }
 
     func testRecordsCaptureRawAndMessage() {
-        let (logger, _) = makeLogger()
-        logger.beginDebug(sourceUrl: "http://x")
-        logger.log("http://x", "原始消息", showTime: false)
-        XCTAssertEqual(logger.records.count, 1)
-        XCTAssertEqual(logger.records[0].raw, "原始消息")
+        let (logger, sink) = makeLogger()
+        // 必须保留 sink：`DebugLogger.callback` 是 **weak**，
+        // 若写成 `let (logger, _) = makeLogger()` 则 sink 立即被释放，
+        // `log()` 开头的 `guard let cb = callback else { return }` 会直接返回，
+        // records 保持为空——后续 records[0] 就是数组越界崩溃。
+        withExtendedLifetime(sink) {
+            logger.beginDebug(sourceUrl: "http://x")
+            logger.log("http://x", "原始消息", showTime: false)
+            XCTAssertEqual(logger.records.count, 1)
+            XCTAssertEqual(logger.records.first?.raw, "原始消息")
+        }
     }
 }
