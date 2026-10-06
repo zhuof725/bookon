@@ -1478,6 +1478,9 @@ Debug 的 RSS/校验书源函数明确排除（理由见脚本 EXCLUDED）。详
 - 4 个页签：**书源 / 调试 / 日志历史 / 设置**（导航、导入 4 入口、结果弹窗、横向标签条、
   源码/结果/日志标签、ShareLink 导出、日志历史、两个源码上限设置、清 Cookie/缓存、
   版本+commit+CI run —— 详见上文「如何在手机上使用」）。
+- CI 终态：run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+  （commit `a61fcdf`）四 job 全绿，`build-ipa` 产出 `BookonDebug.ipa`（1,948,134 B），
+  artifact `bookon-debug-ipa`（1,943,619 B，ID `11417751571`）。
 
 ### 如何在手机上使用
 

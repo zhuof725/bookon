@@ -4,20 +4,22 @@
 > **A/B 段**：CI 四 job 已在 GitHub 全绿（run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)），
 > 真实日志留存于 `ci_logs/step7_final_*.log`，`bookon-debug-ipa` artifact 已产出。
 > **C 段返工**（App 界面补齐 / Cookie 缓存持久化 / 7 书源端到端精确断言 / StringUtils 去强解包 / 文档）：
-> 代码与文档已完成、本地实测通过，**推送与 CI 日志需在有 GitHub 写凭据的环境执行**（见第六节）。
-> 返工完成状态详见第四节。
+> 代码、文档、推送与 CI 均已**完成并全绿**——run
+> [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)（commit `a61fcdf`，分支 `main`）
+> 四个 job（golden / test-macos / test-ios-simulator / build-ipa）**全部 success**，
+> 真实日志留存于 `ci_logs/run_37472428939/`。返工完成状态详见第四节，CI 数据详见第三节。
 
 ## 一、交付内容总览
 
 | 段落 | 内容 | 状态 |
 |---|---|---|
 | A | WebBook 流程层源码移植（搜索/详情/目录/正文/发现/调试） | ✅ 完成，typecheck 通过 |
-| A | 流程层测试（171 @testable + 5 public）+ 端到端（7 真实规则，C 段返工后） | ✅ 本地通过，CI 待推 |
-| A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ 完成，本地已生成验证 |
+| A | 流程层测试（171 @testable + 5 public）+ 端到端（7 真实规则，C 段返工后） | ✅ CI 全绿（run 37472428939） |
+| A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ CI 全绿（2391 条用例） |
 | B | BookonDebugKit（@Observable：仓库/会话/日志/设置/清 Cookie 缓存） | ✅ 完成 |
-| B | BookonDebugKitTests（145 用例，含 63 条 public 测试） | ✅ 完成 |
+| B | BookonDebugKitTests（147 用例，含 65 条 public 测试） | ✅ CI 全绿（run 37472428939） |
 | C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成（C 段返工后界面按第四节最终状态） |
-| C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，artifact 已上传 |
+| C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，`bookon-debug-ipa` artifact 已上传 |
 | C | **返工**：App 界面补齐 / Cookie 缓存持久化 / 端到端 7 书源精确断言 / StringUtils 强解包 / 文档 | ✅ 完成（详见第四节） |
 | D | README 差异表 / 不做清单 / 手机使用说明 / FUNCTION_MAPPING | ✅ 完成 |
 
@@ -26,7 +28,7 @@
 ```
 scripts/local_typecheck.sh          -> ✅ 类型检查通过（源码，含 shim）
 scripts/local_typecheck_tests.sh    -> 流程层测试 typecheck 通过
-scripts/local_typecheck_bookon.sh   -> BookonDebugKit 测试 typecheck 通过（9 文件 / 145 用例）
+scripts/local_typecheck_bookon.sh   -> BookonDebugKit 测试 typecheck 通过（9 文件 / 147 用例）+ re-export 回归探针
 python3 scripts/verify_functions.py -> 「Kotlin 有但 Swift 没实现的函数」清单：空
 python3 scripts/verify_fields.py    -> 「Kotlin 有但 Swift 没实现的字段」清单：空
 python3 scripts/verify_platform_apis.py     -> 未发现 String.Encoding 成员名误用（空）
@@ -42,10 +44,12 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 |---|---|
 | LegadoWebBookTests（流程层，@testable；含新增 `WebBookRealSourcesEndToEndTests` 16 条） | 171 |
 | LegadoWebBookPublicAPITests（流程层，非 @testable） | 5 |
-| BookonDebugKitTests（B 段；含 `DebugKitPublicAPITests` 63 条 public 测试） | 145 |
+| BookonDebugKitTests（B 段；含 `DebugKitPublicAPITests` 65 条 public 测试） | 147 |
 
-> 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；171/5/145 个测试的
-> **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，需以推送后的 macOS/iOS CI 确认（见第三节）。
+> 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；171/5/147 个测试的
+> **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，已在推送后的 CI 得到确认：
+> run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+> **macOS 890 tests / 0 failures、iOS 890 tests / 0 failures（总数一致）**，见第三节。
 
 ## 二之二、CI 首轮暴露并已修复的缺陷（Linux 本地测不到的盲区）
 
@@ -97,35 +101,73 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 ## 三、CI 三 job + build-ipa
 
-> **A/B 段基线**：run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)（commit `7ad1589`）四 job 全绿，日志见下表。
-> **C 段返工**：代码已完成，**待有写凭据环境推送后重跑并回填新 run 链接**（见第六节）。下表为基线数据。
+> **C 段返工最终结果**：run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+> （commit `a61fcdf`，分支 `main`）**四个 job 全部 success**，日志留存于 `ci_logs/run_37472428939/`。
+> iOS 与 macOS 用例数**相等（均为 890）**，由 `scripts/ios_sim_test.sh` 逐 bundle 累加后与
+> macOS artifact 比对得出（见下方「总数一致」小节）。
 
 `.github/workflows/test.yml` 现有 4 个 job（+ 1 个 `live-smoke` 默认 skipped）：
 
-| job | runner | 实测结果（run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)，commit `7ad1589`） | 日志 |
+| job | runner | 实测结果（run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)，commit `a61fcdf`） | 日志 |
 |---|---|---|---|
-| **golden** | ubuntu-latest | ✅ success —— **24 个用例文件 / 2391 条**（HtmlFormatter 85、wordCount 35、UrlOption 84、URL 编码 299、OkHttp 系列、jsoup 91、Rhino 74、Java MessageDigest 2、Rhino 数字入参 42 …） | `ci_logs/step7_final_golden.log` |
-| **test-macos** | macos-14 | ✅ success —— **Executed 809 tests, 0 failures**（1 skipped） | `ci_logs/step7_final_macos.log` |
-| **test-ios-simulator** | macos-14 | ✅ success —— scheme `LegadoBookSource-Package`，**809 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 809）`；App target 构建通过；`[verify_xcodeproj_format] Xcode=15.4 objectVersion=63 → OK` | `ci_logs/step7_final_ios.log` |
-| **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,810,407 B），artifact `bookon-debug-ipa`（1,806,528 B）已上传 | `ci_logs/step7_final_build_ipa.log` |
+| **golden** | ubuntu-latest | ✅ success —— **24 个用例文件 / 2391 条**（HtmlFormatter 85、wordCount 35、UrlOption 84、URL 编码 299、OkHttp 44、jsoup 91、Rhino 74、Java MessageDigest 2、Rhino 数字入参 42 …） | `ci_logs/run_37472428939/golden.log` |
+| **test-macos** | macos-14 | ✅ success —— **`Executed 890 tests, with 1 test skipped and 0 failures`** | `ci_logs/run_37472428939/test-macos.log` |
+| **test-ios-simulator** | macos-14 | ✅ success —— `** TEST SUCCEEDED **`，逐 **13 个 xctest bundle** 累加 **890 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 890）。` | `ci_logs/run_37472428939/test-ios-simulator.log` |
+| **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,948,134 B），artifact `bookon-debug-ipa`（1,943,619 B）已上传，ID `11417751571` | `ci_logs/run_37472428939/build-ipa.log` |
 | live-smoke | ubuntu-latest | skipped（默认不跑真实网络） | — |
 
-> ⚠️ C 段返工新增了 16 个端到端用例与 63 个 DebugKit public 测试，**预期**新 run 的
-> macOS / iOS 用例数会高于 809（新增后本地计数：LegadoWebBookTests 171、BookonDebugKitTests 145）。
-> 最终以新 run 的真实日志为准，不得沿用旧数字。
+**artifact**（run 37472428939）：`bookon-debug-ipa`（1,943,619 B，ID `11417751571`）。
+下载地址：<https://github.com/zhuof725/bookon/actions/runs/37472428939/artifacts/11417751571>。
 
-**artifact**（run 37310649613）：`golden-data`（227,811 B）、`macos-test-count`（160 B，内容 `809`）、`bookon-debug-ipa`（1,806,528 B）。
+### 「iOS == macOS 用例数相等」的口径说明
 
-### 复现确认（后续两次推送同样全绿）
+`xcodebuild test` 顶层那行显示的是 `Executed 171 tests`——**171 是单个 xctest 进程**
+（`LegadoBookSource-Package` 默认 bundle，即 `LegadoWebBookTests`）的数字，**不是 iOS 全量**。
+`scripts/ios_sim_test.sh:88-108` 会遍历日志里**所有 13 个 `*.xctest` bundle** 的
+`Executed N test` 行并累加，得到 iOS 全量后与 macOS artifact `macos_test_count.txt` 比对：
+
+| xctest bundle | 用例数 |
+|---|---|
+| BookonDebugKitTests | 147 |
+| LegadoAnalyzeRulePublicAPITests | 13 |
+| LegadoAnalyzeRuleTests | 129 |
+| LegadoBookSourcePublicAPITests | 3 |
+| LegadoBookSourceTests | 14 |
+| LegadoHTMLEnginePublicAPITests | 4 |
+| LegadoHTMLEngineTests | 178 |
+| LegadoNetworkPublicAPITests | 16 |
+| LegadoNetworkTests | 98 |
+| LegadoRuleEnginePublicAPITests | 5 |
+| LegadoRuleEngineTests | 107 |
+| LegadoWebBookPublicAPITests | 5 |
+| **LegadoWebBookTests**（C 段 e2e 所在） | **171** |
+| **合计** | **890** ✅ |
+
+> 上表逐项相加 = 890，与 iOS 脚本报告值、macOS `All tests` 汇总值三者**完全一致**。
+
+### 复现确认
 
 | run | commit | 结果 |
 |---|---|---|
-| [37310649613](https://github.com/zhuof725/bookon/actions/runs/37310649613) | `7ad1589` | ✅ 4 job 全绿（上表数据来源） |
+| [37310649613](https://github.com/zhuof725/bookon/actions/runs/37310649613) | `7ad1589` | ✅ 4 job 全绿（A/B 段基线） |
 | [37312666887](https://github.com/zhuof725/bookon/actions/runs/37312666887) | `489fbed` | ✅ 4 job 全绿（仅文档/日志变更） |
 | [37313519896](https://github.com/zhuof725/bookon/actions/runs/37313519896) | `315b58e` | ✅ 4 job 全绿（含 HtmlFormatter 去强解包改动） |
 | [37314891664](https://github.com/zhuof725/bookon/actions/runs/37314891664) | `8e988aa` | ✅ 4 job 全绿（文档补充） |
+| [**37472428939**](https://github.com/zhuof725/bookon/actions/runs/37472428939) | **`a61fcdf`** | ✅ **4 job 全绿（C 段返工终版，890 tests / 0 failures）** |
 
-> **四次连续全绿**说明修复稳定、非偶发。`live-smoke` 仅在 `workflow_dispatch` 时运行，push 下为 skipped（预期）。
+### C 段返工的 CI 收敛过程（7 轮，含 3 类真实移植缺陷）
+
+| run | 结果 | 根因 / 修复 |
+|---|---|---|
+| 37437895722 | ❌ 6 例失败 | `DebugSettings` 显式构造参数被空存储静默冲掉 → 修设置语义 |
+| 37441598115 | ❌ 16 例失败 | `.copy` 单文件资源在 bundle 内被扁平化 → 修资源加载路径 |
+| 37444288772 | 💥 SIGABRT | `BookBox` inout 独占性冲突（`&class属性` 长期写访问）→ 改局部变量 |
+| 37449176865 | 💥 SIGABRT | 得奇小说网 e2e 字典字面量重复键 → 去重 |
+| 37450644690 | ❌ 2 例失败 | JSONPath 多元素被降级成字符串 → 新增 `.jsonList` 保留结构 |
+| 37463875191 | ❌ 1 例失败 | `book`/`chapter` 被绑成字符串（Kotlin 绑的是对象）→ 加 `jsFields` |
+| **37472428939** | ✅ **全绿** | App target 缺 `DebugVerbosity` 可见性 → `@_exported import LegadoBookSource` |
+
+> 后三项是**真实移植缺陷**（不是测试写错），根因与复现见「二之三」表与第四节 4.4b/4.4c。
 
 ### 收敛过程（11 轮 CI，56 → 0 失败）
 
@@ -284,6 +326,51 @@ bindings["book"] = book        // ← BaseBook 对象，可访问 book.bookUrl
 `bookUrl` 为真值且含 `sourceId=4001`（正则才匹配得上）、可选字段「存在但为空串」
 （不会让 JS 取到 `undefined`）、空 Book 不崩溃、`InMemoryBook` 走默认空实现。
 
+### 4.4d CI 第 14 轮：App target 缺 `DebugVerbosity` 可见性（build-ipa 编译失败）
+
+run 37467005822 时 `test-macos`（890 tests / 0 failures）与 `test-ios-simulator`
+（171 tests / 0 failures，`** TEST SUCCEEDED **`）**都已全绿**，只剩 `build-ipa` 失败：
+
+```
+App/SettingsView.swift:36:44: error: cannot find 'DebugVerbosity' in scope
+App/SettingsView.swift:37:47: error: cannot find 'DebugVerbosity' in scope
+##[error]Process completed with exit code 65.
+```
+
+**根因不是 App 漏写 import，而是提供方的公开 API 泄漏**：
+
+`DebugVerbosity` 定义在 **LegadoBookSource**（`DebugLogger.swift:231`），而
+`App/SettingsView.swift` 只写了 `import BookonDebugKit`。因为
+`DebugSettings.verbosity` 是 **BookonDebugKit 里 public 类型的 public 属性**，
+其类型属于另一个模块；Swift **不会**把「成员类型所属模块」沿属性访问链透传给调用方：
+
+```swift
+settings.verbosity            // ✅ 能过（不写类型名）
+DebugVerbosity.normal         // ❌ cannot find 'DebugVerbosity' in scope
+```
+
+同一问题不止一处：`DebugSession.logger` 的 public 类型 `DebugLogger` 也来自
+LegadoBookSource。
+
+**修复**：
+
+- 新增 `Sources/BookonDebugKit/Reexports.swift`，内容仅 `@_exported import LegadoBookSource`。
+  只要公开 API 引用了某模块的类型，该模块就应被**重新导出**——把「每个用到
+  `DebugSettings.verbosity` / `DebugLogger` 的文件都要记得多写一行 import」这条**易漏**约束
+  收口到一处。
+- `App/SettingsView.swift`、`App/LogHistoryView.swift` 补上显式 `import LegadoBookSource`
+  （自文档化；两文件此前都缺）。
+
+**本地验证**：新增 `scripts/verify/reexport_verbosity_probe.swift`——**只 import
+BookonDebugKit**，却使用 `DebugVerbosity` / `DebugLogger` → **PASS=12 FAIL=0**。
+**负向对照**（临时删掉 `Reexports.swift` 重编该模块）复现出与 CI **完全一致**的报错
+（`cannot find type 'DebugVerbosity' in scope` ×4、`cannot find 'DebugLogger' in scope` ×1），
+证明探针能守住该回归。已并入 `scripts/local_typecheck_bookon.sh` 第 4 步。
+
+**CI 确认**：run 37472428939 的 `build-ipa` 日志中 `SettingsView.swift` 正常参与
+`SwiftCompile`（target `BookonDebug`），`cannot find 'DebugVerbosity'` 出现 **0 次**，
+`BUILD SUCCEEDED`、IPA 打包成功。
+
 ### 4.5 隐私扫描（5 个提取书源）
 
 扫描 `loginUrl` / `header` / `variable` / `cookie` / `token` / `authorization` 字段：
@@ -331,7 +418,7 @@ bindings["book"] = book        // ← BaseBook 对象，可访问 book.bookUrl
 **测试**
 - `Tests/LegadoWebBookTests/`（17 个文件，171 用例）
 - `Tests/LegadoWebBookPublicAPITests/`（1 个文件，5 用例）
-- `Tests/BookonDebugKitTests/`（9 个文件，145 用例）+ `Resources/{配置文件_14个,malformed_sources}.json`
+- `Tests/BookonDebugKitTests/`（9 个文件，147 用例）+ `Resources/{配置文件_14个,malformed_sources}.json`
 - `Tests/LegadoWebBookTests/Resources/{配置文件_14个,synthetic_flow_pages}.json`
 
 **验收/文档/CI**
@@ -347,6 +434,8 @@ bindings["book"] = book        // ← BaseBook 对象，可访问 book.bookUrl
 - `reference/kotlin/analyzeRule/webBook/*.kt`、`reference/kotlin/analyzeRule/Debug.kt`
 - `.github/workflows/test.yml`、`Package.swift`、`README.md`、`FUNCTION_MAPPING.md`、`.gitignore`
 - `ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`（run 37310649613 的真实 CI 日志）
+- `ci_logs/run_37467005822/{test_macos_full,test_ios,build_ipa}.log`（第 14 轮 build-ipa 失败的现场日志）
+- `ci_logs/run_37472428939/{golden,test-macos,test-ios-simulator,build-ipa}.log`（**终版全绿**的真实 CI 日志）
 
 ## 五、关键文件清单（C 段返工，本次新增/修改）
 
@@ -364,50 +453,59 @@ bindings["book"] = book        // ← BaseBook 对象，可访问 book.bookUrl
 - `Sources/BookonDebugKit/DebugTab.swift`（**新增**：标签枚举 + `DebugKeyExample`）
 - `Sources/BookonDebugKit/AppBuildInfo.swift`（**新增**：version / commit / CI run）
 - `Sources/BookonDebugKit/ImportOutcome.swift`（**新增**：导入结果/弹窗文案）
+- `Sources/BookonDebugKit/Reexports.swift`（**新增，第 14 轮**：`@_exported import LegadoBookSource`，
+  修 `DebugVerbosity` / `DebugLogger` 在 App target 不可见）
 - `Sources/BookonDebugKit/{BookSourceRepository,DebugSession,DebugLogStore,DebugSettings}.swift`（修改）
 
 **内核（LegadoBookSource）**
 - `Sources/LegadoBookSource/RuleEngine/StringUtils.swift`（删除强解包，新增 `firstScalarValue(_:)`）
 - `Sources/LegadoBookSource/RuleEngine/DebugLogger.swift`、`WebBook/Debug.swift`（调试钩子/响应留存）
+- `Sources/LegadoBookSource/RuleEngine/AnalyzeRule+Dispatch.swift`（`.json` 分支保留 JSON 结构，返回 `.jsonList`）
+- `Sources/LegadoBookSource/RuleEngine/RuleValue.swift`（新增 `.jsonList` case）
+- `Sources/LegadoBookSource/RuleEngine/JSEngine.swift`（JSON→JS 递归转换；`fieldsToJSObject`；`book`/`chapter` 绑对象）
+- `Sources/LegadoBookSource/RuleEngine/AnalyzeRuleDependencies.swift`（`BookData`/`ChapterData` 新增 `jsFields`）
+- `Sources/LegadoBookSource/WebBook/WebBookSupport.swift`（`BookBox`/`SearchBookBox`/`BookChapterBox` 实现 `jsFields`）
+- `Sources/LegadoBookSource/WebBook/WebBookNetwork.swift`（`MockWebBookNetwork` 支持前缀匹配 + 记录请求 URL）
 
 **测试**
 - `Tests/LegadoWebBookTests/WebBookRealSourcesEndToEndTests.swift`（**新增**，16 用例）
 - `Tests/LegadoWebBookTests/WebBookEndToEndTests.swift`（删除弱断言，改精确值）
-- `Tests/BookonDebugKitTests/DebugKitPublicAPITests.swift`（**新增/扩写**，63 条 public 测试）
+- `Tests/BookonDebugKitTests/DebugKitPublicAPITests.swift`（**新增/扩写**，65 条 public 测试）
 - `Tests/LegadoWebBookTests/Resources/real/{real_sources_5,muli_real_source,qimo_real_source}.json`（**新增**）
 
 **验收 / 文档 / CI**
 - `scripts/verify/e2e_probe.swift`、`scripts/verify/e2e_assert.swift`（本地探针 + 精确断言实测）
+- `scripts/verify/{json_element,mock_network,js_book_binding,reexport_verbosity}_probe.swift`（本地回归探针）
 - `scripts/verify_debugkit_logic.sh`（DebugKit 逻辑实测 PASS=28 FAIL=0）
+- `scripts/local_typecheck_bookon.sh`（追加 re-export 回归检查）
 - `Package.swift`（注册 `Resources/real/` 资源）
 - `README.md`（「如何在手机上使用」按新界面重写 + 两个上限章节 + 端到端章节 + B 段组件表）
 - `STEP7_HANDOFF.md`（本文件）
-- `ci_logs/`（三 job + build-ipa 真实日志）
+- `ci_logs/run_37472428939/`（三 job + build-ipa 真实日志，run 全绿）
+- `App/SettingsView.swift`、`App/LogHistoryView.swift`（补显式 `import LegadoBookSource`）
 
 ## 六、已完成 / 仍需人工
 
-**本次 C 段返工已完成（本地可复现证据）**
+**本次 C 段返工已完成（本地可复现证据 + CI 实测）**
 - ✅ App 界面按需求补齐（书源列表点行导航 / 导入 4 入口 / 结果弹窗 / 6 页签横向标签条 /
   源码与结果页签 / ShareLink 导出 / 日志历史 / 设置两个上限 + 清 Cookie/缓存 + 版本信息）。
 - ✅ Cookie / 缓存持久化：共享文件实例（`Documents/cookies.json`、`Documents/legado_cache.json`），跨次调试保留。
 - ✅ 端到端：7 真实书源 4 阶段**精确值**断言，删弱断言，裸 IP / `#md` / Punycode 专门断言，
   muli/qimo 逐字节复制（md5 一致），`Package.swift` 注册资源。
 - ✅ 本地实测（跑真实产品代码）：DebugKit 逻辑 **PASS=28 FAIL=0**；
-  端到端精确断言 **PASS=63 FAIL=0**；全量 typecheck（源码 + 流程层测试 + BookonDebugKit 测试）**通过**。
-- ✅ StringUtils 删除 `unicodeScalars.first!`，改安全写法；全仓 grep 结果如实列于 4.4（未新增强解包）。
+  端到端精确断言 **PASS=63 FAIL=0**；re-export 回归探针 **PASS=12 FAIL=0**；
+  全量 typecheck（源码 + 流程层测试 + BookonDebugKit 测试）**通过**。
+- ✅ StringUtils 删除 `unicodeScalars.first!`，改安全写法；全仓 grep 结果如实列于 4.4（强解包已清零）。
 
-**仍需人工 / CI（本沙箱无法完成）**
-- ⚠️ **推送与 CI 触发**：本沙箱**无 GitHub 写凭据**（`git push` 报
-  `could not read Username for 'https://github.com'`；credential-helper 无凭据）。
-  请在有凭据的环境执行（分支为 `step7-debug-app`）：
+**CI 已全绿（run 37472428939，commit `a61fcdf`，分支 `main`）**
+- ✅ **golden** success（24 文件 / 2391 条）；**test-macos** success（`Executed 890 tests, 0 failures`）；
+  **test-ios-simulator** success（`** TEST SUCCEEDED **`，逐 13 bundle 累加 890，0 failures）；
+  **build-ipa** success（`MinimumOSVersion = 17.0 ✓`，`BookonDebug.ipa` 1,948,134 B）。
+- ✅ **iOS 与 macOS 用例数相等（均为 890）**，由 `ios_sim_test.sh` 逐 bundle 累加后与 macOS artifact 比对得出。
+- ✅ 真实日志留存于 `ci_logs/run_37472428939/`（golden / test-macos / test-ios-simulator / build-ipa 四份）。
+- ✅ 7 书源端到端（含此前失败的 `testTaoyueInfoTocContentPreciseValues`、`testQimoSearchInfoTocPreciseValues`）
+  在 CI 日志中逐条 `passed`。
 
-  ```bash
-  git push origin HEAD:step7-debug-app
-  ```
-
-  或直接应用本仓库补丁：`/workspace/step7_c_rework.patch`（含 2 个 commit）。
-- ⚠️ **CI 三 job + build-ipa 真实日志**：推送后由 `.github/workflows/test.yml`
-  （golden / test-macos / test-ios-simulator / build-ipa）产出；把日志放入 `ci_logs/` 并
-  回填第三节的 run 链接、IPA 产物名与「iOS == macOS 用例数」核对结果。
-- ⚠️ App 的 SwiftUI 界面**运行时**验证（Linux 无法编译/运行 SwiftUI，需 macOS / 真机 / 模拟器手点）。
-- ⚠️ iOS / macOS 用例数相等需由 CI 的 `ios_sim_test.sh`（比对 `macos-test-count` artifact）最终确认。
+**仍需人工（沙箱无法完成）**
+- ⚠️ App 的 SwiftUI 界面**运行时**手点验证（Linux 无法编译/运行 SwiftUI，需 macOS / 真机 / 模拟器）。
+  `build-ipa` 已证明 App target **编译、archive、打包 IPA 全部通过**，但交互细节仍需人眼确认。
