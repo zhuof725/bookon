@@ -192,16 +192,97 @@ iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、
 - 本地用 `scripts/verify/e2e_assert.swift`（无 XCTest，真实产品代码）实测 **PASS=63 FAIL=0**，
   确认所有精确断言成立（含 4 阶段全链路）。
 
-### 4.4 StringUtils 强解包清理
+### 4.4 强解包清理（全仓已清零）
 
-- 删除 `Sources/LegadoBookSource/RuleEngine/StringUtils.swift` 原第 249、252 行
-  `unicodeScalars.first!`，改为安全写法（新增 `firstScalarValue(_:)`，空串返回 nil 兜底）。
-- **全仓 grep 结果（如实列出，均为本次之前既有、非新增）**：
-  `Unicode.Scalar(...)!` 9 处（`StringUtils.swift` 5 + `RealJsNetworkExtensionsProvider.swift` 4）；
-  `content!` / `analyzeByXPath!` / `analyzeByJSoup!` / `analyzeByJSonPath!` 6 处（`AnalyzeRule.swift`）；
-  `result!.isNull` 1 处（`AnalyzeRule+Dispatch.swift`）；`ind!` 1 处（`JavaURLResolver.swift`）；
-  `baseURL!` 2 处（`NetworkUtils.swift`）。**本次改动未新增任何强解包**
-  （`git diff HEAD` 中新增强解包命中数 = 0）。
+原先只清了 `StringUtils.swift` 第 249、252 行的 `unicodeScalars.first!`。
+本轮把**全仓剩余强解包一并清除**，确保「不许崩溃」是结构性保证而非局部修补。
+
+| 位置 | 原写法 | 现写法 |
+|---|---|---|
+| `StringUtils.swift:firstScalarValue` | `unicodeScalars.first!` | `unicodeScalars.first.map { $0.value } ?? 哨兵` |
+| `StringUtils.swift` ×4 | `UnicodeScalar(...)!` | 新增 `safeScalar(_:)`，非法码点回退 U+FFFD |
+| `RealJsNetworkExtensionsProvider.swift` ×4 | `Unicode.Scalar(UInt32(b))!` | 新增 `jsSafeScalar(_:)`，回退 U+FFFD |
+| `AnalyzeRule.swift` ×3 | `content!`、`analyzeByXPath!` 等 | `guard let` + 缓存局部变量 |
+| `NetworkUtils.swift` ×2 | `baseURL!` | `guard let baseURL = baseURL, !baseURL.isEmpty` |
+
+**全仓扫描结果（`Sources/`，本次实测）**：
+
+```
+try!        0 处
+as!         0 处
+fatalError  0 处
+![,)] 形态   1 处 —— 且是正则字面量 "(?!)"（否定前瞻），非强解包
+```
+
+### 4.4b CI 第 12 轮暴露的真实移植缺陷：JSONPath 多元素被降级成字符串
+
+**这轮 CI（run 37450644690）无任何崩溃，只剩 2 个断言失败，其中淘小说那个是真 bug。**
+
+真实书源「淘小说书城」的 `ruleToc.chapterUrl`：
+
+```js
+@js:var m = String(book.bookUrl).match(/sourceId=([^&]+)/);
+    '/ajax/or/authopt/ty/chapter_content?sourceName=tf&sourceId=' + m[1]
+    + '&chapterId=' + String(result.chapterId)
+```
+
+它要求 JS 里 `result` 是**带字段的对象**。而本移植的 `AnalyzeRule.getElements`
+在 json 分支把每个 JSON 对象**降级成 JSON 文本字符串**
+（`.stringList($0.map { $0.stringValue })`），`JSEngine.ruleValueToJSNative`
+再按 `stringValue` 传给 JS → `result.chapterId` 恒为 `undefined` →
+所有章节算出同一个 URL → 被 `BookChapterList` 的按 url 去重压成 **1 章**。
+
+**修复**：`RuleValue` 新增 `.jsonList` 保留结构；`getElements` 逐元素展开为 `.json`；
+`JSEngine` 增加 `.json`/`.jsonList`/`.jsonObject`/`.jsObject` → 递归转真正 JS 对象。
+
+同时（同一 run 的第 2 个失败）七猫 `searchUrl` 是纯 `@js:`（MD5 算 `sign`），
+测试无法预知完整 URL —— 给 `MockWebBookNetwork` 增加 `setPrefix(_:_:)`（最长前缀回退）
+与 `requestedURLs`（如实记录每次请求），用例改为对**真实发生过的 URL** 逐项断言。
+
+> 诚实标注：Linux 无 JavaScriptCore，本地探针 `toc_flow_probe` **仍**得 1 章
+> （`chapterUrl` 的 `@js:` 不执行 → url 兜底成同一 baseUrl → 去重剩 1）。
+> 修复正确性由 `scripts/verify/json_element_probe.swift`（PASS=8）逐条验证；
+> 真实验收以 macOS / iOS CI 为准。
+
+### 4.4c CI 第 13 轮：`book` 被绑成字符串而非对象（同一症状的第二层根因）
+
+第 12 轮的 `getElements` 修复**确实生效**（CI run 37463875191 日志实测
+`└列表大小:2`），但淘小说仍只剩 1 章，日志给出下一层根因：
+
+```
+└列表大小:2
+⇒目录0未获取到url,使用baseUrl替代
+⇒目录1未获取到url,使用baseUrl替代
+```
+
+即 `ruleToc.chapterUrl` 的 `@js:` **没算出 URL**。对比 Kotlin 源码：
+
+```kotlin
+// AnalyzeRule.kt 828 行
+bindings["book"] = book        // ← BaseBook 对象，可访问 book.bookUrl
+```
+
+而本移植当时绑的是 `bookStore?.name`（**书名字符串**）。于是
+`String(book.bookUrl)` 得 `"undefined"` → `.match(/sourceId=([^&]+)/)` 返回 null
+→ `m[1]` 抛 TypeError → 规则结果为空 → url 兜底 baseUrl → 两章相同 → 去重剩 1 章。
+
+**修复**：
+
+- `BookData` / `ChapterData` 协议新增 `jsFields: [String: String]`（带默认空实现，
+  既有 `InMemoryBook` / `InMemoryChapter` 零改动）。
+- `BookBox` / `SearchBookBox` / `BookChapterBox` 覆写 `jsFields`，暴露 Book / BookChapter
+  的真实字段（`bookUrl` / `tocUrl` / `name` / `author` / `kind` / `intro` / `wordCount` /
+  `latestChapterTitle` / `origin` / `originName` / `variable` / `totalChapterNum`；
+  章节为 `title` / `url` / `baseUrl` / `bookUrl` / `index` / `isVip` / `isPay` / `isVolume` /
+  `tag` / `wordCount` / `resourceUrl` / `imgUrl` / `variable`）。
+- `JSEngine` 新增 `fieldsToJSObject(_:fallbackName:context:)`：字段非空时绑成 **JS 对象**，
+  为空时退化为原字符串（既有调用方行为不变）。`book` / `chapter` 两个绑定改用它。
+- `chapter` 也一并从「标题字符串」改为对象（Kotlin 同为对象），`title` 绑定保持不变。
+
+**本地验证**（Linux 无 JSC，改为验证喂给 JS 的**数据源**）：
+`scripts/verify/js_book_binding_probe.swift` → **PASS=26 FAIL=0**，逐条断言
+`bookUrl` 为真值且含 `sourceId=4001`（正则才匹配得上）、可选字段「存在但为空串」
+（不会让 JS 取到 `undefined`）、空 Book 不崩溃、`InMemoryBook` 走默认空实现。
 
 ### 4.5 隐私扫描（5 个提取书源）
 
@@ -216,10 +297,23 @@ iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、
 
 | target | 用例数 |
 |---|---|
-| LegadoWebBookTests（含新增 `WebBookRealSourcesEndToEndTests` 16 条） | 171 |
-| BookonDebugKitTests（含 `DebugKitPublicAPITests` 63 条 public 测试） | 145 |
+| LegadoWebBookTests（含 `WebBookRealSourcesEndToEndTests` 16 条） | 171 |
+| BookonDebugKitTests（含 `DebugKitPublicAPITests` 65 条 public 测试） | 147 |
 
 > macOS 与 iOS 用例数相等由 CI 强制核对（`ios_sim_test.sh` 比对 `macos-test-count` artifact）。
+
+**本地探针套件（Linux，真实验收仍以 macOS/iOS CI 为准）**
+
+| 探针 | 结果 |
+|---|---|
+| `scripts/verify/json_element_probe.swift`（新增，验证本轮 JSON 结构修复） | PASS=8 FAIL=0 |
+| `scripts/verify/mock_network_probe.swift`（新增，验证前缀匹配/请求记录） | PASS=6 FAIL=0 |
+| `scripts/verify/e2e_assert.swift` | PASS=63 FAIL=0 |
+| `scripts/verify/settings_semantics_probe.swift` | PASS=13 FAIL=0 |
+| `scripts/verify/deqixs_flow_probe.swift` | PASS=13 FAIL=0 |
+| `scripts/verify/bookbox_exclusivity_probe.swift` | PASS=80 FAIL=0 |
+| `scripts/verify_debugkit_logic.sh` | PASS=28 FAIL=0 |
+| `scripts/verify/mock_network_dupkey_scan.py` | 108 处 0 命中 |
 
 **源码**
 - `Sources/LegadoBookSource/WebBook/`（9 个文件：WebBook/BookList/BookInfo/BookChapterList/BookContent/Debug/WebBookSupport/WebBookNetwork/WebBookOptions）

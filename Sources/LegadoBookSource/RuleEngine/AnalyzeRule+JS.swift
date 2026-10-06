@@ -51,6 +51,8 @@ extension AnalyzeRule {
             cache: cacheManagerValue,
             sourceKey: sourceStore?.getKey(),
             bookName: bookStore?.name,
+            bookFields: bookStore?.jsFields ?? [:],
+            chapterFields: chapterStore?.jsFields ?? [:],
             result: result,
             baseUrl: baseUrlValue,
             chapterTitle: chapterStore?.title,

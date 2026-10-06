@@ -70,6 +70,12 @@ final class JSEngine {
         var cache: CacheManagerProtocol
         var sourceKey: String?
         var bookName: String?
+        /// 书籍字段（键值均为字符串），用于把 `book` 绑成 **JS 对象**（对齐 Kotlin
+        /// `bindings["book"] = book`，BaseBook 对象可访问 `book.bookUrl`）。
+        /// 为空时退化为按 `bookName` 绑一个字符串，保持既有行为。
+        var bookFields: [String: String] = [:]
+        /// 章节字段（同上，用于 `chapter` 绑定）。
+        var chapterFields: [String: String] = [:]
         var result: RuleValue
         var baseUrl: String?
         var chapterTitle: String?
@@ -158,11 +164,26 @@ final class JSEngine {
 
         // 标量绑定
         context.setObject(bindings.sourceKey, forKeyedSubscript: "source" as NSString)
-        context.setObject(bindings.bookName, forKeyedSubscript: "book" as NSString)
+        // ── `book` 必须是**对象**，不是书名字符串 ──
+        //
+        // Kotlin: `bindings["book"] = book`（BaseBook 对象），真实书源会写
+        // `book.bookUrl` / `book.tocUrl`（如「淘小说书城」的 `ruleToc.chapterUrl`：
+        // `String(book.bookUrl).match(/sourceId=([^&]+)/)`）。
+        // 若绑成字符串，`book.bookUrl` 得 `undefined` → `.match()` 返回 null → `m[1]`
+        // 抛 TypeError → 规则结果为「未获取到url」→ 所有章节 URL 相同，被按 url 去重
+        // 压成 1 章（CI run 37463875191 实测日志：`⇒目录0未获取到url,使用baseUrl替代`）。
+        context.setObject(
+            JSEngine.fieldsToJSObject(bindings.bookFields, fallbackName: bindings.bookName, context: context),
+            forKeyedSubscript: "book" as NSString
+        )
         context.setObject(JSEngine.ruleValueToJSNative(bindings.result, context: context),
                           forKeyedSubscript: "result" as NSString)
         context.setObject(bindings.baseUrl, forKeyedSubscript: "baseUrl" as NSString)
-        context.setObject(bindings.chapterTitle, forKeyedSubscript: "chapter" as NSString)
+        // `chapter` 同理：Kotlin 绑的是 BookChapter 对象（可访问 `chapter.title` 等）。
+        context.setObject(
+            JSEngine.fieldsToJSObject(bindings.chapterFields, fallbackName: bindings.chapterTitle, context: context),
+            forKeyedSubscript: "chapter" as NSString
+        )
         context.setObject(bindings.chapterTitle, forKeyedSubscript: "title" as NSString)
         context.setObject(bindings.src, forKeyedSubscript: "src" as NSString)
         context.setObject(bindings.nextChapterUrl, forKeyedSubscript: "nextChapterUrl" as NSString)
@@ -204,6 +225,20 @@ final class JSEngine {
             // 元素等复杂类型：传其字符串化（对齐 Kotlin 把 content.toString() 交给 JS）
             return v.stringValue
         }
+    }
+
+    /// 把「字段字典」转成 JS 对象；字典为空时退化为 `fallbackName` 字符串
+    /// （保证既有调用方在没提供字段时行为不变：`book` 仍是书名）。
+    ///
+    /// 对象上额外挂 `name`（= fallbackName 或字段里的 name），让 `book.name` 也可用。
+    static func fieldsToJSObject(_ fields: [String: String], fallbackName: String?, context: JSContext) -> Any {
+        guard !fields.isEmpty else { return fallbackName as Any }
+        let obj = JSValue(newObjectIn: context)
+        for (k, v) in fields { obj?.setObject(v, forKeyedSubscript: k as NSString) }
+        if obj?.objectForKeyedSubscript("name") == nil, let n = fallbackName {
+            obj?.setObject(n, forKeyedSubscript: "name" as NSString)
+        }
+        return obj ?? (fallbackName as Any)
     }
 
     /// `JSONValue` → JS 原生值（object/array/标量逐层递归）。

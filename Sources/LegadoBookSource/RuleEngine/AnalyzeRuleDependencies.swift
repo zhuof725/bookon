@@ -55,6 +55,21 @@ public protocol BookData: AnyObject {
     var name: String { get }
     func putVariable(_ key: String, _ value: String?)
     func getVariable(_ key: String) -> String
+    /// 暴露给 `@js:` 规则的**书籍字段**（键名与 Kotlin `BaseBook` 属性一致）。
+    ///
+    /// 为什么需要它：Kotlin 的 `evalJS` 做的是 `bindings["book"] = book`（`book` 是
+    /// `BaseBook` **对象**），因此真实书源可以写 `book.bookUrl`。
+    /// 本移植早期把 `book` 绑成书名字符串，导致 `String(book.bookUrl)` 得
+    /// `"undefined"`、`book.bookUrl.match(...)` 抛 TypeError —— 真实书源
+    /// 「淘小说书城」的 `ruleToc.chapterUrl` 正好这么写，于是所有章节 URL 为空、
+    /// 被按 url 去重压成 1 章（CI run 37463875191 的实测日志）。
+    ///
+    /// 默认实现返回空字典（保持既有实现零改动）；`BookBox` 覆写为真实字段。
+    var jsFields: [String: String] { get }
+}
+
+extension BookData {
+    public var jsFields: [String: String] { [:] }
 }
 
 /// 内存默认实现。
@@ -73,6 +88,13 @@ public protocol ChapterData: AnyObject {
     var title: String { get }
     func putVariable(_ key: String, _ value: String?)
     func getVariable(_ key: String) -> String
+    /// 暴露给 `@js:` 规则的章节字段（键名对齐 Kotlin BookChapter 属性）。
+    /// 见 `BookData.jsFields` 的说明（Kotlin 绑的是对象而非字符串）。
+    var jsFields: [String: String] { get }
+}
+
+extension ChapterData {
+    public var jsFields: [String: String] { [:] }
 }
 
 public final class InMemoryChapter: ChapterData {

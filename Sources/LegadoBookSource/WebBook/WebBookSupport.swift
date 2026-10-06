@@ -99,6 +99,34 @@ public final class BookBox: BookData, RuleDataStore {
     // MARK: BookData
     public var name: String { book.name }
 
+    /// 暴露给 `@js:` 规则的书籍字段（键名对齐 Kotlin `BaseBook` 属性）。
+    ///
+    /// Kotlin 的 `evalJS` 绑的是 `bindings["book"] = book`（BaseBook 对象），真实书源
+    /// 会写 `book.bookUrl`（如「淘小说书城」的 `ruleToc.chapterUrl`）。
+    /// 本移植早期绑的是书名字符串，`book.bookUrl` 得 `undefined` → `.match()` 抛错
+    /// → 章节 URL 全空 → 被按 url 去重压成 1 章（CI run 37463875191 实测）。
+    ///
+    /// 这里只放**规则里真正会用到的**字段（bookUrl/tocUrl/name/author/kind/intro/
+    /// wordCount/latestChapterTitle/origin/originName/variable），保持体积可控。
+    public var jsFields: [String: String] {
+        var f: [String: String] = [
+            "bookUrl": book.bookUrl,
+            "tocUrl": book.tocUrl,
+            "name": book.name,
+            "author": book.author,
+            "origin": book.origin,
+            "originName": book.originName,
+            "variable": book.variable ?? "",
+        ]
+        f["kind"] = book.kind ?? ""
+        f["intro"] = book.intro ?? ""
+        f["wordCount"] = book.wordCount ?? ""
+        f["latestChapterTitle"] = book.latestChapterTitle ?? ""
+        f["durChapterTitle"] = book.durChapterTitle ?? ""
+        f["totalChapterNum"] = String(book.totalChapterNum)
+        return f
+    }
+
     // MARK: RuleDataStore（variable 以 JSON 存于 book.variable，与 Kotlin 一致）
     public func putVariable(_ key: String, _ value: String?) {
         var map = _wb_variableMap(from: book.variable)
@@ -115,6 +143,24 @@ public final class SearchBookBox: BookData, RuleDataStore {
     public init(_ searchBook: SearchBook = SearchBook()) { self.searchBook = searchBook }
 
     public var name: String { searchBook.name }
+
+    /// 暴露给 `@js:` 规则的字段（与 `BookBox.jsFields` 同一套键名，见其注释）。
+    public var jsFields: [String: String] {
+        var f: [String: String] = [
+            "bookUrl": searchBook.bookUrl,
+            "tocUrl": searchBook.tocUrl,
+            "name": searchBook.name,
+            "author": searchBook.author,
+            "origin": searchBook.origin,
+            "originName": searchBook.originName,
+            "variable": searchBook.variable ?? "",
+        ]
+        f["kind"] = searchBook.kind ?? ""
+        f["intro"] = searchBook.intro ?? ""
+        f["wordCount"] = searchBook.wordCount ?? ""
+        f["latestChapterTitle"] = searchBook.latestChapterTitle ?? ""
+        return f
+    }
 
     public func putVariable(_ key: String, _ value: String?) {
         var map = _wb_variableMap(from: searchBook.variable)
@@ -133,6 +179,27 @@ public final class BookChapterBox: ChapterData {
     public init(_ chapter: BookChapter = BookChapter()) { self.chapter = chapter }
 
     public var title: String { chapter.title }
+
+    /// 暴露给 `@js:` 规则的章节字段（键名对齐 Kotlin BookChapter 属性）。
+    /// 见 `BookData.jsFields` 的说明（Kotlin 绑的是对象而非字符串）。
+    public var jsFields: [String: String] {
+        var f: [String: String] = [
+            "title": chapter.title,
+            "url": chapter.url,
+            "baseUrl": chapter.baseUrl,
+            "bookUrl": chapter.bookUrl,
+            "index": String(chapter.index),
+            "isVip": chapter.isVip ? "true" : "false",
+            "isPay": chapter.isPay ? "true" : "false",
+            "isVolume": chapter.isVolume ? "true" : "false",
+            "variable": chapter.variable ?? "",
+        ]
+        f["tag"] = chapter.tag ?? ""
+        f["wordCount"] = chapter.wordCount ?? ""
+        f["resourceUrl"] = chapter.resourceUrl ?? ""
+        f["imgUrl"] = chapter.imgUrl ?? ""
+        return f
+    }
 
     public func putVariable(_ key: String, _ value: String?) {
         var map = _wb_variableMap(from: chapter.variable)
