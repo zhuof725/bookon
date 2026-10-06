@@ -4,20 +4,23 @@
 > **A/B 段**：CI 四 job 已在 GitHub 全绿（run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)），
 > 真实日志留存于 `ci_logs/step7_final_*.log`，`bookon-debug-ipa` artifact 已产出。
 > **C 段返工**（App 界面补齐 / Cookie 缓存持久化 / 7 书源端到端精确断言 / StringUtils 去强解包 / 文档）：
-> 代码、文档、推送与 CI 均已**完成并全绿**——run
-> [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)（commit `a61fcdf`，分支 `main`）
+> 代码、文档、推送与 CI 均已**完成并全绿**。终版为 run
+> [`37483342891`](https://github.com/zhuof725/bookon/actions/runs/37483342891)（commit `38d59cf`，分支 `main`），
 > 四个 job（golden / test-macos / test-ios-simulator / build-ipa）**全部 success**，
-> 真实日志留存于 `ci_logs/run_37472428939/`。返工完成状态详见第四节，CI 数据详见第三节。
+> 真实日志留存于 `ci_logs/run_37483342891/`。
+> 上一次同为全绿的 run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+> （commit `a61fcdf`，仅代码变更，无文档改动）结果**逐项一致**（890 == 890、IPA 大小 ~1.95 MB），
+> 说明状态稳定、非偶发。返工完成状态详见第四节，CI 数据详见第三节。
 
 ## 一、交付内容总览
 
 | 段落 | 内容 | 状态 |
 |---|---|---|
 | A | WebBook 流程层源码移植（搜索/详情/目录/正文/发现/调试） | ✅ 完成，typecheck 通过 |
-| A | 流程层测试（171 @testable + 5 public）+ 端到端（7 真实规则，C 段返工后） | ✅ CI 全绿（run 37472428939） |
+| A | 流程层测试（171 @testable + 5 public）+ 端到端（7 真实规则，C 段返工后） | ✅ CI 全绿（run 37483342891） |
 | A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ CI 全绿（2391 条用例） |
 | B | BookonDebugKit（@Observable：仓库/会话/日志/设置/清 Cookie 缓存） | ✅ 完成 |
-| B | BookonDebugKitTests（147 用例，含 65 条 public 测试） | ✅ CI 全绿（run 37472428939） |
+| B | BookonDebugKitTests（147 用例，含 65 条 public 测试） | ✅ CI 全绿（run 37483342891） |
 | C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成（C 段返工后界面按第四节最终状态） |
 | C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，`bookon-debug-ipa` artifact 已上传 |
 | C | **返工**：App 界面补齐 / Cookie 缓存持久化 / 端到端 7 书源精确断言 / StringUtils 强解包 / 文档 | ✅ 完成（详见第四节） |
@@ -48,7 +51,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 > 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；171/5/147 个测试的
 > **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，已在推送后的 CI 得到确认：
-> run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+> run [`37483342891`](https://github.com/zhuof725/bookon/actions/runs/37483342891)
 > **macOS 890 tests / 0 failures、iOS 890 tests / 0 failures（总数一致）**，见第三节。
 
 ## 二之二、CI 首轮暴露并已修复的缺陷（Linux 本地测不到的盲区）
@@ -101,23 +104,27 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 
 ## 三、CI 三 job + build-ipa
 
-> **C 段返工最终结果**：run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
-> （commit `a61fcdf`，分支 `main`）**四个 job 全部 success**，日志留存于 `ci_logs/run_37472428939/`。
+> **C 段返工最终结果**：run [`37483342891`](https://github.com/zhuof725/bookon/actions/runs/37483342891)
+> （commit `38d59cf`，分支 `main`）**四个 job 全部 success**，日志留存于 `ci_logs/run_37483342891/`。
 > iOS 与 macOS 用例数**相等（均为 890）**，由 `scripts/ios_sim_test.sh` 逐 bundle 累加后与
 > macOS artifact 比对得出（见下方「总数一致」小节）。
 
 `.github/workflows/test.yml` 现有 4 个 job（+ 1 个 `live-smoke` 默认 skipped）：
 
-| job | runner | 实测结果（run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)，commit `a61fcdf`） | 日志 |
+| job | runner | 实测结果（run [`37483342891`](https://github.com/zhuof725/bookon/actions/runs/37483342891)，commit `38d59cf`） | 日志 |
 |---|---|---|---|
-| **golden** | ubuntu-latest | ✅ success —— **24 个用例文件 / 2391 条**（HtmlFormatter 85、wordCount 35、UrlOption 84、URL 编码 299、OkHttp 44、jsoup 91、Rhino 74、Java MessageDigest 2、Rhino 数字入参 42 …） | `ci_logs/run_37472428939/golden.log` |
-| **test-macos** | macos-14 | ✅ success —— **`Executed 890 tests, with 1 test skipped and 0 failures`** | `ci_logs/run_37472428939/test-macos.log` |
-| **test-ios-simulator** | macos-14 | ✅ success —— `** TEST SUCCEEDED **`，逐 **13 个 xctest bundle** 累加 **890 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 890）。` | `ci_logs/run_37472428939/test-ios-simulator.log` |
-| **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,948,134 B），artifact `bookon-debug-ipa`（1,943,619 B）已上传，ID `11417751571` | `ci_logs/run_37472428939/build-ipa.log` |
+| **golden** | ubuntu-latest | ✅ success —— **24 个用例文件 / 2391 条**（HtmlFormatter 85、wordCount 35、UrlOption 84、URL 编码 299、OkHttp 44、jsoup 91、Rhino 74、Java MessageDigest 2、Rhino 数字入参 42 …） | `ci_logs/run_37483342891/golden.log` |
+| **test-macos** | macos-14 | ✅ success —— **`Executed 890 tests, with 1 test skipped and 0 failures`** | `ci_logs/run_37483342891/test-macos.log` |
+| **test-ios-simulator** | macos-14 | ✅ success —— `** TEST SUCCEEDED **`，逐 **13 个 xctest bundle** 累加 **890 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 890）。` | `ci_logs/run_37483342891/test-ios-simulator.log` |
+| **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,948,132 B），artifact `bookon-debug-ipa`（1,943,617 B）已上传，ID `11422502155` | `ci_logs/run_37483342891/build-ipa.log` |
 | live-smoke | ubuntu-latest | skipped（默认不跑真实网络） | — |
 
-**artifact**（run 37472428939）：`bookon-debug-ipa`（1,943,619 B，ID `11417751571`）。
-下载地址：<https://github.com/zhuof725/bookon/actions/runs/37472428939/artifacts/11417751571>。
+**artifact**（run 37483342891）：`bookon-debug-ipa`（1,943,617 B，ID `11422502155`）。
+下载地址：<https://github.com/zhuof725/bookon/actions/runs/37483342891/artifacts/11422502155>。
+
+> 上一次全绿的 run [`37472428939`](https://github.com/zhuof725/bookon/actions/runs/37472428939)
+> （commit `a61fcdf`）结果与本表**逐项一致**（890 == 890、IPA 1,948,134 B），日志留存于
+> `ci_logs/run_37472428939/`。两次连续全绿说明修复稳定。
 
 ### 「iOS == macOS 用例数相等」的口径说明
 
@@ -153,7 +160,8 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | [37312666887](https://github.com/zhuof725/bookon/actions/runs/37312666887) | `489fbed` | ✅ 4 job 全绿（仅文档/日志变更） |
 | [37313519896](https://github.com/zhuof725/bookon/actions/runs/37313519896) | `315b58e` | ✅ 4 job 全绿（含 HtmlFormatter 去强解包改动） |
 | [37314891664](https://github.com/zhuof725/bookon/actions/runs/37314891664) | `8e988aa` | ✅ 4 job 全绿（文档补充） |
-| [**37472428939**](https://github.com/zhuof725/bookon/actions/runs/37472428939) | **`a61fcdf`** | ✅ **4 job 全绿（C 段返工终版，890 tests / 0 failures）** |
+| [37472428939](https://github.com/zhuof725/bookon/actions/runs/37472428939) | `a61fcdf` | ✅ 4 job 全绿（C 段代码终版，890 tests / 0 failures） |
+| [**37483342891**](https://github.com/zhuof725/bookon/actions/runs/37483342891) | **`38d59cf`** | ✅ **4 job 全绿（含文档回填，结果与前一次逐项一致）** |
 
 ### C 段返工的 CI 收敛过程（7 轮，含 3 类真实移植缺陷）
 
@@ -165,7 +173,7 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | 37449176865 | 💥 SIGABRT | 得奇小说网 e2e 字典字面量重复键 → 去重 |
 | 37450644690 | ❌ 2 例失败 | JSONPath 多元素被降级成字符串 → 新增 `.jsonList` 保留结构 |
 | 37463875191 | ❌ 1 例失败 | `book`/`chapter` 被绑成字符串（Kotlin 绑的是对象）→ 加 `jsFields` |
-| **37472428939** | ✅ **全绿** | App target 缺 `DebugVerbosity` 可见性 → `@_exported import LegadoBookSource` |
+| **37472428939**（后 37483342891 复现全绿） | ✅ **全绿** | App target 缺 `DebugVerbosity` 可见性 → `@_exported import LegadoBookSource` |
 
 > 后三项是**真实移植缺陷**（不是测试写错），根因与复现见「二之三」表与第四节 4.4b/4.4c。
 
@@ -367,7 +375,7 @@ BookonDebugKit**，却使用 `DebugVerbosity` / `DebugLogger` → **PASS=12 FAIL
 （`cannot find type 'DebugVerbosity' in scope` ×4、`cannot find 'DebugLogger' in scope` ×1），
 证明探针能守住该回归。已并入 `scripts/local_typecheck_bookon.sh` 第 4 步。
 
-**CI 确认**：run 37472428939 的 `build-ipa` 日志中 `SettingsView.swift` 正常参与
+**CI 确认**：run 37472428939 / 37483342891 的 `build-ipa` 日志中 `SettingsView.swift` 均正常参与
 `SwiftCompile`（target `BookonDebug`），`cannot find 'DebugVerbosity'` 出现 **0 次**，
 `BUILD SUCCEEDED`、IPA 打包成功。
 
@@ -435,7 +443,8 @@ BookonDebugKit**，却使用 `DebugVerbosity` / `DebugLogger` → **PASS=12 FAIL
 - `.github/workflows/test.yml`、`Package.swift`、`README.md`、`FUNCTION_MAPPING.md`、`.gitignore`
 - `ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`（run 37310649613 的真实 CI 日志）
 - `ci_logs/run_37467005822/{test_macos_full,test_ios,build_ipa}.log`（第 14 轮 build-ipa 失败的现场日志）
-- `ci_logs/run_37472428939/{golden,test-macos,test-ios-simulator,build-ipa}.log`（**终版全绿**的真实 CI 日志）
+- `ci_logs/run_37483342891/{golden,test-macos,test-ios-simulator,build-ipa}.log`（**终版全绿**的真实 CI 日志）
+- `ci_logs/run_37472428939/{golden,test-macos,test-ios-simulator,build-ipa}.log`（上一次同样全绿的日志，用于对照）
 
 ## 五、关键文件清单（C 段返工，本次新增/修改）
 
@@ -481,7 +490,7 @@ BookonDebugKit**，却使用 `DebugVerbosity` / `DebugLogger` → **PASS=12 FAIL
 - `Package.swift`（注册 `Resources/real/` 资源）
 - `README.md`（「如何在手机上使用」按新界面重写 + 两个上限章节 + 端到端章节 + B 段组件表）
 - `STEP7_HANDOFF.md`（本文件）
-- `ci_logs/run_37472428939/`（三 job + build-ipa 真实日志，run 全绿）
+- `ci_logs/run_37483342891/`（三 job + build-ipa 真实日志，run 全绿）
 - `App/SettingsView.swift`、`App/LogHistoryView.swift`（补显式 `import LegadoBookSource`）
 
 ## 六、已完成 / 仍需人工
@@ -497,12 +506,13 @@ BookonDebugKit**，却使用 `DebugVerbosity` / `DebugLogger` → **PASS=12 FAIL
   全量 typecheck（源码 + 流程层测试 + BookonDebugKit 测试）**通过**。
 - ✅ StringUtils 删除 `unicodeScalars.first!`，改安全写法；全仓 grep 结果如实列于 4.4（强解包已清零）。
 
-**CI 已全绿（run 37472428939，commit `a61fcdf`，分支 `main`）**
+**CI 已全绿（run 37483342891，commit `38d59cf`，分支 `main`；前一次 37472428939 结果一致）**
 - ✅ **golden** success（24 文件 / 2391 条）；**test-macos** success（`Executed 890 tests, 0 failures`）；
   **test-ios-simulator** success（`** TEST SUCCEEDED **`，逐 13 bundle 累加 890，0 failures）；
   **build-ipa** success（`MinimumOSVersion = 17.0 ✓`，`BookonDebug.ipa` 1,948,134 B）。
 - ✅ **iOS 与 macOS 用例数相等（均为 890）**，由 `ios_sim_test.sh` 逐 bundle 累加后与 macOS artifact 比对得出。
-- ✅ 真实日志留存于 `ci_logs/run_37472428939/`（golden / test-macos / test-ios-simulator / build-ipa 四份）。
+- ✅ 真实日志留存于 `ci_logs/run_37483342891/`（golden / test-macos / test-ios-simulator / build-ipa 四份），
+  另附同样全绿的 `ci_logs/run_37472428939/` 作对照。
 - ✅ 7 书源端到端（含此前失败的 `testTaoyueInfoTocContentPreciseValues`、`testQimoSearchInfoTocPreciseValues`）
   在 CI 日志中逐条 `passed`。
 
