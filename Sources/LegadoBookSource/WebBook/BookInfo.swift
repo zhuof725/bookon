@@ -45,8 +45,19 @@ public enum BookInfo {
         try analyzeRule.setContent(body).setBaseUrl(baseUrl)
         analyzeRule.setRedirectUrl(redirectUrl)
 
+        // ⚠️ 这里**不能**写 `book: &box.book`（CI run 37444288772 的真实崩溃）：
+        //   * `BookBox.book` 是可变的 class stored property，`&box.book` 会在整个调用期间
+        //     对它持有长期写访问；
+        //   * 而函数体内每个字段解析都调 `analyzeRule.getString(...)`，本 Box 同时又是该
+        //     AnalyzeRule 的 ruleData / bookStore —— `@js:` 规则里的 `java.put` 会经
+        //     `AnalyzeRule.put` → `BookBox.putVariable` **写** `box.book.variable`，
+        //     `BookBox.name` getter 也会**读** `box.book`；
+        //   * 于是长期写访问与上述读写重叠 → Swift 独占性检查报
+        //     `Simultaneous accesses … Fatal access conflict detected` 并 SIGABRT。
+        // 改为传 `box` 本体，由被调方逐字段赋值：每次赋值都是独立、短促的访问，
+        // 不跨越 `analyzeRule.getString(...)` 调用，因而不会产生重叠区间。
         try analyzeBookInfo(
-            book: &box.book,
+            box: box,
             body: body,
             analyzeRule: analyzeRule,
             bookSource: bookSource,
@@ -60,8 +71,11 @@ public enum BookInfo {
     }
 
     /// 对应 Kotlin: 第二个 analyzeBookInfo(book, body, analyzeRule, bookSource, baseUrl, redirectUrl, canReName)
+    ///
+    /// 参数为 `BookBox` 而非 `inout Book`，原因见上面调用点的注释（避免 inout 独占区间
+    /// 与 analyzeRule 内部的读取重叠）。
     public static func analyzeBookInfo(
-        book: inout Book,
+        box: BookBox,
         body: String,
         analyzeRule: AnalyzeRule,
         bookSource: BookSource,
@@ -86,24 +100,24 @@ public enum BookInfo {
         // ┌获取书名
         options.logger.log(src, "┌获取书名")
         let name = BookHelp.formatBookName(try? analyzeRule.getString(infoRule.name))
-        if !name.isEmpty, (mCanReName || book.name.isEmpty) {
-            book.name = name
+        if !name.isEmpty, (mCanReName || box.book.name.isEmpty) {
+            box.book.name = name
         }
-        options.logger.log(src, "└\(book.name)")
+        options.logger.log(src, "└\(box.book.name)")
 
         // ┌获取作者
         options.logger.log(src, "┌获取作者")
         let author = BookHelp.formatBookAuthor(try? analyzeRule.getString(infoRule.author))
-        if !author.isEmpty, (mCanReName || book.author.isEmpty) {
-            book.author = author
+        if !author.isEmpty, (mCanReName || box.book.author.isEmpty) {
+            box.book.author = author
         }
-        options.logger.log(src, "└\(book.author)")
+        options.logger.log(src, "└\(box.book.author)")
 
         // ┌获取分类
         options.logger.log(src, "┌获取分类")
         do {
             let kind = try analyzeRule.getStringList(infoRule.kind)?.joined(separator: ",") ?? ""
-            if !kind.isEmpty { book.kind = kind }
+            if !kind.isEmpty { box.book.kind = kind }
             options.logger.log(src, "└\(kind)")
         } catch {
             options.logger.log(src, "└\(error.localizedDescription)")
@@ -113,7 +127,7 @@ public enum BookInfo {
         options.logger.log(src, "┌获取字数")
         do {
             let wc = LegadoStringUtils2.wordCountFormat(try analyzeRule.getString(infoRule.wordCount))
-            if !wc.isEmpty { book.wordCount = wc }
+            if !wc.isEmpty { box.book.wordCount = wc }
             options.logger.log(src, "└\(wc)")
         } catch {
             options.logger.log(src, "└\(error.localizedDescription)")
@@ -123,7 +137,7 @@ public enum BookInfo {
         options.logger.log(src, "┌获取最新章节")
         do {
             let lc = try analyzeRule.getString(infoRule.lastChapter)
-            if !lc.isEmpty { book.latestChapterTitle = lc }
+            if !lc.isEmpty { box.book.latestChapterTitle = lc }
             options.logger.log(src, "└\(lc)")
         } catch {
             options.logger.log(src, "└\(error.localizedDescription)")
@@ -135,11 +149,11 @@ public enum BookInfo {
             let intro = try analyzeRule.getString(infoRule.intro)
             let introTrim = intro.trimmingCharacters(in: .whitespaces)
             if introTrim.hasPrefix("<usehtml>") || introTrim.hasPrefix("<md>") || introTrim.hasPrefix("<useweb>") {
-                book.intro = introTrim
+                box.book.intro = introTrim
                 options.logger.log(src, "└\(introTrim)")
             } else {
                 let formatted = HtmlFormatter.format(intro)
-                if !formatted.isEmpty { book.intro = formatted }
+                if !formatted.isEmpty { box.book.intro = formatted }
                 options.logger.log(src, "└\(formatted)")
             }
         } catch {
@@ -151,7 +165,7 @@ public enum BookInfo {
         do {
             let cover = try analyzeRule.getString(infoRule.coverUrl)
             if !cover.isEmpty {
-                book.coverUrl = NetworkUtils.getAbsoluteURL(redirectUrl, cover)
+                box.book.coverUrl = NetworkUtils.getAbsoluteURL(redirectUrl, cover)
             }
             options.logger.log(src, "└\(cover)")
         } catch {
@@ -159,14 +173,14 @@ public enum BookInfo {
         }
 
         // 目录链接 OR 文件下载链接
-        if !book.isWebFile {
+        if !box.book.isWebFile {
             options.logger.log(src, "┌获取目录链接")
-            book.tocUrl = try analyzeRule.getString(infoRule.tocUrl, isUrl: true)
-            if book.tocUrl.isEmpty { book.tocUrl = baseUrl }
-            if book.tocUrl == baseUrl {
-                book.tocHtml = body
+            box.book.tocUrl = try analyzeRule.getString(infoRule.tocUrl, isUrl: true)
+            if box.book.tocUrl.isEmpty { box.book.tocUrl = baseUrl }
+            if box.book.tocUrl == baseUrl {
+                box.book.tocHtml = body
             }
-            options.logger.log(src, "└\(book.tocUrl)")
+            options.logger.log(src, "└\(box.book.tocUrl)")
         } else {
             options.logger.log(src, "┌获取文件下载链接")
             let urls = try analyzeRule.getStringList(infoRule.downloadUrls, isUrl: true)
@@ -174,7 +188,7 @@ public enum BookInfo {
                 options.logger.log(src, "└")
                 throw RuleEngineError.unsupported("下载链接为空")
             } else {
-                book.downloadUrls = urls ?? []
+                box.book.downloadUrls = urls ?? []
                 options.logger.log(src, "└" + (urls?.joined(separator: "，\n") ?? ""))
             }
         }

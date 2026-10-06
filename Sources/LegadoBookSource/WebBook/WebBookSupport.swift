@@ -82,6 +82,15 @@ private func _wb_jsonString(from map: [String: String]) -> String? {
 /// 对应 Kotlin: `Book : RuleData()` —— Kotlin 的 Book 是 class（引用语义），Swift 的 Book 是 struct。
 /// 流程层在 Kotlin 把同一个 Book 同时当 ruleData 和 BookData 使用（引用共享）。
 /// Swift 用 `BookBox` 包装一个可变的 Book，遵循 BookData + RuleDataStore，二者指向同一实例。
+///
+/// ⚠️ **不要把 `book` 以 `inout` 传出去**（如 `f(&box.book)`）。
+/// `book` 是可变的 class stored property，Swift 会对它做运行时独占性检查；
+/// 一旦 `f` 内部又经由 `AnalyzeRule`（本 Box 同时是它的 ruleData / bookStore）
+/// 读写同一个 `book`（例如 `@js:` 规则里的 `java.put` → `putVariable` → 写 `book.variable`，
+/// 或 `BookBox.name` getter → 读 `book`），就会触发
+/// `Simultaneous accesses … Fatal access conflict detected` 并 SIGABRT。
+/// 需要「传入后可写回」的语义时，请直接传 `BookBox` 本体，由被调方逐字段赋值。
+/// 见 `BookInfo.analyzeBookInfo(box:...)`（曾用 `book: &box.book`，已在 CI 实测崩溃后改掉）。
 public final class BookBox: BookData, RuleDataStore {
     public var book: Book
 

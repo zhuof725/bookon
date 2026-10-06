@@ -161,7 +161,7 @@ public enum BookList {
         analyzeRule.setBook(box)
         _ = try? analyzeRule.setContent(body)
         _ = try? BookInfo.analyzeBookInfo(
-            book: &box.book, body: body, analyzeRule: analyzeRule, bookSource: bookSource,
+            box: box, body: body, analyzeRule: analyzeRule, bookSource: bookSource,
             baseUrl: baseUrl, redirectUrl: baseUrl, canReName: false, options: options
         )
         let result = box.book.toSearchBook()
