@@ -1,18 +1,21 @@
 # 第 7 步 交付说明（STEP7_HANDOFF）
 
-> 本文件为第 7 步（A/B/C 段）最终交付状态说明。**CI 四 job 已在 GitHub 全绿**
-> （run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)），
+> 本文件为第 7 步（A/B/C 段）最终交付状态说明。
+> **A/B 段**：CI 四 job 已在 GitHub 全绿（run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)），
 > 真实日志留存于 `ci_logs/step7_final_*.log`，`bookon-debug-ipa` artifact 已产出。
+> **C 段返工**（App 界面补齐 / Cookie 缓存持久化 / 7 书源端到端精确断言 / StringUtils 去强解包 / 文档）：
+> 代码与文档已完成、本地实测通过，**推送与 CI 日志需在有 GitHub 写凭据的环境执行**（见第六节）。
+> 返工完成状态详见第四节。
 
 ## 一、交付内容总览
 
 | 段落 | 内容 | 状态 |
 |---|---|---|
 | A | WebBook 流程层源码移植（搜索/详情/目录/正文/发现/调试） | ✅ 完成，typecheck 通过 |
-| A | 流程层测试（155 @testable + 5 public）+ 端到端（7 真实规则） | ✅ CI 809 tests / 0 failures |
+| A | 流程层测试（171 @testable + 5 public）+ 端到端（7 真实规则，C 段返工后） | ✅ 本地通过，CI 待推 |
 | A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ 完成，本地已生成验证 |
 | B | BookonDebugKit（@Observable：仓库/会话/日志/设置/清 Cookie 缓存） | ✅ 完成 |
-| B | BookonDebugKitTests（82 用例） | ✅ 完成 |
+| B | BookonDebugKitTests（145 用例，含 63 条 public 测试） | ✅ 完成 |
 | C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成（C 段返工后界面按第四节最终状态） |
 | C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，artifact 已上传 |
 | C | **返工**：App 界面补齐 / Cookie 缓存持久化 / 端到端 7 书源精确断言 / StringUtils 强解包 / 文档 | ✅ 完成（详见第四节） |
@@ -33,16 +36,16 @@ scripts/verify/e2e_assert.swift（自建探针）  -> 端到端精确断言 PASS
 scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35 条
 ```
 
-测试用例数（XCTest 方法计数）：
+测试用例数（XCTest 方法计数，C 段返工后）：
 
 | target | 用例数 |
 |---|---|
-| LegadoWebBookTests（流程层，@testable） | 155 |
+| LegadoWebBookTests（流程层，@testable；含新增 `WebBookRealSourcesEndToEndTests` 16 条） | 171 |
 | LegadoWebBookPublicAPITests（流程层，非 @testable） | 5 |
-| BookonDebugKitTests（B 段） | 82 |
+| BookonDebugKitTests（B 段；含 `DebugKitPublicAPITests` 63 条 public 测试） | 145 |
 
-> 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；155/5/82 个测试的
-> **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，已由 macOS CI 全部确认（见第三节）。
+> 说明：上表为**本地 typecheck + 逻辑推演 + golden 本地生成**验证；171/5/145 个测试的
+> **运行时通过**、golden 逐条比对、iOS==macOS 用例数相等，需以推送后的 macOS/iOS CI 确认（见第三节）。
 
 ## 二之二、CI 首轮暴露并已修复的缺陷（Linux 本地测不到的盲区）
 
@@ -92,7 +95,10 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 > 缺陷 6 打印出 `book.type = 40 isAudio=true isOnLineTxt=true`（未清类型位）与
 > `book.type = 32 isAudio=true isOnLineTxt=false`（清位后，歌词分支命中）。
 
-## 三、CI 三 job + build-ipa —— ✅ 已在 GitHub 全绿
+## 三、CI 三 job + build-ipa
+
+> **A/B 段基线**：run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)（commit `7ad1589`）四 job 全绿，日志见下表。
+> **C 段返工**：代码已完成，**待有写凭据环境推送后重跑并回填新 run 链接**（见第六节）。下表为基线数据。
 
 `.github/workflows/test.yml` 现有 4 个 job（+ 1 个 `live-smoke` 默认 skipped）：
 
@@ -103,6 +109,10 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 | **test-ios-simulator** | macos-14 | ✅ success —— scheme `LegadoBookSource-Package`，**809 tests / 0 failures**，且 `✅ iOS 总数与 macOS 总数一致（均为 809）`；App target 构建通过；`[verify_xcodeproj_format] Xcode=15.4 objectVersion=63 → OK` | `ci_logs/step7_final_ios.log` |
 | **build-ipa** | macos-14 | ✅ success —— `MinimumOSVersion = 17.0 ✓`，产出 `build/BookonDebug.ipa`（1,810,407 B），artifact `bookon-debug-ipa`（1,806,528 B）已上传 | `ci_logs/step7_final_build_ipa.log` |
 | live-smoke | ubuntu-latest | skipped（默认不跑真实网络） | — |
+
+> ⚠️ C 段返工新增了 16 个端到端用例与 63 个 DebugKit public 测试，**预期**新 run 的
+> macOS / iOS 用例数会高于 809（新增后本地计数：LegadoWebBookTests 171、BookonDebugKitTests 145）。
+> 最终以新 run 的真实日志为准，不得沿用旧数字。
 
 **artifact**（run 37310649613）：`golden-data`（227,811 B）、`macos-test-count`（160 B，内容 `809`）、`bookon-debug-ipa`（1,806,528 B）。
 
@@ -225,9 +235,9 @@ iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、
 - `scripts/build_ipa.sh`
 
 **测试**
-- `Tests/LegadoWebBookTests/`（16 个文件，155 用例）
+- `Tests/LegadoWebBookTests/`（17 个文件，171 用例）
 - `Tests/LegadoWebBookPublicAPITests/`（1 个文件，5 用例）
-- `Tests/BookonDebugKitTests/`（8 个文件，82 用例）+ `Resources/{配置文件_14个,malformed_sources}.json`
+- `Tests/BookonDebugKitTests/`（9 个文件，145 用例）+ `Resources/{配置文件_14个,malformed_sources}.json`
 - `Tests/LegadoWebBookTests/Resources/{配置文件_14个,synthetic_flow_pages}.json`
 
 **验收/文档/CI**
@@ -282,13 +292,28 @@ iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、
 
 ## 六、已完成 / 仍需人工
 
-**已完成（本次在 GitHub 上跑通并留存证据）**
-- ✅ CI 四 job 全绿：run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)（golden / test-macos / test-ios-simulator / build-ipa）。
-- ✅ 真实日志已留存：`ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`。
-- ✅ `bookon-debug-ipa` artifact 已产出并确认（1,806,528 B）；`MinimumOSVersion = 17.0 ✓`。
-- ✅ iOS == macOS 用例数相等（均为 **809**）；golden **24 文件 / 2391 条**全部通过。
+**本次 C 段返工已完成（本地可复现证据）**
+- ✅ App 界面按需求补齐（书源列表点行导航 / 导入 4 入口 / 结果弹窗 / 6 页签横向标签条 /
+  源码与结果页签 / ShareLink 导出 / 日志历史 / 设置两个上限 + 清 Cookie/缓存 + 版本信息）。
+- ✅ Cookie / 缓存持久化：共享文件实例（`Documents/cookies.json`、`Documents/legado_cache.json`），跨次调试保留。
+- ✅ 端到端：7 真实书源 4 阶段**精确值**断言，删弱断言，裸 IP / `#md` / Punycode 专门断言，
+  muli/qimo 逐字节复制（md5 一致），`Package.swift` 注册资源。
+- ✅ 本地实测（跑真实产品代码）：DebugKit 逻辑 **PASS=28 FAIL=0**；
+  端到端精确断言 **PASS=63 FAIL=0**；全量 typecheck（源码 + 流程层测试 + BookonDebugKit 测试）**通过**。
+- ✅ StringUtils 删除 `unicodeScalars.first!`，改安全写法；全仓 grep 结果如实列于 4.4（未新增强解包）。
 
-**仍需人工**
-- App 的 SwiftUI 界面**运行时**验证（Linux 无法编译/运行 SwiftUI，需在 macOS / 真机 / 模拟器上手点）。
-- 书源编辑/分享等 UI 细节（README「不做」清单已声明，超出本步范围）。
-- 如需安装到真机：`bookon-debug-ipa` 为**无签名**包，需自行重签或用 AltStore/侧载工具。
+**仍需人工 / CI（本沙箱无法完成）**
+- ⚠️ **推送与 CI 触发**：本沙箱**无 GitHub 写凭据**（`git push` 报
+  `could not read Username for 'https://github.com'`；credential-helper 无凭据）。
+  请在有凭据的环境执行（分支为 `step7-debug-app`）：
+
+  ```bash
+  git push origin HEAD:step7-debug-app
+  ```
+
+  或直接应用本仓库补丁：`/workspace/step7_c_rework.patch`（含 2 个 commit）。
+- ⚠️ **CI 三 job + build-ipa 真实日志**：推送后由 `.github/workflows/test.yml`
+  （golden / test-macos / test-ios-simulator / build-ipa）产出；把日志放入 `ci_logs/` 并
+  回填第三节的 run 链接、IPA 产物名与「iOS == macOS 用例数」核对结果。
+- ⚠️ App 的 SwiftUI 界面**运行时**验证（Linux 无法编译/运行 SwiftUI，需 macOS / 真机 / 模拟器手点）。
+- ⚠️ iOS / macOS 用例数相等需由 CI 的 `ios_sim_test.sh`（比对 `macos-test-count` artifact）最终确认。
