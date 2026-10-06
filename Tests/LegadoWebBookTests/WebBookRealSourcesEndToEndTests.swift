@@ -147,8 +147,8 @@ final class WebBookRealSourcesEndToEndTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: s.bookSourceUrl))
         let host = try XCTUnwrap(url.host)
         XCTAssertTrue(host.hasPrefix("xn--"), "Punycode 主机应以 xn-- 开头，实际 \(host)")
-        // Punycode 可被 Foundation 还原为 Unicode（用于证明这是合法 IDN）。
-        XCTAssertFalse(host.replacingOccurrences(of: "xn--", with: "").isEmpty)
+        // Punycode 主机去掉前缀后应是非空 ASCII 标签（证明不是空字符串占位）。
+        XCTAssertEqual(host.replacingOccurrences(of: "xn--", with: "").isEmpty, false)
     }
 
     // MARK: - 规则引擎真实规则 + 合成数据的精确值断言（不依赖 JS）
