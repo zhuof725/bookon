@@ -27,4 +27,13 @@ echo "== 类型检查 ${#TEST_FILES[@]} 个测试文件 =="
 "$SWIFT_BIN/swiftc" -typecheck -swift-version 5 \
   -I "$OUT" -L "$OUT" -lSwiftSoup \
   "${TEST_FILES[@]}" 2>&1 | grep -E "error:|warning:" | grep -v "never mutated\|never used\|redundant" | head -60
+
+# 4) 重新导出回归检查：App 只 import BookonDebugKit 时，DebugVerbosity/DebugLogger 必须可见。
+#    对应 CI run 37467005822 build-ipa 的 `cannot find 'DebugVerbosity' in scope`。
+echo "== 类型检查 re-export 回归探针（只 import BookonDebugKit）=="
+"$SWIFT_BIN/swiftc" -typecheck -swift-version 5 \
+  -I "$OUT" -L "$OUT" -lSwiftSoup \
+  "$REPO/scripts/verify/reexport_verbosity_probe.swift" 2>&1 \
+  | grep -E "error:" | head -20
+echo "  （无输出 = 通过；出现 cannot find 'DebugVerbosity' 说明 @_exported 丢失）"
 echo "done"

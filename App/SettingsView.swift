@@ -13,6 +13,7 @@
 
 import SwiftUI
 import BookonDebugKit
+import LegadoBookSource
 
 struct SettingsView: View {
     @Bindable var settings: DebugSettings

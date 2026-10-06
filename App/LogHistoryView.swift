@@ -12,6 +12,7 @@
 
 import SwiftUI
 import BookonDebugKit
+import LegadoBookSource
 
 struct LogHistoryView: View {
     let logStore: DebugLogStore
