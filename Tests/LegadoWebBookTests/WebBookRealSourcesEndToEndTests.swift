@@ -34,6 +34,24 @@
 import XCTest
 @testable import LegadoBookSource
 
+/// 把 Debug 日志原样打到 stdout 的 sink（仅测试使用）。
+///
+/// 为什么要它：CI 失败时日志里只有断言消息，看不到「目录解析到第几步」。把流程层
+/// 的真实日志逐行打印后，失败诊断只需读日志，不必再靠推测。
+final class StdoutDebugSink: DebugLogSink {
+    private let tag: String
+    private let lock = NSLock()
+
+    init(tag: String) { self.tag = tag }
+
+    func printLog(state: Int, msg: String) {
+        lock.lock(); defer { lock.unlock() }
+        // 单行化，避免响应体里的换行把 CI 日志结构冲散。
+        let oneLine = msg.replacingOccurrences(of: "\n", with: "⏎")
+        print("[\(tag)][state=\(state)] \(oneLine)")
+    }
+}
+
 final class WebBookRealSourcesEndToEndTests: XCTestCase {
 
     // MARK: - 资源加载（7 个真实书源）
@@ -466,6 +484,12 @@ extension WebBookRealSourcesEndToEndTests {
 
     // ── 淘小说：详情 → 目录 → 正文 ──
 
+    /// 淘小说 `ruleBookInfo.tocUrl` 与 `ruleToc.chapterUrl` 都是 `@js:`（用
+    /// `String(book.bookUrl).match(/sourceId=([^&]+)/)` 取 sourceId 拼目标地址），
+    /// 故本用例只在 Apple 平台（有 JavaScriptCore）运行。
+    ///
+    /// 本用例把流程层日志接到一个 stdout sink，CI 会**逐行打印**目录解析的真实过程
+    /// （`┌获取目录列表` / `└列表大小:N` / `◇目录总数:N`），便于失败时定位到具体阶段。
     func testTaoyueInfoTocContentPreciseValues() async throws {
         let src = try source(named: "⚡📂淘小说书城")
         let searchURL = "http://betam.taoyuewenhua.com/ajax/or/authopt/ty/search_books?keywords=斗罗&page=0&pageSize=20&ctype=1"
@@ -486,8 +510,8 @@ extension WebBookRealSourcesEndToEndTests {
         let contentBody = """
         {"code":0,"data":{"content":"淘小说合成正文第一段。\\n淘小说合成正文第二段。"}}
         """
-        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
-        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // 用注册方法而不是字典字面量：部分书源的详情页与目录页是**同一个 URL**
+        // （如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
         // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
         // 进程（实测于 CI run 37449176865）。
         let net = MockWebBookNetwork()
@@ -495,7 +519,14 @@ extension WebBookRealSourcesEndToEndTests {
         net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
         net.set(tocURL, WebBookResponse(url: tocURL, status: 200, body: tocBody))
         net.set(contentURL, WebBookResponse(url: contentURL, status: 200, body: contentBody))
-        let opts = WebBookOptions(network: net)
+
+        // 把 Debug 日志接到 stdout（仅本用例）：CI 日志里能看到目录解析的真实每一步。
+        let logger = DebugLogger()
+        let sink = StdoutDebugSink(tag: "taoyue")
+        logger.callback = sink
+        logger.beginDebug(sourceUrl: src.bookSourceUrl)
+        logger.recordResponseBody = true
+        let opts = WebBookOptions(logger: logger, network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
         var book = try XCTUnwrap(books.first).toBook()
@@ -507,8 +538,11 @@ extension WebBookRealSourcesEndToEndTests {
         XCTAssertEqual(book.intro, "合成淘小说简介正文。")
         XCTAssertEqual(book.latestChapterTitle, "第一章 淘小说起始")
 
+        // 详情阶段必须把 tocUrl 解析成绝对地址（规则真实：@js 用 sourceId 拼 chapter_list）。
+        XCTAssertEqual(book.tocUrl, tocURL, "淘小说详情页 @js tocUrl 应拼出目录地址")
+
         let chapters = try await WebBook.getChapterListAwait(bookSource: src, book: &book, options: opts)
-        XCTAssertEqual(chapters.count, 2)
+        XCTAssertEqual(chapters.count, 2, "目录应解析出 2 章；实际请求 URL = \(net.requestedURLs)")
         XCTAssertEqual(chapters.map(\.title), ["第一章 淘小说起始", "第二章 淘小说发展"])
 
         let content = try await WebBook.getContentAwait(bookSource: src, book: book, bookChapter: chapters[0], options: opts)
@@ -518,9 +552,15 @@ extension WebBookRealSourcesEndToEndTests {
 
     // ── 七猫：搜索 → 详情 → 目录（正文为 AES 解密，不在此覆盖）──
 
+    /// 七猫 `searchUrl` 是**纯 `@js:`**（原文见 qimo_real_source.json）：
+    /// 它在运行时用 `java.md5Encode(...)` 算出 `sign`，再拼成
+    /// `"/api/v5/search/words?" + body`。因此测试**无法**在注册阶段预知完整 URL
+    /// —— 这正是 `MockWebBookNetwork.setPrefix` 存在的理由（按稳定的「主机+路径」
+    /// 前缀注册，再用 `requestedURLs` 对运行时 query 做**精确**断言，而不是猜 URL）。
     func testQimoSearchInfoTocPreciseValues() async throws {
         let src = try source(named: "七猫小说（qimo）")
-        let searchURL = "https://api-bc.wtzw.com/api/v5/search/words"
+        // 稳定的前缀（主机 + 路径）；七猫 searchUrl 的 JS 结果必然以它开头。
+        let searchPrefix = "https://api-bc.wtzw.com/api/v5/search/words"
         let bookURL = "https://api-bc.wtzw.com/api/v4/book/detail?id=7001"
 
         let searchBody = """
@@ -533,12 +573,12 @@ extension WebBookRealSourcesEndToEndTests {
           "intro":"合成七猫简介正文。","book_tag_list":[{"title":"言情"}],"words_num":"55万",
           "latest_chapter_title":"第一章 七猫起始","update_time":"1700000000"}}}
         """
-        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
-        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // 用注册方法而不是字典字面量：部分书源的详情页与目录页是**同一个 URL**
+        // （如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
         // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
         // 进程（实测于 CI run 37449176865）。
         let net = MockWebBookNetwork()
-        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: searchBody))
+        net.setPrefix(searchPrefix, WebBookResponse(url: searchPrefix, status: 200, body: searchBody))
         net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
         let opts = WebBookOptions(network: net)
 
@@ -550,11 +590,36 @@ extension WebBookRealSourcesEndToEndTests {
         XCTAssertEqual(b.kind, "言情")
         XCTAssertEqual(b.wordCount, "55万")
 
+        // ── 对**真实发生过的请求 URL** 做精确断言（不猜 URL）──
+        // 七猫 JS 固定注入 gender=3 / imei_ip=2937357107 / page=1 / wd=<key>，
+        // 并附一个 32 位十六进制 MD5 sign。逐项断言这些**稳定**部分，
+        // sign 的值本身由 MD5 决定、不硬编码（那才是不撒谎）。
+        let searchRequests = net.requestedURLs.filter { $0.hasPrefix(searchPrefix) }
+        XCTAssertEqual(searchRequests.count, 1, "七猫搜索阶段应恰好发起 1 次请求")
+        let actual = try XCTUnwrap(searchRequests.first)
+        for needle in ["gender=3", "imei_ip=2937357107", "page=1", "wd=%E6%96%97%E7%BD%97"] {
+            XCTAssertTrue(actual.contains(needle), "七猫搜索 URL 缺少 \(needle)（实际：\(actual)）")
+        }
+        let sign = Self.queryValue(actual, name: "sign")
+        XCTAssertNotNil(sign, "七猫搜索 URL 应带 sign（实际：\(actual)）")
+        XCTAssertEqual(sign?.count, 32, "七猫 sign 应为 32 位 MD5 十六进制（实际：\(sign ?? "nil")）")
+        XCTAssertTrue(sign?.allSatisfy { $0.isHexDigit } ?? false, "七猫 sign 必须全为十六进制字符")
+
         var book = b.toBook()
         book.bookUrl = bookURL
         book = try await WebBook.getBookInfoAwait(bookSource: src, book: &book, options: opts)
         XCTAssertEqual(book.name, "七猫之书")
         XCTAssertEqual(book.author, "合成作者庚")
+    }
+
+    /// 从 URL 的 query 中取出指定参数值（无则 nil）。仅用于测试断言。
+    private static func queryValue(_ url: String, name: String) -> String? {
+        guard let q = url.split(separator: "?", maxSplits: 1).dropFirst().first else { return nil }
+        for pair in q.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1)
+            if kv.first.map(String.init) == name { return kv.count > 1 ? String(kv[1]) : "" }
+        }
+        return nil
     }
 }
 #endif

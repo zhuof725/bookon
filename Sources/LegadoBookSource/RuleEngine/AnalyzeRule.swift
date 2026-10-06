@@ -192,30 +192,35 @@ public final class AnalyzeRule {
         if !contentEquals(o) {
             return try AnalyzeByXPath(ruleValueToDoc(o))
         }
-        if analyzeByXPath == nil {
-            analyzeByXPath = try AnalyzeByXPath(ruleValueToDoc(content!))
-        }
-        return analyzeByXPath!
+        if let cached = analyzeByXPath { return cached }
+        // contentEquals(o) == true 保证 content != nil（见其 guard）；此处仍用 guard 而非 `!`：
+        // 仓库硬规则禁止强解包，任何路径都不能因意外状态崩溃。
+        guard let content = content else { throw RuleEngineError.unsupported("XPath 解析缺少 content") }
+        let made = try AnalyzeByXPath(ruleValueToDoc(content))
+        analyzeByXPath = made
+        return made
     }
 
     func getAnalyzeByJSoup(_ o: RuleValue) throws -> AnalyzeByJSoup {
         if !contentEquals(o) {
             return try AnalyzeByJSoup(ruleValueToDoc(o))
         }
-        if analyzeByJSoup == nil {
-            analyzeByJSoup = try AnalyzeByJSoup(ruleValueToDoc(content!))
-        }
-        return analyzeByJSoup!
+        if let cached = analyzeByJSoup { return cached }
+        guard let content = content else { throw RuleEngineError.unsupported("JSoup 解析缺少 content") }
+        let made = try AnalyzeByJSoup(ruleValueToDoc(content))
+        analyzeByJSoup = made
+        return made
     }
 
     func getAnalyzeByJSonPath(_ o: RuleValue) throws -> AnalyzeByJSonPath {
         if !contentEquals(o) {
             return AnalyzeByJSonPath(ruleValueToJSON(o), diagnostics: diagnostics)
         }
-        if analyzeByJSonPath == nil {
-            analyzeByJSonPath = AnalyzeByJSonPath(ruleValueToJSON(content!), diagnostics: diagnostics)
-        }
-        return analyzeByJSonPath!
+        if let cached = analyzeByJSonPath { return cached }
+        guard let content = content else { throw RuleEngineError.unsupported("JSONPath 解析缺少 content") }
+        let made = AnalyzeByJSonPath(ruleValueToJSON(content), diagnostics: diagnostics)
+        analyzeByJSonPath = made
+        return made
     }
 
     /// RuleValue -> 适合喂给 JSoup/XPath 的 doc（Element 或 HTML 字符串）。

@@ -61,25 +61,64 @@ public protocol WebBookNetwork {
     func fetch(_ analyzeUrl: AnalyzeUrl, webJs: String?, sourceRegex: String?) async throws -> WebBookResponse
 }
 
-/// 内存合成响应实现：按完整 URL 精确匹配（含 query）。
-/// 测试用它 + 人工构造的响应页面驱动 ≥150 条流程层用例。
+/// 内存合成响应实现：先按完整 URL 精确匹配（含 query），未命中时退回**已注册前缀**匹配。
+///
+/// 为什么要前缀回退：部分真实书源的 URL 由 `@js:` 在运行时算出（例如七猫的
+/// `searchUrl` 用 MD5 算 `sign`），测试**无法**在注册阶段预知完整 URL。前缀回退让测试
+/// 可以按「主机 + 路径」注册（如 `https://api-bc.wtzw.com/api/v5/search/words`），
+/// 同时仍能对运行时 query 做断言（见 `requestedURLs`）。
+///
+/// 匹配优先级：**精确 > 最长前缀**。因此同一 Mock 上可以同时注册
+/// `.../word`（通用）与 `.../word?a=1`（特例），特例优先，语义无歧义。
+///
+/// `requestedURLs` 记录**实际发生过的每一次请求 URL（按序）**，供测试断言
+/// 「到底请求了哪些地址」，避免用「猜测 URL」代替事实。
 public final class MockWebBookNetwork: WebBookNetwork {
     private var responses: [String: WebBookResponse]
+    /// 前缀注册表（有序，匹配时取最长前缀）。
+    private var prefixes: [(prefix: String, response: WebBookResponse)] = []
+    /// 实际请求过的 URL（按发生顺序，含重复）。
+    private var requested: [String] = []
     private let lock = NSLock()
 
     public init(_ responses: [String: WebBookResponse] = [:]) {
         self.responses = responses
     }
 
+    /// 精确注册一个 URL 的响应。
     public func set(_ url: String, _ response: WebBookResponse) {
         lock.lock(); defer { lock.unlock() }
         responses[url] = response
     }
 
+    /// 按**前缀**注册响应（精确匹配未命中时生效；多前缀命中取最长者）。
+    ///
+    /// 典型用法：书源 URL 含运行时算出的签名字段（七猫 `sign`），测试只知道
+    /// 「主机 + 路径」这一稳定前缀。
+    public func setPrefix(_ prefix: String, _ response: WebBookResponse) {
+        lock.lock(); defer { lock.unlock() }
+        prefixes.removeAll { $0.prefix == prefix }
+        prefixes.append((prefix, response))
+    }
+
+    /// 实际请求过的 URL 快照（按发生顺序）。
+    public var requestedURLs: [String] {
+        lock.lock(); defer { lock.unlock() }
+        return requested
+    }
+
     public func fetch(_ analyzeUrl: AnalyzeUrl, webJs: String?, sourceRegex: String?) async throws -> WebBookResponse {
         let url = analyzeUrl.url.isEmpty ? analyzeUrl.ruleUrl : analyzeUrl.url
         lock.lock()
-        let hit = responses[url]
+        requested.append(url)
+        var hit = responses[url]
+        if hit == nil {
+            // 最长前缀优先，保证「特例注册」总能盖住「通用注册」。
+            hit = prefixes
+                .filter { !$0.prefix.isEmpty && url.hasPrefix($0.prefix) }
+                .max { $0.prefix.count < $1.prefix.count }?
+                .response
+        }
         lock.unlock()
         guard let hit = hit else {
             throw RuleEngineError.unsupported("MockWebBookNetwork 无此 URL 的响应: \(url)")

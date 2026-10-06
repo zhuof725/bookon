@@ -45,11 +45,13 @@ public enum NetworkUtils {
 
     /// 对应 Kotlin: fun getAbsoluteURL(baseURL: String?, relativePath): String
     public static func getAbsoluteURL(_ baseURL: String?, _ relativePath: String) -> String {
-        if baseURL == nil || baseURL!.isEmpty {
+        // 用 guard 展开可选值，替代原先的 `baseURL == nil || baseURL!.isEmpty` +
+        // `baseURL!`（仓库硬规则禁止强解包）。
+        guard let baseURL = baseURL, !baseURL.isEmpty else {
             return relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         // Kotlin: URL(baseURL.substringBefore(","))
-        let base = substringBefore(baseURL!, ",")
+        let base = substringBefore(baseURL, ",")
         let absoluteUrl = JavaURL.parse(base)   // 解析失败 -> nil（对齐 catch）
         return getAbsoluteURL(parsedBase: absoluteUrl, relativePath)
     }

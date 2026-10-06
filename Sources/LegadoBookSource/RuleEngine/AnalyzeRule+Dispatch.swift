@@ -262,8 +262,15 @@ extension AnalyzeRule {
                 case .js:
                     result = try evalJS(rule, result: r0)
                 case .json:
+                    // ⚠️ 必须**保留 JSON 结构**，不能降级成字符串：
+                    // Kotlin 的 getElements 在 json 模式下返回 Jayway 读出的原始元素
+                    // （对象/数组），后续 `@js:` 规则可直接 `result.字段名` 取值。
+                    // 本移植早期写成 `.stringList($0.map { $0.stringValue })`，把对象变成
+                    // JSON 文本，导致真实书源「淘小说书城」的 `ruleToc.chapterUrl`
+                    // （`String(result.chapterId)`）恒得 `undefined`，所有章节 URL 相同、
+                    // 被按 url 去重压成 1 章（本地探针复现，见 toc_flow_probe）。
                     let list = try getAnalyzeByJSonPath(r0).getList(rule)
-                    result = list.map { .stringList($0.map { $0.stringValue }) } ?? .null
+                    result = list.map { .jsonList($0) } ?? .null
                 case .xPath:
                     let nodes = try getAnalyzeByXPath(r0).getElements(rule)
                     result = nodes.map { .xpathNodes($0) } ?? .null
@@ -278,6 +285,12 @@ extension AnalyzeRule {
         case .elements(let es): return es.map { .element($0) }
         case .xpathNodes(let ns): return ns.map { .xpathNodes([$0]) }
         case .stringList(let l): return l.map { .string($0) }
+        // JSON 数组 → **逐个元素**返回（保留结构，供后续 @js 按字段取值）。
+        case .jsonList(let l): return l.map { .json($0) }
+        case .json(let j):
+            // 兜底：若最终结果本身就是 JSON 数组，同样展开（对齐 getList 返回 List 的语义）。
+            if case .array(let a) = j { return a.map { .json($0) } }
+            return [res]
         default: return [res]
         }
     }

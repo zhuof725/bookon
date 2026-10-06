@@ -195,6 +195,16 @@ enum JsNetEnvelope {
 /// 各级都按 Java `new String(bytes, charset)` 的 U+FFFD 替换语义解码。
 enum JsNetTextDecoder {
 
+    /// 由字节值构造 Unicode 标量；不可构造时回退 U+FFFD（REPLACEMENT CHARACTER）而非崩溃。
+    ///
+    /// 替代原先的 `Unicode.Scalar(UInt32(b))!` 强解包（仓库硬规则禁止强解包）。
+    /// 本文件调用点的实参都是 `UInt8`（0...255，恒为合法标量），但**不依赖**该前提，
+    /// 保证任何上游变更都不会把「解码」变成崩溃点。
+    @inline(__always)
+    static func jsSafeScalar(_ byte: UInt8) -> Unicode.Scalar {
+        return Unicode.Scalar(UInt32(byte)) ?? "\u{FFFD}"
+    }
+
     /// 剥离 UTF-8 BOM（对应 legado `Utf8BomUtils.removeUTF8BOM(bytes)`）。
     ///
     /// ⚠️ 判定条件是 **`bytes.size > 3`（严格大于）**，不是 `>= 3`：
@@ -637,7 +647,7 @@ enum JsNetTextDecoder {
                     // 控制字符（如 0x0A）在双字节设计集下仍是单字节直通（JDK 实测：
                     // 样本里的换行在 ESC $ B 段内照常输出 U+000A）。
                     if b < 0x21 {
-                        out.unicodeScalars.append(Unicode.Scalar(UInt32(b))!)
+                        out.unicodeScalars.append(jsSafeScalar(b))
                         i += 1
                     } else {
                         out.unicodeScalars.append("\u{FFFD}")
@@ -672,7 +682,7 @@ enum JsNetTextDecoder {
                         out.unicodeScalars.append("\u{FFFD}")
                     }
                 } else if b < 0x21 {
-                    out.unicodeScalars.append(Unicode.Scalar(UInt32(b))!)
+                    out.unicodeScalars.append(jsSafeScalar(b))
                 } else {
                     out.unicodeScalars.append("\u{FFFD}")
                 }
@@ -680,7 +690,7 @@ enum JsNetTextDecoder {
             default:
                 // ASCII / JIS X 0201 Roman：单字节直通。
                 if b < 0x80 {
-                    out.unicodeScalars.append(Unicode.Scalar(UInt32(b))!)
+                    out.unicodeScalars.append(jsSafeScalar(b))
                 } else {
                     out.unicodeScalars.append("\u{FFFD}")
                 }
@@ -2395,7 +2405,7 @@ enum JsNetTextDecoder {
             return String(decoding: bytes, as: UTF8.self)
         case NSISOLatin1StringEncoding:
             // ISO-8859-1 是全单字节映射：1 字节 = 1 个码位，永不失败。
-            return String(bytes.map { Character(UnicodeScalar(UInt32($0))!) })
+            return String(bytes.map { Character(jsSafeScalar($0)) })
         default:
             // 编码在系统里不可用：按 UTF-8 替换语义兜底（不返回 nil）。
             return String(decoding: bytes, as: UTF8.self)

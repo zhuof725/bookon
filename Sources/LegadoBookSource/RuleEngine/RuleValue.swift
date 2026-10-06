@@ -30,6 +30,9 @@ public enum RuleValue {
     case elements([Element])
     case xpathNodes([XPathNode])
     case json(JSONValue)
+    /// 一组 JSON 元素（对应 Kotlin `getElements` 在 json 模式下返回的 `List<Any>`，
+    /// 元素仍是**结构化 JSON**，可被后续 `@js:` 规则按字段取值，如 `result.chapterId`）。
+    case jsonList([JSONValue])
     /// Rhino NativeObject / JS 求值得到的对象（键值访问）。
     case jsObject([String: RuleValue])
     /// Gson LinkedTreeMap：直接按键取值（Kotlin `result[rule]`）。
@@ -54,6 +57,7 @@ public enum RuleValue {
         case .elements(let es): return es.map { (try? $0.outerHtml()) ?? "" }.description
         case .xpathNodes(let ns): return ns.map { $0.asString() }.description
         case .json(let j): return j.stringValue
+        case .jsonList(let l): return l.map { $0.stringValue }.description
         case .jsObject: return "[object Object]" // Rhino NativeObject.toString()
         case .jsonObject(let m): return String(describing: m)
         case .number(let d):
@@ -69,6 +73,7 @@ public enum RuleValue {
     public var asStringList: [String]? {
         switch self {
         case .stringList(let l): return l
+        case .jsonList(let l): return l.map { $0.stringValue }
         case .string(let s): return s.components(separatedBy: "\n")
         default: return nil
         }

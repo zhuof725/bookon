@@ -186,9 +186,47 @@ final class JSEngine {
         case .number(let d): return d
         case .bool(let b): return b
         case .null: return NSNull()
+        // ── JSON 必须**结构化**传给 JS，不能字符串化 ──
+        //
+        // Kotlin legado 里 `chapterList = "$.data.chapters[*]"` 经 Jayway 读出的是
+        // **LinkedTreeMap/对象数组**，`@js:` 规则可以直接写 `result.chapterId` 取值。
+        // 本移植早期把 `.json` 归到 default 分支传 `stringValue`（JSON 文本），导致
+        // JS 里 `result.chapterId` 恒为 `undefined` —— 真实书源「淘小说书城」的
+        // `ruleToc.chapterUrl` 正是用 `result.chapterId` 拼每章地址，于是所有章节
+        // 拿到同一个 URL，被 `BookChapterList` 的按 url 去重逻辑压成 1 章
+        // （本地探针复现：chapters.count = 1）。
+        case .json(let j): return jsonValueToJSNative(j, context: context)
+        case .jsonObject(let m), .jsObject(let m):
+            let obj = JSValue(newObjectIn: context)
+            for (k, val) in m { obj?.setObject(ruleValueToJSNative(val, context: context), forKeyedSubscript: k as NSString) }
+            return obj ?? NSNull()
         default:
-            // 元素/JSON 等复杂类型：传其字符串化（对齐 Kotlin 把 content.toString() 交给 JS）
+            // 元素等复杂类型：传其字符串化（对齐 Kotlin 把 content.toString() 交给 JS）
             return v.stringValue
+        }
+    }
+
+    /// `JSONValue` → JS 原生值（object/array/标量逐层递归）。
+    ///
+    /// 数字分支与 `JSONValue.stringValue` 的文本形式保持一致：
+    /// 整数用 Int64（避免 `1` 变成 `1.0`）、bigInteger 原样按文本传（JS 数字会丢精度，
+    /// 但这是 Jayway BigInteger 场景的已知差异，见差异表），double 传 Double。
+    static func jsonValueToJSNative(_ v: JSONValue, context: JSContext) -> Any {
+        switch v {
+        case .object(let o):
+            let obj = JSValue(newObjectIn: context)
+            for (k, val) in o.orderedPairs {
+                obj?.setObject(jsonValueToJSNative(val, context: context), forKeyedSubscript: k as NSString)
+            }
+            return obj ?? NSNull()
+        case .array(let a):
+            return a.map { jsonValueToJSNative($0, context: context) }
+        case .string(let s): return s
+        case .int(let i): return i
+        case .bigInteger(let s): return s
+        case .double(let d): return d
+        case .bool(let b): return b
+        case .null: return NSNull()
         }
     }
 

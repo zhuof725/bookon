@@ -147,7 +147,7 @@ public enum LegadoStringUtils2 {
         var result = 0
         var tmp = 0
         var billion = 0
-        var cn = Array(chNum)
+        let cn = Array(chNum)
 
         // "一零二五" 形式
         if cn.count > 1 && RegexCacheLike.fullMatch("^[〇零一二三四五六七八九壹贰叁肆伍陆柒捌玖]$", chNum) {
@@ -155,7 +155,9 @@ public enum LegadoStringUtils2 {
             var digits = ""
             for ch in cn {
                 guard let v = chnMap[ch] else { return -1 }
-                digits.append(Character(UnicodeScalar(48 + v)!))
+                // 48 + v 恒为合法 Unicode 标量（v ∈ 0...9），仍用 safeScalar 而非 `!`：
+                // 仓库硬规则禁止强解包，任何路径都不允许崩溃。
+                digits.append(Character(safeScalar(48 + v)))
             }
             return Int(digits) ?? -1
         }
@@ -206,11 +208,11 @@ public enum LegadoStringUtils2 {
         for scalar in input.unicodeScalars {
             let code = Int(scalar.value)
             if code == 32 {
-                out.unicodeScalars.append(UnicodeScalar(12288)!)
+                out.unicodeScalars.append(safeScalar(12288))
                 continue
             }
             if code >= 33 && code <= 126 {
-                out.unicodeScalars.append(UnicodeScalar(UInt32(code + 65248))!)
+                out.unicodeScalars.append(safeScalar(code + 65248))
             } else {
                 out.unicodeScalars.append(scalar)
             }
@@ -224,11 +226,11 @@ public enum LegadoStringUtils2 {
         for scalar in input.unicodeScalars {
             let code = Int(scalar.value)
             if code == 12288 {
-                out.unicodeScalars.append(UnicodeScalar(32)!)
+                out.unicodeScalars.append(safeScalar(32))
                 continue
             }
             if code >= 65281 && code <= 65374 {
-                out.unicodeScalars.append(UnicodeScalar(UInt32(code - 65248))!)
+                out.unicodeScalars.append(safeScalar(code - 65248))
             } else {
                 out.unicodeScalars.append(scalar)
             }
@@ -246,10 +248,17 @@ public enum LegadoStringUtils2 {
         return c.unicodeScalars.first.map { $0.value } ?? 0xFFFF_FFFF
     }
 
+    /// 由整数构造 Unicode 标量；非法码点回退为 U+FFFD（REPLACEMENT CHARACTER）而非崩溃。
+    /// 替代 `UnicodeScalar(x)!` 强解包（仓库硬规则禁止强解包）。
+    @inline(__always)
+    private static func safeScalar(_ value: Int) -> Unicode.Scalar {
+        return Unicode.Scalar(UInt32(truncatingIfNeeded: value)) ?? "\u{FFFD}"
+    }
+
     /// 移除首尾空字符（利用 ASCII 值判断，包括全角空格 U+3000）。
     public static func trim(_ s: String) -> String {
         if s.isEmpty { return "" }
-        var chars = Array(s)
+        let chars = Array(s)
         let len = chars.count
         var start = 0
         var end = len - 1
