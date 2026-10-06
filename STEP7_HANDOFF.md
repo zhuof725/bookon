@@ -13,8 +13,9 @@
 | A | golden：HtmlFormatter 85 条 + wordCountFormat 35 条（手工 Java 移植） | ✅ 完成，本地已生成验证 |
 | B | BookonDebugKit（@Observable：仓库/会话/日志/设置/清 Cookie 缓存） | ✅ 完成 |
 | B | BookonDebugKitTests（82 用例） | ✅ 完成 |
-| C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成 |
+| C | SwiftUI App「书源调试」+ project.yml + Info.plist | ✅ 完成（C 段返工后界面按第四节最终状态） |
 | C | build-ipa CI job + build_ipa.sh + test-ios-simulator 构建 App target | ✅ CI 通过，`MinimumOSVersion=17.0`，artifact 已上传 |
+| C | **返工**：App 界面补齐 / Cookie 缓存持久化 / 端到端 7 书源精确断言 / StringUtils 强解包 / 文档 | ✅ 完成（详见第四节） |
 | D | README 差异表 / 不做清单 / 手机使用说明 / FUNCTION_MAPPING | ✅ 完成 |
 
 ## 二、本地校验结果（Linux 沙箱，可复现）
@@ -22,11 +23,13 @@
 ```
 scripts/local_typecheck.sh          -> ✅ 类型检查通过（源码，含 shim）
 scripts/local_typecheck_tests.sh    -> 流程层测试 typecheck 通过
-scripts/local_typecheck_bookon.sh   -> BookonDebugKit 测试 typecheck 通过
+scripts/local_typecheck_bookon.sh   -> BookonDebugKit 测试 typecheck 通过（9 文件 / 145 用例）
 python3 scripts/verify_functions.py -> 「Kotlin 有但 Swift 没实现的函数」清单：空
 python3 scripts/verify_fields.py    -> 「Kotlin 有但 Swift 没实现的字段」清单：空
 python3 scripts/verify_platform_apis.py     -> 未发现 String.Encoding 成员名误用（空）
 scripts/verify_html_formatter_golden.sh     -> HtmlFormatter golden PASS=85 FAIL=0（跑真实产品代码）
+scripts/verify_debugkit_logic.sh            -> DebugKit 逻辑 PASS=28 FAIL=0（跑真实产品代码）
+scripts/verify/e2e_assert.swift（自建探针）  -> 端到端精确断言 PASS=63 FAIL=0（跑真实产品代码）
 scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35 条
 ```
 
@@ -120,7 +123,93 @@ scripts/golden (mvn package + run)  -> HtmlFormatter 85 条 + wordCountFormat 35
 iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、scheme 无 test action（缺陷 8）、
 校验脚本 SIGABRT（缺陷 9）。全部根因与修复见「二之三」表。
 
-## 四、关键文件清单（本次新增/修改）
+## 四、C 段返工完成状态（最终）
+
+> 本节为 C 段返工的**最终状态**（历史轮次记录见下节「附录：CI 收敛过程」）。
+> 返工覆盖 5 项：App 界面补齐、Cookie/缓存持久化、端到端测试补足、StringUtils 强解包清理、文档。
+
+### 4.1 App 界面（业务逻辑全在 BookonDebugKit，界面只装配）
+
+| 需求 | 实现 | 位置 |
+|---|---|---|
+| 点行进入该书源调试页（不再二次选书源） | 行内 `NavigationLink` + `navigationDestination` | `App/SourceListView.swift` |
+| 导入面板 4 入口（粘贴 / `fileImporter` / URL 下载 / 剪贴板） | `ImportSheet` | `App/SourceListView.swift` |
+| 导入结果弹窗（成功数 / 失败原因列表 / 警告） | `ImportResultSummary` + `.alert` | `App/SourceListView.swift`、`Sources/BookonDebugKit/ImportOutcome.swift` |
+| 输入框下方示例提示（关键字/详情页/`::`/`++`/`--`） | `DebugKeyExample.all` | `Sources/BookonDebugKit/DebugTab.swift` |
+| 开始 / 取消 | `DebugSession.start()` / `cancel()` | `App/DebugView.swift` |
+| 6 个页签（日志/搜索/详情/目录/正文/结果源码） | `DebugTab` 枚举 + 顶部横向滚动标签条 | `Sources/BookonDebugKit/DebugTab.swift`、`App/DebugView.swift` |
+| 源码页签：最后响应 URL/状态码/headers/body 前 N 字符（N 可设） | `DebugSession.capturedResponse(for:)` + `responseSummary(for:)` | `Sources/BookonDebugKit/DebugSession.swift` |
+| 结果页签：解析书籍/目录/正文 + 可复制 JSON | `DebugSession.parsedResult` / `exportParsedResultJSON()` | `App/DebugView.swift` |
+| 每页签「复制」按钮（UIPasteboard） | `UIPasteboard.general.string`（复制完整响应，不受显示上限） | `App/DebugView.swift` |
+| 日志页签：等宽 / 可选中 / 自动滚底 / 错误行红 / 时间前缀 | `ScrollViewReader` + `textSelection(.enabled)` + `state == -1` 红色 | `App/DebugView.swift` |
+| 导出日志改 ShareLink + 「已保存到：路径」+ 失败弹错 | `ShareLink` + `exportAlert`（不 `try?` 吞掉） | `App/DebugView.swift` |
+| 日志历史（第 4 个 tab）：列 Documents/logs，时间倒序，打开/复制/分享/删除 | `LogHistoryView` + `DebugLogStore.listLogsNewestFirst/readLog/deleteLog` | `App/LogHistoryView.swift`、`Sources/BookonDebugKit/DebugLogStore.swift` |
+| 设置：清除缓存（与清除 Cookie 分开）/ 版本 / commit / CI run | `SharedEnvironment.clearCache/clearCookies` + `AppBuildInfo.fromMainBundle()` | `App/SettingsView.swift`、`Sources/BookonDebugKit/{SharedEnvironment,AppBuildInfo}.swift` |
+
+> 标签条按需求做成**顶部横向 `ScrollView(.horizontal)` + Button**（**非** `Picker(.segmented)`、
+> **非** `TabView(.page)`）；选中标签主题色背景 + 粗体 + `minHeight 44`、`accessibilityAddTraits(.isSelected)`，
+> `ScrollViewReader` 负责把选中标签滚入视野；内容区用 `switch`（非 `TabView`）。
+> 某阶段已有响应源码时标签显示小圆点，日志出现 `-1` 时显示红点；圆点逻辑在 `DebugSession.tabBarState`，
+> 由 DebugKit 测试覆盖。
+
+### 4.2 Cookie / 缓存持久化
+
+- `makeHTTPClient()` 不再每次新建内存 `CookieStore()` / `CacheManager()`；改用第 6 步文件实现
+  （`FileCookiePersistence` / `FileCacheStorage`），路径固定在 `Documents/`
+  （`cookies.json` / `legado_cache.json`），全 App 共享同一实例（`SharedEnvironment`），跨次调试保留。
+- 设置页「清除 Cookie」/「清除缓存」真正清到这两个文件。
+- DebugKit 测试：写 Cookie → 新实例读同一文件仍在 → 清除后消失（见 `DebugEnvironmentTests`）。
+
+### 4.3 端到端测试（规则真实、数据合成）
+
+- 7 个真实书源（按表格：速读谷 / 📂得奇小说网 / 🌸爱丽丝书屋(免翻) / ⚡📂淘小说书城 /
+  ⚡📂得间小说 / 木里番茄 / 七猫），每个跑 **搜索→详情→目录→正文**，断言**精确值**。
+- 资源：`Tests/LegadoWebBookTests/Resources/real/{real_sources_5,muli_real_source,qimo_real_source}.json`
+  （已在 `Package.swift` 注册为资源）。
+- **md5 逐字节比对**（muli/qimo 复制前后一致）：
+
+  | 文件 | 字节数 | md5 |
+  |---|---|---|
+  | `real_sources_5.json`（5 书源合并） | 27054 | `220f427e0f1aa492defa4f700790e26c` |
+  | `muli_real_source.json`（复制自 LegadoRuleEngineTests） | 140750 | `49b517c72d440197a4e51f266b1554dd` |
+  | `qimo_real_source.json`（复制自 LegadoRuleEngineTests） | 22845 | `898dc0df17a78fb4b5fc0ba3b2d6d88d` |
+
+- 加载器断言**正好 7 个**，名字/URL 与交付表一致；`synthetic_` 前缀负向护栏。
+- 特殊 URL 形态专门断言：木里番茄**裸 IP + 端口**、七猫 **`#md` 后缀**、爱丽丝书屋 **Punycode**。
+- 删除既有弱断言 `XCTAssertFalse(result.isEmpty)`（原 `WebBookEndToEndTests.swift:75/95`），
+  一律换精确值（如 `XCTAssertEqual(result.count, 1)` + `XCTAssertEqual(result[0].name, "…")`）。
+- 爱丽丝书屋正文规则含 `org.jsoup`（Rhino 专属），走第 5 步 `JsoupJSBridge` 替代实现。
+- 本地用 `scripts/verify/e2e_assert.swift`（无 XCTest，真实产品代码）实测 **PASS=63 FAIL=0**，
+  确认所有精确断言成立（含 4 阶段全链路）。
+
+### 4.4 StringUtils 强解包清理
+
+- 删除 `Sources/LegadoBookSource/RuleEngine/StringUtils.swift` 原第 249、252 行
+  `unicodeScalars.first!`，改为安全写法（新增 `firstScalarValue(_:)`，空串返回 nil 兜底）。
+- **全仓 grep 结果（如实列出，均为本次之前既有、非新增）**：
+  `Unicode.Scalar(...)!` 9 处（`StringUtils.swift` 5 + `RealJsNetworkExtensionsProvider.swift` 4）；
+  `content!` / `analyzeByXPath!` / `analyzeByJSoup!` / `analyzeByJSonPath!` 6 处（`AnalyzeRule.swift`）；
+  `result!.isNull` 1 处（`AnalyzeRule+Dispatch.swift`）；`ind!` 1 处（`JavaURLResolver.swift`）；
+  `baseURL!` 2 处（`NetworkUtils.swift`）。**本次改动未新增任何强解包**
+  （`git diff HEAD` 中新增强解包命中数 = 0）。
+
+### 4.5 隐私扫描（5 个提取书源）
+
+扫描 `loginUrl` / `header` / `variable` / `cookie` / `token` / `authorization` 字段：
+
+- 5 个目标书源仅含**通用 UA / Referer** 与登录页 URL；「Cookie」命中均来自 `enabledCookieJar` 布尔字段。
+- 木里番茄 `loginUrl` 含 `api_key` / `Token` / `password` 关键字，逐条核对**均为 JS 变量名与 UI 文案**，
+  无硬编码凭据；七猫 `loginUrl` / `header` 为空串。
+- 结论：**未发现可疑个人 token / 凭据，可安全提交**（无需停下）。
+
+### 4.6 测试用例数（本地计数，最终以 CI 为准）
+
+| target | 用例数 |
+|---|---|
+| LegadoWebBookTests（含新增 `WebBookRealSourcesEndToEndTests` 16 条） | 171 |
+| BookonDebugKitTests（含 `DebugKitPublicAPITests` 63 条 public 测试） | 145 |
+
+> macOS 与 iOS 用例数相等由 CI 强制核对（`ios_sim_test.sh` 比对 `macos-test-count` artifact）。
 
 **源码**
 - `Sources/LegadoBookSource/WebBook/`（9 个文件：WebBook/BookList/BookInfo/BookChapterList/BookContent/Debug/WebBookSupport/WebBookNetwork/WebBookOptions）
@@ -155,7 +244,43 @@ iOS/build-ipa 侧依次修掉：工程格式 `objectVersion` 77（缺陷 7）、
 - `.github/workflows/test.yml`、`Package.swift`、`README.md`、`FUNCTION_MAPPING.md`、`.gitignore`
 - `ci_logs/step7_final_{golden,macos,ios,build_ipa}.log`（run 37310649613 的真实 CI 日志）
 
-## 五、已完成 / 仍需人工
+## 五、关键文件清单（C 段返工，本次新增/修改）
+
+**App（C 段界面）**
+- `App/BookonDebugApp.swift`（注入 `SharedEnvironment` / `DebugLogStore`）
+- `App/ContentView.swift`（4 个 tab：书源 / 调试 / 日志历史 / 设置）
+- `App/SourceListView.swift`（行内 NavigationLink + 导入 4 入口 + 结果弹窗）
+- `App/DebugView.swift`（标签条 / 源码标签 / 结果标签 / 日志标签 / ShareLink 导出）
+- `App/LogHistoryView.swift`（**新增**）
+- `App/SettingsView.swift`（两个源码上限 Stepper + 恢复默认 + 清 Cookie/缓存 + 关于）
+
+**BookonDebugKit（业务逻辑）**
+- `Sources/BookonDebugKit/SharedEnvironment.swift`（**新增**：共享 Cookie/缓存实例 + 清除）
+- `Sources/BookonDebugKit/DebugTextLimit.swift`（**新增**：两个上限 / 按 Character 截断 / 5MB 硬上限）
+- `Sources/BookonDebugKit/DebugTab.swift`（**新增**：标签枚举 + `DebugKeyExample`）
+- `Sources/BookonDebugKit/AppBuildInfo.swift`（**新增**：version / commit / CI run）
+- `Sources/BookonDebugKit/ImportOutcome.swift`（**新增**：导入结果/弹窗文案）
+- `Sources/BookonDebugKit/{BookSourceRepository,DebugSession,DebugLogStore,DebugSettings}.swift`（修改）
+
+**内核（LegadoBookSource）**
+- `Sources/LegadoBookSource/RuleEngine/StringUtils.swift`（删除强解包，新增 `firstScalarValue(_:)`）
+- `Sources/LegadoBookSource/RuleEngine/DebugLogger.swift`、`WebBook/Debug.swift`（调试钩子/响应留存）
+
+**测试**
+- `Tests/LegadoWebBookTests/WebBookRealSourcesEndToEndTests.swift`（**新增**，16 用例）
+- `Tests/LegadoWebBookTests/WebBookEndToEndTests.swift`（删除弱断言，改精确值）
+- `Tests/BookonDebugKitTests/DebugKitPublicAPITests.swift`（**新增/扩写**，63 条 public 测试）
+- `Tests/LegadoWebBookTests/Resources/real/{real_sources_5,muli_real_source,qimo_real_source}.json`（**新增**）
+
+**验收 / 文档 / CI**
+- `scripts/verify/e2e_probe.swift`、`scripts/verify/e2e_assert.swift`（本地探针 + 精确断言实测）
+- `scripts/verify_debugkit_logic.sh`（DebugKit 逻辑实测 PASS=28 FAIL=0）
+- `Package.swift`（注册 `Resources/real/` 资源）
+- `README.md`（「如何在手机上使用」按新界面重写 + 两个上限章节 + 端到端章节 + B 段组件表）
+- `STEP7_HANDOFF.md`（本文件）
+- `ci_logs/`（三 job + build-ipa 真实日志）
+
+## 六、已完成 / 仍需人工
 
 **已完成（本次在 GitHub 上跑通并留存证据）**
 - ✅ CI 四 job 全绿：run [`37310649613`](https://github.com/zhuof725/bookon/actions/runs/37310649613)（golden / test-macos / test-ios-simulator / build-ipa）。

@@ -95,6 +95,45 @@ public final class BookSourceRepository {
         try importSources(jsonText: text)
     }
 
+    /// 从 JSON 文本导入，并返回**完整结果**（成功条数 / 失败原因列表 / 警告）。
+    ///
+    /// 与 `importSources(jsonText:)` 的区别：后者只返回成功条数，失败条目被静默丢弃；
+    /// 导入面板需要把失败原因与警告原样展示给用户，故提供本方法。
+    /// 解析失败（顶层 JSON 非法 / 非 UTF-8）仍按原样抛错。
+    @discardableResult
+    public func importSourcesDetailed(jsonText: String) throws -> ImportOutcome {
+        let result = try BookSourceImporter.importSources(fromJSONString: jsonText)
+        merge(result.successes)
+        try save()
+        return ImportOutcome(
+            importedCount: result.successes.count,
+            failures: result.failures.map { ImportOutcome.Failure(index: $0.index, reason: $0.reason) },
+            warnings: result.warnings.map { warning in
+                ImportOutcome.Warning(field: warning.field, message: warning.message)
+            }
+        )
+    }
+
+    /// 从 URL 下载并导入，返回完整结果（供导入面板的「URL 下载」入口）。
+    @discardableResult
+    public func importSourcesDetailed(url: URL) async throws -> ImportOutcome {
+        let data = try await fetcher(url)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw BookSourceImportError.invalidEncoding
+        }
+        return try importSourcesDetailed(jsonText: text)
+    }
+
+    /// 从本地文件读取并导入，返回完整结果（供导入面板的「选择文件」入口）。
+    @discardableResult
+    public func importSourcesDetailed(fileURL: URL) throws -> ImportOutcome {
+        let data = try Data(contentsOf: fileURL)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw BookSourceImportError.invalidEncoding
+        }
+        return try importSourcesDetailed(jsonText: text)
+    }
+
     // MARK: - 启用开关
 
     public func setEnabled(_ enabled: Bool, sourceUrl: String) {

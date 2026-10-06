@@ -110,6 +110,37 @@ public final class DebugLogStore {
         return files.filter { $0.pathExtension == "txt" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
+    /// 日志文件列表，按时间倒序（新的在前）。用于「日志历史」页。
+    public func listLogsNewestFirst() -> [URL] {
+        listLogs().reversed()
+    }
+
+    /// 读取某个日志文件的文本内容；读失败抛错（由界面展示错误，不静默）。
+    public func readLog(at url: URL) throws -> String {
+        let data = try Data(contentsOf: url)
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// 删除某个日志文件；失败抛错。
+    public func deleteLog(at url: URL) throws {
+        try fileManager.removeItem(at: url)
+    }
+
+    /// 删除全部日志文件；返回成功删除的个数。
+    @discardableResult
+    public func deleteAllLogs() -> Int {
+        var removed = 0
+        for url in listLogs() {
+            do { try fileManager.removeItem(at: url); removed += 1 } catch { continue }
+        }
+        return removed
+    }
+
+    /// 日志显示名（去掉扩展名的时间戳-书源名）。
+    public func displayName(for url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
+    }
+
     public var logCount: Int { listLogs().count }
 
     private func prune() {

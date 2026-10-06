@@ -239,6 +239,13 @@ public enum LegadoStringUtils2 {
     // MARK: - trim / repeat
 
     /// 对应 Kotlin: fun trim(s: String): String
+    /// 取字符首标量的值；空标量集合（理论上不存在）返回一个不会命中 `<= 0x20` 的哨兵值。
+    /// 避免 `unicodeScalars.first!` 强解包（仓库硬规则禁止强解包）。
+    @inline(__always)
+    private static func firstScalarValue(_ c: Character) -> UInt32 {
+        return c.unicodeScalars.first.map { $0.value } ?? 0xFFFF_FFFF
+    }
+
     /// 移除首尾空字符（利用 ASCII 值判断，包括全角空格 U+3000）。
     public static func trim(_ s: String) -> String {
         if s.isEmpty { return "" }
@@ -246,10 +253,10 @@ public enum LegadoStringUtils2 {
         let len = chars.count
         var start = 0
         var end = len - 1
-        while start < end && (chars[start].unicodeScalars.first!.value <= 0x20 || chars[start] == "　") {
+        while start < end && (firstScalarValue(chars[start]) <= 0x20 || chars[start] == "　") {
             start += 1
         }
-        while start < end && (chars[end].unicodeScalars.first!.value <= 0x20 || chars[end] == "　") {
+        while start < end && (firstScalarValue(chars[end]) <= 0x20 || chars[end] == "　") {
             end -= 1
         }
         end += 1

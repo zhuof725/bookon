@@ -133,8 +133,7 @@ let package = Package(
             dependencies: ["LegadoBookSource", "SwiftSoup"],
             path: "Tests/LegadoAnalyzeRulePublicAPITests"
         ),
-        // 第 7 步 A 段：WebBook 流程层（搜索/详情/目录/正文/发现）的 @testable 单元测试。
-        // 用本地 NWListener 合成服务器 + 手工构造的合成页面逐分支测试（≥150 用例）。
+        // 第 7 步 C 段返工：端到端测试（规则真实、数据合成）用真实书源资源，见下。
         .testTarget(
             name: "LegadoWebBookTests",
             dependencies: ["LegadoBookSource", "SwiftSoup"],
@@ -142,6 +141,13 @@ let package = Package(
             resources: [
                 .copy("Resources/配置文件_14个.json"),
                 .copy("Resources/synthetic_flow_pages.json"),
+                // 第 7 步 C 段返工：端到端测试用的 7 个**真实书源**（规则真实、数据合成）。
+                // real_sources_5.json 是按 name+URL 从「配置文件_14个.json」精确提取的 5 个书源；
+                // muli_real_source.json / qimo_real_source.json 与 LegadoRuleEngineTests 下的同名
+                // 文件逐字节一致（见 STEP7_HANDOFF.md 的 md5 比对记录）。
+                .copy("Resources/real/real_sources_5.json"),
+                .copy("Resources/real/muli_real_source.json"),
+                .copy("Resources/real/qimo_real_source.json"),
                 // 第 7 步 A：HtmlFormatter/wordCountFormat golden（真实 Java 移植产出的期望值）。
                 .copy("Resources/golden")
             ]

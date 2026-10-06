@@ -69,6 +69,7 @@ public enum Debug {
         do {
             let exploreBooks = try await WebBook.exploreBookAwait(bookSource: bookSource, url: url, options: options)
             if !exploreBooks.isEmpty {
+                options.logger.resultSink?.updateParsedResult { $0.books = exploreBooks.map { $0.toBook() } }
                 options.logger.log(src, "︽发现页解析完成")
                 options.logger.log(src, "", showTime: false)
                 var book = exploreBooks[0].toBook()
@@ -89,6 +90,7 @@ public enum Debug {
         do {
             let searchBooks = try await WebBook.searchBookAwait(bookSource: bookSource, key: key, options: options)
             if !searchBooks.isEmpty {
+                options.logger.resultSink?.updateParsedResult { $0.books = searchBooks.map { $0.toBook() } }
                 options.logger.log(src, "︽搜索页解析完成")
                 options.logger.log(src, "", showTime: false)
                 var book = searchBooks[0].toBook()
@@ -114,6 +116,7 @@ public enum Debug {
         options.logger.log(src, "︾开始解析详情页")
         do {
             _ = try await WebBook.getBookInfoAwait(bookSource: bookSource, book: &book, canReName: true, options: options)
+            options.logger.resultSink?.updateParsedResult { $0.book = book }
             options.logger.log(src, "︽详情页解析完成")
             options.logger.log(src, "", showTime: false)
             if !book.isWebFile {
@@ -133,6 +136,7 @@ public enum Debug {
         options.logger.log(src, "︾开始解析目录页")
         do {
             let chapters = try await WebBook.getChapterListAwait(bookSource: bookSource, book: &book, options: options)
+            options.logger.resultSink?.updateParsedResult { $0.book = book; $0.chapters = chapters }
             options.logger.log(src, "︽目录页解析完成")
             options.logger.log(src, "", showTime: false)
             let toc = chapters.filter { !(($0.isVolume) && ($0.url.hasPrefix($0.title))) }
@@ -160,10 +164,11 @@ public enum Debug {
         let src = bookSource.bookSourceUrl
         options.logger.log(src, "︾开始解析正文页")
         do {
-            _ = try await WebBook.getContentAwait(
+            let content = try await WebBook.getContentAwait(
                 bookSource: bookSource, book: book, bookChapter: bookChapter,
                 nextChapterUrl: nextChapterUrl, needSave: false, options: options
             )
+            options.logger.resultSink?.updateParsedResult { $0.content = content }
             options.logger.log(src, "︽正文页解析完成", state: DebugLogState.finished)
         } catch {
             options.logger.log(src, error.localizedDescription, state: DebugLogState.error)

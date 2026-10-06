@@ -58,6 +58,9 @@ public final class DebugLogger {
     public private(set) var startTime: Int64 = DebugLogger.nowMillis()
     /// 对应 Kotlin: Debug.callback
     public weak var callback: DebugLogSink?
+    /// 解析结果接收者（第 7 步 C 段：「结果」页签；由流程层在调试过程中回调）。
+    /// 未注入时为 nil，不产生任何额外开销，也不改变 Kotlin 行为。
+    public weak var resultSink: DebugResultSink?
 
     /// 额外保留一份内存日志（便于测试与「最终解析结果」导出，不改变 Kotlin 行为）。
     public private(set) var records: [DebugRecord] = []
@@ -236,4 +239,41 @@ public enum DebugVerbosity: String, Codable, CaseIterable, Equatable, Sendable {
 public final class NoopDebugSink: DebugLogSink {
     public init() {}
     public func printLog(state: Int, msg: String) {}
+}
+
+// MARK: - 解析结果留存（第 7 步 C 段返工：「结果」页签）
+
+/// 调试过程中解析出的结果快照。
+///
+/// Kotlin 的 `Debug.startDebug` 只打日志、不返回解析对象；为了界面「结果」页签，
+/// 这里额外留存一份**可观察的解析结果**（仅内存，不改变 Kotlin 的日志行为）。
+public struct DebugParsedResult: Equatable {
+    /// 搜索/发现阶段解析出的书籍列表。
+    public var books: [Book]
+    /// 详情阶段解析出的第一本书（含书名/作者/简介等）。
+    public var book: Book?
+    /// 目录阶段解析出的章节列表。
+    public var chapters: [BookChapter]
+    /// 正文阶段解析出的正文（取第一章）。
+    public var content: String?
+
+    public init(books: [Book] = [],
+                book: Book? = nil,
+                chapters: [BookChapter] = [],
+                content: String? = nil) {
+        self.books = books
+        self.book = book
+        self.chapters = chapters
+        self.content = content
+    }
+
+    /// 是否已有任何解析结果。
+    public var isEmpty: Bool {
+        books.isEmpty && book == nil && chapters.isEmpty && (content?.isEmpty ?? true)
+    }
+}
+
+/// 解析结果接收协议（由流程层在调试过程中回调，界面侧的 DebugSession 实现）。
+public protocol DebugResultSink: AnyObject {
+    func updateParsedResult(_ update: (inout DebugParsedResult) -> Void)
 }

@@ -1413,12 +1413,28 @@ JS 断言全部走真实 JavaScriptCore（evalJS 全链路）。
 **「Kotlin 有但 Swift 没实现的函数」清单为空**；WebBook 的 6 个 `runBlocking` 同步包装、
 Debug 的 RSS/校验书源函数明确排除（理由见脚本 EXCLUDED）。详见 `FUNCTION_MAPPING.md`。
 
-### 测试（`Tests/LegadoWebBookTests`，154 用例 + `LegadoWebBookPublicAPITests`，5 用例）
+### 测试（`Tests/LegadoWebBookTests` 流程层 + `Tests/LegadoWebBookPublicAPITests` public）
 
 覆盖搜索/发现/详情/目录/正文/调试全部分支，输入全部为合成书源规则 + 合成 HTML
-（`synthetic_` 前缀 + `配置文件_14个.json` 的 `_fixtureProvenance` 标记）；
-端到端用例用 7 个**真实书源规则文本** + 合成响应（标注「规则真实、数据合成」）。
+（`synthetic_` 前缀 + `配置文件_14个.json` 的 `_fixtureProvenance` 标记）。
 本地合成服务器用 `NWListener`（仅 Apple 平台编译）。
+
+**端到端（`WebBookRealSourcesEndToEndTests`，规则真实、数据合成）**：用 7 个**真实书源规则文本**
+跑完整 **搜索→详情→目录→正文**，每步断言**精确值**（书名、作者、章数、首章标题、正文片段），
+不使用「非空」这类弱断言。资源与标注（3 处：资源文件、测试注释、README）：
+
+- `Tests/LegadoWebBookTests/Resources/real/real_sources_5.json` —— 按 `name`+URL 从
+  `配置文件_14个.json` **精确提取**的 5 个书源（速读谷 / 📂得奇小说网 / 🌸爱丽丝书屋(免翻) /
+  ⚡📂淘小说书城 / ⚡📂得间小说），字段原样保留。
+- `Tests/LegadoWebBookTests/Resources/real/{muli_real_source,qimo_real_source}.json` ——
+  木里番茄、七猫，与 `Tests/LegadoRuleEngineTests/Resources/real/` 下同名文件**逐字节一致**。
+- 特殊 URL 形态专门断言：木里番茄**裸 IP + 端口**（`http://154.58.233.54:1968`）、
+  七猫 baseUrl 带 **`#md`** 后缀（`https://api-bc.wtzw.com#md`）、爱丽丝书屋 **Punycode**
+  域名（`xn--vcsx64d.alicesw12.xyz`）。
+- 爱丽丝书屋正文规则含 `org.jsoup`（Rhino 专属），由第 5 步的 `JsoupJSBridge` 替代实现覆盖。
+- Linux 无 JavaScriptCore：依赖 `@js:` 拼 URL 的阶段（淘小说详情、得间、七猫、木里）用
+  `#if canImport(JavaScriptCore)` 包裹，只在 Apple 平台（macOS / iOS 模拟器）真实跑到，
+  保证两平台用例数相等。
 
 ### golden（手工 Java 移植）
 
@@ -1433,26 +1449,35 @@ Debug 的 RSS/校验书源函数明确排除（理由见脚本 EXCLUDED）。详
 
 | 组件 | 职责 |
 |---|---|
-| `BookSourceRepository` | 书源导入（粘贴/文件/URL/剪贴板文本）+ 持久化 `Documents/sources.json`（原子写）+ 启用开关 + 搜索过滤 |
-| `DebugSession` | 5 种 key 形式调试 + 取消 + 计时 + 阶段追踪 + 结果导出 JSON |
-| `DebugLogStore` | 日志持久化 `Documents/logs/时间戳-书源名.txt`（写后即刷、保留 50）+ 日志导出（头 + 正文 + 可选书源规则前 N 字符） |
-| `DebugSettings` | 连接/读取/总超时、记录响应体、详细级别（UserDefaults 持久化） |
-| `DebugEnvironment` | 清 Cookie（`CookieStore.clear`）+ 清缓存（`CacheManager.clearAll`，第 6 步实现） |
+| `BookSourceRepository` | 书源导入（粘贴/文件/URL/剪贴板文本；`importSourcesDetailed` 返回成功数+失败原因+警告）+ 持久化 `Documents/sources.json`（原子写）+ 启用开关 + 搜索过滤 |
+| `DebugSession` | 5 种 key 形式调试 + 取消 + 计时 + 阶段追踪 + 结果导出 JSON + 标签条状态（`tabBarState`：每阶段有无源码、日志有无错误） |
+| `DebugTab` | 调试页标签枚举（日志/搜索源码/详情源码/目录源码/正文源码/结果）+ 每标签标题 + 无数据占位文案 + `DebugKeyExample`（5 种 key 示例提示） |
+| `DebugLogStore` | 日志持久化 `Documents/logs/时间戳-书源名.txt`（写后即刷、保留 50）+ `listLogsNewestFirst` / `readLog` / `deleteLog` + 日志导出（头 + 正文 + 可选书源规则前 N 字符） |
+| `DebugSettings` | 连接/读取/总超时、记录响应体、详细级别 + **两个源码上限**（`sourceDisplayLimit` `exportSourceLimit`，可注入存储、越界钳位回写、恢复默认；UserDefaults key 前缀 `bookon.debug.`） |
+| `DebugTextLimit` | 两个上限的默认值/范围/钳位；按 **Character** 截断（不切代理对/组合字符）；5 MB 硬上限；`exportSection` 逐阶段标注 |
+| `AppBuildInfo` | 读 `Info.plist` 的 `BuildCommit` / `BuildCIRun`（缺失显示 `—`），供设置页「关于」展示 |
+| `SharedEnvironment` | 全 App **共享同一个** Cookie/Cache 实例（`Documents/cookies.json`、`Documents/legado_cache.json`）+ `clearCookies()` / `clearCache()` / `clearAll()` |
 
-测试：`Tests/BookonDebugKitTests`，**82 个用例**（macOS/iOS 数量一致）。
+测试：`Tests/BookonDebugKitTests`（@testable）+ `Tests/BookonDebugKitTests/DebugKitPublicAPITests.swift`（非 @testable 的 public 测试）。
+其中源码上限相关用例 **≥25 条**（默认值 / 范围钳位 / 持久化往返 / 恢复默认 / 截断边界
+（正好等于、limit+1、空、emoji、组合字符、代理对）/ 导出 0 与非 0 / 复制完整内容 / 5 MB 硬上限提示）。
 
 ## 第 7 步 C：SwiftUI App「书源调试」（iOS 17）
 
-- App 源码：`App/`（`BookonDebugApp` / `ContentView` / `SourceListView` / `DebugView` / `SettingsView`）。
-  **界面只做装配，业务逻辑全部委托 BookonDebugKit**。
+- App 源码：`App/`（`BookonDebugApp` / `ContentView` / `SourceListView` / `DebugView` /
+  `LogHistoryView` / `SettingsView`）。
+  **界面只做装配，业务逻辑全部委托 BookonDebugKit**（含标签枚举、数据读取、圆点/红点判定）。
 - XcodeGen 工程：`project.yml`（`xcodegen generate` 生成 `BookonDebug.xcodeproj`）。
 - `App/Info.plist`：`NSAllowsArbitraryLoads`、`UIFileSharingEnabled`、
   `LSSupportsOpeningDocumentsInPlace`、显示名「书源调试」、bundle id `com.bookon.debug`、
-  `MinimumOSVersion 17.0`。
+  `MinimumOSVersion 17.0`、`BuildCommit` / `BuildCIRun`。
 - CI 新增 `build-ipa` job（macos-14）：archive → `Payload/BookonDebug.app` → zip 成 `BookonDebug.ipa`
   → upload-artifact；注入 `GIT_COMMIT`/`CI_RUN_ID`；`plutil` 校验 `MinimumOSVersion == 17.0`。
 - `test-ios-simulator` job 额外 `xcodegen generate` + 构建 App target（iOS 模拟器）。
 - Release 不依赖 DEBUG 宏（App/BookonDebugKit 无 `#if DEBUG`）；无新增第三方依赖。
+- 4 个页签：**书源 / 调试 / 日志历史 / 设置**（导航、导入 4 入口、结果弹窗、横向标签条、
+  源码/结果/日志标签、ShareLink 导出、日志历史、两个源码上限设置、清 Cookie/缓存、
+  版本+commit+CI run —— 详见上文「如何在手机上使用」）。
 
 ### 如何在手机上使用
 
@@ -1461,12 +1486,56 @@ Debug 的 RSS/校验书源函数明确排除（理由见脚本 EXCLUDED）。详
 2. 把 `BookonDebug.ipa` 通过 AirDrop / 隔空投送 / 数据线 传到 iPhone（iOS 17+）。
 3. 用 Xcode 的「Devices and Simulators」或 Apple Configurator / 爱思助手 / 巨魔商店等
    侧载工具安装（未签名 IPA 需开发者证书重签或使用支持侧载的工具）。
-4. 打开「书源调试」：
-   - **书源** 页：右上角导入（粘贴书源 JSON），支持文件分享导入（`UIFileSharingEnabled` 开启后
-     可在「文件」App 里直接放入书源 JSON），长按/左滑可启用/禁用，顶部搜索过滤。
-   - **调试** 页：选书源 → 输入关键字（绝对地址 / `::发现` / `++目录` / `--正文` / 搜索词）→
-     开始调试 → 查看分阶段日志与耗时 → 导出日志（存到「文件」App 的 `logs/` 目录）。
-   - **设置** 页：调整超时、记录响应体、日志级别，清除 Cookie 与缓存。
+4. 打开「书源调试」。App 是 **4 个底部页签**（书源 / 调试 / 日志历史 / 设置）：
+
+   - **书源** 页签：
+     - 顶部搜索框按名称/地址过滤；每行为一个书源，右侧开关可启用/禁用。
+     - **点行**直接进入该书源的**调试页**（`NavigationStack` + `navigationDestination`）——
+       调试页不再需要二次选书源。
+     - 右上角「导入」打开导入面板，提供 **4 个入口**：**粘贴文本**、**选择文件**
+       （`fileImporter`，配合 `UIFileSharingEnabled` 可在「文件」App 里直接放入书源 JSON）、
+       **从 URL 下载**、**读剪贴板**。
+     - 导入结束弹出**结果弹窗**：成功条数、失败条目及原因列表、警告列表。
+   - **调试** 页签（从书源列表进入，或先在此页选书源）：
+     - 输入框下方有**示例提示**：关键字、详情页网址、`::发现页`、`++目录页`、`--正文页`。
+     - 「开始调试 / 取消」按钮。
+     - **顶部横向滚动标签条**（非分段控件）：**日志 / 搜索源码 / 详情源码 / 目录源码 /
+       正文源码 / 结果**。选中的标签用主题色背景 + 粗体并自动滚入视野；某阶段已有响应源码时
+       标签显示**小圆点**，日志标签出现 `-1` 错误行时显示**红点**。
+     - 源码标签：等宽字体、可选中复制、长行横向滚动；顶部显示**最后响应**的 URL、状态码、
+       headers 与 body 前 N 字符（N 见下文「设置」）；超过 5 MB 时提示
+       「响应体超过 5MB，仅保留前 5MB」；截断时提示「已截断，显示 N / 共 M 字符」。
+     - 结果标签：显示解析出的书籍/目录/正文，可**复制 JSON**。
+     - 每个标签都有「复制」按钮（写入系统剪贴板；**复制内容不受显示上限限制**）。
+     - **导出日志**使用系统分享面板（`ShareLink`），可分享完整导出文本或日志文件；
+       同时显示「已保存到：<路径>」；保存失败会**弹出错误提示**（不静默吞掉）。
+   - **日志历史** 页签：列出 `Documents/logs/` 下的日志文件（**按时间倒序**），
+     可打开、复制、分享、删除；删除失败会弹错误提示。
+   - **设置** 页签：
+     - **源码显示上限**、**导出附带源码上限** 两个独立设置（见下表）。
+     - **清除 Cookie** 与 **清除缓存** 两个分开的按钮（分别清空共享的 Cookie 存储与缓存存储）。
+     - 「关于」显示 App 版本、commit hash、CI run 编号（读 `Info.plist` 的 `BuildCommit` / `BuildCIRun`）。
+
+### 设置：两个源码上限（默认 / 范围 / 含义）
+
+| 设置项 | 持久化位置 | 默认值 | 范围 | 步进 | 含义 |
+|---|---|---|---|---|---|
+| 源码显示上限 `sourceDisplayLimit` | UserDefaults suite `com.bookon.debug.settings`，键 `sourceDisplayLimit` | **30000** | `1000…500000` | 5000 | 调试页「源码」标签里最多显示多少**字符**；超出部分截断并提示「已截断，显示 N / 共 M 字符」 |
+| 导出附带源码上限 `exportSourceLimit` | 同上 suite，键 `exportSourceLimit` | **5000** | `0…100000` | 1000 | 导出日志时每个阶段附带的源码字符数；**0 = 整段不附带**（头部标注「未附带源码」）；非 0 时每阶段标注「搜索源码 前 N 字符（共 M）」 |
+
+- 两值都按 **Character**（不是字节）截断，绝不切开代理对或组合字符。
+- 取值越界或类型不对时**钳位到范围并写回**，不崩溃、不静默忽略；缺失则用默认值。
+- 设置页有「恢复默认」按钮，一键把两值复位到 30000 / 5000。
+- 完整响应始终留在内存；每阶段设 **5 MB 硬上限**，超过时保留前 5 MB 并在源码标签顶部显示
+  「响应体超过 5MB，仅保留前 5MB」。「复制」按钮复制的是**完整**（未截断）响应。
+
+### 数据持久化（跨次调试保留）
+
+- 书源清单：`Documents/sources.json`。
+- Cookie：`Documents/cookies.json`（第 6 步文件实现）；缓存：`Documents/legado_cache.json`。
+- 全 App **共享同一个** Cookie / 缓存实例（`SharedEnvironment`），`makeHTTPClient()`
+  不再每次新建内存实例，因此**跨次调试**登录态与缓存都会保留；设置页的清除按钮真正清到这些文件。
+- 日志：`Documents/logs/时间戳-书源名.txt`（写后即刷，保留最近 50 份）。
 
 ## 第 7 步与 Kotlin 的已知差异（README 差异表登记）
 

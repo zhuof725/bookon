@@ -23,6 +23,10 @@ public final class DebugSettings {
     public var recordResponseBody: Bool
     /// 日志详细级别（对应 DebugLogger.verbosity）。
     public var verbosity: DebugVerbosity
+    /// 源码页签显示上限（按 Character 计数，默认 30000，范围 1000...500000）。
+    public var sourceDisplayLimit: Int
+    /// 导出日志附带各阶段源码的上限（按 Character 计数，默认 5000，范围 0...100000，0=不附带）。
+    public var exportSourceLimit: Int
 
     private let defaults: UserDefaults
     static let suiteName = "com.bookon.debug.settings"
@@ -32,12 +36,16 @@ public final class DebugSettings {
                 totalTimeout: Int = 60,
                 recordResponseBody: Bool = false,
                 verbosity: DebugVerbosity = .normal,
+                sourceDisplayLimit: Int = DebugTextLimit.displayDefault,
+                exportSourceLimit: Int = DebugTextLimit.exportDefault,
                 defaults: UserDefaults = UserDefaults(suiteName: "com.bookon.debug.settings") ?? .standard) {
         self.connectTimeout = connectTimeout
         self.readTimeout = readTimeout
         self.totalTimeout = totalTimeout
         self.recordResponseBody = recordResponseBody
         self.verbosity = verbosity
+        self.sourceDisplayLimit = DebugTextLimit.clamp(sourceDisplayLimit, to: DebugTextLimit.displayRange)
+        self.exportSourceLimit = DebugTextLimit.clamp(exportSourceLimit, to: DebugTextLimit.exportRange)
         self.defaults = defaults
         load()
     }
@@ -53,6 +61,13 @@ public final class DebugSettings {
         (connectTimeout * 1000, readTimeout * 1000, totalTimeout * 1000)
     }
 
+    /// 恢复两个字符上限到默认值（不改变超时与日志设置）。
+    public func restoreDefaultTextLimits() {
+        sourceDisplayLimit = DebugTextLimit.displayDefault
+        exportSourceLimit = DebugTextLimit.exportDefault
+        save()
+    }
+
     // MARK: - 持久化（UserDefaults，可注入）
 
     public func save() {
@@ -61,6 +76,8 @@ public final class DebugSettings {
         defaults.set(totalTimeout, forKey: "totalTimeout")
         defaults.set(recordResponseBody, forKey: "recordResponseBody")
         defaults.set(verbosity.rawValue, forKey: "verbosity")
+        defaults.set(sourceDisplayLimit, forKey: "sourceDisplayLimit")
+        defaults.set(exportSourceLimit, forKey: "exportSourceLimit")
     }
 
     private func load() {
@@ -79,5 +96,40 @@ public final class DebugSettings {
         if let raw = defaults.string(forKey: "verbosity") {
             verbosity = DebugVerbosity(rawValue: raw) ?? .normal
         }
+        // 两个字符上限：读到越界值/类型不对时钳位到合法范围，不崩溃、不静默忽略。
+        sourceDisplayLimit = Self.readInt(
+            defaults, key: "sourceDisplayLimit",
+            fallback: DebugTextLimit.displayDefault,
+            range: DebugTextLimit.displayRange
+        )
+        exportSourceLimit = Self.readInt(
+            defaults, key: "exportSourceLimit",
+            fallback: DebugTextLimit.exportDefault,
+            range: DebugTextLimit.exportRange
+        )
+    }
+
+    /// 读一个 Int 设置：缺省用默认值；越界钳位；类型不对（如存了字符串）也回退并写回。
+    private static func readInt(_ defaults: UserDefaults,
+                                key: String,
+                                fallback: Int,
+                                range: ClosedRange<Int>) -> Int {
+        guard let obj = defaults.object(forKey: key) else {
+            defaults.set(fallback, forKey: key)
+            return fallback
+        }
+        let raw: Int
+        if let i = obj as? Int {
+            raw = i
+        } else if let s = obj as? String, let i = Int(s) {
+            raw = i
+        } else {
+            // 类型不对：回退并回写，避免每次启动都走异常分支。
+            defaults.set(fallback, forKey: key)
+            return fallback
+        }
+        let clamped = DebugTextLimit.clamp(raw, to: range)
+        if clamped != raw { defaults.set(clamped, forKey: key) } // 越界回写
+        return clamped
     }
 }

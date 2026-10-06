@@ -72,7 +72,9 @@ final class WebBookEndToEndTests: XCTestCase {
         let net = MockWebBookNetwork(["https://www.deqixs.org/modules/article/search.php": WebBookResponse(url: "https://www.deqixs.org/modules/article/search.php", status: 200, body: html)])
         let opts = WebBookOptions(network: net)
         let result = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
-        XCTAssertFalse(result.isEmpty)
+        // 第 7 步 C 段返工：删除弱断言 `XCTAssertFalse(result.isEmpty)`，
+        // 改为精确值断言（完整四阶段精确断言见 WebBookRealSourcesEndToEndTests.swift）。
+        XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].name, "斗破苍穹")
     }
 
@@ -92,7 +94,8 @@ final class WebBookEndToEndTests: XCTestCase {
         let net = MockWebBookNetwork(["https://www.shudugu.org/i/sor.aspx?key=斗罗": WebBookResponse(url: "https://www.shudugu.org/i/sor.aspx?key=斗罗", status: 200, body: html)])
         let opts = WebBookOptions(network: net)
         let result = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
-        XCTAssertFalse(result.isEmpty)
+        // 第 7 步 C 段返工：删除弱断言 `XCTAssertFalse(result.isEmpty)`，改为精确值断言。
+        XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].name, "斗罗大陆")
     }
 
