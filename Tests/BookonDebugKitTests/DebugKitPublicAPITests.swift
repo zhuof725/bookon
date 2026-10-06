@@ -619,8 +619,11 @@ final class BookSourceRepositoryDetailedImportTests: XCTestCase {
 
     func testDetailedImportReportsFailures() throws {
         let repo = repository()
-        // 第二个条目缺 bookSourceUrl → 记为失败，但不影响第一条。
-        let json = "[\(validSourceJSON(name: "A", url: "http://a.test")),{\"bookSourceName\":\"bad\"}]"
+        // 第二个条目不是 JSON 对象（这里是数字）→ 该条无法序列化/解码为 BookSource，记为失败，
+        // 但不影响第一条。
+        // 注意：BookSourceImporter 是「逐条容错」的——**缺字段或字段类型不符都会走宽松默认值**，
+        // 只有「数组元素根本不是一个对象」才真正失败。所以这里用 12345 而非缺字段条目。
+        let json = "[\(validSourceJSON(name: "A", url: "http://a.test")),12345]"
         let outcome = try repo.importSourcesDetailed(jsonText: json)
         XCTAssertEqual(outcome.importedCount, 1)
         XCTAssertEqual(outcome.failures.count, 1)
