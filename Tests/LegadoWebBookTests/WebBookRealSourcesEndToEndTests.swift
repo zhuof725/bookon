@@ -222,12 +222,15 @@ final class WebBookRealSourcesEndToEndTests: XCTestCase {
         let contentBody = """
         <div class="con"><p>速读谷合成正文第一段。</p><p>速读谷合成正文第二段。</p></div>
         """
-        let net = MockWebBookNetwork([
-            searchURL: WebBookResponse(url: searchURL, status: 200, body: Self.shuduguSearchBody),
-            bookURL: WebBookResponse(url: bookURL, status: 200, body: infoBody),
-            tocURL: WebBookResponse(url: tocURL, status: 200, body: tocBody),
-            contentURL: WebBookResponse(url: contentURL, status: 200, body: contentBody),
-        ])
+        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
+        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
+        // 进程（实测于 CI run 37449176865）。
+        let net = MockWebBookNetwork()
+        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: Self.shuduguSearchBody))
+        net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
+        net.set(tocURL, WebBookResponse(url: tocURL, status: 200, body: tocBody))
+        net.set(contentURL, WebBookResponse(url: contentURL, status: 200, body: contentBody))
         let opts = WebBookOptions(network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
@@ -314,12 +317,14 @@ final class WebBookRealSourcesEndToEndTests: XCTestCase {
         let contentBody = """
         <div class="con"><p>得奇合成正文第一段。</p><p>得奇合成正文第二段。</p></div>
         """
-        let net = MockWebBookNetwork([
-            searchURL: WebBookResponse(url: searchURL, status: 200, body: Self.deqixsSearchBody),
-            bookURL: WebBookResponse(url: bookURL, status: 200, body: infoBody),
-            tocURL: WebBookResponse(url: tocURL, status: 200, body: tocBody),
-            contentURL: WebBookResponse(url: contentURL, status: 200, body: contentBody),
-        ])
+        // ⚠️ 得奇小说网的详情页与目录页是**同一个 URL**（bookURL == tocURL）。
+        // 不能用字典字面量（重复 key 会触发 Swift `Fatal error: Dictionary literal contains
+        // duplicate keys` 并直接终止进程），改用 set(_:_:) 逐个写入（后者覆盖前者即可）。
+        let net = MockWebBookNetwork()
+        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: Self.deqixsSearchBody))
+        net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
+        net.set(tocURL, WebBookResponse(url: tocURL, status: 200, body: tocBody))
+        net.set(contentURL, WebBookResponse(url: contentURL, status: 200, body: contentBody))
         let opts = WebBookOptions(network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
@@ -394,11 +399,14 @@ final class WebBookRealSourcesEndToEndTests: XCTestCase {
           <li><a href="/c/2.html">第二章 爱丽丝发展</a></li>
         </ul>
         """
-        let net = MockWebBookNetwork([
-            searchURL: WebBookResponse(url: searchURL, status: 200, body: Self.aliceSearchBody),
-            bookURL: WebBookResponse(url: bookURL, status: 200, body: infoBody),
-            tocURL: WebBookResponse(url: tocURL, status: 200, body: tocBody),
-        ])
+        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
+        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
+        // 进程（实测于 CI run 37449176865）。
+        let net = MockWebBookNetwork()
+        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: Self.aliceSearchBody))
+        net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
+        net.set(tocURL, WebBookResponse(url: tocURL, status: 200, body: tocBody))
         let opts = WebBookOptions(network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
@@ -478,12 +486,15 @@ extension WebBookRealSourcesEndToEndTests {
         let contentBody = """
         {"code":0,"data":{"content":"淘小说合成正文第一段。\\n淘小说合成正文第二段。"}}
         """
-        let net = MockWebBookNetwork([
-            searchURL: WebBookResponse(url: searchURL, status: 200, body: Self.taoyueSearchBody),
-            bookURL: WebBookResponse(url: bookURL, status: 200, body: infoBody),
-            tocURL: WebBookResponse(url: tocURL, status: 200, body: tocBody),
-            contentURL: WebBookResponse(url: contentURL, status: 200, body: contentBody),
-        ])
+        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
+        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
+        // 进程（实测于 CI run 37449176865）。
+        let net = MockWebBookNetwork()
+        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: Self.taoyueSearchBody))
+        net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
+        net.set(tocURL, WebBookResponse(url: tocURL, status: 200, body: tocBody))
+        net.set(contentURL, WebBookResponse(url: contentURL, status: 200, body: contentBody))
         let opts = WebBookOptions(network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
@@ -522,10 +533,13 @@ extension WebBookRealSourcesEndToEndTests {
           "intro":"合成七猫简介正文。","book_tag_list":[{"title":"言情"}],"words_num":"55万",
           "latest_chapter_title":"第一章 七猫起始","update_time":"1700000000"}}}
         """
-        let net = MockWebBookNetwork([
-            searchURL: WebBookResponse(url: searchURL, status: 200, body: searchBody),
-            bookURL: WebBookResponse(url: bookURL, status: 200, body: infoBody),
-        ])
+        // 用 set(_:_:) 逐个写入而不是字典字面量：部分书源的详情页与目录页是
+        // **同一个 URL**（如得奇的 bookURL == tocURL），字典字面量遇到重复 key 会触发
+        // `Fatal error: Dictionary literal contains duplicate keys` 并直接终止整个测试
+        // 进程（实测于 CI run 37449176865）。
+        let net = MockWebBookNetwork()
+        net.set(searchURL, WebBookResponse(url: searchURL, status: 200, body: searchBody))
+        net.set(bookURL, WebBookResponse(url: bookURL, status: 200, body: infoBody))
         let opts = WebBookOptions(network: net)
 
         let books = try await WebBook.searchBookAwait(bookSource: src, key: "斗罗", options: opts)
