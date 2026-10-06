@@ -31,6 +31,17 @@ public final class DebugSettings {
     private let defaults: UserDefaults
     static let suiteName = "com.bookon.debug.settings"
 
+    /// 两个字符上限的存储键（设置页与测试都用这两个 key 直接读写）。
+    public static let sourceDisplayLimitKey = "sourceDisplayLimit"
+    public static let exportSourceLimitKey = "exportSourceLimit"
+
+    /// - Parameters:
+    ///   - sourceDisplayLimit: 源码页签显示上限；越界自动钳位到 `DebugTextLimit.displayRange`。
+    ///   - exportSourceLimit: 导出日志附带源码上限；越界自动钳位到 `DebugTextLimit.exportRange`。
+    ///   - defaults: 可注入存储，默认真机上的 `com.bookon.debug.settings`。
+    ///
+    /// 优先级：**存储里已有的值 > 构造参数 > 默认值**。两个上限的构造参数只在存储里
+    /// 没有对应 key 时生效，并会立即写回存储（因此构造后即可被新实例读到）。
     public init(connectTimeout: Int = 10,
                 readTimeout: Int = 60,
                 totalTimeout: Int = 60,
@@ -76,8 +87,8 @@ public final class DebugSettings {
         defaults.set(totalTimeout, forKey: "totalTimeout")
         defaults.set(recordResponseBody, forKey: "recordResponseBody")
         defaults.set(verbosity.rawValue, forKey: "verbosity")
-        defaults.set(sourceDisplayLimit, forKey: "sourceDisplayLimit")
-        defaults.set(exportSourceLimit, forKey: "exportSourceLimit")
+        defaults.set(sourceDisplayLimit, forKey: Self.sourceDisplayLimitKey)
+        defaults.set(exportSourceLimit, forKey: Self.exportSourceLimitKey)
     }
 
     private func load() {
@@ -97,26 +108,40 @@ public final class DebugSettings {
             verbosity = DebugVerbosity(rawValue: raw) ?? .normal
         }
         // 两个字符上限：读到越界值/类型不对时钳位到合法范围，不崩溃、不静默忽略。
+        //
+        // 优先级：存储里已有的值 > 构造参数 > 默认值。构造参数只在存储里没有对应 key 时生效。
         sourceDisplayLimit = Self.readInt(
-            defaults, key: "sourceDisplayLimit",
+            defaults, key: Self.sourceDisplayLimitKey,
+            initialValue: sourceDisplayLimit,
             fallback: DebugTextLimit.displayDefault,
             range: DebugTextLimit.displayRange
         )
         exportSourceLimit = Self.readInt(
-            defaults, key: "exportSourceLimit",
+            defaults, key: Self.exportSourceLimitKey,
+            initialValue: exportSourceLimit,
             fallback: DebugTextLimit.exportDefault,
             range: DebugTextLimit.exportRange
         )
     }
 
-    /// 读一个 Int 设置：缺省用默认值；越界钳位；类型不对（如存了字符串）也回退并写回。
+    /// 读一个 Int 设置。
+    ///
+    /// - 存储里有 key：`Int` 直接取用，`String` 尝试转 Int，其它类型视为类型不对；
+    /// - 存储里没有 key：用 `initialValue`（构造期已把参数钳位后暂存到的值），无则用 `fallback`；
+    /// - 越界钳位，类型不对回退，并都写回存储。
+    ///
+    /// 返回前保证已把最终值回写存储（键缺失时填入），因此「构造后立即用同一份 defaults
+    /// 再构造一个实例」能读到同一个值，不存在「未保存即丢失」。
     private static func readInt(_ defaults: UserDefaults,
                                 key: String,
+                                initialValue: Int? = nil,
                                 fallback: Int,
                                 range: ClosedRange<Int>) -> Int {
         guard let obj = defaults.object(forKey: key) else {
-            defaults.set(fallback, forKey: key)
-            return fallback
+            let seed = initialValue ?? fallback
+            let value = DebugTextLimit.clamp(seed, to: range)
+            defaults.set(value, forKey: key)
+            return value
         }
         let raw: Int
         if let i = obj as? Int {

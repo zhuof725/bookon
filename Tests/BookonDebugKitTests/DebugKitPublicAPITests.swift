@@ -429,6 +429,35 @@ final class DebugSettingsTextLimitPublicTests: XCTestCase {
         XCTAssertEqual(s2.exportSourceLimit, 678)
     }
 
+    /// 显式传入的构造参数在存储为空时必须立即写回存储，
+    /// 否则「构造 → 不 save → 新实例」会丢值。
+    func testInitArgumentWrittenBackImmediately() {
+        let defaults = makeDefaults()
+        let s = DebugSettings(sourceDisplayLimit: 200000, exportSourceLimit: 90000, defaults: defaults)
+        XCTAssertEqual(s.sourceDisplayLimit, 200000)
+        XCTAssertEqual(s.exportSourceLimit, 90000)
+
+        // 不调用 save()，直接读存储。
+        XCTAssertEqual(defaults.integer(forKey: DebugSettings.sourceDisplayLimitKey), 200000)
+        XCTAssertEqual(defaults.integer(forKey: DebugSettings.exportSourceLimitKey), 90000)
+
+        let s2 = DebugSettings(defaults: defaults)
+        XCTAssertEqual(s2.sourceDisplayLimit, 200000)
+        XCTAssertEqual(s2.exportSourceLimit, 90000)
+    }
+
+    /// 存储里已有的值优先于构造参数（避免「传入参数静默覆盖用户已保存的设置」）。
+    func testStoredValueBeatsInitArgument() {
+        let defaults = makeDefaults()
+        defaults.set(42000, forKey: DebugSettings.sourceDisplayLimitKey)
+        let s = DebugSettings(sourceDisplayLimit: 11111, defaults: defaults)
+        XCTAssertEqual(s.sourceDisplayLimit, 42000)
+
+        // 构造参数仍会被钳位后存在属性上（只是不覆盖存储值）。
+        let s2 = DebugSettings(sourceDisplayLimit: 999_999_999, defaults: makeDefaults())
+        XCTAssertEqual(s2.sourceDisplayLimit, DebugTextLimit.displayRange.upperBound)
+    }
+
     func testOutOfRangeStoredValueIsClampedOnLoad() {
         let defaults = makeDefaults()
         // 直接塞越界值（模拟历史脏数据）。
