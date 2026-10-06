@@ -42,15 +42,26 @@ final class WebBookRealSourcesEndToEndTests: XCTestCase {
     private static let mergedFile = "real_sources_5"
     private static let singleFiles = ["muli_real_source", "qimo_real_source"]
 
+    /// 在资源 bundle 里定位一个文件。
+    ///
+    /// ⚠️ 不要用 `subdirectory:`：`.copy("Resources/real/x.json")` 这类**单文件**资源
+    /// 会被 SwiftPM **扁平化**到 bundle 根目录（已本地实测确认），bundle 内不存在
+    /// `real/` 子目录。所以这里先按根目录找，再兜底找 `real/` 子目录，两种布局都能命中。
+    private func resourceURL(name: String) -> URL? {
+        let bundle = Bundle.module
+        if let url = bundle.url(forResource: name, withExtension: "json") { return url }
+        return bundle.url(forResource: name, withExtension: "json", subdirectory: "real")
+    }
+
     /// 加载全部 7 个真实书源。任何一步缺失即 fail-stop（不用 XCTSkip 掩盖）。
     private func loadRealSources() throws -> [BookSource] {
         let mergedURL = try XCTUnwrap(
-            Bundle.module.url(forResource: Self.mergedFile, withExtension: "json", subdirectory: "real"),
+            resourceURL(name: Self.mergedFile),
             "缺少 real_sources_5.json（5 个真实书源合并文件）")
         var all = try decodeSources(try Data(contentsOf: mergedURL))
         for name in Self.singleFiles {
             let url = try XCTUnwrap(
-                Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "real"),
+                resourceURL(name: name),
                 "缺少 \(name).json（真实书源文件）")
             all += try decodeSources(try Data(contentsOf: url))
         }
