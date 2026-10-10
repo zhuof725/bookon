@@ -258,7 +258,7 @@ private enum TypographyInspection {
         let latin = "“AVATAR” ‘office’ don’t — ffi… café·e\u{301} 👨‍👩‍👧‍👦"
         _ = layout(view, text: latin, width: 900, size: 19, spacing: 8, continuation: true)
         reference.attributedText = NSAttributedString(string: latin, attributes: [.font: UIFont.systemFont(ofSize: 19)])
-        reference.textContainer.size = CGSize(width: 900, height: .greatestFiniteMagnitude)
+        reference.textContainer.size = CGSize(width: 900, height: CGFloat.greatestFiniteMagnitude)
         reference.layoutManager.ensureLayout(for: reference.textContainer)
         let actual = view.layoutManager, native = reference.layoutManager
         var shapingError: CGFloat = 0
