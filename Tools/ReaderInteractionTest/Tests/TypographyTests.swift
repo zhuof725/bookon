@@ -1,107 +1,77 @@
 import XCTest
 
 final class TypographyTests: XCTestCase {
-    func testNativeCJKColumnsBaselinesAndPagination() throws {
+    func testNativeGlyphsFixedBaselinesAndActualLinePagination() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--typography-mode"]
         app.launch()
         let inspect = app.buttons["inspect-typography"]
-        XCTAssertTrue(inspect.waitForExistence(timeout: 10))
+        XCTAssertTrue(inspect.waitForExistence(timeout: 8))
         inspect.tap()
         let metrics = app.staticTexts["typography-metrics"]
         let ready = NSPredicate { _, _ in metrics.exists && metrics.label.hasPrefix("{") }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: metrics)], timeout: 10), .completed)
-        let data = try XCTUnwrap(metrics.label.data(using: .utf8))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: metrics)], timeout: 12), .completed)
+        let raw = metrics.label
+        let data = try XCTUnwrap(raw.data(using: .utf8))
         let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         func number(_ key: String) throws -> Double {
-            try XCTUnwrap(report[key] as? NSNumber, "Missing \(key): \(metrics.label)").doubleValue
+            try XCTUnwrap(report[key] as? NSNumber, "Missing \(key): \(raw)").doubleValue
         }
-        let detail = XCTAttachment(string: metrics.label)
-        detail.name = "production-glyph-metrics"
+        let detail = XCTAttachment(string: raw)
+        detail.name = "native-glyph-baseline-and-source-metrics.json"
         detail.lifetime = .keepAlways
         add(detail)
-        // Native TextKit + rendered PageContentView, including the reported 24 pt
-        // screenshot and all 16 line/paragraph combinations (0/8/16/24 x 0/2/8/16).
-        for key in ["rhythmWithinError", "rhythmAcrossError", "rhythmBottomError", "rhythmHeightError", "rhythmNativeError", "rhythmBubbleGrowth"] {
-            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(metrics.label)")
+        // Six representative settings × first/continuation. The same 19pt font is
+        // measured at two widths, which catches width/floor(width/fontSize) tracking.
+        XCTAssertEqual(try number("naturalCases"), 12, raw)
+        for key in ["nativeAdvanceError", "nativeSizeError", "nativeGlyphError", "indentError", "widthError", "shapingError"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.25, "\(key): \(raw)")
         }
-        XCTAssertEqual(try number("rhythmCases"), 19, metrics.label)
-        XCTAssertEqual(try number("rhythmTerminals"), 19, metrics.label)
-        XCTAssertGreaterThan(try number("rhythmPairs"), 100, metrics.label)
-        XCTAssertGreaterThan(try number("rhythmBoundaries"), 100, metrics.label)
-        XCTAssertGreaterThan(try number("rhythmAligned"), 15, metrics.label)
-        for key in ["rhythmSourceOK", "rhythmTerminalOK", "rhythmBubbleOK", "rhythmSparseOK"] {
-            XCTAssertEqual(report[key] as? Bool, true, "\(key): \(metrics.label)")
+        XCTAssertLessThanOrEqual(try number("largestHanStepRatio"), 1.02, raw)
+        XCTAssertGreaterThan(try number("hanPairs"), 100, raw)
+        XCTAssertGreaterThan(try number("punctuationGlyphs"), 100, raw)
+        XCTAssertGreaterThan(try number("naturalRows"), 30, raw)
+        XCTAssertGreaterThan(try number("baselinePairs"), 20, raw)
+        for key in ["baselineError", "heightError", "bubbleBaselineError", "bubbleHeightError", "bubbleWidthError"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.5, "\(key): \(raw)")
         }
-        XCTAssertEqual(report["quoteCorrectFont"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["quoteDistinctGlyphs"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["quoteSourceOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual((report["quoteGlyphs"] as? [[String: Any]])?.count, 16, metrics.label)
-        // Genuine adjacent Han remains exactly one cell at 19/23/24/26 pt,
-        // including nested quotes; never trade a straight right edge for broken words.
-        XCTAssertLessThanOrEqual(try number("naturalStepError"), 0.25, metrics.label)
-        XCTAssertLessThanOrEqual(try number("naturalEdgeCells"), 2.5, metrics.label)
-        XCTAssertGreaterThan(try number("naturalHanPairs"), 70, metrics.label)
-        XCTAssertGreaterThan(try number("naturalRows"), 35, metrics.label)
-        XCTAssertEqual(try number("naturalTerminalRows"), 16, metrics.label)
-        XCTAssertEqual(report["naturalBreaksOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["naturalSourceOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["referenceCompact"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["referencePreserved"] as? Bool, true, metrics.label)
-        XCTAssertLessThan(try number("referenceOpeningError"), 0.18, metrics.label)
-        XCTAssertGreaterThan(try number("referenceChecks"), 70, metrics.label)
-        for key in ["bottomBaselineError", "bottomOverflow", "bottomTopError"] {
-            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(metrics.label)")
+        for key in ["naturalSourceOK", "naturalAttributesOK", "nativeGlyphsOK", "lineBreaksOK", "nativeRunsOK",
+                    "bubbleHitOK", "bubbleSourceOK", "bubbleTailOK", "mixedNativeRunsOK"] {
+            XCTAssertEqual(report[key] as? Bool, true, "\(key): \(raw)")
         }
-        XCTAssertGreaterThan(try number("bottomPages"), 6, metrics.label)
-        XCTAssertGreaterThan(try number("bottomContinuations"), 0, metrics.label)
-        XCTAssertGreaterThan(try number("bottomComments"), 6, metrics.label)
-        XCTAssertEqual(report["bottomTerminalOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["bottomSpecialOK"] as? Bool, true, metrics.label)
-        // 首行/续段、全宽标点、不同字号和非整数字号倍数的宽度，实际字形落在同一网格。
-        for key in ["gridError", "stepError", "indentError", "edgeError", "tailError", "widthError"] {
-            XCTAssertLessThanOrEqual(try number(key), 0.25, "\(key): \(metrics.label)")
+        let quotes = try XCTUnwrap(report["quoteGlyphs"] as? [String: Int])
+        XCTAssertEqual(Set(quotes.keys), Set(["‘", "’", "“", "”"]))
+        XCTAssertEqual(Set(quotes.values).count, 4, raw)
+        XCTAssertEqual(try number("bubbleChecks"), 4, raw)
+        // No full-right-edge or bottom-fill demand: ALL pages keep H+L / H+L+P.
+        // Actual nonterminal glyph baselines and stored heights both have to agree.
+        for key in ["pageWithinError", "pageAcrossError", "pageHeightError", "pageWidthError", "pageOverflow", "pageTopError"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(raw)")
         }
-        for key in ["scrollWidthError", "scrollGridError"] {
-            XCTAssertLessThanOrEqual(try number(key), 0.25, metrics.label)
+        for key in ["pageSourceOK", "offsetsOK", "actualLineSplitsOK", "continuationsOK", "pageCommentsOK", "pageBubblesOK", "naturalPagesOK"] {
+            XCTAssertEqual(report[key] as? Bool, true, "\(key): \(raw)")
         }
-        XCTAssertLessThanOrEqual(try number("scrollRhythmError"), 0.75, metrics.label)
-        XCTAssertEqual(try number("scrollRhythmBoundaries"), 4, metrics.label)
-        XCTAssertLessThanOrEqual(try number("scrollHeightError"), 0.5, metrics.label)
-        XCTAssertEqual(try number("scrollParagraphs"), 6, metrics.label)
-        XCTAssertGreaterThan(try number("scrollGlyphs"), 100, metrics.label)
-        XCTAssertEqual(report["scrollSourceOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["scrollBubbleOK"] as? Bool, true, metrics.label)
-        XCTAssertGreaterThan(try number("gridGlyphs"), 1000)
-        // 三档字号、三档宽度、0/8/30 行间距，Latin、emoji、气泡不能使某行忽高忽低。
-        XCTAssertLessThanOrEqual(try number("baselineError"), 0.5, metrics.label)
-        XCTAssertGreaterThan(try number("baselinePairs"), 80)
-        XCTAssertLessThanOrEqual(try number("clipping"), 0.5, metrics.label)
-        XCTAssertLessThanOrEqual(try number("shapingError"), 0.25, metrics.label)
-        XCTAssertEqual(report["nativeRuns"] as? Bool, true, metrics.label)
-        XCTAssertEqual(try number("bubbleChecks"), 27, metrics.label)
-        XCTAssertEqual(report["bubbleOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(try number("preservationChecks"), 63, metrics.label)
-        for key in ["heightError", "paragraphHeightError", "pageOverflow"] {
-            XCTAssertLessThanOrEqual(try number(key), 0.5, "\(key): \(metrics.label)")
+        XCTAssertGreaterThan(try number("nonterminalPages"), 2, raw)
+        XCTAssertGreaterThan(try number("splitChecks"), 2, raw)
+        XCTAssertGreaterThan(try number("pagePairs"), 10, raw)
+        XCTAssertGreaterThan(try number("pageBoundaries"), 2, raw)
+        XCTAssertEqual(try number("pageComments"), 9, raw)
+        for key in ["scrollWidthError", "scrollHeightError", "scrollBaselineError"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(raw)")
         }
-        XCTAssertEqual(report["offsetsOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(report["sourceOK"] as? Bool, true, metrics.label)
-        XCTAssertGreaterThan(try number("continuations"), 0, metrics.label)
-        XCTAssertGreaterThan(try number("pages"), 1, metrics.label)
-        XCTAssertEqual(try number("commentCount"), 1, metrics.label)
-        XCTAssertEqual(report["inkOK"] as? Bool, true, metrics.label)
-        XCTAssertEqual(try number("inkChecks"), 27, metrics.label)
-        XCTAssertEqual(report["wrappingOK"] as? Bool, true, metrics.label)
-        XCTAssertGreaterThan(try number("breakChecks"), 100, metrics.label)
-        XCTAssertLessThanOrEqual(try number("bubbleGapError"), 0.25, metrics.label)
-        XCTAssertLessThanOrEqual(try number("bubbleBaselineError"), 0.5, metrics.label)
+        XCTAssertEqual(try number("scrollParagraphs"), 6, raw)
+        XCTAssertEqual(try number("scrollBoundaries"), 4, raw)
+        XCTAssertGreaterThan(try number("scrollPairs"), 10, raw)
+        XCTAssertEqual(report["scrollSourceOK"] as? Bool, true, raw)
+        XCTAssertEqual(report["scrollBubbleOK"] as? Bool, true, raw)
+        // Avoid restoring the old hundreds-of-bitmaps / many-host Cartesian matrix.
+        XCTAssertLessThan(try number("elapsedSeconds"), 12, raw)
         app.terminate()
         app.launchArguments = ["--typography-mode", "--reference-page"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["chapter-title"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["chapter-title"].waitForExistence(timeout: 8))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "reference-production-page"
+        screenshot.name = "reference-chinese-dialogue-native-production-page"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }

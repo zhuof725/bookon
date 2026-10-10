@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreText
 
 struct ContinuousScrollHarnessView: View {
     @State private var ids = [1, 2]
@@ -79,31 +80,59 @@ struct ContinuousScrollHarnessView: View {
 }
 
 private enum ContinuousScrollInspection {
-    // Inspect existing TextKit glyphs in visible production paragraphs without calling sizeThatFits.
-    // Mixed Latin paragraphs are deliberately excluded from the CJK column invariant.
+    // Read visible, already-laid-out TextKit glyphs; never remeasure cached scroll hosts.
+    // Native punctuation has different advances, so neither x % cellWidth nor a full
+    // right edge is meaningful. Mixed Latin/emoji paragraphs must remain in coverage.
     private static func alignment(in scroll: UIScrollView) -> [String: Any] {
-        var paragraphs = 0, glyphs = 0, quotes = 0
-        var gridError: CGFloat = 0
+        var paragraphs = 0, glyphs = 0, quotes = 0, hanPairs = 0
+        var advanceError: CGFloat = 0, sizeError: CGFloat = 0, widthError: CGFloat = 0
+        var naturalAttributes = true, breaksOK = true
         let quoteCharacters = Set("‘’“”「」")
+        let closing = Set("，。！？；：、’”】》）〉」』〕］｝")
+        let opening = Set("‘“【《（〈「『〔［｛")
+        func isHan(_ unit: unichar) -> Bool { (0x4E00...0x9FFF).contains(Int(unit)) }
         func visit(_ view: UIView) {
             if let text = view as? CommentTextView,
-               text.convert(text.bounds, to: scroll).intersects(scroll.bounds) {
-                let source = text.textStorage.string
-                guard text.bounds.width > 0, !source.isEmpty,
-                      source.unicodeScalars.allSatisfy({ $0.value > 0x7f }) else { return }
+               text.bounds.width > 0,
+               text.convert(text.bounds, to: scroll).intersects(scroll.bounds),
+               !text.textStorage.string.isEmpty {
+                let storage = text.textStorage
                 let manager = text.layoutManager
-                let font = (text.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)?.pointSize ?? 19
-                let grid = ReaderTextLayout.metrics(fontSize: font, width: text.bounds.width)
-                let string = source as NSString
+                let string = storage.string as NSString
+                widthError = max(widthError, abs(text.bounds.width - text.renderedWidth),
+                                 abs(text.bounds.width - text.textContainer.size.width))
+                storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attrs, _, _ in
+                    naturalAttributes = naturalAttributes && attrs[.kern] == nil && attrs[.ligature] == nil
+                }
+                var advances: [String: CGFloat] = [:]
                 manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: text.textContainer)) {
-                    rect, _, _, range, _ in
+                    _, _, _, range, _ in
+                    let characters = manager.characterRange(forGlyphRange: range, actualGlyphRange: nil)
+                    let row = string.substring(with: characters)
+                    if let first = row.first, characters.location > 0, closing.contains(first) { breaksOK = false }
+                    if let last = row.last, NSMaxRange(characters) < string.length,
+                       opening.contains(last) { breaksOK = false }
                     for glyph in range.location..<NSMaxRange(range) {
-                        let x = rect.minX + manager.location(forGlyphAt: glyph).x
-                        gridError = max(gridError, abs(x - (x / grid.cellWidth).rounded() * grid.cellWidth))
                         let index = manager.characterIndexForGlyph(at: glyph)
+                        guard index < string.length else { continue }
                         let character = string.substring(with: string.rangeOfComposedCharacterSequence(at: index))
                         if character.contains(where: { quoteCharacters.contains($0) }) { quotes += 1 }
                         glyphs += 1
+                        guard glyph > range.location, index > 0,
+                              manager.characterIndexForGlyph(at: glyph - 1) == index - 1,
+                              isHan(string.character(at: index)), isHan(string.character(at: index - 1)),
+                              let font = storage.attribute(.font, at: index - 1, effectiveRange: nil) as? UIFont,
+                              let native = UIFont(name: "PingFangSC-Regular", size: font.pointSize) else { continue }
+                        let key = "\(native.fontName):\(native.pointSize)"
+                        let expected = advances[key] ?? CGFloat(CTLineGetTypographicBounds(
+                            CTLineCreateWithAttributedString(NSAttributedString(string: "汉", attributes: [.font: native])),
+                            nil, nil, nil))
+                        advances[key] = expected
+                        let step = manager.location(forGlyphAt: glyph).x - manager.location(forGlyphAt: glyph - 1).x
+                        advanceError = max(advanceError, abs(step - expected))
+                        sizeError = max(sizeError, abs(step - font.pointSize))
+                        naturalAttributes = naturalAttributes && font.fontName == native.fontName
+                        hanPairs += 1
                     }
                 }
                 paragraphs += 1
@@ -111,7 +140,9 @@ private enum ContinuousScrollInspection {
             for child in view.subviews { visit(child) }
         }
         visit(scroll)
-        return ["paragraphs": paragraphs, "glyphs": glyphs, "quotes": quotes, "gridError": Double(gridError)]
+        return ["paragraphs": paragraphs, "glyphs": glyphs, "quotes": quotes, "hanPairs": hanPairs,
+                "advanceError": Double(advanceError), "sizeError": Double(sizeError),
+                "widthError": Double(widthError), "naturalAttributes": naturalAttributes, "breaksOK": breaksOK]
     }
 
     static func snapshot() -> String {

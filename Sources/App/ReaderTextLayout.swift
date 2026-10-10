@@ -1,11 +1,10 @@
 import UIKit
 import CoreText
 
-/// 渲染和分页共用 TextKit 1。只修改属性，不插入字格占位符或改写原文。
+/// 渲染与分页共用 TextKit 1 的真实字形与换行；不拉伸字格、行距或更改原文。
 enum ReaderTextLayout {
     fileprivate static let baselineKey = NSAttributedString.Key("ReaderTextBaseline")
     fileprivate static let commentTailKey = NSAttributedString.Key("ReaderCommentTailStart")
-    fileprivate static let quoteOpeningKey = NSAttributedString.Key("ReaderASCIIQuoteOpening")
 
     struct Metrics {
         let font: UIFont
@@ -15,7 +14,6 @@ enum ReaderTextLayout {
         let tracking: CGFloat
         let lineHeight: CGFloat
         let baseline: CGFloat
-        fileprivate let punctuationAdvances: [UInt32: CGFloat]
     }
 
     private struct Fonts {
@@ -25,11 +23,7 @@ enum ReaderTextLayout {
         let advance: CGFloat
         let ascent: CGFloat
         let descent: CGFloat
-        let punctuationAdvances: [UInt32: CGFloat]
     }
-
-    // 这些 Unicode 标点也用于西文，只在相邻 CJK 上下文中占一格。
-    private static let contextualPunctuation: [UInt32] = [0x00B7, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2026]
 
     private static func advance(of text: String, font: UIFont) -> CGFloat {
         // 量 feature 生效后的字形，不能把引号一律当作半角再补半格：fwid 可能已给它一整格。
@@ -54,39 +48,24 @@ enum ReaderTextLayout {
             // 仍由字体提供 ink bearings，不移动 glyph origin 或破坏整格 advance。
             let cjk = UIFont(name: "PingFangSC-Regular", size: size)
                 ?? UIFont(name: CTFontCopyPostScriptName(fallback) as String, size: size) ?? body
-            // 仅中文使用全宽字形，关闭标点的比例宽度；不把西文/emoji 变成等宽字体。
-            let descriptor = cjk.fontDescriptor.addingAttributes([
-                .featureSettings: [[UIFontDescriptor.FeatureKey.type: kTextSpacingType,
-                                    UIFontDescriptor.FeatureKey.selector: kMonospacedTextSelector]]
-            ])
-            let fullWidth = UIFont(descriptor: descriptor, size: size)
             let emoji = UIFont(name: "AppleColorEmoji", size: size) ?? body
             let bubbleSize = max(size - 5, 11)
             let tail = CommentBubble.tailHeight(for: bubbleSize)
             // 包含气泡（即便本段没有），避免附加气泡或最后一页改变行高。
-            let ascent = max(max(body.ascender, fullWidth.ascender),
+            let ascent = max(max(body.ascender, cjk.ascender),
                              max(emoji.ascender, bubbleSize + tail * 0.5 + 2))
-            let descent = max(max(-body.descender, -fullWidth.descender),
+            let descent = max(max(-body.descender, -cjk.descender),
                               max(-emoji.descender, tail * 0.5))
-            let punctuationAdvances = Dictionary(uniqueKeysWithValues: contextualPunctuation.map {
-                ($0, advance(of: String(UnicodeScalar($0)!), font: fullWidth))
-            })
-            // “/”/‘/’ 必须使用 PingFang 原生弯曲字形：系统西文字体在
-            // 中文上下文中的引号虽仍是 U+201C/U+201D，却画成两根斜直线。
-            // 只对句读启用等宽特性，不让特性替换原始引号字形。
-            fonts = Fonts(body: body, cjk: fullWidth, quote: cjk,
-                          advance: max(advance(of: "汉", font: fullWidth), 1),
-                          ascent: ascent, descent: descent, punctuationAdvances: punctuationAdvances)
+            // PingFang 负责字形、标点侧边留白和天然 advance；没有宽度均分或逐字 kern。
+            fonts = Fonts(body: body, cjk: cjk, quote: cjk,
+                          advance: max(advance(of: "汉", font: cjk), 1),
+                          ascent: ascent, descent: descent)
             fontCache[size] = fonts
         }
-        let available = width.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        let columns = available.map { max(floor($0 / fonts.advance), 1) } ?? 1
-        let cell = available.map { max($0 / columns, fonts.advance) } ?? fonts.advance
         let height = ceil(fonts.ascent + fonts.descent)
-        return Metrics(font: fonts.body, cjkFont: fonts.cjk, quoteFont: fonts.quote, cellWidth: cell,
-                       tracking: cell - fonts.advance, lineHeight: height,
-                       baseline: fonts.ascent + (height - fonts.ascent - fonts.descent) * 0.5,
-                       punctuationAdvances: fonts.punctuationAdvances)
+        return Metrics(font: fonts.body, cjkFont: fonts.cjk, quoteFont: fonts.quote, cellWidth: fonts.advance,
+                       tracking: 0, lineHeight: height,
+                       baseline: fonts.ascent + (height - fonts.ascent - fonts.descent) * 0.5)
     }
 
     /// 只给单标量字符加字距；组合字符、变体选择符、ZWJ 和 Latin run 不拆开。
@@ -116,7 +95,6 @@ enum ReaderTextLayout {
         style.alignment = .left
         // 只在显示副本中将纯中文成对 U+0022 识别为开/闭引号；原始正文不动，
         // 每个替换仍占一个 UTF-16 单元，分页、进度和命中索引一一对应。
-        let dialogueQuotes = chineseDialogueQuotes(in: text)
         let displayed = displayText(for: text)
         style.lineBreakMode = .byWordWrapping
         style.lineBreakStrategy = []
@@ -131,69 +109,26 @@ enum ReaderTextLayout {
             baselineKey: NSNumber(value: Double(grid.baseline))
         ]
         let result = NSMutableAttributedString(string: displayed, attributes: attrs)
+        // 中文与中文标点统一使用 PingFang SC 的原始横排字形，不设置 fwid、
+        // kern、ligature 或逐字 glyph 位置；Latin / emoji 仍交给系统字体塑形。
+        let hasCJK = displayed.unicodeScalars.contains { (0x3400...0x9FFF).contains($0.value) }
+        let marks = CharacterSet(charactersIn: "‘’“”—…·")
         var offset = 0
-        var runStart = 0, runEnd = 0
-        var runKern: CGFloat?
-        func finishRun() {
-            guard let kern = runKern else { return }
-            // 明确的 advance + kern 组成一格；只关闭字格 run 的连字/自动 kerning。
-            result.addAttributes([.font: grid.cjkFont, .kern: kern, .ligature: 0],
-                                 range: NSRange(location: runStart, length: runEnd - runStart))
-            runKern = nil
-        }
-        func appendGrid(start: Int, length: Int, kern: CGFloat) {
-            if runKern != kern || runEnd != start {
-                finishRun()
-                runStart = start
-                runKern = kern
+        var runStart: Int?
+        func finishFontRun() {
+            if let start = runStart {
+                result.addAttribute(.font, value: grid.cjkFont, range: NSRange(location: start, length: offset - start))
             }
-            runEnd = start + length
-        }
-        var pending: [(start: Int, length: Int, kern: CGFloat)] = []
-        var leftIsGrid = false
-        func resolvePunctuation(rightIsGrid: Bool) {
-            // 只查看紧邻的非候选字符；不跨越空格/西文/emoji，把英文引号和 don't 留给原生塑形。
-            if leftIsGrid || rightIsGrid {
-                for mark in pending { appendGrid(start: mark.start, length: mark.length, kern: mark.kern) }
-            } else if !pending.isEmpty {
-                finishRun()
-            }
-            pending.removeAll(keepingCapacity: true)
+            runStart = nil
         }
         for character in displayed {
-            let scalar = character.unicodeScalars.count == 1 ? character.unicodeScalars.first?.value : nil
-            let length = scalar.map { $0 > 0xFFFF ? 2 : 1 } ?? String(character).utf16.count
-            if let scalar, isGridScalar(scalar) {
-                resolvePunctuation(rightIsGrid: true)
-                appendGrid(start: offset, length: length, kern: grid.tracking)
-                leftIsGrid = true
-            } else if let scalar, let advance = grid.punctuationAdvances[scalar] {
-                pending.append((offset, length, grid.cellWidth - advance))
-            } else {
-                resolvePunctuation(rightIsGrid: false)
-                finishRun()
-                leftIsGrid = false
-            }
-            offset += length
+            let scalar = character.unicodeScalars.count == 1 ? character.unicodeScalars.first : nil
+            let isCJK = scalar.map { isGridScalar($0.value) || (hasCJK && marks.contains($0)) } ?? false
+            if isCJK { if runStart == nil { runStart = offset } }
+            else { finishFontRun() }
+            offset += String(character).utf16.count
         }
-        resolvePunctuation(rightIsGrid: false)
-        finishRun()
-        // PingFang SC draws authentic curved U+2018/19/1C/1D glyphs. Assign it
-        // directly only to CJK-context quotes, with a proportional advance; do not
-        // substitute characters or expand adjacent Han to hide a width mismatch.
-        let source = displayed as NSString
-        let quotes = CharacterSet(charactersIn: "‘’“”")
-        for index in 0..<source.length {
-            guard let scalar = UnicodeScalar(source.character(at: index)), quotes.contains(scalar),
-                  result.attribute(.kern, at: index, effectiveRange: nil) != nil else { continue }
-            result.addAttributes([.font: grid.quoteFont, .kern: 0, .ligature: 0],
-                                 range: NSRange(location: index, length: 1))
-        }
-        for (position, opening) in dialogueQuotes {
-            result.addAttribute(quoteOpeningKey, value: opening, range: NSRange(location: position, length: 1))
-        }
-        result.addAttribute(.paragraphStyle, value: style,
-                            range: NSRange(location: 0, length: result.length))
+        finishFontRun()
         if count > 0 {
             // 保留原有的一个分隔字符；显式固定为四分之一字格，避免系统空格宽度漂移。
             var gapAttributes = attrs
@@ -236,19 +171,41 @@ enum ReaderTextLayout {
     }
 
     private static func chineseDialogueQuotes(in text: String) -> [(Int, Bool)] {
-        var positions: [Int] = [], offset = 0
-        var hasHan = false
-        for scalar in text.unicodeScalars {
-            let value = scalar.value
-            // 不改变英文单词、网址、尺寸符号、数字或其他字母的断行。
-            if CharacterSet.letters.contains(scalar) && !isGridScalar(value) { return [] }
-            if CharacterSet.decimalDigits.contains(scalar) || value == 0x2F || value == 0x5C { return [] }
-            if value == 0x22 { positions.append(offset) }
-            if (0x4E00...0x9FFF).contains(value) { hasHan = true }
-            offset += value > 0xFFFF ? 2 : 1
+        let scalars = Array(text.unicodeScalars)
+        guard scalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }),
+              scalars.contains(where: { $0.value == 0x22 }) else { return [] }
+        // 纯中文才处理；英文引用、网址和 6\" × 12\" 尺寸保留原貌。
+        guard !scalars.contains(where: {
+            (CharacterSet.letters.contains($0) && !isGridScalar($0.value))
+                || CharacterSet.decimalDigits.contains($0) || $0.value == 0x2F || $0.value == 0x5C
+        }) else { return [] }
+        var offset = 0
+        var pending: (offset: Int, isASCII: Bool)?
+        var replacements: [(Int, Bool)] = []
+        let stops = CharacterSet(charactersIn: "。！？!?….")
+        for (index, scalar) in scalars.enumerated() {
+            defer { offset += scalar.value > 0xFFFF ? 2 : 1 }
+            if scalar.value == 0x201C {
+                pending = (offset, false)
+            } else if scalar.value == 0x201D {
+                if let opening = pending, opening.isASCII { replacements.append((opening.offset, true)) }
+                pending = nil
+            } else if scalar.value == 0x22 {
+                if let opening = pending {
+                    if opening.isASCII { replacements.append((opening.offset, true)) }
+                    replacements.append((offset, false))
+                    pending = nil
+                } else if index > 0, stops.contains(scalars[index - 1]),
+                          scalars[(index + 1)...].allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) {
+                    // 对话可能跨原文段落；句末标点后的最终直引号是明确的结束角色。
+                    replacements.append((offset, false))
+                } else {
+                    pending = (offset, true)
+                }
+            }
         }
-        guard hasHan, !positions.isEmpty, positions.count.isMultiple(of: 2) else { return [] }
-        return positions.enumerated().map { ($0.element, $0.offset.isMultiple(of: 2)) }
+        // 未配对的起始直引号不猜测，避免改写正文语义；所有替换仍为单 UTF-16 单元。
+        return replacements
     }
 
     private static func commentTailStart(in text: String) -> Int? {

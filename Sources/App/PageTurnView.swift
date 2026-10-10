@@ -37,7 +37,6 @@ struct PageContentView: View {
     private func paragraphLeadingGap(at index: Int) -> CGFloat {
         guard index > 0, case .paragraph = page.blocks[index - 1] else { return 0 }
         return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: 0)
-            + CGFloat(page.justifiedGap ?? 0)
     }
 
     var body: some View {
@@ -61,16 +60,13 @@ struct PageContentView: View {
                         let continuation = page.continuationIndices.contains(blockIndex)
                         InlineCommentParagraph(text: page.displayParagraphs[blockIndex] ?? t, count: count,
                                                 fontSize: fontSize,
-                                                lineSpacing: lineSpacing + (page.justifiedGap ?? 0),
+                                                lineSpacing: lineSpacing,
                                                 color: UIColor(fg),
                                                 continuation: continuation,
                                                 onTap: { onTapComment(url) })
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .frame(height: page.justifiedGap != nil && blockIndex < page.blockHeights.count
-                                ? CGFloat(page.blockHeights[blockIndex]) : nil, alignment: .top)
-                            // The canonical text height excludes trailing line spacing.
-                            // At a paragraph boundary restore the base gap AND the page's
-                            // per-line residual; VStack contributes only paragraph extra.
+                            // 正文 frame 由同一 TextKit 测量，段界只追加基础行距；
+                            // VStack 负责用户段距，不再为了页底等高改变单页行距。
                             .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .hotComment(let label, let t, let click):
                         HStack(spacing: 10) {

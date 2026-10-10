@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
+import CoreText
 
-/// Regression fixture transcribed verbatim from the reported 第23章 screenshot.
+/// Regression fixture transcribed verbatim from photo_5A9EDD22 (第23章 screenshot).
 /// The first line is already a continuation of a paragraph on the preceding page.
 private enum LayoutAuditFixture {
     static let title = "第23章 鬼面王"
@@ -160,9 +161,11 @@ private enum LayoutAuditInspection {
 
     static func snapshot() -> String {
         precondition(Thread.isMainThread)
+        let started = CFAbsoluteTimeGetCurrent()
         var cases = 0, rowsChecked = 0, sourceOK = true, attachmentsOK = true
         var bubbles = 0, eligibleSuffixes = 0, orphanBubbles = 0, eligibleOrphans = 0
-        var quoteBreaks = 0, hanOpportunity = 0, rowFailures: [[String: Any]] = []
+        var nativeAdvanceError: CGFloat = 0, nativeSizeError: CGFloat = 0
+        var hanPairs = 0, nativeAttributesOK = true
         var lineBreakRulesOK = true
         var lineBreakViolations: [String] = []
         var quoteSample: [[String: Any]] = [], bubbleSample: [[String: Any]] = []
@@ -225,57 +228,39 @@ private enum LayoutAuditInspection {
                                 }
                             } else { attachmentsOK = false }
                         }
-                        for (rowIndex, row) in result.enumerated() {
-                            if index == 4, rowIndex > 0 {
-                                let start = row.characters.location
-                                let first = ns.character(at: start)
-                                let previous = ns.character(at: start - 1)
-                                let closed = work.textStorage.attribute(NSAttributedString.Key("ReaderASCIIQuoteOpening"),
-                                    at: start, effectiveRange: nil) as? Bool
-                                let opened = work.textStorage.attribute(NSAttributedString.Key("ReaderASCIIQuoteOpening"),
-                                    at: start - 1, effectiveRange: nil) as? Bool
-                                let closing = CharacterSet(charactersIn: "，。！？；：、’”】》）")
-                                let bad = closed == false || opened == true
-                                    || UnicodeScalar(first).map { closing.contains($0) } == true
-                                    || (first == previous && (first == 0x2026 || first == 0x2014))
-                                if bad {
+                        // Validate native Han advances, not the unused space at the right edge.
+                        // Quote/punctuation grouping is allowed to leave any necessary ragged margin.
+                        if let font = UIFont(name: "PingFangSC-Regular", size: size) {
+                            let expected = CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(
+                                NSAttributedString(string: "汉", attributes: [.font: font])), nil, nil, nil))
+                            work.textStorage.enumerateAttributes(in: NSRange(location: 0, length: textLength)) { attrs, _, _ in
+                                nativeAttributesOK = nativeAttributesOK && attrs[.kern] == nil && attrs[.ligature] == nil
+                            }
+                            for row in result {
+                                let part = row.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let closing = Set("，。！？；：、’”】》）〉」』〕］｝")
+                                let opening = Set("‘“【《（〈「『〔［｛")
+                                let badStart = row.characters.location > 0 && part.first.map { closing.contains($0) } == true
+                                let badEnd = NSMaxRange(row.characters) < textLength && part.last.map { opening.contains($0) } == true
+                                if badStart || badEnd {
                                     lineBreakRulesOK = false
                                     lineBreakViolations.append("\(size)/\(width):\(row.text)")
                                 }
-                            }
-                            // Only internal rows, never demand justified terminal rows be filled.
-                            guard rowIndex + 1 < result.count,
-                                  NSMaxRange(row.characters) < textLength else { continue }
-                            let next = result[rowIndex + 1]
-                            let unused = width - row.used.maxX
-                            let nextIndex = next.characters.location
-                            if nextIndex >= 0 && nextIndex < textLength {
-                                let nextCharRange = (text as NSString).rangeOfComposedCharacterSequence(at: nextIndex)
-                                let nextChar = (text as NSString).substring(with: nextCharRange)
-                                let isHan = nextChar.unicodeScalars.count == 1
-                                    && nextChar.unicodeScalars.first.map { (0x4E00...0x9FFF).contains($0.value) } == true
-                                if isHan && unused >= grid.cellWidth - 0.5 { hanOpportunity += 1 }
-                                if index == 4 && row.text.contains("鬼面") && next.text.hasPrefix("王") {
-                                    quoteBreaks += 1
-                                    // 省略号和闭引号不能独立留在下一行；必须量完整
-                                    // 王……”单元，而不是只看一个王字是否放得下。
-                                    let unit = String(next.text.prefix(4))
-                                    let trial = ReaderTextLayout.makeTextView()
-                                    ReaderTextLayout.configure(trial)
-                                    _ = render(trial, text: unit, count: 0, width: width, size: size,
-                                        line: line, continuation: true)
-                                    let unitWidth = rows(trial).first?.used.maxX ?? width
-                                    if unused >= unitWidth - 0.5 {
-                                        rowFailures.append(["kind": "premature-break-before-王",
-                                            "minimumLegalUnit": unit, "unitWidth": number(unitWidth),
-                                            "font": number(size), "width": number(width),
-                                            "line": number(line), "row": row.text,
-                                            "next": next.text, "advance": number(row.used.maxX),
-                                            "unused": number(unused), "nextHanCouldFit": isHan])
-                                    }
+                                for glyph in (row.glyphs.location + 1)..<NSMaxRange(row.glyphs) {
+                                    let index = manager.characterIndexForGlyph(at: glyph)
+                                    guard index > 0, index < textLength,
+                                          manager.characterIndexForGlyph(at: glyph - 1) == index - 1,
+                                          (0x4E00...0x9FFF).contains(Int(ns.character(at: index))),
+                                          (0x4E00...0x9FFF).contains(Int(ns.character(at: index - 1))) else { continue }
+                                    let step = manager.location(forGlyphAt: glyph).x - manager.location(forGlyphAt: glyph - 1).x
+                                    nativeAdvanceError = max(nativeAdvanceError, abs(step - expected))
+                                    nativeSizeError = max(nativeSizeError, abs(step - size))
+                                    let applied = work.textStorage.attribute(.font, at: index - 1, effectiveRange: nil) as? UIFont
+                                    nativeAttributesOK = nativeAttributesOK && applied?.fontName == font.fontName
+                                    hanPairs += 1
                                 }
                             }
-                        }
+                        } else { nativeAttributesOK = false }
                         if size == 26 && width == 362 && line == 8 && index == 4 {
                             quoteProbe = storage
                             quoteSample = result.map { ["text": $0.text,
@@ -315,9 +300,13 @@ private enum LayoutAuditInspection {
         let config = LayoutAuditFixture.configuration(CGSize(width: 402, height: 874))
         let pages = ReaderPaginator.paginate(LayoutAuditFixture.blocks, configuration: config)
         var pageSourceOK = true, pageBubbleOrphans = 0, pageEligibleOrphans = 0
+        var naturalPagesOK = true, pageHitOK = true
+        var pageWidthError: CGFloat = 0, pageHeightError: CGFloat = 0, pageOverflow: CGFloat = 0
+        let measurer = ReaderTextLayout.Measurer()
         var pageEligible = 0, renderedPages = 0, pageParagraphs = 0, pageBubble36 = false
         var pageSamples: [[String: Any]] = [], reconstructed = "", offset = 0
         for (pageIndex, page) in pages.enumerated() {
+            naturalPagesOK = naturalPagesOK && page.justifiedGap == nil
             pageSourceOK = pageSourceOK && page.startOffset == offset
                 && page.blockHeights.count == page.blocks.count
             let content = PageContentView(page: page, fontSize: 26, lineSpacing: 8,
@@ -351,17 +340,32 @@ private enum LayoutAuditInspection {
                 reconstructed += text
                 offset += text.count
                 let grid = ReaderTextLayout.metrics(fontSize: 26, width: config.textWidth)
-                let extra = CGFloat(page.justifiedGap ?? 0)
+                let measured = measurer.height(text: displayed, count: count, width: config.textWidth,
+                    fontSize: 26, lineSpacing: 8, continuation: page.continuationIndices.contains(blockIndex))
+                let stored = blockIndex < page.blockHeights.count ? CGFloat(page.blockHeights[blockIndex]) : -999
+                pageHeightError = max(pageHeightError, abs(view.bounds.height - measured), abs(stored - measured))
+                pageWidthError = max(pageWidthError, abs(view.bounds.width - config.textWidth),
+                    abs(view.renderedWidth - config.textWidth), abs(view.textContainer.size.width - config.textWidth))
+                if let last = blockRows.last {
+                    let bottom = view.convert(CGPoint(x: 0, y: last.rect.minY + grid.lineHeight), to: host.view).y
+                    pageOverflow = max(pageOverflow, bottom - config.topInset - config.bodyHeight)
+                }
+                if count > 0 {
+                    if let bubble = view.bubbleRect {
+                        pageHitOK = pageHitOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
+                            && !view.isBubble(at: CGPoint(x: bubble.maxX + 2, y: bubble.midY))
+                    } else { pageHitOK = false }
+                }
                 for pair in zip(blockRows, blockRows.dropFirst()) {
                     withinPairs += 1
                     maxWithinError = max(maxWithinError,
-                        abs(pair.1.baseline - pair.0.baseline - grid.lineHeight - 8 - extra))
+                        abs(pair.1.baseline - pair.0.baseline - grid.lineHeight - 8))
                 }
                 if let first = blockRows.first, let previousBaseline {
                     let y = view.convert(CGPoint(x: 0, y: first.baseline), to: host.view).y
                     acrossPairs += 1
                     maxAcrossError = max(maxAcrossError,
-                        abs(y - previousBaseline - grid.lineHeight - 8 - 8 - extra))
+                        abs(y - previousBaseline - grid.lineHeight - 8 - 8))
                 }
                 if let last = blockRows.last {
                     previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
@@ -435,12 +439,22 @@ private enum LayoutAuditInspection {
         let spanning = ReaderPaginator.paginate([.paragraph(text: spanningRaw, commentCount: 36, commentURL: nil)],
                                                configuration: spanningConfig)
         var joinedRaw = "", joinedDisplay = "", spanningOffsetsOK = true, spanningOffset = 0
+        var spanningLineSplitsOK = true, spanningSplits = 0
+        let fullDisplay = Array(ReaderTextLayout.displayText(for: spanningRaw))
         for page in spanning {
             spanningOffsetsOK = spanningOffsetsOK && page.startOffset == spanningOffset
             for (blockIndex, block) in page.blocks.enumerated() {
                 guard case let .paragraph(text, _, _) = block else { continue }
                 let display = page.displayParagraphs[blockIndex] ?? text
                 spanningOffsetsOK = spanningOffsetsOK && text.utf16.count == display.utf16.count
+                if spanningOffset + text.count < fullDisplay.count {
+                    let remainder = String(fullDisplay[spanningOffset...])
+                    _ = render(work, text: remainder, count: 36, width: spanningConfig.textWidth,
+                        size: 26, line: 8, continuation: spanningOffset > 0)
+                    let actualEnds = Set(rows(work).map { NSMaxRange($0.characters) })
+                    spanningLineSplitsOK = spanningLineSplitsOK && actualEnds.contains(display.utf16.count)
+                    spanningSplits += 1
+                }
                 spanningOffset += text.count
                 joinedRaw += text
                 joinedDisplay += display
@@ -450,17 +464,31 @@ private enum LayoutAuditInspection {
             && joinedDisplay == "“" + String(spanningRaw.dropFirst().dropLast()) + "”"
         let untouched = ["6\" × 12\"", "The \"report\" is fine.", "他说\"未闭合", "don't change this"]
         let nonDialogueOK = untouched.allSatisfy { ReaderTextLayout.displayText(for: $0) == $0 }
+        let closingCases = [("他说完了。\"", "他说完了。”"), ("真的？\"", "真的？”"),
+                            ("快走！\"", "快走！”"), ("说到这里……\"", "说到这里……”"),
+                            ("“报告，结束。\"", "“报告，结束。”")]
+        let contextualClosingOK = closingCases.allSatisfy { raw, expected in
+            let actual = ReaderTextLayout.displayText(for: raw)
+            return actual == expected && actual.utf16.count == raw.utf16.count
+        }
         let report: [String: Any] = [
+            "elapsedSeconds": CFAbsoluteTimeGetCurrent() - started,
+            "contextualClosingOK": contextualClosingOK,
+            "spanningLineSplitsOK": spanningLineSplitsOK, "spanningSplits": spanningSplits,
+            "naturalPagesOK": naturalPagesOK, "pageHitOK": pageHitOK,
+            "pageWidthError": number(pageWidthError), "pageHeightError": number(pageHeightError),
+            "pageOverflow": number(pageOverflow),
             "spanningQuoteOK": spanningOK, "spanningPages": spanning.count, "nonDialogueOK": nonDialogueOK,
             "cases": cases, "rowsChecked": rowsChecked, "sourceOK": sourceOK,
             "attachmentsOK": attachmentsOK, "mixedSourceOK": mixedSourceOK,
             "bubbles": bubbles, "eligibleSuffixes": eligibleSuffixes,
             "orphanBubbles": orphanBubbles, "eligibleOrphans": eligibleOrphans,
-            "quoteBreaks": quoteBreaks, "hanOpportunities": hanOpportunity,
+            "nativeAdvanceError": number(nativeAdvanceError), "nativeSizeError": number(nativeSizeError),
+            "hanPairs": hanPairs, "nativeAttributesOK": nativeAttributesOK,
             "quoteSource": quoteProbe, "quoteRows": quoteSample,
             "quoteVariants": quoteVariants,
             "lineBreakRulesOK": lineBreakRulesOK, "lineBreakViolations": lineBreakViolations,
-            "bubble36Rows": bubbleSample, "failingRows": rowFailures,
+            "bubble36Rows": bubbleSample,
             "isolatedNativeBreaks": isolatedBreaks, "pageRows": pageSamples,
             "pageCount": pages.count, "renderedPages": renderedPages,
             "pageParagraphs": pageParagraphs, "pageBubble36": pageBubble36,

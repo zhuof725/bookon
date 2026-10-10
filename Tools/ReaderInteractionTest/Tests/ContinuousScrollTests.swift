@@ -95,8 +95,13 @@ final class ContinuousScrollTests: XCTestCase {
             }
             try assertWork(from: restored, to: after, added: 0)
             let alignment = try XCTUnwrap(after["alignment"] as? [String: Any])
-            XCTAssertLessThanOrEqual(try number("gridError", in: alignment), 0.25,
-                                     "CJK 对话与引号应保持纵向字列：\(alignment)")
+            for key in ["advanceError", "sizeError", "widthError"] {
+                XCTAssertLessThanOrEqual(try number(key, in: alignment), 0.25,
+                    "滚动正文必须保持 PingFang 原生步进，不能挤字或拉大空隙：\(alignment)")
+            }
+            XCTAssertGreaterThan(try number("hanPairs", in: alignment), 0)
+            XCTAssertEqual(alignment["naturalAttributes"] as? Bool, true, "\(alignment)")
+            XCTAssertEqual(alignment["breaksOK"] as? Bool, true, "\(alignment)")
             alignedGlyphs += Int(try number("glyphs", in: alignment))
             alignedQuotes += Int(try number("quotes", in: alignment))
             previous = after

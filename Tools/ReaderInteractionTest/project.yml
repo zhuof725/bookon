@@ -20,6 +20,8 @@ targets:
       - path: ContinuousScrollHarness.swift
       - path: CoverTurnHarness.swift
       - path: LayoutAuditHarness.swift
+      - path: PunctuationFlowHarness.swift
+      - path: ReaderPageFlowHarness.swift
       - path: ../../Sources/App/ReaderCoverPageTurnView.swift
       - path: ../../Sources/App/ReaderContinuousScrollView.swift
       - path: ../../Sources/App/CommentViews.swift

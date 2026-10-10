@@ -11,7 +11,7 @@ final class LayoutAuditTests: XCTestCase {
         let label = app.staticTexts["layout-audit-report"]
         let ready = NSPredicate { _, _ in label.exists && label.label.hasPrefix("{") }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: label)],
-                                    timeout: 45), .completed, label.label)
+                                    timeout: 15), .completed, label.label)
         let raw = label.label
         let attachment = XCTAttachment(string: raw)
         attachment.name = "reported-page-glyph-break-spacing-audit.json"
@@ -22,7 +22,9 @@ final class LayoutAuditTests: XCTestCase {
         func number(_ key: String) throws -> Double {
             try XCTUnwrap(report[key] as? NSNumber, "Missing \(key): \(raw)").doubleValue
         }
-        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36", "lineBreakRulesOK", "spanningQuoteOK", "nonDialogueOK"] {
+        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36",
+                    "lineBreakRulesOK", "spanningQuoteOK", "nonDialogueOK", "contextualClosingOK",
+                    "spanningLineSplitsOK", "nativeAttributesOK", "naturalPagesOK", "pageHitOK"] {
             XCTAssertEqual(report[key] as? Bool, true, "\(key): \(raw)")
         }
         XCTAssertEqual(report["quoteSource"] as? String,
@@ -53,14 +55,24 @@ final class LayoutAuditTests: XCTestCase {
         }
         let quotes = try XCTUnwrap(report["quoteRows"] as? [[String: Any]], raw)
         XCTAssertGreaterThan(quotes.count, 1, raw)
-        XCTAssertTrue(quotes.contains { ($0["text"] as? String)?.contains("在老住宅区发现鬼面王……”") == true }, raw)
+        // Preserve the reported dialogue exactly, without prescribing a font-dependent break.
+        XCTAssertEqual(quotes.compactMap { $0["text"] as? String }.joined(), report["quoteSource"] as? String, raw)
+        XCTAssertGreaterThan(try number("spanningSplits"), 1, raw)
+        XCTAssertGreaterThan(try number("hanPairs"), 50, raw)
+        for key in ["nativeAdvanceError", "nativeSizeError"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.25, "\(key): \(raw)")
+        }
+        for key in ["pageWidthError", "pageHeightError", "pageOverflow"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(raw)")
+        }
+        XCTAssertGreaterThan(try number("paragraph2Pairs"), 0, raw)
+        XCTAssertLessThan(try number("elapsedSeconds"), 12, raw)
         XCTAssertGreaterThan(try number("spanningPages"), 2, raw)
         let bubble = try XCTUnwrap(report["bubble36Rows"] as? [[String: Any]], raw)
         XCTAssertGreaterThan(bubble.count, 1, raw)
         XCTAssertFalse(bubble.last?["text"] as? String == " \u{FFFC}", "Reported bubble 36 must not occupy an otherwise empty line: \(raw)")
-        // No global "all internal lines are 100% filled" assertion. Only the actual
-        // premature 鬼面 | 王…… break is a regression when another Han could fit.
-        XCTAssertEqual((report["failingRows"] as? [[String: Any]])?.count, 0, raw)
+        // Ragged right edges are expected. Native Han spacing, legal punctuation,
+        // preserved source and attached comments are the acceptance criteria.
     }
 
     func testReferencePageIsActuallyRenderedByProductionView() {

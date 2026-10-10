@@ -50,6 +50,9 @@ enum ReaderPaginator {
         precondition(Thread.isMainThread, "ReaderPaginator must run on the main thread")
         guard !blocks.isEmpty else { return [] }
         let measurer = ReaderTextLayout.Measurer()
+        // 与正文渲染共用 TextKit 1 容器/代理，提取真正的行断点。
+        let lineView = ReaderTextLayout.makeTextView()
+        ReaderTextLayout.configure(lineView)
         let width = configuration.textWidth
         var pages: [BookPage] = []
         var pageBlocks: [ContentBlock] = []
@@ -88,74 +91,100 @@ enum ReaderPaginator {
                 let chars = Array(ReaderTextLayout.displayText(for: text))
                 assert(rawChars.count == chars.count)
                 if chars.isEmpty { continue }
+                // Character 索引是阅读位置；TextKit 的字形区间是 UTF-16。
+                // 整段一次建表，行尾只在恰好落于 Character 边界时才允许分页。
+                var utf16Offsets = [0]
+                utf16Offsets.reserveCapacity(chars.count + 1)
+                for character in chars {
+                    utf16Offsets.append(utf16Offsets[utf16Offsets.count - 1] + String(character).utf16.count)
+                }
                 var index = 0
                 var continuation = false
+                var lineEnds: [LineEnd] = []
+                var layoutStart = -1
+                var layoutIsContinuation = false
+                var lineCursor = 0
                 while index < chars.count {
-                    let remaining = chars.count - index
                     let capacity = pages.isEmpty ? configuration.firstPageBodyHeight : configuration.bodyHeight
                     let room = capacity - used - configuration.spacing(before: block, after: pageBlocks.last)
                     if room <= 0.5, !pageBlocks.isEmpty {
                         flush()
                         continue
                     }
-
-                    // 先尝试整段。气泡只在整段最后一块测量和附加。
-                    let wholeFits = remaining > 0 && measuredHeight(
-                        measurer: measurer, chars: chars, start: index, count: remaining,
-                        isLast: true, commentCount: commentCount, width: width,
-                        configuration: configuration, room: room)
-                    let take: Int
-                    if wholeFits {
-                        take = remaining
-                    } else {
-                        // 二分查找可放入本页的最大字符前缀；候选前缀没有气泡。
-                        var low = 1
-                        var high = max(remaining - 1, 1)
-                        var best = 0
-                        while low <= high {
-                            let mid = (low + high) / 2
-                            let h = measured(measurer: measurer, chars: chars, start: index,
-                                             count: mid, commentCount: 0, width: width,
-                                             fontSize: configuration.fontSize,
-                                             lineSpacing: configuration.lineSpacing,
-                                             continuation: continuation)
-                            if h + configuration.spacing(before: block, after: pageBlocks.last) <= capacity - used + 0.01 {
-                                best = mid
-                                low = mid + 1
-                            } else {
-                                high = mid - 1
-                            }
+                    if layoutStart < 0 {
+                        layoutStart = index
+                        lineEnds = textLineEnds(view: lineView, chars: chars, start: index,
+                                                utf16Offsets: utf16Offsets, commentCount: commentCount,
+                                                width: width, configuration: configuration,
+                                                continuation: continuation)
+                        lineCursor = 0
+                    }
+                    while lineCursor < lineEnds.count && lineEnds[lineCursor].characterEnd <= index {
+                        lineCursor += 1
+                    }
+                    let origin = lineCursor < lineEnds.count ? lineEnds[lineCursor].top : 0
+                    var candidate = -1
+                    for row in lineCursor..<lineEnds.count {
+                        let line = lineEnds[row]
+                        guard line.bottom - origin <= room + 0.01 else { break }
+                        // 若气泡产生额外一行，文本虽已到末尾，也必须连同气泡一起放下。
+                        if line.characterEnd < chars.count || row == lineEnds.count - 1 {
+                            candidate = row
                         }
-                        // 任何正常页面都能容纳一个字符；若当前页剩余空间不够，先换页再重试。
-                        if best == 0 && !pageBlocks.isEmpty {
+                    }
+                    // 用实际渲染的片段复核高度（独立片段的尾行字距可能稍有差异）。
+                    var end = candidate >= 0 ? lineEnds[candidate].characterEnd : index
+                    var height: CGFloat = 0
+                    while end > index {
+                        height = measured(measurer: measurer, chars: chars, start: index, count: end - index,
+                                          commentCount: end == chars.count ? commentCount : 0,
+                                          width: width, fontSize: configuration.fontSize,
+                                          lineSpacing: configuration.lineSpacing,
+                                          continuation: continuation)
+                        if height <= room + 0.01 { break }
+                        candidate -= 1
+                        while candidate >= lineCursor && lineEnds[candidate].characterEnd >= end {
+                            candidate -= 1
+                        }
+                        end = candidate >= lineCursor ? lineEnds[candidate].characterEnd : index
+                    }
+                    if end == index {
+                        if !pageBlocks.isEmpty {
                             flush()
                             continue
                         }
-                        take = max(best, 1)
+                        // 极窄/极矮页面：宁可留一整行溢出，也不切开一个字形。
+                        if lineCursor < lineEnds.count {
+                            end = max(index + 1, lineEnds[lineCursor].characterEnd)
+                        } else {
+                            end = index + 1
+                        }
+                        height = measured(measurer: measurer, chars: chars, start: index, count: end - index,
+                                          commentCount: end == chars.count ? commentCount : 0,
+                                          width: width, fontSize: configuration.fontSize,
+                                          lineSpacing: configuration.lineSpacing,
+                                          continuation: continuation)
                     }
-
-                    let end = index + take
                     let isLast = end == chars.count
                     let piece = String(rawChars[index..<end])
                     let displayPiece = String(chars[index..<end])
-                    let h = measured(measurer: measurer, chars: chars, start: index, count: take,
-                                     commentCount: isLast ? commentCount : 0, width: width,
-                                     fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
-                                     continuation: continuation)
-                    if used + h + configuration.spacing(before: block, after: pageBlocks.last) > capacity + 0.01,
-                       !pageBlocks.isEmpty {
-                        flush()
-                        continue
-                    }
                     if displayPiece != piece { displayParagraphs[pageBlocks.count] = displayPiece }
                     append(.paragraph(text: piece,
                                       commentCount: isLast ? commentCount : 0,
                                       commentURL: isLast ? commentURL : nil),
-                           height: h, continuation: continuation)
-                    offset += take
+                           height: height, continuation: continuation)
+                    offset += end - index
                     index = end
                     continuation = true
-                    if !isLast { flush() }
+                    if !isLast {
+                        // 首段有首行缩进；首次续段从这里开始重新排一次，无缩进后
+                        // 此后的页均从同一份 TextKit 行表取整行，不逐页重排整段。
+                        if !layoutIsContinuation {
+                            layoutStart = -1
+                            layoutIsContinuation = true
+                        }
+                        flush()
+                    }
                 }
             default:
                 let h = nonTextHeight(block, configuration: configuration)
@@ -168,30 +197,7 @@ enum ReaderPaginator {
             }
         }
         flush()
-        // 分页边界只由自然行距决定；后处理绝不重拆字符，避免重新分页振荡。
-        for index in pages.indices.dropLast() {
-            let page = pages[index]
-            guard page.blocks.allSatisfy({ if case .paragraph = $0 { return true }; return false }) else { continue }
-            let capacity = index == 0 ? configuration.firstPageBodyHeight : configuration.bodyHeight
-            var rows: [(count: Int, height: CGFloat)] = []
-            for (blockIndex, block) in page.blocks.enumerated() {
-                if case .paragraph(let text, let count, _) = block {
-                    rows.append(measurer.rows(text: page.displayParagraphs[blockIndex] ?? text, count: count, width: width,
-                        fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
-                        continuation: page.continuationIndices.contains(blockIndex)))
-                }
-            }
-            let gaps = rows.reduce(0) { $0 + $1.count } - 1
-            let natural = rows.reduce(CGFloat(0)) { $0 + $1.height }
-                + CGFloat(max(rows.count - 1, 0)) * configuration.blockSpacing
-            let residual = capacity - natural
-            // 少量正文后接图片/卡片时不制造巨大的行间空白。
-            guard gaps > 0, natural >= capacity * 0.7, residual >= 0 else { continue }
-            let extra = residual / CGFloat(gaps)
-            guard extra <= max(configuration.fontSize * 0.5, 4) else { continue }
-            pages[index].justifiedGap = Double(extra)
-            pages[index].blockHeights = rows.map { Double($0.height + CGFloat($0.count - 1) * extra) }
-        }
+        // 不拉伸非末页行距：所有页面使用相同的原生行距与原始块高。
         return pages
     }
 
@@ -203,14 +209,48 @@ enum ReaderPaginator {
                                lineSpacing: lineSpacing, continuation: continuation)
     }
 
-    private static func measuredHeight(measurer: ReaderTextLayout.Measurer, chars: [Character], start: Int,
-                                       count: Int, isLast: Bool, commentCount: Int, width: CGFloat,
-                                       configuration: Configuration, room: CGFloat) -> Bool {
-        let h = measured(measurer: measurer, chars: chars, start: start, count: count,
-                         commentCount: isLast ? commentCount : 0, width: width,
-                         fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
-                         continuation: start > 0)
-        return h <= room + 0.01
+    private struct LineEnd {
+        let characterEnd: Int
+        let top: CGFloat
+        let bottom: CGFloat
+    }
+
+    /// 一次排出整段（包含尾部气泡），取实际 glyph 行尾而非可塞入的字符前缀。
+    /// UTF-16 游标单向扫描 Character 边界，emoji/ZWJ/组合音标不会被拆开。
+    /// 有气泡的行只有连附件一起能容纳时才可作为最终片段。
+    private static func textLineEnds(view: CommentTextView, chars: [Character], start: Int,
+                                     utf16Offsets: [Int], commentCount: Int, width: CGFloat,
+                                     configuration: Configuration, continuation: Bool) -> [LineEnd] {
+        let text = String(chars[start...])
+        view.attributedText = ReaderTextLayout.attributedText(text: text, count: commentCount,
+            fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
+            color: .black, continuation: continuation, width: width)
+        view.textContainer.widthTracksTextView = false
+        view.textContainer.heightTracksTextView = false
+        view.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        let manager = view.layoutManager
+        manager.ensureLayout(for: view.textContainer)
+        var result: [LineEnd] = []
+        var character = start
+        var pendingTop: CGFloat?
+        let base = utf16Offsets[start]
+        let textEnd = utf16Offsets[chars.count]
+        manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: view.textContainer)) {
+            rect, used, _, glyphs, _ in
+            guard glyphs.length > 0 else { return }
+            let range = manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            let end = min(base + NSMaxRange(range), textEnd)
+            if pendingTop == nil { pendingTop = rect.minY }
+            while character < chars.count && utf16Offsets[character] < end { character += 1 }
+            // 不把字素簇中间的 UTF-16 偏移向上/向下取整成伪造的行尾。
+            guard character > start, utf16Offsets[character] == end else { return }
+            let style = view.textStorage.attribute(.paragraphStyle, at: range.location,
+                effectiveRange: nil) as? NSParagraphStyle
+            result.append(LineEnd(characterEnd: character, top: pendingTop ?? rect.minY,
+                                  bottom: rect.minY + (style?.minimumLineHeight ?? used.height)))
+            pendingTop = nil
+        }
+        return result
     }
 
     /// 与 PageContentView 的 SwiftUI 固定 padding/字体相同的非文本块高度。

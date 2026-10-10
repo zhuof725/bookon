@@ -41,7 +41,7 @@ struct TypographyHarnessView: View {
                 VStack(alignment: .leading, spacing: CGFloat(settings.paragraphSpacing)) {
                     ChapterTitleView(title: title, fontSize: CGFloat(settings.fontSize), color: .black)
                         .accessibilityIdentifier("typography-title")
-                    InlineCommentParagraph(text: String(repeating: "这是版式设置的长正文，中文标点也应占用同样的字格。", count: 30),
+                    InlineCommentParagraph(text: String(repeating: "这是版式设置的长正文，中文标点应保留自然字形和间距。", count: 30),
                         count: 82, fontSize: CGFloat(settings.fontSize),
                         lineSpacing: CGFloat(settings.lineSpacing), color: .black, onTap: {})
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,7 +80,7 @@ struct TypographyHarnessView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 2) {
-                Button("检查实际字格与行高") { metrics = TypographyInspection.snapshot() }
+                Button("检查原生字形与行距") { metrics = TypographyInspection.snapshot() }
                     .accessibilityIdentifier("inspect-typography")
                 Text(metrics).font(.system(size: 7)).lineLimit(1)
                     .accessibilityIdentifier("typography-metrics")
@@ -89,10 +89,12 @@ struct TypographyHarnessView: View {
     }
 }
 
-/// 在测试 App 内测量生产 UITextView；XCUITest 断言数值，不把 paragraphStyle 当作排版结果。
+/// Numeric acceptance reads actual TextKit glyphs and hosted production views.
+/// A ragged right edge is intentional; native advances must never be stretched to fill it.
 private enum TypographyInspection {
     private struct Line {
         let glyphs: NSRange
+        let characters: NSRange
         let rect: CGRect
         let used: CGRect
         let baseline: CGFloat
@@ -105,18 +107,17 @@ private enum TypographyInspection {
         manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: view.textContainer)) {
             rect, used, _, glyphs, _ in
             guard glyphs.length > 0 else { return }
-            let character = manager.characterIndexForGlyph(at: glyphs.location)
-            let attachment = view.textStorage.attribute(.attachment, at: character,
-                                                       effectiveRange: nil) as? NSTextAttachment
-            // 附件独占一行时，glyph location 包含 attachment.bounds 的基线位移。
-            // 还原这份位移后才能与普通文字的基线比较，不能把气泡尾巴当成行距误差。
+            let characters = manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            let attachment = view.textStorage.attribute(.attachment, at: characters.location,
+                effectiveRange: nil) as? NSTextAttachment
             let baseline = rect.minY + manager.location(forGlyphAt: glyphs.location).y
                 + (attachment?.bounds.origin.y ?? 0)
-            result.append(Line(glyphs: glyphs, rect: rect, used: used, baseline: baseline))
+            result.append(Line(glyphs: glyphs, characters: characters, rect: rect, used: used, baseline: baseline))
         }
         return result
     }
 
+    @discardableResult
     private static func layout(_ view: CommentTextView, text: String, count: Int = 0,
                                width: CGFloat, size: CGFloat, spacing: CGFloat,
                                continuation: Bool = false) -> CGFloat {
@@ -129,6 +130,319 @@ private enum TypographyInspection {
         return height
     }
 
+    private static func descendants(_ root: UIView) -> [CommentTextView] {
+        if let own = root as? CommentTextView { return [own] }
+        return root.subviews.flatMap { descendants($0) }
+    }
+
+    private static func nativeAdvance(_ font: UIFont) -> CGFloat {
+        CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(
+            NSAttributedString(string: "汉", attributes: [.font: font])), nil, nil, nil))
+    }
+
+    /// Comparing each UTF-16 unit also catches accidental surrogate/combining-mark edits.
+    /// Only paired Chinese ASCII quotes may differ, and each replacement occupies one unit.
+    private static func mappedSource(_ source: String, display: String) -> Bool {
+        let raw = Array(source.utf16), shown = Array(display.utf16)
+        guard raw.count == shown.count else { return false }
+        var changed = 0
+        for index in raw.indices where raw[index] != shown[index] {
+            guard raw[index] == 0x22,
+                  shown[index] == (changed.isMultiple(of: 2) ? 0x201C : 0x201D) else { return false }
+            changed += 1
+        }
+        return changed.isMultiple(of: 2)
+    }
+
+    private static func breaksOK(_ view: CommentTextView) -> Bool {
+        let text = view.textStorage.string as NSString
+        let closing = Set("，。！？；：、’”】》）〉」』〕］｝")
+        let opening = Set("‘“【《（〈「『〔［｛")
+        return lines(view).allSatisfy { line in
+            let part = text.substring(with: line.characters)
+            if line.characters.location > 0, let first = part.first, closing.contains(first) { return false }
+            if NSMaxRange(line.characters) < text.length, let last = part.last, opening.contains(last) { return false }
+            return true
+        }
+    }
+
+    private static func naturalReport() -> [String: Any] {
+        let view = ReaderTextLayout.makeTextView(), reference = ReaderTextLayout.makeTextView()
+        ReaderTextLayout.configure(view); ReaderTextLayout.configure(reference)
+        reference.textContainer.widthTracksTextView = false
+        reference.textContainer.heightTracksTextView = false
+        let measurer = ReaderTextLayout.Measurer()
+        let text = String(repeating: TypographyFixtures.dialogue + "【山川】（风雨）《故事》！？；：、。", count: 2)
+        let ns = text as NSString
+        var advanceError: CGFloat = 0, sizeError: CGFloat = 0, indentError: CGFloat = 0
+        var glyphError: CGFloat = 0, widthError: CGFloat = 0, baselineError: CGFloat = 0
+        var heightError: CGFloat = 0, largestHanStep: CGFloat = 0
+        var hanPairs = 0, punctuationGlyphs = 0, rowCount = 0, baselinePairs = 0, cases = 0
+        var sourceOK = true, attributesOK = true, nativeGlyphs = true, lineBreaksOK = true
+        var quotes: [String: Int] = [:]
+        let settings: [(CGFloat, CGFloat, CGFloat)] = [
+            (12, 333.5, 0), (19, 351, 8), (19, 362, 8),
+            (24, 351, 0), (26, 362, 16), (36, 370, 24)
+        ]
+        for (size, width, spacing) in settings {
+            guard let font = UIFont(name: "PingFangSC-Regular", size: size) else { attributesOK = false; continue }
+            let advance = nativeAdvance(font)
+            let metrics = ReaderTextLayout.metrics(fontSize: size)
+            for continuation in [false, true] {
+                cases += 1
+                let height = layout(view, text: text, width: width, size: size,
+                    spacing: spacing, continuation: continuation)
+                let rows = lines(view)
+                rowCount += rows.count
+                sourceOK = sourceOK && view.textStorage.string == text
+                widthError = max(widthError, abs(view.renderedWidth - width), abs(view.textContainer.size.width - width))
+                heightError = max(heightError, abs(height - measurer.height(text: text, count: 0,
+                    width: width, fontSize: size, lineSpacing: spacing, continuation: continuation)),
+                    abs(height - CGFloat(rows.count) * metrics.lineHeight - CGFloat(max(rows.count - 1, 0)) * spacing))
+                let style = NSMutableParagraphStyle()
+                style.alignment = .left; style.lineBreakMode = .byWordWrapping; style.lineBreakStrategy = []
+                style.firstLineHeadIndent = continuation ? 0 : advance * 2
+                style.lineSpacing = spacing
+                style.minimumLineHeight = metrics.lineHeight; style.maximumLineHeight = metrics.lineHeight
+                // Independent native font/layout, not width-aware production metrics or copied attributes.
+                reference.attributedText = NSAttributedString(string: text, attributes: [.font: font, .paragraphStyle: style])
+                reference.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+                reference.frame = CGRect(x: 0, y: 0, width: width, height: height)
+                reference.layoutManager.ensureLayout(for: reference.textContainer)
+                let manager = view.layoutManager, native = reference.layoutManager
+                nativeGlyphs = nativeGlyphs && manager.numberOfGlyphs == native.numberOfGlyphs
+                for glyph in 0..<min(manager.numberOfGlyphs, native.numberOfGlyphs) {
+                    nativeGlyphs = nativeGlyphs && manager.glyph(at: glyph) == native.glyph(at: glyph)
+                        && manager.characterIndexForGlyph(at: glyph) == native.characterIndexForGlyph(at: glyph)
+                    glyphError = max(glyphError, abs(manager.location(forGlyphAt: glyph).x - native.location(forGlyphAt: glyph).x))
+                }
+                view.textStorage.enumerateAttributes(in: NSRange(location: 0, length: ns.length)) { attrs, _, _ in
+                    let applied = attrs[.font] as? UIFont
+                    attributesOK = attributesOK && attrs[.kern] == nil && attrs[.ligature] == nil
+                        && applied?.fontName == font.fontName
+                        && applied?.fontDescriptor.isEqual(font.fontDescriptor) == true
+                }
+                for (rowIndex, row) in rows.enumerated() {
+                    if rowIndex == 0 {
+                        indentError = max(indentError, abs(row.rect.minX + manager.location(forGlyphAt: row.glyphs.location).x
+                            - (continuation ? 0 : advance * 2)))
+                    }
+                    for glyph in row.glyphs.location..<NSMaxRange(row.glyphs) {
+                        let index = manager.characterIndexForGlyph(at: glyph)
+                        let unit = ns.character(at: index)
+                        if [0x2018, 0x2019, 0x201C, 0x201D].contains(unit) {
+                            quotes[ns.substring(with: NSRange(location: index, length: 1))] = Int(manager.glyph(at: glyph))
+                        }
+                        if "，。！？；：、‘’“”【】（）《》—…·".utf16.contains(unit) { punctuationGlyphs += 1 }
+                        guard glyph > row.glyphs.location, index > 0,
+                              manager.characterIndexForGlyph(at: glyph - 1) == index - 1,
+                              (0x4E00...0x9FFF).contains(Int(unit)),
+                              (0x4E00...0x9FFF).contains(Int(ns.character(at: index - 1))) else { continue }
+                        let step = manager.location(forGlyphAt: glyph).x - manager.location(forGlyphAt: glyph - 1).x
+                        advanceError = max(advanceError, abs(step - advance))
+                        sizeError = max(sizeError, abs(step - size))
+                        largestHanStep = max(largestHanStep, step / size)
+                        hanPairs += 1
+                    }
+                }
+                for pair in zip(rows, rows.dropFirst()) {
+                    baselineError = max(baselineError, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - spacing))
+                    baselinePairs += 1
+                }
+                lineBreaksOK = lineBreaksOK && breaksOK(view)
+                nativeGlyphs = nativeGlyphs && quotes.count == 4 && Set(quotes.values).count == 4
+                    && quotes.values.allSatisfy { $0 > 0 }
+            }
+        }
+        // Latin ligatures, combining marks and emoji remain native runs, not individual cells.
+        let latin = "“AVATAR” ‘office’ don’t — ffi… café·e\u{301} 👨‍👩‍👧‍👦"
+        _ = layout(view, text: latin, width: 900, size: 19, spacing: 8, continuation: true)
+        reference.attributedText = NSAttributedString(string: latin, attributes: [.font: UIFont.systemFont(ofSize: 19)])
+        reference.textContainer.size = CGSize(width: 900, height: .greatestFiniteMagnitude)
+        reference.layoutManager.ensureLayout(for: reference.textContainer)
+        let actual = view.layoutManager, native = reference.layoutManager
+        var shapingError: CGFloat = 0
+        var nativeRuns = actual.numberOfGlyphs == native.numberOfGlyphs
+        for glyph in 0..<min(actual.numberOfGlyphs, native.numberOfGlyphs) {
+            nativeRuns = nativeRuns && actual.glyph(at: glyph) == native.glyph(at: glyph)
+                && actual.characterIndexForGlyph(at: glyph) == native.characterIndexForGlyph(at: glyph)
+            shapingError = max(shapingError, abs(actual.location(forGlyphAt: glyph).x - native.location(forGlyphAt: glyph).x))
+        }
+        return ["naturalCases": cases, "naturalRows": rowCount, "hanPairs": hanPairs,
+            "punctuationGlyphs": punctuationGlyphs, "nativeAdvanceError": Double(advanceError),
+            "nativeSizeError": Double(sizeError), "largestHanStepRatio": Double(largestHanStep),
+            "nativeGlyphError": Double(glyphError), "indentError": Double(indentError),
+            "widthError": Double(widthError), "heightError": Double(heightError),
+            "baselineError": Double(baselineError), "baselinePairs": baselinePairs,
+            "naturalSourceOK": sourceOK, "naturalAttributesOK": attributesOK,
+            "nativeGlyphsOK": nativeGlyphs, "lineBreaksOK": lineBreaksOK,
+            "quoteGlyphs": quotes, "nativeRunsOK": nativeRuns, "shapingError": Double(shapingError)]
+    }
+
+    private static func bubbleReport() -> [String: Any] {
+        let view = ReaderTextLayout.makeTextView()
+        ReaderTextLayout.configure(view)
+        let source = "她说：“AVATAR、office、e\u{301}、👨‍👩‍👧‍👦都不能拆开。”"
+        var hitOK = true, sourceOK = true, tailOK = true, naturalRuns = true
+        var widthError: CGFloat = 0, heightError: CGFloat = 0, baselineError: CGFloat = 0
+        var checks = 0
+        for (size, width, spacing) in [(CGFloat(12), CGFloat(333.5), CGFloat(0)),
+                                       (19, 351, 8), (24, 362, 16), (36, 370, 24)] {
+            let height = layout(view, text: source, count: 82, width: width, size: size, spacing: spacing)
+            let rows = lines(view), metrics = ReaderTextLayout.metrics(fontSize: size)
+            sourceOK = sourceOK && view.textStorage.string == source + " \u{FFFC}"
+            view.textStorage.enumerateAttributes(in: NSRange(location: 0, length: source.utf16.count)) { attrs, _, _ in
+                naturalRuns = naturalRuns && attrs[.kern] == nil && attrs[.ligature] == nil
+            }
+            for pair in zip(rows, rows.dropFirst()) {
+                baselineError = max(baselineError, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - spacing))
+            }
+            let last = rows.last.map { (view.textStorage.string as NSString).substring(with: $0.characters) } ?? ""
+            tailOK = tailOK && last.contains("开。” \u{FFFC}")
+            guard let bubble = view.bubbleRect else { hitOK = false; continue }
+            checks += 1
+            hitOK = hitOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
+                && !view.isBubble(at: CGPoint(x: bubble.maxX + 2, y: bubble.midY))
+                && !view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.maxY + 2))
+                && bubble.maxX <= width + 0.5 && bubble.maxY <= height + 0.5
+            // A speculative SwiftUI width must not invalidate hit-testing on the visible frame.
+            _ = view.sizeThatFits(CGSize(width: width + 47, height: .greatestFiniteMagnitude))
+            if let restored = view.bubbleRect {
+                widthError = max(widthError, abs(restored.minX - bubble.minX), abs(restored.minY - bubble.minY),
+                                 abs(view.renderedWidth - width))
+            } else { hitOK = false }
+            let plain = layout(view, text: "汉", width: width, size: size, spacing: spacing)
+            let plainBaseline = lines(view).first?.baseline ?? -999
+            let withBubble = layout(view, text: "汉", count: 82, width: width, size: size, spacing: spacing)
+            heightError = max(heightError, abs(withBubble - plain))
+            baselineError = max(baselineError, abs((lines(view).first?.baseline ?? 999) - plainBaseline))
+        }
+        return ["bubbleChecks": checks, "bubbleHitOK": hitOK, "bubbleSourceOK": sourceOK,
+            "bubbleTailOK": tailOK, "mixedNativeRunsOK": naturalRuns,
+            "bubbleWidthError": Double(widthError), "bubbleHeightError": Double(heightError),
+            "bubbleBaselineError": Double(baselineError)]
+    }
+
+    private static func pageReport() -> [String: Any] {
+        // Paired ASCII dialogue crosses pages; a separate paragraph covers ZWJ and UTF-16.
+        let rawDialogue = "\"报告，" + String(repeating: "他继续查看告示牌，保持平静。", count: 16) + "说完了。\""
+        let texts = [rawDialogue, "“好。”", "AVATAR、office、e\u{301}、👨‍👩‍👧‍👦与中文混排。" + String(repeating: "山川风雨天地。", count: 7), "短尾段。"]
+        let counts = [36, 7, 82, 0]
+        let url = "https://example.invalid/comments"
+        let blocks: [ContentBlock] = texts.indices.map { .paragraph(text: texts[$0], commentCount: counts[$0], commentURL: counts[$0] > 0 ? url : nil) }
+        let measurer = ReaderTextLayout.Measurer(), probe = ReaderTextLayout.makeTextView()
+        ReaderTextLayout.configure(probe)
+        var sourceOK = true, offsetsOK = true, splitsOK = true, continuationOK = true
+        var commentsOK = true, bubblesOK = true, naturalPages = true
+        var within: CGFloat = 0, across: CGFloat = 0, heightError: CGFloat = 0
+        var widthError: CGFloat = 0, overflow: CGFloat = 0, topError: CGFloat = 0
+        var pagesChecked = 0, nonterminals = 0, pairs = 0, boundaries = 0, splitChecks = 0, comments = 0
+        var samples: [[String: Any]] = []
+        let settings: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [(19, 0, 0, 391), (24, 8, 2, 402), (26, 16, 8, 373.5)]
+        for (size, line, paragraph, width) in settings {
+            let config = ReaderPaginator.Configuration(pageSize: CGSize(width: width, height: 520),
+                fontSize: size, lineSpacing: line, paragraphSpacing: paragraph,
+                leftInset: 20, rightInset: 20, topInset: 30, bottomInset: 20)
+            let pages = ReaderPaginator.paginate(blocks, configuration: config)
+            let metrics = ReaderTextLayout.metrics(fontSize: size)
+            var offset = 0, sourceIndex = 0, localOffset = 0, rawJoined = "", shownJoined = ""
+            for (pageIndex, page) in pages.enumerated() {
+                pagesChecked += 1
+                if pageIndex + 1 < pages.count { nonterminals += 1 }
+                // Nil metadata AND actual glyph baselines: ignoring justifiedGap in a view
+                // cannot make a stale vertically stretched paginator pass this test.
+                naturalPages = naturalPages && page.justifiedGap == nil
+                offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
+                let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
+                    fg: .black, bg: .white, title: "自然排版验收", pageNumber: pageIndex + 1,
+                    pageCount: pages.count, onTapComment: { _ in }, paragraphSpacing: Double(paragraph),
+                    leftMargin: 20, rightMargin: 20, topMargin: 30, bottomMargin: 20)
+                let host = UIHostingController(rootView: content)
+                let window = UIWindow(frame: CGRect(origin: .zero, size: config.pageSize))
+                window.rootViewController = host; window.isHidden = false; host.view.frame = window.bounds
+                for _ in 0..<3 { host.view.setNeedsLayout(); host.view.layoutIfNeeded() }
+                let views = descendants(host.view).sorted { $0.convert(.zero, to: host.view).y < $1.convert(.zero, to: host.view).y }
+                sourceOK = sourceOK && views.count == page.blocks.count
+                var previousBaseline: CGFloat?, used: CGFloat = 0
+                for (index, block) in page.blocks.enumerated() {
+                    guard case let .paragraph(text, count, commentURL) = block,
+                          sourceIndex < texts.count, index < views.count else { sourceOK = false; continue }
+                    let original = texts[sourceIndex], allRaw = Array(original)
+                    let display = ReaderTextLayout.displayText(for: original), allDisplay = Array(display)
+                    let end = localOffset + text.count
+                    guard end <= allRaw.count else { sourceOK = false; continue }
+                    let expectedDisplay = String(allDisplay[localOffset..<end])
+                    let actualDisplay = page.displayParagraphs[index] ?? ReaderTextLayout.displayText(for: text)
+                    let continued = page.continuationIndices.contains(index)
+                    continuationOK = continuationOK && continued == (localOffset > 0)
+                    sourceOK = sourceOK && text == String(allRaw[localOffset..<end])
+                        && actualDisplay == expectedDisplay && text.utf16.count == expectedDisplay.utf16.count
+                        && mappedSource(original, display: display)
+                    let atEnd = end == allRaw.count
+                    commentsOK = commentsOK && count == (atEnd ? counts[sourceIndex] : 0)
+                        && commentURL == (atEnd && counts[sourceIndex] > 0 ? url : nil)
+                    if count > 0 { comments += 1 }
+                    if !atEnd {
+                        // Independent actual TextKit row table for the unsplit remainder.
+                        // Never accept an arbitrary prefix merely because its height fits.
+                        let remainder = String(allDisplay[localOffset...])
+                        _ = layout(probe, text: remainder, count: counts[sourceIndex], width: config.textWidth,
+                            size: size, spacing: line, continuation: continued)
+                        let endUTF16 = expectedDisplay.utf16.count
+                        let actualEnds = Set(lines(probe).map { NSMaxRange($0.characters) })
+                        splitsOK = splitsOK && actualEnds.contains(endUTF16)
+                            && (remainder as NSString).rangeOfComposedCharacterSequence(at: endUTF16).location == endUTF16
+                        splitChecks += 1
+                    }
+                    let view = views[index], rows = lines(view)
+                    sourceOK = sourceOK && view.textStorage.string == expectedDisplay + (count > 0 ? " \u{FFFC}" : "")
+                    widthError = max(widthError, abs(view.bounds.width - config.textWidth),
+                        abs(view.renderedWidth - config.textWidth), abs(view.textContainer.size.width - config.textWidth))
+                    let measured = measurer.height(text: expectedDisplay, count: count, width: config.textWidth,
+                        fontSize: size, lineSpacing: line, continuation: continued)
+                    let stored = index < page.blockHeights.count ? CGFloat(page.blockHeights[index]) : -999
+                    heightError = max(heightError, abs(stored - measured), abs(view.bounds.height - measured))
+                    used += stored + (index > 0 ? config.blockSpacing : 0)
+                    if index == 0 { topError = max(topError, abs(view.convert(.zero, to: host.view).y - config.topInset)) }
+                    for pair in zip(rows, rows.dropFirst()) {
+                        within = max(within, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - line)); pairs += 1
+                    }
+                    if let first = rows.first, let previous = previousBaseline {
+                        let delta = view.convert(CGPoint(x: 0, y: first.baseline), to: host.view).y - previous
+                        across = max(across, abs(delta - metrics.lineHeight - line - paragraph)); boundaries += 1
+                    }
+                    if let last = rows.last {
+                        previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
+                        let bottom = view.convert(CGPoint(x: 0, y: last.rect.minY + metrics.lineHeight), to: host.view).y
+                        overflow = max(overflow, bottom - config.topInset - config.bodyHeight)
+                    }
+                    if count > 0 {
+                        if let bubble = view.bubbleRect {
+                            bubblesOK = bubblesOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
+                                && !view.isBubble(at: CGPoint(x: bubble.maxX + 2, y: bubble.midY))
+                                && bubble.maxY <= view.bounds.height + 0.75
+                        } else { bubblesOK = false }
+                    }
+                    offset += text.count; rawJoined += text; shownJoined += actualDisplay
+                    if atEnd { sourceIndex += 1; localOffset = 0 } else { localOffset = end }
+                }
+                overflow = max(overflow, used - config.bodyHeight)
+                samples.append(["font": Double(size), "page": pageIndex + 1, "rowsHeight": Double(used),
+                                "unusedHeight": Double(config.bodyHeight - used), "terminal": pageIndex + 1 == pages.count])
+                window.isHidden = true; window.rootViewController = nil
+            }
+            sourceOK = sourceOK && sourceIndex == texts.count && localOffset == 0
+                && rawJoined == texts.joined() && shownJoined == texts.map { ReaderTextLayout.displayText(for: $0) }.joined()
+        }
+        return ["pageSourceOK": sourceOK, "offsetsOK": offsetsOK, "actualLineSplitsOK": splitsOK,
+            "continuationsOK": continuationOK, "pageCommentsOK": commentsOK, "pageBubblesOK": bubblesOK,
+            "naturalPagesOK": naturalPages, "pageWithinError": Double(within), "pageAcrossError": Double(across),
+            "pageHeightError": Double(heightError), "pageWidthError": Double(widthError),
+            "pageOverflow": Double(overflow), "pageTopError": Double(topError),
+            "pages": pagesChecked, "nonterminalPages": nonterminals, "pagePairs": pairs,
+            "pageBoundaries": boundaries, "splitChecks": splitChecks, "pageComments": comments, "pageSamples": samples]
+    }
+
     private static func scrollHostReport() -> [String: Any] {
         let controller = ReaderContinuousScrollController()
         controller.update(ReaderContinuousScrollView(chapters: [ReaderScrollChapter(id: 0,
@@ -136,72 +450,44 @@ private enum TypographyInspection {
             request: nil, layoutID: "dialogue", background: .white,
             onPosition: { _, _ in }, onApproachEdge: { _ in }))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 391, height: 700))
-        window.rootViewController = controller
-        window.isHidden = false
+        window.rootViewController = controller; window.isHidden = false
         defer { window.isHidden = true; window.rootViewController = nil }
-        var widthError: CGFloat = 0, gridError: CGFloat = 0, heightError: CGFloat = 0
-        var glyphs = 0, paragraphs = 0
-        var rhythmError: CGFloat = 0
-        var rhythmBoundaries = 0
-        var sourceOK = true, bubbleOK = true
         let measurer = ReaderTextLayout.Measurer()
-        func descendants(_ root: UIView) -> [CommentTextView] {
-            (root as? CommentTextView).map { [$0] } ?? root.subviews.flatMap { descendants($0) }
-        }
-        // 宽度变化和长短段都经过生产 UIScrollView + UIHostingController，不能只检查离屏测量器。
+        let metrics = ReaderTextLayout.metrics(fontSize: 19)
+        var widthError: CGFloat = 0, heightError: CGFloat = 0, baselineError: CGFloat = 0
+        var paragraphs = 0, boundaries = 0, pairs = 0, sourceOK = true, bubbleOK = true
         for width in [CGFloat(391), 373.5] {
             window.frame.size.width = width
             controller.view.frame = window.bounds
             for _ in 0..<3 {
-                controller.view.setNeedsLayout()
-                controller.view.layoutIfNeeded()
+                controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
                 controller.children.forEach { $0.view.layoutIfNeeded() }
             }
-            let views = descendants(controller.view)
             let expectedWidth = width - 40
-            let grid = ReaderTextLayout.metrics(fontSize: 19, width: expectedWidth)
-            let origins = views.map { $0.convert(CGPoint.zero, to: controller.view).x }
-            let ordered = views.sorted { $0.convert(.zero, to: controller.view).y < $1.convert(.zero, to: controller.view).y }
-            for pair in zip(ordered, ordered.dropFirst()) {
+            let views = descendants(controller.view).sorted {
+                $0.convert(.zero, to: controller.view).y < $1.convert(.zero, to: controller.view).y
+            }
+            sourceOK = sourceOK && views.count == TypographyFixtures.paragraphs.count
+            for pair in zip(views, views.dropFirst()) {
                 if let last = lines(pair.0).last, let first = lines(pair.1).first {
                     let delta = pair.1.convert(CGPoint(x: 0, y: first.baseline), to: controller.view).y
                         - pair.0.convert(CGPoint(x: 0, y: last.baseline), to: controller.view).y
-                    rhythmError = max(rhythmError, abs(delta - grid.lineHeight - 8 - 8))
-                    rhythmBoundaries += 1
+                    baselineError = max(baselineError, abs(delta - metrics.lineHeight - 8 - 8)); boundaries += 1
                 }
             }
-            if let first = origins.first {
-                for x in origins { widthError = max(widthError, abs(x - first)) }
-            }
-            for view in views {
+            for (index, view) in views.enumerated() {
+                guard index < TypographyFixtures.paragraphs.count else { sourceOK = false; continue }
+                let text = TypographyFixtures.paragraphs[index]
                 paragraphs += 1
+                sourceOK = sourceOK && view.textStorage.string == text + " \u{FFFC}"
                 widthError = max(widthError, abs(view.bounds.width - expectedWidth),
-                                 abs(view.renderedWidth - expectedWidth), abs(view.textContainer.size.width - expectedWidth))
-                guard let text = TypographyFixtures.paragraphs.first(where: { view.textStorage.string == $0 + " \u{FFFC}" }) else {
-                    sourceOK = false
-                    continue
-                }
+                    abs(view.renderedWidth - expectedWidth), abs(view.textContainer.size.width - expectedWidth),
+                    abs(view.convert(.zero, to: controller.view).x - 20))
                 heightError = max(heightError, abs(view.bounds.height - measurer.height(text: text, count: 82,
                     width: expectedWidth, fontSize: 19, lineSpacing: 8)))
-                let manager = view.layoutManager
-                for row in lines(view) {
-                    var hanStep: CGFloat?
-                    for glyph in row.glyphs.location..<NSMaxRange(row.glyphs) {
-                        if manager.characterIndexForGlyph(at: glyph) >= (text as NSString).length { continue }
-                        let x = row.rect.minX + manager.location(forGlyphAt: glyph).x
-                        // Curly quotes shift the grid phase locally. Adjacent Han still
-                        // advance exactly one cell; optical marks are checked separately.
-                        let ci = manager.characterIndexForGlyph(at: glyph)
-                        let ns = text as NSString
-                        if glyph > row.glyphs.location, ci > 0,
-                           (0x4E00...0x9FFF).contains(Int(ns.character(at: ci))),
-                           (0x4E00...0x9FFF).contains(Int(ns.character(at: ci - 1))) {
-                            let step = x - row.rect.minX - manager.location(forGlyphAt: glyph - 1).x
-                            gridError = max(gridError, abs(step - (hanStep ?? step)))
-                            hanStep = step
-                        }
-                        glyphs += 1
-                    }
+                let rows = lines(view)
+                for pair in zip(rows, rows.dropFirst()) {
+                    baselineError = max(baselineError, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - 8)); pairs += 1
                 }
                 if let bubble = view.bubbleRect {
                     bubbleOK = bubbleOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
@@ -209,664 +495,22 @@ private enum TypographyInspection {
                 } else { bubbleOK = false }
             }
         }
-        return ["scrollRhythmError": Double(rhythmError), "scrollRhythmBoundaries": rhythmBoundaries,
-                "scrollWidthError": Double(widthError), "scrollGridError": Double(gridError),
-                "scrollHeightError": Double(heightError), "scrollParagraphs": paragraphs,
-                "scrollGlyphs": glyphs, "scrollSourceOK": sourceOK, "scrollBubbleOK": bubbleOK]
-    }
-
-    /// 单独绘制生产 TextKit 的一个字形，读取实际透明位图的墨迹范围。
-    /// 不用 advance / paragraphStyle 代替可见字面位置。
-    private static func ink(_ view: CommentTextView, character: Int) -> CGRect? {
-        let manager = view.layoutManager
-        let range = manager.glyphRange(forCharacterRange: NSRange(location: character, length: 1),
-                                       actualCharacterRange: nil)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 3
-        format.opaque = false
-        let image = UIGraphicsImageRenderer(size: view.bounds.size, format: format).image { _ in
-            manager.drawGlyphs(forGlyphRange: range, at: .zero)
-        }
-        guard let cg = image.cgImage else { return nil }
-        let w = cg.width, h = cg.height
-        var pixels = [UInt8](repeating: 0, count: w * h * 4)
-        let found: CGRect? = pixels.withUnsafeMutableBytes { bytes in
-            guard let context = CGContext(data: bytes.baseAddress, width: w, height: h,
-                bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue)
-            else { return nil }
-            context.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-            let data = bytes.bindMemory(to: UInt8.self)
-            var minX = w, minY = h, maxX = -1, maxY = -1
-            for y in 0..<h {
-                for x in 0..<w where data[(y * w + x) * 4 + 3] > 32 {
-                    minX = min(minX, x); maxX = max(maxX, x)
-                    minY = min(minY, y); maxY = max(maxY, y)
-                }
-            }
-            guard maxX >= minX else { return nil }
-            return CGRect(x: CGFloat(minX) / 3, y: CGFloat(minY) / 3,
-                          width: CGFloat(maxX - minX + 1) / 3, height: CGFloat(maxY - minY + 1) / 3)
-        }
-        return found
-    }
-
-    private static func punctuationReport() -> [String: Any] {
-        let view = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(view)
-        var inkOK = true, wrappingOK = true
-        var inkChecks = 0, breakChecks = 0
-        var bubbleGapError: CGFloat = 0, bubbleBaselineError: CGFloat = 0
-        var inkSamples: [String: [Double]] = [:]
-        for size in [CGFloat(12), 19, 36] {
-            let width: CGFloat = 351
-            let grid = ReaderTextLayout.metrics(fontSize: size, width: width)
-            // 横排简体句读在左下；开引号/开括号靠右，闭引号/闭括号靠左。
-            for mark in ["，", "。", "！", "‘", "’", "“", "”", "【", "】"] {
-                _ = layout(view, text: "汉" + mark + "汉", width: width, size: size, spacing: 8, continuation: true)
-                guard let bounds = ink(view, character: 1), let han = ink(view, character: 0) else {
-                    inkOK = false; continue
-                }
-                let glyph = view.layoutManager.glyphIndexForCharacter(at: 1)
-                let x = view.layoutManager.location(forGlyphAt: glyph).x
-                let fraction = (bounds.midX - x) / grid.cellWidth
-                inkSamples["\(size):\(mark)"] = [Double(fraction), Double(bounds.midY - han.midY)]
-                if mark == "【" { inkOK = inkOK && fraction > 0.5 }
-                else { inkOK = inkOK && fraction < 0.5 }
-                if ["，", "。"].contains(mark) { inkOK = inkOK && bounds.midY > han.midY }
-                inkChecks += 1
-            }
-            // 不改写标点，不手动插入换行：覆盖不同剩余字格的系统避头尾。
-            for prefix in 0..<12 {
-                let text = String(repeating: "汉", count: prefix) + "‘我的天赋还不错！’亦或者说，这本【素月莲华刀】很好。"
-                _ = layout(view, text: text, width: size * 8.3, size: size, spacing: 8, continuation: true)
-                let string = text as NSString
-                for row in lines(view) {
-                    let chars = view.layoutManager.characterRange(forGlyphRange: row.glyphs, actualGlyphRange: nil)
-                    let part = string.substring(with: chars)
-                    if let first = part.first, let last = part.last {
-                        wrappingOK = wrappingOK && !"，。！’】".contains(first) && !"‘【".contains(last)
-                        breakChecks += 1
-                    }
-                }
-            }
-            let text = "我的天赋还不错！’"
-            _ = layout(view, text: text, width: width, size: size, spacing: 8)
-            let plainBaseline = lines(view).last?.baseline ?? -999
-            let plainHeight = view.bounds.height
-            _ = layout(view, text: text, count: 3, width: width, size: size, spacing: 8)
-            let manager = view.layoutManager
-            let gap = manager.glyphIndexForCharacter(at: (text as NSString).length)
-            let attachment = manager.glyphIndexForCharacter(at: (text as NSString).length + 1)
-            bubbleGapError = max(bubbleGapError, abs(manager.location(forGlyphAt: attachment).x
-                - manager.location(forGlyphAt: gap).x - grid.cellWidth * 0.25))
-            bubbleBaselineError = max(bubbleBaselineError, abs((lines(view).last?.baseline ?? 999) - plainBaseline),
-                                      abs(view.bounds.height - plainHeight))
-        }
-        return ["inkOK": inkOK, "inkChecks": inkChecks, "inkSamples": inkSamples,
-                "wrappingOK": wrappingOK, "breakChecks": breakChecks,
-                "bubbleGapError": Double(bubbleGapError), "bubbleBaselineError": Double(bubbleBaselineError)]
-    }
-
-    /// 检查真实整段 + 内层引号的原生排版；不能用“每行必须填满”掩盖字间拉伸。
-    private static func quoteGlyphReport() -> [String: Any] {
-        let view = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(view)
-        var correctFont = true, distinctGlyphs = true, sourceOK = true
-        var glyphNames: [[String: Any]] = []
-        for size in [CGFloat(19), 23, 24, 26] {
-            let text = "“陈迹，‘很轻’，可以吗？”"
-            _ = layout(view, text: text, width: 351, size: size, spacing: 8)
-            let ns = text as NSString
-            sourceOK = sourceOK && view.textStorage.string == text
-            let font = ReaderTextLayout.metrics(fontSize: size, width: 351).quoteFont
-            let actualName = CTFontCopyPostScriptName(font as CTFont) as String
-            var ids: [String: Int] = [:]
-            for index in 0..<ns.length {
-                let code = ns.character(at: index)
-                guard [0x2018, 0x2019, 0x201C, 0x201D].contains(code) else { continue }
-                let applied = view.textStorage.attribute(.font, at: index, effectiveRange: nil) as? UIFont
-                correctFont = correctFont && applied.map { CTFontCopyPostScriptName($0 as CTFont) as String == actualName } == true
-                let key = ns.substring(with: NSRange(location: index, length: 1))
-                let glyph = view.layoutManager.glyphIndexForCharacter(at: index)
-                ids[key] = Int(view.layoutManager.glyph(at: glyph))
-                glyphNames.append(["size": Double(size), "quote": key,
-                    "unicode": Int(code), "font": actualName, "glyph": ids[key] ?? -1])
-            }
-            distinctGlyphs = distinctGlyphs && ids["“"] != ids["”"] && ids["‘"] != ids["’"]
-                && ids.count == 4 && ids.values.allSatisfy { $0 > 0 }
-        }
-        return ["quoteCorrectFont": correctFont, "quoteDistinctGlyphs": distinctGlyphs,
-                "quoteSourceOK": sourceOK, "quoteGlyphs": glyphNames]
-    }
-
-    private static func naturalRowsReport() -> [String: Any] {
-        let view = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(view)
-        var samples: [[String: Any]] = []
-        var stepError: CGFloat = 0, edgeCells: CGFloat = 0
-        var checked = 0, terminalRows = 0, hanPairs = 0
-        var breaksOK = true, sourceOK = true
-        for size in [CGFloat(19), 23, 24, 26] {
-            for width in [CGFloat(333.5), 351, 362, 370] {
-                let text = ReferenceTypography.texts[2]
-                let ns = text as NSString
-                let grid = ReaderTextLayout.metrics(fontSize: size, width: width)
-                _ = layout(view, text: text, count: 99, width: width, size: size, spacing: 8)
-                sourceOK = sourceOK && view.textStorage.string == text + " \u{FFFC}"
-                let manager = view.layoutManager
-                let rows = lines(view)
-                for row in rows {
-                    let cr = manager.characterRange(forGlyphRange: row.glyphs, actualGlyphRange: nil)
-                    let part = (view.textStorage.string as NSString).substring(with: cr)
-                    // Some widths wrap only the comment attachment after the final
-                    // text row; this is not another paragraph terminal text row.
-                    guard !part.trimmingCharacters(in: .whitespacesAndNewlines)
-                        .replacingOccurrences(of: "\u{FFFC}", with: "").isEmpty else { continue }
-                    if let first = part.first, let last = part.last {
-                        breaksOK = breaksOK && !"，。！？；：、’”】》」".contains(first)
-                            && !"‘“【《「".contains(last)
-                    }
-                    for g in (row.glyphs.location + 1)..<NSMaxRange(row.glyphs) {
-                        let a = manager.characterIndexForGlyph(at: g - 1)
-                        let b = manager.characterIndexForGlyph(at: g)
-                        if b < ns.length, (0x4E00...0x9FFF).contains(Int(ns.character(at: a))),
-                           (0x4E00...0x9FFF).contains(Int(ns.character(at: b))) {
-                            let step = manager.location(forGlyphAt: g).x - manager.location(forGlyphAt: g - 1).x
-                            stepError = max(stepError, abs(step - grid.cellWidth))
-                            hanPairs += 1
-                        }
-                    }
-                    let terminal = NSMaxRange(cr) >= ns.length
-                    if terminal { terminalRows += 1 }
-                    else {
-                        let end = NSMaxRange(cr)
-                        // 段末字+闭标点+气泡整体回退允许前一行留白，不能靠拉字距填补。
-                        let tailStart = end < view.textStorage.length
-                            ? view.textStorage.attribute(NSAttributedString.Key("ReaderCommentTailStart"),
-                                at: end, effectiveRange: nil) as? Int : nil
-                        if tailStart != end { edgeCells = max(edgeCells, max(0, width - row.used.maxX) / grid.cellWidth) }
-                        checked += 1
-                    }
-                    samples.append(["size": Double(size), "width": Double(width), "text": part,
-                        "right": Double(row.used.maxX), "terminal": terminal])
-                }
-            }
-        }
-        return ["naturalStepError": Double(stepError), "naturalEdgeCells": Double(edgeCells),
-                "naturalHanPairs": hanPairs, "naturalRows": checked,
-                "naturalTerminalRows": terminalRows, "naturalBreaksOK": breaksOK,
-                "naturalSourceOK": sourceOK, "naturalSamples": samples]
-    }
-
-    private static func referenceReport() -> [String: Any] {
-        let view = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(view)
-        var compact = true, preserved = true
-        var openingError: CGFloat = 0, maxGap: CGFloat = 0, minGap: CGFloat = 0
-        var bubbleGap: CGFloat = 0
-        var checks = 0
-        for size in [CGFloat(12), 19, 36] {
-            let width: CGFloat = 351
-            let grid = ReaderTextLayout.metrics(fontSize: size, width: width)
-            for (index, text) in ReferenceTypography.texts.enumerated() {
-                _ = layout(view, text: text, count: ReferenceTypography.counts[index], width: width, size: size, spacing: 8)
-                preserved = preserved && view.textStorage.string == text + " \u{FFFC}"
-                let ns = text as NSString
-                if text.hasPrefix("“"), let opening = ink(view, character: 0) {
-                    openingError = max(openingError, abs(opening.minX - grid.cellWidth * 2) / grid.cellWidth)
-                }
-                for ci in 1..<ns.length {
-                    let mark = ns.substring(with: NSRange(location: ci, length: 1))
-                    let previous = ns.substring(with: NSRange(location: ci - 1, length: 1))
-                    guard "‘’“”、".contains(mark) || "‘’“”".contains(previous),
-                          let left = ink(view, character: ci - 1), let right = ink(view, character: ci),
-                          abs(left.midY - right.midY) < grid.lineHeight,
-                          right.minX >= left.minX else { continue }
-                    let gap = (right.minX - left.maxX) / grid.cellWidth
-                    maxGap = max(maxGap, gap)
-                    minGap = min(minGap, gap)
-                    compact = compact && gap < 0.9 && gap > -0.2
-                    checks += 1
-                }
-                if text.hasSuffix("”"), let last = ink(view, character: ns.length - 1), let bubble = view.bubbleRect,
-                   bubble.minX > last.maxX {
-                    let gap = (bubble.minX - last.maxX) / grid.cellWidth
-                    bubbleGap = max(bubbleGap, gap)
-                    compact = compact && gap < 0.9
-                }
-            }
-        }
-        return ["referenceCompact": compact, "referencePreserved": preserved,
-                "referenceOpeningError": Double(openingError), "referenceMaxGap": Double(maxGap),
-                "referenceMinGap": Double(minGap), "referenceBubbleGap": Double(bubbleGap),
-                "referenceChecks": checks]
-    }
-
-    private static func bottomReport() -> [String: Any] {
-        var baselineError: CGFloat = 0, overflow: CGFloat = 0, topError: CGFloat = 0
-        var checked = 0, continued = 0, comments = 0
-        var terminalOK = true, specialOK = true
-        func descendants(_ root: UIView) -> [CommentTextView] {
-            (root as? CommentTextView).map { [$0] } ?? root.subviews.flatMap { descendants($0) }
-        }
-        for size in [CGFloat(12), 19, 36] {
-            var config = ReaderPaginator.Configuration(pageSize: CGSize(width: 391, height: 720),
-                safeInsets: UIEdgeInsets(top: 47, left: 0, bottom: 34, right: 0),
-                fontSize: size, lineSpacing: 8, paragraphSpacing: 7,
-                leftInset: 23, rightInset: 31, topInset: 19, bottomInset: 17)
-            config.chapterTitle = "标题保持顶部位置，正文末行统一高度"
-            let blocks: [ContentBlock] = (0..<12).map { index in
-                .paragraph(text: String(repeating: TypographyFixtures.dialogue, count: index % 3 + 1),
-                    commentCount: 82, commentURL: nil)
-            } + [.paragraph(text: "章末短尾段", commentCount: 3, commentURL: nil)]
-            let pages = ReaderPaginator.paginate(blocks, configuration: config)
-            terminalOK = terminalOK && pages.last?.justifiedGap == nil
-            for (index, page) in pages.enumerated() {
-                if index != pages.count - 1 && page.justifiedGap == nil { terminalOK = false }
-                let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: 8,
-                    fg: .black, bg: .white, title: config.chapterTitle, pageNumber: index + 1,
-                    pageCount: pages.count, onTapComment: { _ in },
-                    safeInsets: EdgeInsets(top: 47, leading: 0, bottom: 34, trailing: 0),
-                    paragraphSpacing: 7, leftMargin: 23, rightMargin: 31, topMargin: 19,
-                    bottomMargin: 17, showsChapterTitle: true)
-                let host = UIHostingController(rootView: content)
-                let window = UIWindow(frame: CGRect(origin: .zero, size: config.pageSize))
-                window.rootViewController = host
-                window.isHidden = false
-                host.view.frame = window.bounds
-                for _ in 0..<3 { host.view.setNeedsLayout(); host.view.layoutIfNeeded() }
-                let views = descendants(host.view).sorted {
-                    $0.convert(CGPoint.zero, to: host.view).y < $1.convert(CGPoint.zero, to: host.view).y
-                }
-                if index == 0 {
-                    func labels(_ root: UIView) -> [UILabel] {
-                        (root as? UILabel).map { [$0] } ?? root.subviews.flatMap { labels($0) }
-                    }
-                    if let label = labels(host.view).first(where: { $0.accessibilityIdentifier == "chapter-title" }),
-                       let first = views.first {
-                        let frame = label.convert(label.bounds, to: host.view)
-                        let expectedCenter = config.leftInset + config.textWidth / 2
-                        terminalOK = terminalOK && label.textAlignment == .center
-                            && abs(frame.midX - expectedCenter) < 0.75
-                            && abs(first.convert(.zero, to: host.view).y - frame.maxY
-                                - ChapterTitleLayout.bottomSpacing(fontSize: size) - config.paragraphSpacing) < 0.75
-                    } else { terminalOK = false }
-                }
-                let grid = ReaderTextLayout.metrics(fontSize: size, width: config.textWidth)
-                let bottom = config.pageSize.height - 34 - config.bottomInset - 24
-                let top = 47 + config.topInset + (index == 0 ? config.headerHeight : 0)
-                if let first = views.first {
-                    topError = max(topError, abs(first.convert(CGPoint.zero, to: host.view).y - top))
-                } else { topError = 999 }
-                if let last = views.last, let row = lines(last).last {
-                    let y = last.convert(CGPoint(x: 0, y: row.baseline), to: host.view).y
-                    if page.justifiedGap != nil {
-                        baselineError = max(baselineError, abs(y - (bottom - grid.lineHeight + grid.baseline)))
-                        checked += 1
-                    }
-                    overflow = max(overflow, y + grid.lineHeight - grid.baseline - bottom)
-                }
-                if index == pages.count - 1 {
-                    var expectedY = top
-                    for (blockIndex, view) in views.enumerated() {
-                        let origin = view.convert(CGPoint.zero, to: host.view).y
-                        terminalOK = terminalOK && abs(origin - expectedY) <= 0.75
-                        let rows = lines(view)
-                        for pair in zip(rows, rows.dropFirst()) {
-                            terminalOK = terminalOK && abs(pair.1.baseline - pair.0.baseline - grid.lineHeight - 8) <= 0.5
-                        }
-                        if blockIndex < page.blockHeights.count {
-                            expectedY += CGFloat(page.blockHeights[blockIndex]) + config.blockSpacing
-                        } else { terminalOK = false }
-                    }
-                }
-                for view in views {
-                    if let rect = view.bubbleRect {
-                        if !view.isBubble(at: CGPoint(x: rect.midX, y: rect.midY)) { terminalOK = false }
-                        comments += 1
-                    }
-                }
-                continued += page.continuationIndices.count
-                window.isHidden = true
-                window.rootViewController = nil
-            }
-            let short = ReaderPaginator.paginate([.paragraph(text: "短章", commentCount: 1, commentURL: nil)], configuration: config)
-            terminalOK = terminalOK && short.count == 1 && short[0].justifiedGap == nil
-            let mixed = ReaderPaginator.paginate([.image(src: "", clickURL: nil)] + blocks, configuration: config)
-            specialOK = specialOK && mixed.first?.justifiedGap == nil
-        }
-        return ["bottomBaselineError": Double(baselineError), "bottomOverflow": Double(overflow),
-                "bottomTopError": Double(topError), "bottomPages": checked, "bottomContinuations": continued,
-                "bottomComments": comments, "bottomTerminalOK": terminalOK, "bottomSpecialOK": specialOK]
-    }
-
-    /// Inspect rendered production pages, not just style values or measured heights.
-    /// H + L within a paragraph; H + L + P across paragraphs; page residual E
-    /// adds equally to BOTH kinds of gap. Terminal pages always have E == 0.
-    private static func rhythmReport() -> [String: Any] {
-        var within: CGFloat = 0, across: CGFloat = 0, bottom: CGFloat = 0, height: CGFloat = 0
-        var nativeError: CGFloat = 0, bubbleGrowth: CGFloat = 0
-        var pairs = 0, boundaries = 0, aligned = 0, terminals = 0, cases = 0
-        var sourceOK = true, terminalOK = true, bubbleOK = true
-        var samples: [[String: Any]] = []
-        func descendants(_ root: UIView) -> [CommentTextView] {
-            (root as? CommentTextView).map { [$0] } ?? root.subviews.flatMap { descendants($0) }
-        }
-        let settings: [(CGFloat, CGFloat, CGFloat)] = [CGFloat(0), 8, 16, 24].flatMap { line in
-            [CGFloat(0), 2, 8, 16].map { (CGFloat(24), line, $0) }
-        } + [(19, 16, 2), (36, 24, 0), (12, 8, 16)]
-        for (size, line, paragraph) in settings {
-            cases += 1
-            var config = ReaderPaginator.Configuration(pageSize: CGSize(width: 402, height: 874),
-                fontSize: size, lineSpacing: line, paragraphSpacing: paragraph,
-                leftInset: 20, rightInset: 20, topInset: 70, bottomInset: 30)
-            config.chapterTitle = "1、归零"
-            let blocks = ReferenceTypography.blocks + ReferenceTypography.blocks
-            let pages = ReaderPaginator.paginate(blocks, configuration: config)
-            let grid = ReaderTextLayout.metrics(fontSize: size, width: config.textWidth)
-            let probe = ReaderTextLayout.makeTextView()
-            ReaderTextLayout.configure(probe)
-            let natural = layout(probe, text: ReferenceTypography.texts[1], count: 82,
-                width: config.textWidth, size: size, spacing: line)
-            let probeRows = lines(probe)
-            let raw = probe.sizeThatFits(CGSize(width: config.textWidth, height: .greatestFiniteMagnitude)).height
-            let expectedNatural = CGFloat(probeRows.count) * grid.lineHeight + CGFloat(max(probeRows.count - 1, 0)) * line
-            nativeError = max(nativeError, abs(natural - expectedNatural))
-            for row in probeRows { nativeError = max(nativeError, abs(row.rect.height - grid.lineHeight - line)) }
-            var offset = 0, reconstructed = ""
-            var exampleWithin: CGFloat = 0, exampleAcross: CGFloat = 0, exampleExtra: CGFloat = 0
-            for (pageIndex, page) in pages.enumerated() {
-                sourceOK = sourceOK && page.startOffset == offset
-                let extra = CGFloat(page.justifiedGap ?? 0)
-                let isTerminal = pageIndex == pages.count - 1
-                if isTerminal { terminalOK = terminalOK && page.justifiedGap == nil; terminals += 1 }
-                let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
-                    fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
-                    pageCount: pages.count, onTapComment: { _ in }, paragraphSpacing: Double(paragraph),
-                    leftMargin: 20, rightMargin: 20, topMargin: 70, bottomMargin: 30, showsChapterTitle: true)
-                let host = UIHostingController(rootView: content)
-                let window = UIWindow(frame: CGRect(origin: .zero, size: config.pageSize))
-                window.rootViewController = host; window.isHidden = false; host.view.frame = window.bounds
-                for _ in 0..<3 { host.view.setNeedsLayout(); host.view.layoutIfNeeded() }
-                let views = descendants(host.view).sorted {
-                    $0.convert(.zero, to: host.view).y < $1.convert(.zero, to: host.view).y
-                }
-                sourceOK = sourceOK && views.count == page.blocks.count
-                var previousBaseline: CGFloat?
-                let top = config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
-                if let first = views.first {
-                    height = max(height, abs(first.convert(.zero, to: host.view).y - top))
-                }
-                for (index, view) in views.enumerated() {
-                    guard index < page.blocks.count,
-                          case let .paragraph(text, count, _) = page.blocks[index] else { sourceOK = false; continue }
-                    offset += text.count; reconstructed += text
-                    sourceOK = sourceOK && view.textStorage.string == text + (count > 0 ? " \u{FFFC}" : "")
-                    let rows = lines(view)
-                    for pair in zip(rows, rows.dropFirst()) {
-                        let delta = pair.1.baseline - pair.0.baseline
-                        within = max(within, abs(delta - grid.lineHeight - line - extra)); pairs += 1
-                        if pageIndex == 0 { exampleWithin = delta; exampleExtra = extra }
-                    }
-                    if let first = rows.first, let previousBaseline {
-                        let delta = view.convert(CGPoint(x: 0, y: first.baseline), to: host.view).y - previousBaseline
-                        across = max(across, abs(delta - grid.lineHeight - line - paragraph - extra)); boundaries += 1
-                        if pageIndex == 0 { exampleAcross = delta }
-                    }
-                    if let last = rows.last {
-                        previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
-                        height = max(height, abs(view.bounds.height - last.rect.minY - grid.lineHeight))
-                    }
-                    if let bubble = view.bubbleRect {
-                        _ = layout(probe, text: text, count: count, width: config.textWidth, size: size,
-                            spacing: 0, continuation: page.continuationIndices.contains(index))
-                        if let unspaced = probe.bubbleRect {
-                            bubbleGrowth = max(bubbleGrowth, abs(bubble.height - unspaced.height))
-                        } else { bubbleOK = false }
-                        bubbleOK = bubbleOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
-                            && !view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.maxY + 2))
-                            && bubble.maxY <= view.bounds.height + 0.75
-                    }
-                }
-                if let last = previousBaseline {
-                    let target = config.pageSize.height - config.bottomInset - 24 - grid.lineHeight + grid.baseline
-                    if page.justifiedGap != nil { bottom = max(bottom, abs(last - target)); aligned += 1 }
-                    height = max(height, last - target)
-                }
-                window.isHidden = true; window.rootViewController = nil
-            }
-            sourceOK = sourceOK && reconstructed == ReferenceTypography.texts.joined() + ReferenceTypography.texts.joined()
-            samples.append(["font": Double(size), "line": Double(line), "paragraph": Double(paragraph),
-                "lineHeight": Double(grid.lineHeight), "rawTextKitHeight": Double(raw), "trimmedHeight": Double(natural),
-                "rows": probeRows.count, "within": Double(exampleWithin), "across": Double(exampleAcross),
-                "extra": Double(exampleExtra)])
-        }
-        let sparseConfig = ReaderPaginator.Configuration(pageSize: CGSize(width: 402, height: 180),
-            fontSize: 24, lineSpacing: 8, paragraphSpacing: 2)
-        let sparse = ReaderPaginator.paginate([
-            .paragraph(text: "短段。", commentCount: 0, commentURL: nil),
-            .paragraph(text: "另一段。", commentCount: 0, commentURL: nil),
-            .image(src: "", clickURL: nil)], configuration: sparseConfig)
-        return ["rhythmWithinError": Double(within), "rhythmAcrossError": Double(across),
-            "rhythmBottomError": Double(bottom), "rhythmHeightError": Double(height),
-            "rhythmNativeError": Double(nativeError), "rhythmBubbleGrowth": Double(bubbleGrowth),
-            "rhythmPairs": pairs, "rhythmBoundaries": boundaries, "rhythmAligned": aligned,
-            "rhythmTerminals": terminals, "rhythmCases": cases, "rhythmSourceOK": sourceOK,
-            "rhythmTerminalOK": terminalOK, "rhythmBubbleOK": bubbleOK,
-            "rhythmSparseOK": sparse.count > 1 && sparse[0].blocks.count == 2 && sparse[0].justifiedGap == nil,
-            "rhythmSamples": samples]
+        return ["scrollWidthError": Double(widthError), "scrollHeightError": Double(heightError),
+            "scrollBaselineError": Double(baselineError), "scrollParagraphs": paragraphs,
+            "scrollBoundaries": boundaries, "scrollPairs": pairs, "scrollSourceOK": sourceOK, "scrollBubbleOK": bubbleOK]
     }
 
     static func snapshot() -> String {
         precondition(Thread.isMainThread)
-        let view = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(view)
-        let measurer = ReaderTextLayout.Measurer()
-        var gridError: CGFloat = 0, stepError: CGFloat = 0, indentError: CGFloat = 0
-        var baselineError: CGFloat = 0, heightError: CGFloat = 0, clipping: CGFloat = 0
-        var edgeError: CGFloat = 0, tailError: CGFloat = 0, widthError: CGFloat = 0
-        var gridGlyphs = 0, baselinePairs = 0, bubbleChecks = 0, preservationChecks = 0
-        var bubbleOK = true, nativeRuns = true
-        var worstBaseline: [String: Any] = [:]
-        let han = String(repeating: "春江花月夜山川风雨天", count: 12)
-        let punctuation = String(repeating: "春江，花月。山川；风雨！天地？「阅读」《原文》" + TypographyFixtures.dialogue, count: 8)
-
-        for size in [CGFloat(12), 19, 36] {
-            for width in [CGFloat(241), 333.5, 351] {
-                let grid = ReaderTextLayout.metrics(fontSize: size, width: width)
-                for continued in [false, true] {
-                    for text in [han, punctuation] {
-                        _ = layout(view, text: text, width: width, size: size, spacing: 8,
-                                   continuation: continued)
-                        let rows = lines(view)
-                        if let first = rows.first {
-                            let x = first.rect.minX + view.layoutManager.location(forGlyphAt: first.glyphs.location).x
-                            indentError = max(indentError, abs(x - (continued ? 0 : 2 * grid.cellWidth)))
-                        }
-                        for (rowIndex, row) in rows.enumerated() {
-                            var previous: CGFloat?
-                            var hanStep: CGFloat?
-                            for glyph in row.glyphs.location..<NSMaxRange(row.glyphs) {
-                                let x = row.rect.minX + view.layoutManager.location(forGlyphAt: glyph).x
-                                if text == han {
-                                    gridError = max(gridError, abs(x - (x / grid.cellWidth).rounded() * grid.cellWidth))
-                                }
-                                if let previous {
-                                    let manager = view.layoutManager
-                                    let ci = manager.characterIndexForGlyph(at: glyph - 1)
-                                    let ns = text as NSString
-                                    let mark = ns.substring(with: NSRange(location: ci, length: 1))
-                                    var expected = grid.cellWidth
-                                    if "‘’“”".contains(mark) {
-                                        let sample = NSAttributedString(string: mark, attributes: [.font: grid.quoteFont, .kern: 0, .ligature: 0])
-                                        expected = CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(sample), nil, nil, nil))
-                                    }
-                                    let next = manager.characterIndexForGlyph(at: glyph)
-                                    let adjacentHan = (0x4E00...0x9FFF).contains(Int(ns.character(at: ci)))
-                                        && (0x4E00...0x9FFF).contains(Int(ns.character(at: next)))
-                                    if text != han && adjacentHan {
-                                        // Mixed rows have one uniform Han step; optical punctuation
-                                        // still has its original measured advance, checked below.
-                                        let step = x - previous
-                                        expected = hanStep ?? step
-                                        hanStep = step
-                                    }
-                                    stepError = max(stepError, abs(x - previous - expected))
-                                }
-                                previous = x
-                                gridGlyphs += 1
-                            }
-                            if text == han, rowIndex < rows.count - 1, let last = previous {
-                                // 非尾行右侧最多留下末字之后的一份字距；不容许整字落空。
-                                let right = last + grid.cellWidth - grid.tracking
-                                edgeError = max(edgeError, abs(width - right - grid.tracking))
-                            }
-                        }
-                        if view.textStorage.string == text { preservationChecks += 1 }
-                    }
-                }
-                _ = layout(view, text: "尾行", width: width, size: size, spacing: 8)
-                if let row = lines(view).first, row.glyphs.length == 2 {
-                    let manager = view.layoutManager
-                    let span = manager.location(forGlyphAt: row.glyphs.location + 1).x
-                        - manager.location(forGlyphAt: row.glyphs.location).x
-                    tailError = max(tailError, abs(span - grid.cellWidth))
-                } else { tailError = 999 }
-
-                for spacing in [CGFloat(0), 8, 30] {
-                    // 有纯中文、西文、重音组合字符、emoji 及气泡的实际换行；不插测试专用硬换行。
-                    let mixed = String(repeating: "天地玄黄宇宙洪荒", count: 4)
-                        + String(repeating: " AVATAR office affine café e\u{301} 12345 ", count: 3)
-                        + "👨‍👩‍👧‍👦🙂🚀" + String(repeating: "继续阅读中文正文", count: 4)
-                    let height = layout(view, text: mixed, count: 82, width: width, size: size, spacing: spacing)
-                    let rows = lines(view)
-                    for (left, right) in zip(rows, rows.dropFirst()) {
-                        let error = abs(right.baseline - left.baseline - grid.lineHeight - spacing)
-                        if error > baselineError {
-                            baselineError = error
-                            let manager = view.layoutManager
-                            let leftChar = manager.characterIndexForGlyph(at: left.glyphs.location)
-                            let rightChar = manager.characterIndexForGlyph(at: right.glyphs.location)
-                            let string = view.textStorage.string as NSString
-                            worstBaseline = ["size": Double(size), "width": Double(width), "spacing": Double(spacing),
-                                "height": Double(grid.lineHeight), "baseline": Double(grid.baseline),
-                                "leftY": Double(left.rect.minY), "rightY": Double(right.rect.minY),
-                                "leftHeight": Double(left.rect.height), "rightHeight": Double(right.rect.height),
-                                "leftBaseline": Double(left.baseline), "rightBaseline": Double(right.baseline),
-                                "leftText": string.substring(with: NSRange(location: leftChar, length: min(8, string.length - leftChar))),
-                                "rightText": string.substring(with: NSRange(location: rightChar, length: min(8, string.length - rightChar)))]
-                        }
-                        baselinePairs += 1
-                    }
-                    for row in rows {
-                        let bounds = view.layoutManager.boundingRect(forGlyphRange: row.glyphs, in: view.textContainer)
-                        clipping = max(clipping, max(-bounds.minY, bounds.maxY - height))
-                    }
-                    heightError = max(heightError, abs(height - measurer.height(text: mixed, count: 82,
-                        width: width, fontSize: size, lineSpacing: spacing)))
-                    widthError = max(widthError, max(abs(view.renderedWidth - width),
-                                                    abs(view.textContainer.size.width - width)))
-                    if let bubble = view.bubbleRect {
-                        bubbleChecks += 1
-                        bubbleOK = bubbleOK && bubble.maxY <= height + 0.5 && bubble.maxX <= width + 0.5
-                            && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
-                            && !view.isBubble(at: CGPoint(x: bubble.maxX + 2, y: bubble.midY))
-                        // 模拟 SwiftUI 测过另一提议宽度但未提交 frame，命中仍须用屏幕上的字形。
-                        _ = view.sizeThatFits(CGSize(width: width + 47, height: .greatestFiniteMagnitude))
-                        if let restored = view.bubbleRect {
-                            widthError = max(widthError, max(abs(restored.minX - bubble.minX),
-                                                           abs(restored.minY - bubble.minY)))
-                            widthError = max(widthError, abs(view.renderedWidth - width))
-                        } else { bubbleOK = false }
-                    } else { bubbleOK = false }
-                    let original = (view.textStorage.string as NSString).substring(to: (mixed as NSString).length)
-                    if original == mixed, view.textStorage.length == (mixed as NSString).length + 2 {
-                        preservationChecks += 1
-                    }
-                    let latin = (mixed as NSString).range(of: "AVATAR office")
-                    let emoji = (mixed as NSString).range(of: "👨‍👩‍👧‍👦")
-                    for range in [latin, emoji] {
-                        view.textStorage.enumerateAttribute(.kern, in: range) { value, _, _ in
-                            if value != nil { nativeRuns = false }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 西文/emoji 的实际字形数量和横向位置与无字格的系统字体布局比较，而非只查 kern 属性。
-        let latin = "“AVATAR” ‘office’ don’t — ffi… café·e\u{301} 👨‍👩‍👧‍👦"
-        _ = layout(view, text: latin, width: 700, size: 19, spacing: 8, continuation: true)
-        let reference = ReaderTextLayout.makeTextView()
-        ReaderTextLayout.configure(reference)
-        reference.attributedText = NSAttributedString(string: latin, attributes: [.font: UIFont.systemFont(ofSize: 19)])
-        reference.frame = CGRect(x: 0, y: 0, width: 700, height: 100)
-        reference.textContainer.size = CGSize(width: 700, height: CGFloat.greatestFiniteMagnitude)
-        reference.layoutManager.ensureLayout(for: reference.textContainer)
-        let actualManager = view.layoutManager, referenceManager = reference.layoutManager
-        var shapingError: CGFloat = 0
-        if actualManager.numberOfGlyphs == referenceManager.numberOfGlyphs {
-            for index in 0..<actualManager.numberOfGlyphs {
-                shapingError = max(shapingError, abs(actualManager.location(forGlyphAt: index).x
-                    - referenceManager.location(forGlyphAt: index).x))
-            }
-        } else { shapingError = 999 }
-
-        var config = ReaderPaginator.Configuration(pageSize: CGSize(width: 391, height: 380),
-                                                   fontSize: 19, lineSpacing: 8)
-        config.chapterTitle = "完整章节标题，不占正文的固定行距"
-        let source = String(repeating: TypographyFixtures.dialogue + "原文标点，分页偏移。AVATAR👨‍👩‍👧‍👦e\u{301}", count: 12)
-        let pages = ReaderPaginator.paginate([
-            .paragraph(text: source, commentCount: 82, commentURL: "https://example.invalid/comments"),
-            .paragraph(text: "短尾段", commentCount: 0, commentURL: nil)
-        ], configuration: config)
-        var offset = 0, reconstructed = "", offsetsOK = true, paragraphHeightError: CGFloat = 0
-        var pageOverflow: CGFloat = 0, continuationCount = 0, commentCount = 0
-        for (pageIndex, page) in pages.enumerated() {
-            offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
-            var used: CGFloat = 0
-            for (index, block) in page.blocks.enumerated() {
-                guard case let .paragraph(text, count, _) = block else { continue }
-                let continued = page.continuationIndices.contains(index)
-                if continued { continuationCount += 1 }
-                if count > 0 { commentCount += 1 }
-                let gap = CGFloat(page.justifiedGap ?? 0)
-                let measured = measurer.height(text: text, count: count, width: config.textWidth,
-                    fontSize: config.fontSize, lineSpacing: config.lineSpacing + gap, continuation: continued)
-                let height = index < page.blockHeights.count ? CGFloat(page.blockHeights[index]) : -1
-                let actual = page.justifiedGap == nil ? measured : measurer.rows(text: text, count: count,
-                    width: config.textWidth, fontSize: config.fontSize, lineSpacing: config.lineSpacing + gap,
-                    continuation: continued).height
-                paragraphHeightError = max(paragraphHeightError, abs(actual - height))
-                used += height + (index > 0 ? config.blockSpacing + gap : 0)
-                offset += text.count
-                reconstructed += text
-            }
-            let capacity = pageIndex == 0 ? config.firstPageBodyHeight : config.bodyHeight
-            pageOverflow = max(pageOverflow, used - capacity)
-        }
-        var report: [String: Any] = [
-            "gridError": Double(gridError), "stepError": Double(stepError), "indentError": Double(indentError),
-            "baselineError": Double(baselineError), "heightError": Double(heightError), "clipping": Double(clipping),
-            "edgeError": Double(edgeError), "tailError": Double(tailError), "widthError": Double(widthError),
-            "gridGlyphs": gridGlyphs, "baselinePairs": baselinePairs, "bubbleChecks": bubbleChecks,
-            "preservationChecks": preservationChecks, "bubbleOK": bubbleOK, "nativeRuns": nativeRuns,
-            "shapingError": Double(shapingError), "paragraphHeightError": Double(paragraphHeightError),
-            "pageOverflow": Double(pageOverflow), "offsetsOK": offsetsOK,
-            "sourceOK": reconstructed == source + "短尾段", "continuations": continuationCount,
-            "commentCount": commentCount, "pages": pages.count, "worstBaseline": worstBaseline
-        ]
-        report.merge(rhythmReport()) { _, new in new }
-        report.merge(bottomReport()) { _, new in new }
-        report.merge(scrollHostReport()) { _, new in new }
-        report.merge(quoteGlyphReport()) { _, new in new }
-        report.merge(naturalRowsReport()) { _, new in new }
-        report.merge(referenceReport()) { _, new in new }
-        report.merge(punctuationReport()) { _, new in new }
+        let started = CFAbsoluteTimeGetCurrent()
+        var report = naturalReport()
+        report.merge(bubbleReport()) { _, value in value }
+        report.merge(pageReport()) { _, value in value }
+        report.merge(scrollHostReport()) { _, value in value }
+        report["elapsedSeconds"] = CFAbsoluteTimeGetCurrent() - started
         guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]),
-              let json = String(data: data, encoding: .utf8) else { return "invalid" }
-        return json
+              let result = String(data: data, encoding: .utf8) else { return "invalid" }
+        return result
     }
 }
 
