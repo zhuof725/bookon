@@ -277,7 +277,12 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
         let fitted = super.sizeThatFits(size)
         // UITextView 可能临时使用另一宽度进行试排。恢复本次字号/字格对应的容器，
         // 避免屏幕上和段评命中区域仍沿用前一次试排宽度。
-        if renderedWidth > 0 { textContainer.size.width = renderedWidth }
+        if renderedWidth > 0 {
+            // UITextView's probe can leave a finite height from the previous frame.
+            // Canonical row measurement must include ALL glyphs when a reused view
+            // grows, not just the fragments that fit its previous paragraph.
+            textContainer.size = CGSize(width: renderedWidth, height: .greatestFiniteMagnitude)
+        }
         // UIKit/SwiftUI 的滚动宿主必须保留同一提议宽度；短段落的 usedRect 不是正文列宽。
         // 这里只改返回尺寸，重复 layoutSubviews 仍由 typeset 的内容/宽度缓存拦截。
         return CGSize(width: size.width.isFinite && size.width > 0 ? size.width : fitted.width,
@@ -287,6 +292,14 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
     override func layoutSubviews() {
         if bounds.width > 0 { typeset(width: bounds.width) }
         super.layoutSubviews()
+        // The visible frame intentionally ends before final trailing line spacing.
+        // Do not let UITextView use that clipped frame as a pagination container;
+        // the last glyph line still needs its full fragment to be laid out.
+        if renderedWidth > 0 {
+            let full = CGSize(width: renderedWidth, height: .greatestFiniteMagnitude)
+            if textContainer.size != full { textContainer.size = full }
+            layoutManager.ensureLayout(for: textContainer)
+        }
     }
 
     override var intrinsicContentSize: CGSize {
