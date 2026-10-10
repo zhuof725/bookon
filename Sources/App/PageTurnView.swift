@@ -59,7 +59,7 @@ struct PageContentView: View {
                     switch block {
                     case .paragraph(let t, let count, let url):
                         let continuation = page.continuationIndices.contains(blockIndex)
-                        InlineCommentParagraph(text: t, count: count,
+                        InlineCommentParagraph(text: page.displayParagraphs[blockIndex] ?? t, count: count,
                                                 fontSize: fontSize,
                                                 lineSpacing: lineSpacing + (page.justifiedGap ?? 0),
                                                 color: UIColor(fg),

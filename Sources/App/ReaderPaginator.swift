@@ -55,6 +55,7 @@ enum ReaderPaginator {
         var pageBlocks: [ContentBlock] = []
         var pageHeights: [Double] = []
         var continuations = Set<Int>()
+        var displayParagraphs: [Int: String] = [:]
         var used: CGFloat = 0
         var offset = 0
         var pageStart = 0
@@ -63,10 +64,11 @@ enum ReaderPaginator {
             guard !pageBlocks.isEmpty else { return }
             pages.append(BookPage(blocks: pageBlocks, startOffset: pageStart,
                                   continuationIndices: continuations,
-                                  blockHeights: pageHeights))
+                                  blockHeights: pageHeights, displayParagraphs: displayParagraphs))
             pageBlocks.removeAll(keepingCapacity: true)
             pageHeights.removeAll(keepingCapacity: true)
             continuations.removeAll(keepingCapacity: true)
+            displayParagraphs.removeAll(keepingCapacity: true)
             used = 0
             pageStart = offset
         }
@@ -82,7 +84,9 @@ enum ReaderPaginator {
         for block in blocks {
             switch block {
             case .paragraph(let text, let commentCount, let commentURL):
-                let chars = Array(text)
+                let rawChars = Array(text)
+                let chars = Array(ReaderTextLayout.displayText(for: text))
+                assert(rawChars.count == chars.count)
                 if chars.isEmpty { continue }
                 var index = 0
                 var continuation = false
@@ -132,7 +136,8 @@ enum ReaderPaginator {
 
                     let end = index + take
                     let isLast = end == chars.count
-                    let piece = String(chars[index..<end])
+                    let piece = String(rawChars[index..<end])
+                    let displayPiece = String(chars[index..<end])
                     let h = measured(measurer: measurer, chars: chars, start: index, count: take,
                                      commentCount: isLast ? commentCount : 0, width: width,
                                      fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
@@ -142,6 +147,7 @@ enum ReaderPaginator {
                         flush()
                         continue
                     }
+                    if displayPiece != piece { displayParagraphs[pageBlocks.count] = displayPiece }
                     append(.paragraph(text: piece,
                                       commentCount: isLast ? commentCount : 0,
                                       commentURL: isLast ? commentURL : nil),
@@ -170,7 +176,7 @@ enum ReaderPaginator {
             var rows: [(count: Int, height: CGFloat)] = []
             for (blockIndex, block) in page.blocks.enumerated() {
                 if case .paragraph(let text, let count, _) = block {
-                    rows.append(measurer.rows(text: text, count: count, width: width,
+                    rows.append(measurer.rows(text: page.displayParagraphs[blockIndex] ?? text, count: count, width: width,
                         fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
                         continuation: page.continuationIndices.contains(blockIndex)))
                 }

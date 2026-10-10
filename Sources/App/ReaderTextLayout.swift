@@ -114,11 +114,11 @@ enum ReaderTextLayout {
         style.paragraphSpacing = 0
         // TextKit 使用稳定字距决定合法断行；不为填满行尾拉散汉字。
         style.alignment = .left
-        // U+0022 在系统按词断行中是左右不明的 QU，可能把“王……\"他”
-        // 整串绑定而提早换行。仅纯中文的成对直引号对话使用逐字断行，
-        // 仍由下方委托保留开闭标点禁则；英文、数字尺寸、URL 等保持按词塑形。
+        // 只在显示副本中将纯中文成对 U+0022 识别为开/闭引号；原始正文不动，
+        // 每个替换仍占一个 UTF-16 单元，分页、进度和命中索引一一对应。
         let dialogueQuotes = chineseDialogueQuotes(in: text)
-        style.lineBreakMode = dialogueQuotes.isEmpty ? .byWordWrapping : .byCharWrapping
+        let displayed = displayText(for: text)
+        style.lineBreakMode = .byWordWrapping
         style.lineBreakStrategy = []
         style.hyphenationFactor = 0
         style.headIndent = 0
@@ -130,7 +130,7 @@ enum ReaderTextLayout {
             .paragraphStyle: style,
             baselineKey: NSNumber(value: Double(grid.baseline))
         ]
-        let result = NSMutableAttributedString(string: text, attributes: attrs)
+        let result = NSMutableAttributedString(string: displayed, attributes: attrs)
         var offset = 0
         var runStart = 0, runEnd = 0
         var runKern: CGFloat?
@@ -160,7 +160,7 @@ enum ReaderTextLayout {
             }
             pending.removeAll(keepingCapacity: true)
         }
-        for character in text {
+        for character in displayed {
             let scalar = character.unicodeScalars.count == 1 ? character.unicodeScalars.first?.value : nil
             let length = scalar.map { $0 > 0xFFFF ? 2 : 1 } ?? String(character).utf16.count
             if let scalar, isGridScalar(scalar) {
@@ -181,7 +181,7 @@ enum ReaderTextLayout {
         // PingFang SC draws authentic curved U+2018/19/1C/1D glyphs. Assign it
         // directly only to CJK-context quotes, with a proportional advance; do not
         // substitute characters or expand adjacent Han to hide a width mismatch.
-        let source = text as NSString
+        let source = displayed as NSString
         let quotes = CharacterSet(charactersIn: "‘’“”")
         for index in 0..<source.length {
             guard let scalar = UnicodeScalar(source.character(at: index)), quotes.contains(scalar),
@@ -221,6 +221,16 @@ enum ReaderTextLayout {
             }
         }
         return result
+    }
+
+    static func displayText(for original: String) -> String {
+        let replacements = chineseDialogueQuotes(in: original)
+        guard !replacements.isEmpty else { return original }
+        let copy = NSMutableString(string: original)
+        for (index, opening) in replacements {
+            copy.replaceCharacters(in: NSRange(location: index, length: 1), with: opening ? "“" : "”")
+        }
+        return copy as String
     }
 
     private static func chineseDialogueQuotes(in text: String) -> [(Int, Bool)] {
@@ -354,23 +364,6 @@ private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate {
         guard let storage = manager.textStorage, index > 0, index < storage.length else { return true }
         if let start = storage.attribute(ReaderTextLayout.commentTailKey, at: index,
                                          effectiveRange: nil) as? Int, index > start { return false }
-        guard let style = storage.attribute(.paragraphStyle, at: index,
-                                             effectiveRange: nil) as? NSParagraphStyle,
-              style.lineBreakMode == .byCharWrapping else { return true }
-        let source = storage.string as NSString
-        let before = source.character(at: index - 1), after = source.character(at: index)
-        if before == 0x0A || before == 0x0D { return true }
-        if source.rangeOfComposedCharacterSequence(at: index).location != index { return false }
-        if (storage.attribute(ReaderTextLayout.quoteOpeningKey, at: index - 1,
-                              effectiveRange: nil) as? Bool) == true { return false }
-        if (storage.attribute(ReaderTextLayout.quoteOpeningKey, at: index,
-                              effectiveRange: nil) as? Bool) == false { return false }
-        let opening = "（【《〈「『〔［｛‘“"
-        let closing = "，。！？，、；：）】》〉」』〕］｝’”"
-        if let scalar = UnicodeScalar(before), opening.unicodeScalars.contains(scalar) { return false }
-        if let scalar = UnicodeScalar(after), closing.unicodeScalars.contains(scalar) { return false }
-        // 不在同一省略号/破折号对内部断开。
-        if before == after && (before == 0x2026 || before == 0x2014 || before == 0x2E) { return false }
         return true
     }
 

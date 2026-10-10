@@ -25,6 +25,8 @@ struct BookPage: Equatable {
     /// 非章末纯正文页的垂直匀排余量；行间和段间各增加此值。
     /// nil 保留自然排版（滚动、章末、图片/卡片页及稀疏页）。
     var justifiedGap: Double? = nil
+    /// 等长度排版副本：跨页后沿用整段识别的开闭引号；blocks 仍是原文。
+    var displayParagraphs: [Int: String] = [:]
 }
 
 enum Paginator {

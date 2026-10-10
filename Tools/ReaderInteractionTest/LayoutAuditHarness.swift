@@ -115,6 +115,19 @@ private enum LayoutAuditInspection {
 
     private static func number(_ value: CGFloat) -> Double { Double(value) }
 
+    private static func mappedSource(_ original: String, _ displayed: String, count: Int) -> Bool {
+        let suffix = count > 0 ? " \u{FFFC}" : ""
+        guard displayed.hasSuffix(suffix), displayed.utf16.count == original.utf16.count + suffix.utf16.count else { return false }
+        let units = Array(displayed.utf16.prefix(original.utf16.count))
+        var quote = 0
+        for (index, unit) in original.utf16.enumerated() {
+            if unit == units[index] { continue }
+            guard unit == 0x22, units[index] == (quote.isMultiple(of: 2) ? 0x201C : 0x201D) else { return false }
+            quote += 1
+        }
+        return quote.isMultiple(of: 2)
+    }
+
     /// Isolated attributed copies expose native line-break policy without mutating production.
     private static func diagnosticBreaks(text: String, width: CGFloat, size: CGFloat) -> [String: [String]] {
         var result: [String: [String]] = [:]
@@ -149,6 +162,8 @@ private enum LayoutAuditInspection {
         var cases = 0, rowsChecked = 0, sourceOK = true, attachmentsOK = true
         var bubbles = 0, eligibleSuffixes = 0, orphanBubbles = 0, eligibleOrphans = 0
         var quoteBreaks = 0, hanOpportunity = 0, rowFailures: [[String: Any]] = []
+        var lineBreakRulesOK = true
+        var lineBreakViolations: [String] = []
         var quoteSample: [[String: Any]] = [], bubbleSample: [[String: Any]] = []
         var maxAcrossError: CGFloat = 0, acrossPairs = 0, maxWithinError: CGFloat = 0, withinPairs = 0
         var quoteProbe = "", mixedSourceOK = true, isolatedBreaks: [String: [String]] = [:]
@@ -169,7 +184,7 @@ private enum LayoutAuditInspection {
                         _ = render(work, text: text, count: count, width: width, size: size,
                                    line: line, continuation: index == 0)
                         let storage = work.textStorage.string
-                        sourceOK = sourceOK && storage == text + (count > 0 ? " \u{FFFC}" : "")
+                        sourceOK = sourceOK && mappedSource(text, storage, count: count)
                         let result = rows(work)
                         rowsChecked += result.count
                         for pair in zip(result, result.dropFirst()) {
@@ -210,6 +225,23 @@ private enum LayoutAuditInspection {
                             } else { attachmentsOK = false }
                         }
                         for (rowIndex, row) in result.enumerated() {
+                            if index == 4, rowIndex > 0 {
+                                let start = row.characters.location
+                                let first = ns.character(at: start)
+                                let previous = ns.character(at: start - 1)
+                                let closed = work.textStorage.attribute(NSAttributedString.Key("ReaderASCIIQuoteOpening"),
+                                    at: start, effectiveRange: nil) as? Bool
+                                let opened = work.textStorage.attribute(NSAttributedString.Key("ReaderASCIIQuoteOpening"),
+                                    at: start - 1, effectiveRange: nil) as? Bool
+                                let closing = CharacterSet(charactersIn: "，。！？；：、’”】》）")
+                                let bad = closed == false || opened == true
+                                    || UnicodeScalar(first).map { closing.contains($0) } == true
+                                    || (first == previous && (first == 0x2026 || first == 0x2014))
+                                if bad {
+                                    lineBreakRulesOK = false
+                                    lineBreakViolations.append("\(size)/\(width):\(row.text)")
+                                }
+                            }
                             // Only internal rows, never demand justified terminal rows be filled.
                             guard rowIndex + 1 < result.count,
                                   NSMaxRange(row.characters) < textLength else { continue }
@@ -247,7 +279,7 @@ private enum LayoutAuditInspection {
         for text in ["\"报告，鬼面王……\"他说。", "她说：“鬼面王……”然后离开。",
                      "don't change 12\" inch marks 👨‍👩‍👧‍👦 e\u{301}。"] {
             _ = render(work, text: text, count: 7, width: 351, size: 24, line: 8)
-            mixedSourceOK = mixedSourceOK && work.textStorage.string == text + " \u{FFFC}"
+            mixedSourceOK = mixedSourceOK && mappedSource(text, work.textStorage.string, count: 7)
         }
         isolatedBreaks = diagnosticBreaks(text: LayoutAuditFixture.texts[4], width: 362, size: 26)
         // Diagnostic-only glyph comparison; do not rewrite fixture or the rendered page.
@@ -267,7 +299,7 @@ private enum LayoutAuditInspection {
                  "advance": number(row.used.maxX), "unused": number(362 - row.used.maxX)]
             }
             if name.hasPrefix("ascii-") {
-                mixedSourceOK = mixedSourceOK && work.textStorage.string == text + " \u{FFFC}"
+                mixedSourceOK = mixedSourceOK && mappedSource(text, work.textStorage.string, count: 7)
             }
         }
         let config = LayoutAuditFixture.configuration(CGSize(width: 402, height: 874))
@@ -301,8 +333,10 @@ private enum LayoutAuditInspection {
                 let view = views[blockIndex]
                 let blockRows = rows(view)
                 pageParagraphs += 1
-                pageSourceOK = pageSourceOK && view.textStorage.string == text
+                let displayed = page.displayParagraphs[blockIndex] ?? ReaderTextLayout.displayText(for: text)
+                pageSourceOK = pageSourceOK && view.textStorage.string == displayed
                     + (count > 0 ? " \u{FFFC}" : "")
+                    && displayed.utf16.count == text.utf16.count
                     && abs(view.bounds.width - config.textWidth) <= 0.75
                 reconstructed += text
                 offset += text.count
@@ -393,6 +427,7 @@ private enum LayoutAuditInspection {
             "quoteBreaks": quoteBreaks, "hanOpportunities": hanOpportunity,
             "quoteSource": quoteProbe, "quoteRows": quoteSample,
             "quoteVariants": quoteVariants,
+            "lineBreakRulesOK": lineBreakRulesOK, "lineBreakViolations": lineBreakViolations,
             "bubble36Rows": bubbleSample, "failingRows": rowFailures,
             "isolatedNativeBreaks": isolatedBreaks, "pageRows": pageSamples,
             "pageCount": pages.count, "renderedPages": renderedPages,

@@ -22,11 +22,11 @@ final class LayoutAuditTests: XCTestCase {
         func number(_ key: String) throws -> Double {
             try XCTUnwrap(report[key] as? NSNumber, "Missing \(key): \(raw)").doubleValue
         }
-        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36"] {
+        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36", "lineBreakRulesOK"] {
             XCTAssertEqual(report[key] as? Bool, true, "\(key): \(raw)")
         }
         XCTAssertEqual(report["quoteSource"] as? String,
-            "\"报告，守望者赵空城，在老住宅区发现鬼面王……\"他打开耳麦，声音十分平静。 \u{FFFC}", raw)
+            "“报告，守望者赵空城，在老住宅区发现鬼面王……”他打开耳麦，声音十分平静。 \u{FFFC}", raw)
         XCTAssertEqual(try number("cases"), 7, raw)
         XCTAssertGreaterThan(try number("rowsChecked"), 45, raw)
         XCTAssertGreaterThan(try number("bubbles"), 50, raw)
