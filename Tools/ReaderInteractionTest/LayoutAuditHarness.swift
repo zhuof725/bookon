@@ -41,7 +41,8 @@ struct LayoutAuditHarnessView: View {
                 let config = LayoutAuditFixture.configuration(geometry.size)
                 let pages = ReaderPaginator.paginate(LayoutAuditFixture.blocks, configuration: config)
                 if !pages.isEmpty {
-                    let index = LayoutAuditFixture.referencePage(pages)
+                    let index = ProcessInfo.processInfo.arguments.contains("--layout-audit-first-page")
+                        ? 0 : LayoutAuditFixture.referencePage(pages)
                     PageContentView(page: pages[index], fontSize: 26, lineSpacing: 8,
                         fg: Color(red: 0.18, green: 0.18, blue: 0.17),
                         bg: Color(red: 0.985, green: 0.965, blue: 0.92),
@@ -50,7 +51,7 @@ struct LayoutAuditHarnessView: View {
                         paragraphSpacing: 8, leftMargin: 20, rightMargin: 20,
                         topMargin: 70, bottomMargin: 30)
                 }
-            }.ignoresSafeArea()
+            }.ignoresSafeArea().statusBarHidden(true)
         } else {
             VStack {
                 Button("检查原文换行、段间距与孤行气泡") { report = LayoutAuditInspection.snapshot() }
@@ -256,8 +257,17 @@ private enum LayoutAuditInspection {
                                 if isHan && unused >= grid.cellWidth - 0.5 { hanOpportunity += 1 }
                                 if index == 4 && row.text.contains("鬼面") && next.text.hasPrefix("王") {
                                     quoteBreaks += 1
-                                    if unused >= grid.cellWidth - 0.5 {
+                                    // 省略号和闭引号不能独立留在下一行；必须量完整
+                                    // 王……”单元，而不是只看一个王字是否放得下。
+                                    let unit = String(next.text.prefix(4))
+                                    let trial = ReaderTextLayout.makeTextView()
+                                    ReaderTextLayout.configure(trial)
+                                    _ = render(trial, text: unit, count: 0, width: width, size: size,
+                                        line: line, continuation: true)
+                                    let unitWidth = rows(trial).first?.used.maxX ?? width
+                                    if unused >= unitWidth - 0.5 {
                                         rowFailures.append(["kind": "premature-break-before-王",
+                                            "minimumLegalUnit": unit, "unitWidth": number(unitWidth),
                                             "font": number(size), "width": number(width),
                                             "line": number(line), "row": row.text,
                                             "next": next.text, "advance": number(row.used.maxX),
@@ -419,7 +429,29 @@ private enum LayoutAuditInspection {
             compactWindow.isHidden = true
             compactWindow.rootViewController = nil
         }
+        let spanningRaw = "\"报告，" + String(repeating: "他继续查看手提箱里的告示牌，保持平静。", count: 18) + "说完了。\""
+        let spanningConfig = ReaderPaginator.Configuration(pageSize: CGSize(width: 391, height: 260),
+            fontSize: 26, lineSpacing: 8, paragraphSpacing: 2)
+        let spanning = ReaderPaginator.paginate([.paragraph(text: spanningRaw, commentCount: 36, commentURL: nil)],
+                                               configuration: spanningConfig)
+        var joinedRaw = "", joinedDisplay = "", spanningOffsetsOK = true, spanningOffset = 0
+        for page in spanning {
+            spanningOffsetsOK = spanningOffsetsOK && page.startOffset == spanningOffset
+            for (blockIndex, block) in page.blocks.enumerated() {
+                guard case let .paragraph(text, _, _) = block else { continue }
+                let display = page.displayParagraphs[blockIndex] ?? text
+                spanningOffsetsOK = spanningOffsetsOK && text.utf16.count == display.utf16.count
+                spanningOffset += text.count
+                joinedRaw += text
+                joinedDisplay += display
+            }
+        }
+        let spanningOK = spanning.count > 2 && spanningOffsetsOK && joinedRaw == spanningRaw
+            && joinedDisplay == "“" + String(spanningRaw.dropFirst().dropLast()) + "”"
+        let untouched = ["6\" × 12\"", "The \"report\" is fine.", "他说\"未闭合", "don't change this"]
+        let nonDialogueOK = untouched.allSatisfy { ReaderTextLayout.displayText(for: $0) == $0 }
         let report: [String: Any] = [
+            "spanningQuoteOK": spanningOK, "spanningPages": spanning.count, "nonDialogueOK": nonDialogueOK,
             "cases": cases, "rowsChecked": rowsChecked, "sourceOK": sourceOK,
             "attachmentsOK": attachmentsOK, "mixedSourceOK": mixedSourceOK,
             "bubbles": bubbles, "eligibleSuffixes": eligibleSuffixes,

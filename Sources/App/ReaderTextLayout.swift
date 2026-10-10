@@ -212,8 +212,10 @@ enum ReaderTextLayout {
             // 原文、分隔字符和 UTF-16 索引均不改变；只限制排版断点。
             if let start = commentTailStart(in: text) {
                 let tail = NSRange(location: start, length: result.length - start)
-                let sample = result.attributedSubstring(from: tail)
+                let sample = result.attributedSubstring(from: NSRange(location: start, length: tail.length - 1))
+                // CoreText 不会自动计入 UIKit NSTextAttachment 的图像宽度。
                 let tailWidth = CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(sample), nil, nil, nil))
+                    + attachment.bounds.width
                 let usableWidth = width.map { max($0 - (start == 0 ? style.firstLineHeadIndent : 0), 1) }
                 if let usableWidth, tailWidth <= usableWidth {
                     result.addAttribute(commentTailKey, value: start, range: tail)

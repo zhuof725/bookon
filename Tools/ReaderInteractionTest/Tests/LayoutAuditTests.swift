@@ -22,7 +22,7 @@ final class LayoutAuditTests: XCTestCase {
         func number(_ key: String) throws -> Double {
             try XCTUnwrap(report[key] as? NSNumber, "Missing \(key): \(raw)").doubleValue
         }
-        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36", "lineBreakRulesOK"] {
+        for key in ["sourceOK", "attachmentsOK", "mixedSourceOK", "pageSourceOK", "pageBubble36", "lineBreakRulesOK", "spanningQuoteOK", "nonDialogueOK"] {
             XCTAssertEqual(report[key] as? Bool, true, "\(key): \(raw)")
         }
         XCTAssertEqual(report["quoteSource"] as? String,
@@ -53,7 +53,8 @@ final class LayoutAuditTests: XCTestCase {
         }
         let quotes = try XCTUnwrap(report["quoteRows"] as? [[String: Any]], raw)
         XCTAssertGreaterThan(quotes.count, 1, raw)
-        XCTAssertTrue(quotes.contains { ($0["text"] as? String)?.contains("鬼面") == true }, raw)
+        XCTAssertTrue(quotes.contains { ($0["text"] as? String)?.contains("在老住宅区发现鬼面王……”") == true }, raw)
+        XCTAssertGreaterThan(try number("spanningPages"), 2, raw)
         let bubble = try XCTUnwrap(report["bubble36Rows"] as? [[String: Any]], raw)
         XCTAssertGreaterThan(bubble.count, 1, raw)
         XCTAssertFalse(bubble.last?["text"] as? String == " \u{FFFC}", "Reported bubble 36 must not occupy an otherwise empty line: \(raw)")
@@ -75,5 +76,13 @@ final class LayoutAuditTests: XCTestCase {
         screenshot.name = "reported-layout-production-26pt-natural-page"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+        app.terminate()
+        app.launchArguments.append("--layout-audit-first-page")
+        app.launch()
+        XCTAssertTrue(app.staticTexts["reader-footer-page"].waitForExistence(timeout: 12))
+        let first = XCTAttachment(screenshot: app.screenshot())
+        first.name = "reported-dialogue-production-26pt-first-page"
+        first.lifetime = .keepAlways
+        add(first)
     }
 }
