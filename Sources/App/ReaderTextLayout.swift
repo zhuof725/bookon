@@ -4,6 +4,7 @@ import CoreText
 /// 渲染和分页共用 TextKit 1。只修改属性，不插入字格占位符或改写原文。
 enum ReaderTextLayout {
     fileprivate static let baselineKey = NSAttributedString.Key("ReaderTextBaseline")
+    fileprivate static let commentTailKey = NSAttributedString.Key("ReaderCommentTailStart")
 
     struct Metrics {
         let font: UIFont
@@ -199,8 +200,37 @@ enum ReaderTextLayout {
             let bubble = NSMutableAttributedString(attachment: attachment)
             bubble.addAttributes(attrs, range: NSRange(location: 0, length: bubble.length))
             result.append(bubble)
+            // 段评与最后一个完整字符及尾随句读一起换行，不让附件自己占一行。
+            // 原文、分隔字符和 UTF-16 索引均不改变；只限制排版断点。
+            if let start = commentTailStart(in: text) {
+                let tail = NSRange(location: start, length: result.length - start)
+                let sample = result.attributedSubstring(from: tail)
+                let tailWidth = CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(sample), nil, nil, nil))
+                let usableWidth = width.map { max($0 - (start == 0 ? style.firstLineHeadIndent : 0), 1) }
+                if let usableWidth, tailWidth <= usableWidth {
+                    result.addAttribute(commentTailKey, value: start, range: tail)
+                }
+            }
         }
         return result
+    }
+
+    private static func commentTailStart(in text: String) -> Int? {
+        guard !text.isEmpty else { return nil }
+        let closing = CharacterSet(charactersIn: "，。、；：！？,.!?;:’”\"'）】》〉」』〕］｝…")
+        var boundary = text.endIndex
+        var suffixCount = 0
+        while boundary > text.startIndex {
+            let previous = text.index(before: boundary)
+            let character = text[previous]
+            if character.isNewline { return nil }
+            let isClosing = character.unicodeScalars.allSatisfy { closing.contains($0) }
+            boundary = previous
+            suffixCount += 1
+            if !isClosing && !character.isWhitespace { return text[..<boundary].utf16.count }
+            if suffixCount > 12 { return nil }
+        }
+        return 0
     }
 
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
@@ -285,6 +315,23 @@ enum ReaderTextLayout {
 /// NSLayoutManager.delegate 是弱引用，静态实例确保渲染器/分页器始终使用同一规则。
 private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate {
     static let shared = ReaderLineMetrics()
+
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldBreakLineByWordBeforeCharacterAt charIndex: Int) -> Bool {
+        allowsBreak(layoutManager, at: charIndex)
+    }
+
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldBreakLineByHyphenatingBeforeCharacterAt charIndex: Int) -> Bool {
+        allowsBreak(layoutManager, at: charIndex)
+    }
+
+    private func allowsBreak(_ manager: NSLayoutManager, at index: Int) -> Bool {
+        guard let storage = manager.textStorage, index > 0, index < storage.length,
+              let start = storage.attribute(ReaderTextLayout.commentTailKey, at: index,
+                                            effectiveRange: nil) as? Int else { return true }
+        return index <= start
+    }
 
     func layoutManager(_ layoutManager: NSLayoutManager,
                        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<CGRect>,

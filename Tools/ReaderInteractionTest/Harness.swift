@@ -18,7 +18,9 @@ struct HarnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--continuous-scroll-mode") {
+            if ProcessInfo.processInfo.arguments.contains("--layout-audit-mode") {
+                LayoutAuditHarnessView()
+            } else if ProcessInfo.processInfo.arguments.contains("--continuous-scroll-mode") {
                 ContinuousScrollHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--typography-mode") {
                 TypographyHarnessView()
