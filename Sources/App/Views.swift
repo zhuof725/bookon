@@ -500,6 +500,11 @@ struct ReaderView: View {
         }.joined(separator: "|")
     }
 
+    private func scrollParagraphLeadingGap(in blocks: [ContentBlock], at index: Int) -> CGFloat {
+        guard index > 0, case .paragraph = blocks[index - 1], case .paragraph = blocks[index] else { return 0 }
+        return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(settings.lineSpacing), paragraphSpacing: 0)
+    }
+
     private func scrollChapterBody(_ content: ScrollReaderChapter) -> some View {
         let chapter = chapters[content.id]
         return VStack(alignment: .leading, spacing: CGFloat(settings.paragraphSpacing)) {
@@ -514,7 +519,10 @@ struct ReaderView: View {
                     .padding(.bottom, max(CGFloat(settings.fontSize) * 0.8, 14))
                     .contentShape(Rectangle())
                     .onTapGesture { toggleBars() }
-                ForEach(Array(content.readingBlocks.enumerated()), id: \.offset) { _, block in blockView(block) }
+                ForEach(Array(content.readingBlocks.enumerated()), id: \.offset) { index, block in
+                    blockView(block)
+                        .padding(.top, scrollParagraphLeadingGap(in: content.readingBlocks, at: index))
+                }
             }
         }
         .foregroundStyle(theme.fg)

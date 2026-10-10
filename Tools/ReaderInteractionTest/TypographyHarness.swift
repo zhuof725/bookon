@@ -10,7 +10,7 @@ private struct TypographyScrollParagraphs: View {
     let size: CGFloat
     let spacing: CGFloat
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ReaderTextLayout.paragraphGap(lineSpacing: spacing, paragraphSpacing: 8)) {
             ForEach(TypographyFixtures.paragraphs.indices, id: \.self) { index in
                 InlineCommentParagraph(text: TypographyFixtures.paragraphs[index], count: 82,
                     fontSize: size, lineSpacing: spacing, color: .black, onTap: {})
@@ -141,6 +141,8 @@ private enum TypographyInspection {
         defer { window.isHidden = true; window.rootViewController = nil }
         var widthError: CGFloat = 0, gridError: CGFloat = 0, heightError: CGFloat = 0
         var glyphs = 0, paragraphs = 0
+        var rhythmError: CGFloat = 0
+        var rhythmBoundaries = 0
         var sourceOK = true, bubbleOK = true
         let measurer = ReaderTextLayout.Measurer()
         func descendants(_ root: UIView) -> [CommentTextView] {
@@ -159,6 +161,15 @@ private enum TypographyInspection {
             let expectedWidth = width - 40
             let grid = ReaderTextLayout.metrics(fontSize: 19, width: expectedWidth)
             let origins = views.map { $0.convert(CGPoint.zero, to: controller.view).x }
+            let ordered = views.sorted { $0.convert(.zero, to: controller.view).y < $1.convert(.zero, to: controller.view).y }
+            for pair in zip(ordered, ordered.dropFirst()) {
+                if let last = lines(pair.0).last, let first = lines(pair.1).first {
+                    let delta = pair.1.convert(CGPoint(x: 0, y: first.baseline), to: controller.view).y
+                        - pair.0.convert(CGPoint(x: 0, y: last.baseline), to: controller.view).y
+                    rhythmError = max(rhythmError, abs(delta - grid.lineHeight - 8 - 8))
+                    rhythmBoundaries += 1
+                }
+            }
             if let first = origins.first {
                 for x in origins { widthError = max(widthError, abs(x - first)) }
             }
@@ -198,7 +209,8 @@ private enum TypographyInspection {
                 } else { bubbleOK = false }
             }
         }
-        return ["scrollWidthError": Double(widthError), "scrollGridError": Double(gridError),
+        return ["scrollRhythmError": Double(rhythmError), "scrollRhythmBoundaries": rhythmBoundaries,
+                "scrollWidthError": Double(widthError), "scrollGridError": Double(gridError),
                 "scrollHeightError": Double(heightError), "scrollParagraphs": paragraphs,
                 "scrollGlyphs": glyphs, "scrollSourceOK": sourceOK, "scrollBubbleOK": bubbleOK]
     }
@@ -500,7 +512,7 @@ private enum TypographyInspection {
                             terminalOK = terminalOK && abs(pair.1.baseline - pair.0.baseline - grid.lineHeight - 8) <= 0.5
                         }
                         if blockIndex < page.blockHeights.count {
-                            expectedY += CGFloat(page.blockHeights[blockIndex]) + config.paragraphSpacing
+                            expectedY += CGFloat(page.blockHeights[blockIndex]) + config.blockSpacing
                         } else { terminalOK = false }
                     }
                 }
@@ -522,6 +534,123 @@ private enum TypographyInspection {
         return ["bottomBaselineError": Double(baselineError), "bottomOverflow": Double(overflow),
                 "bottomTopError": Double(topError), "bottomPages": checked, "bottomContinuations": continued,
                 "bottomComments": comments, "bottomTerminalOK": terminalOK, "bottomSpecialOK": specialOK]
+    }
+
+    /// Inspect rendered production pages, not just style values or measured heights.
+    /// H + L within a paragraph; H + L + P across paragraphs; page residual E
+    /// adds equally to BOTH kinds of gap. Terminal pages always have E == 0.
+    private static func rhythmReport() -> [String: Any] {
+        var within: CGFloat = 0, across: CGFloat = 0, bottom: CGFloat = 0, height: CGFloat = 0
+        var nativeError: CGFloat = 0, bubbleGrowth: CGFloat = 0
+        var pairs = 0, boundaries = 0, aligned = 0, terminals = 0, cases = 0
+        var sourceOK = true, terminalOK = true, bubbleOK = true
+        var samples: [[String: Any]] = []
+        func descendants(_ root: UIView) -> [CommentTextView] {
+            (root as? CommentTextView).map { [$0] } ?? root.subviews.flatMap { descendants($0) }
+        }
+        let settings: [(CGFloat, CGFloat, CGFloat)] = [CGFloat(0), 8, 16, 24].flatMap { line in
+            [CGFloat(0), 2, 8, 16].map { (CGFloat(24), line, $0) }
+        } + [(19, 16, 2), (36, 24, 0), (12, 8, 16)]
+        for (size, line, paragraph) in settings {
+            cases += 1
+            var config = ReaderPaginator.Configuration(pageSize: CGSize(width: 402, height: 874),
+                fontSize: size, lineSpacing: line, paragraphSpacing: paragraph,
+                leftInset: 20, rightInset: 20, topInset: 70, bottomInset: 30)
+            config.chapterTitle = "1、归零"
+            let blocks = ReferenceTypography.blocks + ReferenceTypography.blocks
+            let pages = ReaderPaginator.paginate(blocks, configuration: config)
+            let grid = ReaderTextLayout.metrics(fontSize: size, width: config.textWidth)
+            let probe = ReaderTextLayout.makeTextView()
+            ReaderTextLayout.configure(probe)
+            let natural = layout(probe, text: ReferenceTypography.texts[1], count: 82,
+                width: config.textWidth, size: size, spacing: line)
+            let probeRows = lines(probe)
+            let raw = probe.sizeThatFits(CGSize(width: config.textWidth, height: .greatestFiniteMagnitude)).height
+            let expectedNatural = CGFloat(probeRows.count) * grid.lineHeight + CGFloat(max(probeRows.count - 1, 0)) * line
+            nativeError = max(nativeError, abs(natural - expectedNatural))
+            for row in probeRows { nativeError = max(nativeError, abs(row.rect.height - grid.lineHeight - line)) }
+            var offset = 0, reconstructed = ""
+            var exampleWithin: CGFloat = 0, exampleAcross: CGFloat = 0, exampleExtra: CGFloat = 0
+            for (pageIndex, page) in pages.enumerated() {
+                sourceOK = sourceOK && page.startOffset == offset
+                let extra = CGFloat(page.justifiedGap ?? 0)
+                let isTerminal = pageIndex == pages.count - 1
+                if isTerminal { terminalOK = terminalOK && page.justifiedGap == nil; terminals += 1 }
+                let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
+                    fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
+                    pageCount: pages.count, onTapComment: { _ in }, paragraphSpacing: Double(paragraph),
+                    leftMargin: 20, rightMargin: 20, topMargin: 70, bottomMargin: 30, showsChapterTitle: true)
+                let host = UIHostingController(rootView: content)
+                let window = UIWindow(frame: CGRect(origin: .zero, size: config.pageSize))
+                window.rootViewController = host; window.isHidden = false; host.view.frame = window.bounds
+                for _ in 0..<3 { host.view.setNeedsLayout(); host.view.layoutIfNeeded() }
+                let views = descendants(host.view).sorted {
+                    $0.convert(.zero, to: host.view).y < $1.convert(.zero, to: host.view).y
+                }
+                sourceOK = sourceOK && views.count == page.blocks.count
+                var previousBaseline: CGFloat?
+                let top = config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
+                if let first = views.first {
+                    height = max(height, abs(first.convert(.zero, to: host.view).y - top))
+                }
+                for (index, view) in views.enumerated() {
+                    guard index < page.blocks.count,
+                          case let .paragraph(text, count, _) = page.blocks[index] else { sourceOK = false; continue }
+                    offset += text.count; reconstructed += text
+                    sourceOK = sourceOK && view.textStorage.string == text + (count > 0 ? " \u{FFFC}" : "")
+                    let rows = lines(view)
+                    for pair in zip(rows, rows.dropFirst()) {
+                        let delta = pair.1.baseline - pair.0.baseline
+                        within = max(within, abs(delta - grid.lineHeight - line - extra)); pairs += 1
+                        if pageIndex == 0 { exampleWithin = delta; exampleExtra = extra }
+                    }
+                    if let first = rows.first, let previousBaseline {
+                        let delta = view.convert(CGPoint(x: 0, y: first.baseline), to: host.view).y - previousBaseline
+                        across = max(across, abs(delta - grid.lineHeight - line - paragraph - extra)); boundaries += 1
+                        if pageIndex == 0 { exampleAcross = delta }
+                    }
+                    if let last = rows.last {
+                        previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
+                        height = max(height, abs(view.bounds.height - last.rect.minY - grid.lineHeight))
+                    }
+                    if let bubble = view.bubbleRect {
+                        _ = layout(probe, text: text, count: count, width: config.textWidth, size: size,
+                            spacing: 0, continuation: page.continuationIndices.contains(index))
+                        if let unspaced = probe.bubbleRect {
+                            bubbleGrowth = max(bubbleGrowth, abs(bubble.height - unspaced.height))
+                        } else { bubbleOK = false }
+                        bubbleOK = bubbleOK && view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.midY))
+                            && !view.isBubble(at: CGPoint(x: bubble.midX, y: bubble.maxY + 2))
+                            && bubble.maxY <= view.bounds.height + 0.75
+                    }
+                }
+                if let last = previousBaseline {
+                    let target = config.pageSize.height - config.bottomInset - 24 - grid.lineHeight + grid.baseline
+                    if page.justifiedGap != nil { bottom = max(bottom, abs(last - target)); aligned += 1 }
+                    height = max(height, last - target)
+                }
+                window.isHidden = true; window.rootViewController = nil
+            }
+            sourceOK = sourceOK && reconstructed == ReferenceTypography.texts.joined() + ReferenceTypography.texts.joined()
+            samples.append(["font": Double(size), "line": Double(line), "paragraph": Double(paragraph),
+                "lineHeight": Double(grid.lineHeight), "rawTextKitHeight": Double(raw), "trimmedHeight": Double(natural),
+                "rows": probeRows.count, "within": Double(exampleWithin), "across": Double(exampleAcross),
+                "extra": Double(exampleExtra)])
+        }
+        let sparseConfig = ReaderPaginator.Configuration(pageSize: CGSize(width: 402, height: 180),
+            fontSize: 24, lineSpacing: 8, paragraphSpacing: 2)
+        let sparse = ReaderPaginator.paginate([
+            .paragraph(text: "短段。", commentCount: 0, commentURL: nil),
+            .paragraph(text: "另一段。", commentCount: 0, commentURL: nil),
+            .image(src: "", clickURL: nil)], configuration: sparseConfig)
+        return ["rhythmWithinError": Double(within), "rhythmAcrossError": Double(across),
+            "rhythmBottomError": Double(bottom), "rhythmHeightError": Double(height),
+            "rhythmNativeError": Double(nativeError), "rhythmBubbleGrowth": Double(bubbleGrowth),
+            "rhythmPairs": pairs, "rhythmBoundaries": boundaries, "rhythmAligned": aligned,
+            "rhythmTerminals": terminals, "rhythmCases": cases, "rhythmSourceOK": sourceOK,
+            "rhythmTerminalOK": terminalOK, "rhythmBubbleOK": bubbleOK,
+            "rhythmSparseOK": sparse.count > 1 && sparse[0].blocks.count == 2 && sparse[0].justifiedGap == nil,
+            "rhythmSamples": samples]
     }
 
     static func snapshot() -> String {
@@ -723,6 +852,7 @@ private enum TypographyInspection {
             "sourceOK": reconstructed == source + "短尾段", "continuations": continuationCount,
             "commentCount": commentCount, "pages": pages.count, "worstBaseline": worstBaseline
         ]
+        report.merge(rhythmReport()) { _, new in new }
         report.merge(bottomReport()) { _, new in new }
         report.merge(scrollHostReport()) { _, new in new }
         report.merge(quoteGlyphReport()) { _, new in new }

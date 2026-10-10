@@ -227,8 +227,33 @@ enum ReaderTextLayout {
         view.textContainer.lineFragmentPadding = 0
     }
 
+    /// Canonical paragraph bounds end at the last line box, not TextKit's trailing
+    /// line-fragment spacing. Pagination, intrinsic sizing and scroll use these bounds.
+    /// Every following paragraph explicitly adds lineSpacing + paragraphSpacing.
+    static func paragraphGap(lineSpacing: CGFloat, paragraphSpacing: CGFloat) -> CGFloat {
+        max(lineSpacing, 0) + max(paragraphSpacing, 0)
+    }
+
     static func height(of view: UITextView, width: CGFloat) -> CGFloat {
-        ceil(view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        _ = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return rows(of: view).height
+    }
+
+    private static func rows(of view: UITextView) -> (count: Int, height: CGFloat) {
+        let manager = view.layoutManager
+        manager.ensureLayout(for: view.textContainer)
+        var count = 0
+        var bottom: CGFloat = 0
+        manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: view.textContainer)) {
+            rect, used, _, glyphs, _ in
+            guard glyphs.length > 0 else { return }
+            count += 1
+            let index = manager.characterIndexForGlyph(at: glyphs.location)
+            let style = view.textStorage.attribute(.paragraphStyle, at: index,
+                effectiveRange: nil) as? NSParagraphStyle
+            bottom = rect.minY + (style?.minimumLineHeight ?? used.height)
+        }
+        return (count, bottom)
     }
 
     /// 一个分页请求复用一个测量 UITextView；必须在主线程使用。
@@ -244,17 +269,7 @@ enum ReaderTextLayout {
                   lineSpacing: CGFloat, continuation: Bool) -> (count: Int, height: CGFloat) {
             _ = height(text: text, count: count, width: width, fontSize: fontSize,
                        lineSpacing: lineSpacing, continuation: continuation)
-            let manager = view.layoutManager
-            manager.ensureLayout(for: view.textContainer)
-            var count = 0
-            var bottom: CGFloat = 0
-            manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: view.textContainer)) {
-                rect, _, _, glyphs, _ in
-                guard glyphs.length > 0 else { return }
-                count += 1
-                bottom = rect.minY + ReaderTextLayout.metrics(fontSize: fontSize, width: width).lineHeight
-            }
-            return (count, bottom)
+            return ReaderTextLayout.rows(of: view)
         }
 
         func height(text: String, count: Int, width: CGFloat, fontSize: CGFloat,

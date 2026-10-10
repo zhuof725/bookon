@@ -34,6 +34,12 @@ struct PageContentView: View {
     var volumeTitle: String? = nil
     var showsChapterTitle = false
 
+    private func paragraphLeadingGap(at index: Int) -> CGFloat {
+        guard index > 0, case .paragraph = page.blocks[index - 1] else { return 0 }
+        return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: 0)
+            + CGFloat(page.justifiedGap ?? 0)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             bg.ignoresSafeArea()
@@ -62,7 +68,10 @@ struct PageContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .frame(height: page.justifiedGap != nil && blockIndex < page.blockHeights.count
                                 ? CGFloat(page.blockHeights[blockIndex]) : nil, alignment: .top)
-                            .padding(.top, blockIndex > 0 ? CGFloat(page.justifiedGap ?? 0) : 0)
+                            // The canonical text height excludes trailing line spacing.
+                            // At a paragraph boundary restore the base gap AND the page's
+                            // per-line residual; VStack contributes only paragraph extra.
+                            .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .hotComment(let label, let t, let click):
                         HStack(spacing: 10) {
                             Text(label).font(.system(size: max(fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)

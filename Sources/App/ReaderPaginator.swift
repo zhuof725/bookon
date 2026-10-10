@@ -17,7 +17,14 @@ enum ReaderPaginator {
         /// PageContentView 底部页码栏及与正文间的固定距离。
         var footerHeight: CGFloat = 16
         var footerGap: CGFloat = 8
-        var blockSpacing: CGFloat { paragraphSpacing }
+        var blockSpacing: CGFloat {
+            ReaderTextLayout.paragraphGap(lineSpacing: lineSpacing, paragraphSpacing: paragraphSpacing)
+        }
+        func spacing(before block: ContentBlock, after previous: ContentBlock?) -> CGFloat {
+            guard let previous else { return 0 }
+            if case .paragraph = previous, case .paragraph = block { return blockSpacing }
+            return max(paragraphSpacing, 0)
+        }
         var headerHeight: CGFloat {
             chapterTitle.isEmpty ? 0 : ChapterTitleLayout.height(title: chapterTitle,
                 fontSize: fontSize, width: textWidth) + ChapterTitleLayout.bottomSpacing(fontSize: fontSize) + paragraphSpacing
@@ -65,7 +72,7 @@ enum ReaderPaginator {
         }
 
         func append(_ block: ContentBlock, height: CGFloat, continuation: Bool = false) {
-            if !pageBlocks.isEmpty { used += configuration.blockSpacing }
+            used += configuration.spacing(before: block, after: pageBlocks.last)
             if continuation { continuations.insert(pageBlocks.count) }
             pageBlocks.append(block)
             pageHeights.append(Double(height))
@@ -82,7 +89,7 @@ enum ReaderPaginator {
                 while index < chars.count {
                     let remaining = chars.count - index
                     let capacity = pages.isEmpty ? configuration.firstPageBodyHeight : configuration.bodyHeight
-                    let room = capacity - used - (pageBlocks.isEmpty ? 0 : configuration.blockSpacing)
+                    let room = capacity - used - configuration.spacing(before: block, after: pageBlocks.last)
                     if room <= 0.5, !pageBlocks.isEmpty {
                         flush()
                         continue
@@ -108,7 +115,7 @@ enum ReaderPaginator {
                                              fontSize: configuration.fontSize,
                                              lineSpacing: configuration.lineSpacing,
                                              continuation: continuation)
-                            if h + (pageBlocks.isEmpty ? 0 : configuration.blockSpacing) <= capacity - used + 0.01 {
+                            if h + configuration.spacing(before: block, after: pageBlocks.last) <= capacity - used + 0.01 {
                                 best = mid
                                 low = mid + 1
                             } else {
@@ -130,7 +137,7 @@ enum ReaderPaginator {
                                      commentCount: isLast ? commentCount : 0, width: width,
                                      fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
                                      continuation: continuation)
-                    if used + h + (pageBlocks.isEmpty ? 0 : configuration.blockSpacing) > capacity + 0.01,
+                    if used + h + configuration.spacing(before: block, after: pageBlocks.last) > capacity + 0.01,
                        !pageBlocks.isEmpty {
                         flush()
                         continue
@@ -147,7 +154,7 @@ enum ReaderPaginator {
             default:
                 let h = nonTextHeight(block, configuration: configuration)
                 let capacity = pages.isEmpty ? configuration.firstPageBodyHeight : configuration.bodyHeight
-                if used + h + (pageBlocks.isEmpty ? 0 : configuration.blockSpacing) > capacity + 0.01,
+                if used + h + configuration.spacing(before: block, after: pageBlocks.last) > capacity + 0.01,
                    !pageBlocks.isEmpty {
                     flush()
                 }

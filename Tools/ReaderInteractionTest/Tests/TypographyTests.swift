@@ -20,6 +20,19 @@ final class TypographyTests: XCTestCase {
         detail.name = "production-glyph-metrics"
         detail.lifetime = .keepAlways
         add(detail)
+        // Native TextKit + rendered PageContentView, including the reported 24 pt
+        // screenshot and all 16 line/paragraph combinations (0/8/16/24 x 0/2/8/16).
+        for key in ["rhythmWithinError", "rhythmAcrossError", "rhythmBottomError", "rhythmHeightError", "rhythmNativeError", "rhythmBubbleGrowth"] {
+            XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(metrics.label)")
+        }
+        XCTAssertEqual(try number("rhythmCases"), 19, metrics.label)
+        XCTAssertEqual(try number("rhythmTerminals"), 19, metrics.label)
+        XCTAssertGreaterThan(try number("rhythmPairs"), 100, metrics.label)
+        XCTAssertGreaterThan(try number("rhythmBoundaries"), 100, metrics.label)
+        XCTAssertGreaterThan(try number("rhythmAligned"), 15, metrics.label)
+        for key in ["rhythmSourceOK", "rhythmTerminalOK", "rhythmBubbleOK", "rhythmSparseOK"] {
+            XCTAssertEqual(report[key] as? Bool, true, "\(key): \(metrics.label)")
+        }
         XCTAssertEqual(report["quoteCorrectFont"] as? Bool, true, metrics.label)
         XCTAssertEqual(report["quoteDistinctGlyphs"] as? Bool, true, metrics.label)
         XCTAssertEqual(report["quoteSourceOK"] as? Bool, true, metrics.label)
@@ -52,6 +65,8 @@ final class TypographyTests: XCTestCase {
         for key in ["scrollWidthError", "scrollGridError"] {
             XCTAssertLessThanOrEqual(try number(key), 0.25, metrics.label)
         }
+        XCTAssertLessThanOrEqual(try number("scrollRhythmError"), 0.75, metrics.label)
+        XCTAssertEqual(try number("scrollRhythmBoundaries"), 4, metrics.label)
         XCTAssertLessThanOrEqual(try number("scrollHeightError"), 0.5, metrics.label)
         XCTAssertEqual(try number("scrollParagraphs"), 6, metrics.label)
         XCTAssertGreaterThan(try number("scrollGlyphs"), 100, metrics.label)
