@@ -406,6 +406,8 @@ private enum LayoutAuditInspection {
         guard JSONSerialization.isValidJSONObject(report),
               let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8) else { return "invalid-json" }
-        return json
+        // Accessibility strips literal attachment placeholders from labels; JSON
+        // escaping preserves the source code unit for the UI test to decode.
+        return json.replacingOccurrences(of: "\u{FFFC}", with: "\\ufffc")
     }
 }

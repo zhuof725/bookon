@@ -380,7 +380,12 @@ private enum TypographyInspection {
                     let terminal = NSMaxRange(cr) >= ns.length
                     if terminal { terminalRows += 1 }
                     else {
-                        edgeCells = max(edgeCells, max(0, width - row.used.maxX) / grid.cellWidth)
+                        let end = NSMaxRange(cr)
+                        // 段末字+闭标点+气泡整体回退允许前一行留白，不能靠拉字距填补。
+                        let tailStart = end < view.textStorage.length
+                            ? view.textStorage.attribute(NSAttributedString.Key("ReaderCommentTailStart"),
+                                at: end, effectiveRange: nil) as? Int : nil
+                        if tailStart != end { edgeCells = max(edgeCells, max(0, width - row.used.maxX) / grid.cellWidth) }
                         checked += 1
                     }
                     samples.append(["size": Double(size), "width": Double(width), "text": part,

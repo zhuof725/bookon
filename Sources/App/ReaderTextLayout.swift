@@ -5,6 +5,7 @@ import CoreText
 enum ReaderTextLayout {
     fileprivate static let baselineKey = NSAttributedString.Key("ReaderTextBaseline")
     fileprivate static let commentTailKey = NSAttributedString.Key("ReaderCommentTailStart")
+    fileprivate static let quoteOpeningKey = NSAttributedString.Key("ReaderASCIIQuoteOpening")
 
     struct Metrics {
         let font: UIFont
@@ -111,10 +112,14 @@ enum ReaderTextLayout {
         style.maximumLineHeight = grid.lineHeight
         // 段间距和标题仍由外层布局计算；不把最后一行/章尾撑满。
         style.paragraphSpacing = 0
-        // TextKit 先按整字格及紧凑标点确定合法断行。
-        // 行片段确定后再平衡汉字间余量，标点和段末行保持原来的间隔。
+        // TextKit 使用稳定字距决定合法断行；不为填满行尾拉散汉字。
         style.alignment = .left
-        style.lineBreakMode = .byWordWrapping
+        // U+0022 在系统按词断行中是左右不明的 QU，可能把“王……\"他”
+        // 整串绑定而提早换行。仅纯中文的成对直引号对话使用逐字断行，
+        // 仍由下方委托保留开闭标点禁则；英文、数字尺寸、URL 等保持按词塑形。
+        let dialogueQuotes = chineseDialogueQuotes(in: text)
+        style.lineBreakMode = dialogueQuotes.isEmpty ? .byWordWrapping : .byCharWrapping
+        style.lineBreakStrategy = []
         style.hyphenationFactor = 0
         style.headIndent = 0
         style.tailIndent = 0
@@ -184,6 +189,9 @@ enum ReaderTextLayout {
             result.addAttributes([.font: grid.quoteFont, .kern: 0, .ligature: 0],
                                  range: NSRange(location: index, length: 1))
         }
+        for (position, opening) in dialogueQuotes {
+            result.addAttribute(quoteOpeningKey, value: opening, range: NSRange(location: position, length: 1))
+        }
         result.addAttribute(.paragraphStyle, value: style,
                             range: NSRange(location: 0, length: result.length))
         if count > 0 {
@@ -213,6 +221,22 @@ enum ReaderTextLayout {
             }
         }
         return result
+    }
+
+    private static func chineseDialogueQuotes(in text: String) -> [(Int, Bool)] {
+        var positions: [Int] = [], offset = 0
+        var hasHan = false
+        for scalar in text.unicodeScalars {
+            let value = scalar.value
+            // 不改变英文单词、网址、尺寸符号、数字或其他字母的断行。
+            if CharacterSet.letters.contains(scalar) && !isGridScalar(value) { return [] }
+            if CharacterSet.decimalDigits.contains(scalar) || value == 0x2F || value == 0x5C { return [] }
+            if value == 0x22 { positions.append(offset) }
+            if (0x4E00...0x9FFF).contains(value) { hasHan = true }
+            offset += value > 0xFFFF ? 2 : 1
+        }
+        guard hasHan, !positions.isEmpty, positions.count.isMultiple(of: 2) else { return [] }
+        return positions.enumerated().map { ($0.element, $0.offset.isMultiple(of: 2)) }
     }
 
     private static func commentTailStart(in text: String) -> Int? {
@@ -327,10 +351,27 @@ private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate {
     }
 
     private func allowsBreak(_ manager: NSLayoutManager, at index: Int) -> Bool {
-        guard let storage = manager.textStorage, index > 0, index < storage.length,
-              let start = storage.attribute(ReaderTextLayout.commentTailKey, at: index,
-                                            effectiveRange: nil) as? Int else { return true }
-        return index <= start
+        guard let storage = manager.textStorage, index > 0, index < storage.length else { return true }
+        if let start = storage.attribute(ReaderTextLayout.commentTailKey, at: index,
+                                         effectiveRange: nil) as? Int, index > start { return false }
+        guard let style = storage.attribute(.paragraphStyle, at: index,
+                                             effectiveRange: nil) as? NSParagraphStyle,
+              style.lineBreakMode == .byCharWrapping else { return true }
+        let source = storage.string as NSString
+        let before = source.character(at: index - 1), after = source.character(at: index)
+        if before == 0x0A || before == 0x0D { return true }
+        if source.rangeOfComposedCharacterSequence(at: index).location != index { return false }
+        if (storage.attribute(ReaderTextLayout.quoteOpeningKey, at: index - 1,
+                              effectiveRange: nil) as? Bool) == true { return false }
+        if (storage.attribute(ReaderTextLayout.quoteOpeningKey, at: index,
+                              effectiveRange: nil) as? Bool) == false { return false }
+        let opening = "（【《〈「『〔［｛‘“"
+        let closing = "，。！？，、；：）】》〉」』〕］｝’”"
+        if let scalar = UnicodeScalar(before), opening.unicodeScalars.contains(scalar) { return false }
+        if let scalar = UnicodeScalar(after), closing.unicodeScalars.contains(scalar) { return false }
+        // 不在同一省略号/破折号对内部断开。
+        if before == after && (before == 0x2026 || before == 0x2014 || before == 0x2E) { return false }
+        return true
     }
 
     func layoutManager(_ layoutManager: NSLayoutManager,
