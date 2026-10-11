@@ -123,12 +123,9 @@ struct BookDetailScreen: View {
             if typeSize.isAccessibilitySize {
                 stackedSummary
             } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 16) {
-                        cover
-                        metadata.frame(minWidth: 136, maxWidth: .infinity, alignment: .leading)
-                    }
-                    stackedSummary
+                HStack(alignment: .top, spacing: 14) {
+                    cover
+                    metadata.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             ViewThatFits(in: .horizontal) {
