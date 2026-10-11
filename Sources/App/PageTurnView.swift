@@ -48,12 +48,12 @@ struct PageContentView: View {
                     VolumeTitleView(title: volumeTitle, foreground: fg)
                     Spacer(minLength: 8)
                 } else {
-                VStack(alignment: .leading, spacing: CGFloat(paragraphSpacing)) {
                 if showsChapterTitle && pageNumber == 1 && !title.isEmpty {
                     ChapterTitleView(title: title, fontSize: CGFloat(fontSize), color: UIColor(fg))
                         .frame(maxWidth: .infinity)
-                        .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)))
+                        .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)) + CGFloat(paragraphSpacing))
                 }
+                VStack(alignment: .leading, spacing: CGFloat(paragraphSpacing)) {
                 ForEach(Array(page.blocks.enumerated()), id: \.offset) { blockIndex, block in
                     switch block {
                     case .paragraph(let t, let count, let url):
@@ -95,8 +95,9 @@ struct PageContentView: View {
                     }
                 }
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
-                Spacer(minLength: 0)
             }
             .foregroundStyle(fg)
             .padding(.leading, CGFloat(leftMargin))

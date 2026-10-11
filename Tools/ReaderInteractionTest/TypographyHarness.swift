@@ -336,13 +336,17 @@ private enum TypographyInspection {
         var commentsOK = true, bubblesOK = true, naturalPages = true
         var within: CGFloat = 0, across: CGFloat = 0, heightError: CGFloat = 0
         var widthError: CGFloat = 0, overflow: CGFloat = 0, topError: CGFloat = 0
+        var bottomBaselineError: CGFloat = 0, terminalBottomError: CGFloat = 0, titleTopError: CGFloat = 0
+        var anchoredPages = 0, terminalAnchors = 0, titleChecks = 0
         var pagesChecked = 0, nonterminals = 0, pairs = 0, boundaries = 0, splitChecks = 0, comments = 0
         var samples: [[String: Any]] = []
         let settings: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [(19, 0, 0, 391), (24, 8, 2, 402), (26, 16, 8, 373.5)]
         for (size, line, paragraph, width) in settings {
             let config = ReaderPaginator.Configuration(pageSize: CGSize(width: width, height: 520),
+                safeInsets: UIEdgeInsets(top: 13, left: 0, bottom: 17, right: 0),
                 fontSize: size, lineSpacing: line, paragraphSpacing: paragraph,
-                leftInset: 20, rightInset: 20, topInset: 30, bottomInset: 20)
+                leftInset: 20, rightInset: 20, topInset: 30, bottomInset: 20,
+                chapterTitle: "章节标题固定在上方而正文最后一行统一到底部")
             let pages = ReaderPaginator.paginate(blocks, configuration: config)
             let metrics = ReaderTextLayout.metrics(fontSize: size)
             var offset = 0, sourceIndex = 0, localOffset = 0, rawJoined = "", shownJoined = ""
@@ -354,9 +358,11 @@ private enum TypographyInspection {
                 naturalPages = naturalPages && page.justifiedGap == nil
                 offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
                 let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
-                    fg: .black, bg: .white, title: "自然排版验收", pageNumber: pageIndex + 1,
-                    pageCount: pages.count, onTapComment: { _ in }, paragraphSpacing: Double(paragraph),
-                    leftMargin: 20, rightMargin: 20, topMargin: 30, bottomMargin: 20)
+                    fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
+                    pageCount: pages.count, onTapComment: { _ in },
+                    safeInsets: EdgeInsets(top: 13, leading: 0, bottom: 17, trailing: 0),
+                    paragraphSpacing: Double(paragraph), leftMargin: 20, rightMargin: 20,
+                    topMargin: 30, bottomMargin: 20, showsChapterTitle: true)
                 let host = UIHostingController(rootView: content)
                 let window = UIWindow(frame: CGRect(origin: .zero, size: config.pageSize))
                 window.rootViewController = host; window.isHidden = false; host.view.frame = window.bounds
@@ -403,7 +409,10 @@ private enum TypographyInspection {
                     let stored = index < page.blockHeights.count ? CGFloat(page.blockHeights[index]) : -999
                     heightError = max(heightError, abs(stored - measured), abs(view.bounds.height - measured))
                     used += stored + (index > 0 ? config.blockSpacing : 0)
-                    if index == 0 { topError = max(topError, abs(view.convert(.zero, to: host.view).y - config.topInset)) }
+                    if index == 0 {
+                        let minimumTop = config.safeInsets.top + config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
+                        topError = max(topError, minimumTop - view.convert(.zero, to: host.view).y)
+                    }
                     for pair in zip(rows, rows.dropFirst()) {
                         within = max(within, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - line)); pairs += 1
                     }
@@ -414,7 +423,7 @@ private enum TypographyInspection {
                     if let last = rows.last {
                         previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
                         let bottom = view.convert(CGPoint(x: 0, y: last.rect.minY + metrics.lineHeight), to: host.view).y
-                        overflow = max(overflow, bottom - config.topInset - config.bodyHeight)
+                        overflow = max(overflow, bottom - config.safeInsets.top - config.topInset - config.bodyHeight)
                     }
                     if count > 0 {
                         if let bubble = view.bubbleRect {
@@ -426,9 +435,32 @@ private enum TypographyInspection {
                     offset += text.count; rawJoined += text; shownJoined += actualDisplay
                     if atEnd { sourceIndex += 1; localOffset = 0 } else { localOffset = end }
                 }
-                overflow = max(overflow, used - config.bodyHeight)
+                let capacity = pageIndex == 0 ? config.firstPageBodyHeight : config.bodyHeight
+                overflow = max(overflow, used - capacity)
+                let target = config.pageSize.height - config.safeInsets.bottom - config.bottomInset
+                    - config.footerHeight - config.footerGap - metrics.lineHeight + metrics.baseline
+                if let actual = previousBaseline {
+                    anchoredPages += 1
+                    bottomBaselineError = max(bottomBaselineError, abs(actual - target))
+                    if pageIndex + 1 == pages.count {
+                        terminalAnchors += 1
+                        terminalBottomError = max(terminalBottomError, abs(actual - target))
+                    }
+                } else { sourceOK = false }
+                if pageIndex == 0 {
+                    func titleLabel(_ view: UIView) -> UILabel? {
+                        if let label = view as? UILabel, label.accessibilityIdentifier == "chapter-title" { return label }
+                        return view.subviews.lazy.compactMap { titleLabel($0) }.first
+                    }
+                    if let label = titleLabel(host.view) {
+                        titleChecks += 1
+                        titleTopError = max(titleTopError, abs(label.convert(.zero, to: host.view).y
+                            - config.safeInsets.top - config.topInset))
+                    } else { sourceOK = false }
+                }
                 samples.append(["font": Double(size), "page": pageIndex + 1, "rowsHeight": Double(used),
-                                "unusedHeight": Double(config.bodyHeight - used), "terminal": pageIndex + 1 == pages.count])
+                    "unusedHeight": Double(capacity - used), "terminal": pageIndex + 1 == pages.count,
+                    "actualBaseline": Double(previousBaseline ?? -1), "targetBaseline": Double(target)])
                 window.isHidden = true; window.rootViewController = nil
             }
             sourceOK = sourceOK && sourceIndex == texts.count && localOffset == 0
@@ -439,6 +471,9 @@ private enum TypographyInspection {
             "naturalPagesOK": naturalPages, "pageWithinError": Double(within), "pageAcrossError": Double(across),
             "pageHeightError": Double(heightError), "pageWidthError": Double(widthError),
             "pageOverflow": Double(overflow), "pageTopError": Double(topError),
+            "pageBottomBaselineError": Double(bottomBaselineError), "terminalBottomError": Double(terminalBottomError),
+            "titleTopError": Double(titleTopError), "anchoredPages": anchoredPages,
+            "terminalAnchors": terminalAnchors, "titleChecks": titleChecks,
             "pages": pagesChecked, "nonterminalPages": nonterminals, "pagePairs": pairs,
             "pageBoundaries": boundaries, "splitChecks": splitChecks, "pageComments": comments, "pageSamples": samples]
     }

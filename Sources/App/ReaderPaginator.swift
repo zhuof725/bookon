@@ -148,6 +148,16 @@ enum ReaderPaginator {
                         }
                         end = candidate >= lineCursor ? lineEnds[candidate].characterEnd : index
                     }
+                    // 页底只容纳新段落首行时，整段起始移到下一页。
+                    // 保留真实 TextKit 行尾，不通过增减行距制造空间。
+                    if index == 0, end > index, end < chars.count, !pageBlocks.isEmpty,
+                       candidate >= lineCursor,
+                       lineEnds[candidate].characterEnd == lineEnds[lineCursor].characterEnd,
+                       let second = lineEnds.dropFirst(candidate + 1).first(where: { $0.characterEnd > end }),
+                       second.bottom - origin <= configuration.bodyHeight + 0.01 {
+                        flush()
+                        continue
+                    }
                     if end == index {
                         if !pageBlocks.isEmpty {
                             flush()

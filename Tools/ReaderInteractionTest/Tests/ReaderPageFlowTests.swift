@@ -19,6 +19,14 @@ final class ReaderPageFlowTests: XCTestCase {
         detail.lifetime = .keepAlways
         add(detail)
         XCTAssertEqual(report["cases"] as? Int, 4, output.label)
+        XCTAssertEqual(report["reportedSourceOK"] as? Bool, true, output.label)
+        XCTAssertGreaterThan(report["reportedPages"] as? Int ?? 0, 1, output.label)
+        XCTAssertEqual(report["reportedOrphans"] as? Int, 0,
+                       "同一段不能只把首行留在上一页：\(output.label)")
+        XCTAssertEqual(report["orphanCases"] as? Int, 3, output.label)
+        for key in ["orphanMovedOK", "orphanSourceOK", "orphanHeightsOK", "orphanCommentsOK"] {
+            XCTAssertEqual(report[key] as? Bool, true, "\(key): \(output.label)")
+        }
         XCTAssertGreaterThan(report["splits"] as? Int ?? 0, 8, output.label)
         XCTAssertGreaterThan(report["continuations"] as? Int ?? 0, 8, output.label)
         XCTAssertEqual((report["cuts"] as? [[String: Any]])?.count, 8, output.label)

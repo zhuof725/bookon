@@ -43,9 +43,12 @@ final class TypographyTests: XCTestCase {
         XCTAssertEqual(Set(quotes.keys), Set(["‘", "’", "“", "”"]))
         XCTAssertEqual(Set(quotes.values).count, 4, raw)
         XCTAssertEqual(try number("bubbleChecks"), 4, raw)
-        // No full-right-edge or bottom-fill demand: ALL pages keep H+L / H+L+P.
-        // Actual nonterminal glyph baselines and stored heights both have to agree.
-        for key in ["pageWithinError", "pageAcrossError", "pageHeightError", "pageWidthError", "pageOverflow", "pageTopError"] {
+        // Move the body as a whole to the common bottom baseline. ALL pages,
+        // including sparse terminal pages, still keep H+L / H+L+P within the body.
+        XCTAssertEqual(try number("anchoredPages"), try number("pages"), raw)
+        XCTAssertEqual(try number("terminalAnchors"), 3, raw)
+        XCTAssertEqual(try number("titleChecks"), 3, raw)
+        for key in ["pageWithinError", "pageAcrossError", "pageHeightError", "pageWidthError", "pageOverflow", "pageTopError", "pageBottomBaselineError", "terminalBottomError", "titleTopError"] {
             XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(raw)")
         }
         for key in ["pageSourceOK", "offsetsOK", "actualLineSplitsOK", "continuationsOK", "pageCommentsOK", "pageBubblesOK", "naturalPagesOK"] {

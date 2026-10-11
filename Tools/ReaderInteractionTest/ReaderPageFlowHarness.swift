@@ -230,7 +230,93 @@ private enum ReaderPageFlowAudit {
                 sourceOK = sourceOK && mixedSource == mixed && mixedPages.count > 1
             }
         }
+        // Source 23 screenshot used to leave only “手提箱弹开，露出了里面”
+        // on the previous page. A paragraph's first line must move together with
+        // its following line when another paragraph already occupies that page.
+        let reported: [ContentBlock] = [
+            .paragraph(text: "远处的井盖上。", commentCount: 21, commentURL: nil),
+            .paragraph(text: "臭味，越来越浓。", commentCount: 54, commentURL: nil),
+            .paragraph(text: "赵空城的手紧紧的攥着手提箱的把手，他深吸一口气，微弯下腰，将手提箱放在了地上。", commentCount: 34, commentURL: nil),
+            .paragraph(text: "他很清楚这个臭味代表着什么。", commentCount: 42, commentURL: nil),
+            .paragraph(text: "\"报告，守望者赵空城，在老住宅区发现鬼面王……\"他打开耳麦，声音十分平静。", commentCount: 99, commentURL: nil),
+            .paragraph(text: "边说话，他便按下了手提箱上的按钮。", commentCount: 50, commentURL: nil),
+            .paragraph(text: "啪——！", commentCount: 7, commentURL: nil),
+            .paragraph(text: "手提箱弹开，露出了里面整齐而又崭新的三块告示牌。", commentCount: 36, commentURL: nil),
+            .paragraph(text: "赵空城将三块告示牌扛起", commentCount: 0, commentURL: nil)
+        ]
+        let reportedPages = ReaderPaginator.paginate(reported, configuration:
+            ReaderPaginator.Configuration(pageSize: CGSize(width: 402, height: 874),
+                fontSize: 26, lineSpacing: 8, paragraphSpacing: 8,
+                leftInset: 20, rightInset: 20, topInset: 70, bottomInset: 30))
+        let relevant = "手提箱弹开，露出了里面整齐而又崭新的三块告示牌。"
+        var pageOrphans = 0, reportedRebuilt = "", orphanEligible = 0
+        for page in reportedPages {
+            for (position, block) in page.blocks.enumerated() {
+                guard case let .paragraph(text, _, _) = block else { continue }
+                reportedRebuilt += text
+                guard position > 0, !page.continuationIndices.contains(position),
+                      relevant.hasPrefix(text), text.count < relevant.count else { continue }
+                // Only a new paragraph whose *first fragment* is split across
+                // pages can be orphaned. Earlier complete short paragraphs are fine.
+                orphanEligible += 1
+                let rows = rowEnds(ReaderTextLayout.displayText(for: text), count: 0,
+                    fontSize: 26, lineSpacing: 8, width: 362, continuation: false)
+                if rows.count == 1 { pageOrphans += 1 }
+            }
+        }
+        let originalReported = reported.compactMap { block -> String? in
+            if case let .paragraph(text, _, _) = block { return text }; return nil
+        }.joined()
+        let reportedSourceOK = reportedRebuilt == originalReported
+        var orphanCases = 0, orphanMovedOK = true, orphanSourceOK = true
+        var orphanHeightsOK = true, orphanCommentsOK = true
+        for (font, width) in [(CGFloat(19), CGFloat(240)), (26, 362), (32, 315)] {
+            let lead = "上一段结束。"
+            let next = String(repeating: "手提箱弹开，露出了里面整齐而又崭新的三块告示牌。", count: 8)
+            let measure = ReaderTextLayout.Measurer()
+            let lineHeight = ReaderTextLayout.metrics(fontSize: font).lineHeight
+            let leadHeight = measure.height(text: lead, count: 0, width: width, fontSize: font, lineSpacing: 8)
+            var cfg = ReaderPaginator.Configuration(pageSize: CGSize(width: width + 40, height: 500),
+                fontSize: font, lineSpacing: 8, paragraphSpacing: 8)
+            // Existing complete paragraph + paragraph boundary + exactly ONE new row.
+            cfg.pageSize.height = cfg.topInset + cfg.bottomInset + cfg.footerHeight + cfg.footerGap
+                + leadHeight + cfg.blockSpacing + lineHeight + 0.25
+            let fixture: [ContentBlock] = [.paragraph(text: lead, commentCount: 0, commentURL: nil),
+                .paragraph(text: next, commentCount: 36, commentURL: commentURL)]
+            let output = ReaderPaginator.paginate(fixture, configuration: cfg)
+            orphanCases += 1
+            orphanMovedOK = orphanMovedOK && output.count > 1 && output[0].blocks.count == 1
+            if output.count > 1, let first = output[1].blocks.first,
+               case let .paragraph(fragment, _, _) = first {
+                let n = measure.rows(text: fragment, count: 0, width: width, fontSize: font,
+                    lineSpacing: 8, continuation: false).count
+                orphanMovedOK = orphanMovedOK && next.hasPrefix(fragment) && n >= 2
+                    && !output[1].continuationIndices.contains(0)
+            } else { orphanMovedOK = false }
+            var rebuilt = "", bubbles = 0
+            for page in output {
+                orphanSourceOK = orphanSourceOK && page.startOffset == rebuilt.count
+                var height: CGFloat = 0, previous: ContentBlock?
+                for (blockIndex, block) in page.blocks.enumerated() {
+                    height += cfg.spacing(before: block, after: previous) + CGFloat(page.blockHeights[blockIndex])
+                    previous = block
+                    guard case let .paragraph(fragment, count, url) = block else { orphanSourceOK = false; continue }
+                    rebuilt += fragment
+                    if count > 0 {
+                        bubbles += 1
+                        orphanCommentsOK = orphanCommentsOK && count == 36 && url == commentURL && next.hasSuffix(fragment)
+                    }
+                }
+                orphanHeightsOK = orphanHeightsOK && height <= cfg.bodyHeight + 0.5 && page.justifiedGap == nil
+            }
+            orphanSourceOK = orphanSourceOK && rebuilt == lead + next
+            orphanCommentsOK = orphanCommentsOK && bubbles == 1
+        }
         let values: [String: Any] = [
+            "orphanCases": orphanCases, "orphanMovedOK": orphanMovedOK, "orphanSourceOK": orphanSourceOK,
+            "orphanHeightsOK": orphanHeightsOK, "orphanCommentsOK": orphanCommentsOK,
+            "reportedSourceOK": reportedSourceOK, "reportedPages": reportedPages.count,
+            "reportedOrphans": pageOrphans, "reportedEligible": orphanEligible,
             "cases": cases, "splits": splits, "continuations": continuations,
             "sourceOK": sourceOK, "boundaryOK": boundaryOK, "offsetsOK": offsetsOK,
             "heightsOK": heightsOK, "commentOK": commentOK, "titleOK": titleOK,
