@@ -55,8 +55,8 @@ struct ReaderTopChrome: View {
             }
             .multilineTextAlignment(.center)
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, minHeight: 46)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, minHeight: 40)
             .modifier(ReaderChromeSurface(shape: Capsule(), background: background,
                                           foreground: foreground))
             .accessibilityElement(children: .contain)
@@ -103,7 +103,7 @@ struct ReaderBottomChrome: View {
     let onSettings: () -> Void
 
     @ScaledMetric(relativeTo: .footnote) private var headerSize: CGFloat = 13
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 21
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 17
     @Environment(\.dynamicTypeSize) private var typeSize
 
     init(chapter: String, positionLabel: String, progress: Binding<Double>,
@@ -196,7 +196,6 @@ struct ReaderBottomChrome: View {
         .modifier(ReaderChromeSurface(shape: RoundedRectangle(cornerRadius: 26, style: .continuous),
                                       background: background, foreground: foreground))
         .padding(.horizontal, 12)
-        .padding(.bottom, 12)
     }
 
     private var chapterText: some View {
@@ -271,12 +270,12 @@ private struct ReaderChromeSurface<S: InsettableShape>: ViewModifier {
                     shape.fill(background)
                 } else {
                     shape.fill(.ultraThinMaterial)
-                    shape.fill(background.opacity(0.32))
+                    shape.fill(background.opacity(0.55))
                 }
                 shape.strokeBorder(foreground.opacity(0.14), lineWidth: 0.5)
             }
             .environment(\.colorScheme, materialScheme)
-            .shadow(color: .black.opacity(0.10), radius: 12, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 4)
             .allowsHitTesting(false)
         }
     }

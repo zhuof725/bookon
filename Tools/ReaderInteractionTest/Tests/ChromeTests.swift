@@ -230,6 +230,11 @@ final class ChromeTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "reader.search.result.")).count, 0,
                        "Scroll search is read-only; do not invent approximate jump targets")
         snapshot(app, "reader-chrome-scroll-search-read-only-emoji")
+        // Native searchable replaces navigation items with Cancel while active.
+        let cancel = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Cancel", "取消")).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
         XCTAssertEqual(counters(app)["select"], 0)
         XCTAssertEqual(app.staticTexts["reader.position"].label, "7 / 14")
