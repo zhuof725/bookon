@@ -21,7 +21,9 @@ struct HarnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
+            if ProcessInfo.processInfo.arguments.contains("--detail-mode") {
+                DetailHarnessView()
+            } else if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
                 ShelfHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
                 BottomBubbleHarnessView()

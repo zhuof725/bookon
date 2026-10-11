@@ -15,6 +15,8 @@ targets:
     sources:
       - path: Harness.swift
       - path: ShelfHarness.swift
+      - path: DetailHarness.swift
+      - path: ../../Sources/App/BookDetailScreen.swift
       - path: ../../Sources/App/BookshelfScreen.swift
       - path: ../../Sources/App/LibraryDock.swift
       - path: ChromeHarness.swift
