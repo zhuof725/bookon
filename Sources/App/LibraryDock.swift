@@ -28,6 +28,5 @@ struct LibraryDock: View {
         .modifier(ShelfGlass(shape: Capsule()))
         .shadow(color: .black.opacity(0.035), radius: 10, x: 0, y: 4)
         .padding(.horizontal, 28).padding(.top, 6).padding(.bottom, 2)
-        .accessibilityIdentifier("library.dock")
     }
 }

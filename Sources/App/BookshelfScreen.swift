@@ -214,7 +214,6 @@ struct BookshelfScreen: View {
                     .allowsHitTesting(false)
             }
         }
-        .accessibilityIdentifier("shelf.menuPanel")
     }
 
     private func menuRow(_ title: String, icon: String? = nil, detail: String? = nil, id: String, action: @escaping () -> Void) -> some View {
