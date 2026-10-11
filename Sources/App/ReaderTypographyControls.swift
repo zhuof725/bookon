@@ -20,7 +20,7 @@ struct ReaderTypographyControls: View {
             Toggle("底部对齐", isOn: $settings.bottomJustify)
                 .accessibilityIdentifier("layout-bottom-justify")
         } header: { Text("对齐") } footer: {
-            Text("翻页正文末行统一齐底。近满页微调行距；短页保持原行距，留白在上方。")
+            Text("正文首行始终顶齐。近满页小幅均分行间余量，同时齐底；短末页保持自然行距，留白在下方。")
         }
         Section {
             ReaderLayoutControl(title: "左边距", identifier: "left", value: $settings.leftMargin, range: 0...60)

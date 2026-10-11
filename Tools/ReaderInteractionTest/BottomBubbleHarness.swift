@@ -215,7 +215,6 @@ private enum BottomBubbleAudit {
             audit.count(bottom ? "bottomEnabledPages" : "bottomDisabledPages")
             audit.count((bottom ? "on" : "off") + role.capitalized + "Pages")
             if bottom && pageIndex == pages.count - 1 { audit.count("bottomTerminalPages") }
-            audit.require(page.alignsBodyBottom == bottom, "alignmentFlag", detail)
             audit.require(page.fullJustify, "fullJustifyFlag", detail)
             audit.require(page.startOffset == offset, "pageStartOffset", detail)
             audit.require(page.blockHeights.count == page.blocks.count
@@ -228,7 +227,18 @@ private enum BottomBubbleAudit {
             // Independent fixed footer contract, not inferred from page.justifiedGap.
             let bodyBottom = config.pageSize.height - config.safeInsets.bottom - config.bottomInset - 24
             let targetBaseline = bodyBottom - metrics.lineHeight + metrics.baseline
+            let naturalHeight = CGFloat(page.blockHeights.reduce(0, +))
+                + CGFloat(max(page.blocks.count - 1, 0)) * config.blockSpacing
+            let rowCount = page.blockLineCounts.reduce(0, +)
+            let advance = max(metrics.lineHeight + config.lineSpacing, 1)
+            let surplus = capacity - naturalHeight
+            let candidateGap = rowCount > 1 ? max(surplus, 0) / CGFloat(rowCount - 1) : 0
+            let shouldFill = bottom && rowCount > 1 && surplus >= -0.01
+                && surplus < advance && candidateGap <= advance * 0.1
+            audit.require(page.alignsBodyBottom == shouldFill, "alignmentFlag", detail)
             let extra = CGFloat(page.justifiedGap ?? 0)
+            audit.error(extra - (shouldFill ? candidateGap : 0), "gapPolicyError", detail, tolerance: 0.001)
+            audit.require(extra <= advance * 0.1, "boundedGapExpansion", detail)
             let spacing = config.lineSpacing + extra
             let host = UIHostingController(rootView: BottomBubbleFixtures.content(page, index: pageIndex,
                 count: pages.count, config: config))
@@ -383,13 +393,22 @@ private enum BottomBubbleAudit {
                 if isEnd { sourceIndex += 1; sourceOffset = 0 } else { sourceOffset = end }
             }
             audit.require(firstBaseline != nil && lastBaseline != nil, "baselinePresence", detail)
-            if let actual = lastBaseline, bottom {
-                // Deliberately test every pure-text page, even if the flag regresses
-                // to false or justifiedGap is nil. Flag checks are separate.
-                audit.count("bottomBaselinePages")
-                audit.error(actual - targetBaseline, "bottomBaselineError", detail)
+            if let actual = lastBaseline {
+                if shouldFill {
+                    audit.count("bottomBaselinePages")
+                    audit.error(actual - targetBaseline, "bottomBaselineError", detail)
+                } else {
+                    audit.count("naturalTopPages")
+                    let expectedLast = bodyTop + naturalHeight - metrics.lineHeight + metrics.baseline
+                    audit.error(actual - expectedLast, "naturalLastBaselineError", detail)
+                }
             }
             if let first = firstBaseline {
+                // Assert BOTH endpoints on filled pages, and the same fixed
+                // top origin even for sparse/on/single-row pages. An overflow-
+                // only check cannot catch the whole-body downward shift.
+                audit.count("topBaselinePages")
+                audit.error(first - bodyTop - metrics.baseline, "topBaselineError", detail)
                 audit.error(max(bodyTop + metrics.baseline - first, 0), "bodyTopOverflowError", detail)
                 if !bottom {
                     audit.count("offTopBaselinePages")
@@ -397,7 +416,7 @@ private enum BottomBubbleAudit {
                 }
             }
             if fixture.name == "short" || fixture.name == "single-line" {
-                audit.require(page.justifiedGap == nil, "sparsePageNaturalSpacing", detail)
+                audit.require(page.justifiedGap == nil && !page.alignsBodyBottom, "sparsePageNaturalSpacing", detail)
                 audit.require(capacity - usedHeight > metrics.lineHeight, "sparsePageHasSpareSpace", detail)
                 if bottom { audit.count("sparseBottomPages") }
             }
@@ -407,6 +426,11 @@ private enum BottomBubbleAudit {
             }
             audit.error(max(usedHeight - capacity, 0), "capacityOverflowError", detail)
             detail["alignsBodyBottom"] = page.alignsBodyBottom
+            detail["shouldFill"] = shouldFill
+            detail["targetFirstBaseline"] = Double(bodyTop + metrics.baseline)
+            detail["expectedLastBaseline"] = Double(shouldFill ? targetBaseline
+                : bodyTop + naturalHeight - metrics.lineHeight + metrics.baseline)
+            detail["naturalBodyHeight"] = Double(naturalHeight)
             detail["justifiedGap"] = page.justifiedGap.map { $0 as Any } ?? NSNull()
             detail["startOffset"] = page.startOffset
             detail["endOffset"] = offset

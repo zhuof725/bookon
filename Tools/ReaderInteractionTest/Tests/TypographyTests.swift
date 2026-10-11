@@ -43,10 +43,10 @@ final class TypographyTests: XCTestCase {
         XCTAssertEqual(Set(quotes.keys), Set(["‘", "’", "“", "”"]))
         XCTAssertEqual(Set(quotes.values).count, 4, raw)
         XCTAssertEqual(try number("bubbleChecks"), 4, raw)
-        // All pure-text pages share the same last baseline, even when no
-        // justifiedGap is needed on a sparse or single-row terminal page.
+        // Every page preserves the same top origin; near-full pages also
+        // reach the bottom through bounded row spacing, not body translation.
         XCTAssertGreaterThan(try number("anchoredPages"), 0, raw)
-        XCTAssertEqual(try number("anchoredPages"), try number("pages"), raw)
+        XCTAssertLessThan(try number("anchoredPages"), try number("pages"), raw)
         XCTAssertEqual(try number("terminalAnchors"), 3, raw)
         XCTAssertEqual(try number("titleChecks"), 3, raw)
         for key in ["pageWithinError", "pageAcrossError", "pageHeightError", "pageWidthError", "pageOverflow", "pageTopError", "pageBottomBaselineError", "terminalBottomError", "titleTopError"] {

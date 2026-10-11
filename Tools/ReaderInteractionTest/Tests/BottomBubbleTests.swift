@@ -39,7 +39,10 @@ final class BottomBubbleTests: XCTestCase {
         XCTAssertEqual(try count("longTitlePages"), 8)
         XCTAssertEqual(try count("sparseBottomPages"), 8)
         XCTAssertEqual(try count("singleLineBottomPages"), 4)
-        XCTAssertEqual(try count("bottomBaselinePages"), try count("bottomEnabledPages"))
+        XCTAssertEqual(try count("topBaselinePages"), try count("pages"))
+        XCTAssertEqual(try count("bottomBaselinePages") + count("naturalTopPages"), try count("pages"))
+        XCTAssertGreaterThan(try count("bottomBaselinePages"), 0)
+        XCTAssertEqual(try count("boundedGapExpansionChecks"), try count("pages"))
         XCTAssertEqual(try count("offTopBaselinePages"), try count("bottomDisabledPages"))
         XCTAssertEqual(try count("alignmentFlagChecks"), try count("pages"))
         XCTAssertEqual(try count("bottomEnabledPages") + count("bottomDisabledPages"), try count("pages"))
@@ -60,7 +63,8 @@ final class BottomBubbleTests: XCTestCase {
                     "zeroCommentHasNoBubbleChecks", "bubbleParagraphs", "actualRows"] {
             XCTAssertGreaterThan(try count(key), 0, "Missing coverage: \(key)")
         }
-        for key in ["bottomBaselineError", "offTopBaselineError", "bodyHeightError", "bodyWidthError",
+        for key in ["topBaselineError", "naturalLastBaselineError", "gapPolicyError",
+                    "bottomBaselineError", "offTopBaselineError", "bodyHeightError", "bodyWidthError",
                     "renderedWidthError", "actualLineHeightError", "localBaselineError",
                     "withinParagraphGapError", "paragraphBaselineGapError", "firstLineIndentError",
                     "lineOverflowError", "bodyTopOverflowError", "capacityOverflowError",
@@ -78,17 +82,28 @@ final class BottomBubbleTests: XCTestCase {
         XCTAssertEqual(pages.count, try count("pages"))
         for page in pages {
             let bottom = try XCTUnwrap(page["bottomJustify"] as? Bool)
-            XCTAssertEqual(page["alignsBodyBottom"] as? Bool, bottom)
+            let shouldFill = try XCTUnwrap(page["shouldFill"] as? Bool)
+            XCTAssertEqual(page["alignsBodyBottom"] as? Bool, shouldFill)
             let font = try XCTUnwrap(page["fontSize"] as? Double)
             let number = try XCTUnwrap(page["pageNumber"] as? Int)
             let fixture = try XCTUnwrap(page["fixture"] as? String)
             let detail = "\(fixture), \(font)pt, page \(number), bottom=\(bottom)"
-            // Per-page assertions cannot disappear behind an aggregate maximum or
-            // a justifiedGap filter. Sparse and single-line pages take this path.
-            if bottom {
-                let actual = try XCTUnwrap(page["lastBaseline"] as? Double)
-                let target = try XCTUnwrap(page["targetLastBaseline"] as? Double)
-                XCTAssertEqual(actual, target, accuracy: 0.75, detail)
+            // Top alignment is mandatory for EVERY page (including short
+            // and single-row pages). Last-row expectations are independently
+            // computed from capacity/natural height, never just the output flag.
+            let first = try XCTUnwrap(page["firstBaseline"] as? Double)
+            let targetFirst = try XCTUnwrap(page["targetFirstBaseline"] as? Double)
+            XCTAssertEqual(first, targetFirst, accuracy: 0.75, detail)
+            let last = try XCTUnwrap(page["lastBaseline"] as? Double)
+            let targetLast = try XCTUnwrap(page["expectedLastBaseline"] as? Double)
+            XCTAssertEqual(last, targetLast, accuracy: 0.75, detail)
+            if shouldFill {
+                XCTAssertTrue(bottom, detail)
+                XCTAssertEqual(last, try XCTUnwrap(page["targetLastBaseline"] as? Double), accuracy: 0.75, detail)
+            }
+            if fixture == "short" || fixture == "single-line" {
+                XCTAssertFalse(shouldFill, detail)
+                XCTAssertTrue(page["justifiedGap"] is NSNull, detail)
             }
             XCTAssertGreaterThan(try XCTUnwrap(page["actualRowCount"] as? Int), 0, detail)
             // Every continuation's glyph x is checked in the harness, retained

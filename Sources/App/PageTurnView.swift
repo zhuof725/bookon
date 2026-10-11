@@ -140,8 +140,9 @@ struct PageContentView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(height: measuredTextHeight, alignment: .topLeading)
-                .frame(height: bodyRegionHeight(in: geometry.size),
-                       alignment: page.alignsBodyBottom ? .bottomLeading : .topLeading)
+                // Top origin never moves. Near-full pages reach the bottom
+                // only through the paginator's small inter-row distribution.
+                .frame(height: bodyRegionHeight(in: geometry.size), alignment: .topLeading)
                 }
             }
             .foregroundStyle(fg)

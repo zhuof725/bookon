@@ -354,9 +354,16 @@ private enum TypographyInspection {
             for (pageIndex, page) in pages.enumerated() {
                 pagesChecked += 1
                 if pageIndex + 1 < pages.count { nonterminals += 1 }
-                // Every pure-text page opts into bottom alignment, including
-                // sparse/single-row pages whose spacing remains natural.
-                naturalPages = naturalPages && page.alignsBodyBottom
+                let capacity = pageIndex == 0 ? config.firstPageBodyHeight : config.bodyHeight
+                let naturalHeight = CGFloat(page.blockHeights.reduce(0, +))
+                    + CGFloat(max(page.blocks.count - 1, 0)) * config.blockSpacing
+                let pageRows = page.blockLineCounts.reduce(0, +)
+                let advance = max(metrics.lineHeight + line, 1)
+                let spare = capacity - naturalHeight
+                let candidateGap = pageRows > 1 ? max(spare, 0) / CGFloat(pageRows - 1) : 0
+                let shouldFill = pageRows > 1 && spare >= -0.01 && spare < advance && candidateGap <= advance * 0.1
+                naturalPages = naturalPages && page.alignsBodyBottom == shouldFill
+                    && abs(CGFloat(page.justifiedGap ?? 0) - (shouldFill ? candidateGap : 0)) <= 0.001
                 offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
                 let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
                     fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
@@ -419,7 +426,7 @@ private enum TypographyInspection {
                     used += expectedHeight + (index > 0 ? config.blockSpacing + extra : 0)
                     if index == 0 {
                         let minimumTop = config.safeInsets.top + config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
-                        topError = max(topError, minimumTop - view.convert(.zero, to: host.view).y)
+                        topError = max(topError, abs(minimumTop - view.convert(.zero, to: host.view).y))
                     }
                     for pair in zip(rows, rows.dropFirst()) {
                         within = max(within, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - line - extra)); pairs += 1
@@ -443,21 +450,20 @@ private enum TypographyInspection {
                     offset += text.count; rawJoined += text; shownJoined += actualDisplay
                     if atEnd { sourceIndex += 1; localOffset = 0 } else { localOffset = end }
                 }
-                let capacity = pageIndex == 0 ? config.firstPageBodyHeight : config.bodyHeight
                 overflow = max(overflow, used - capacity)
-                let target = config.pageSize.height - config.safeInsets.bottom - config.bottomInset
+                let bottomTarget = config.pageSize.height - config.safeInsets.bottom - config.bottomInset
                     - config.footerHeight - config.footerGap - metrics.lineHeight + metrics.baseline
+                let topOrigin = config.safeInsets.top + config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
+                let target = shouldFill ? bottomTarget : topOrigin + naturalHeight - metrics.lineHeight + metrics.baseline
                 if let actual = previousBaseline {
-                    // The flag is the contract, not the optional extra gap.
-                    // A natural-height final page must reach the same baseline.
                     naturalPages = naturalPages && abs(actual - target) <= 0.75
-                    if page.alignsBodyBottom {
+                    if shouldFill {
                         anchoredPages += 1
-                        bottomBaselineError = max(bottomBaselineError, abs(actual - target))
-                        if pageIndex + 1 == pages.count {
-                            terminalAnchors += 1
-                            terminalBottomError = max(terminalBottomError, abs(actual - target))
-                        }
+                        bottomBaselineError = max(bottomBaselineError, abs(actual - bottomTarget))
+                    }
+                    if pageIndex + 1 == pages.count {
+                        terminalAnchors += 1
+                        terminalBottomError = max(terminalBottomError, abs(actual - target))
                     }
                 } else { sourceOK = false }
                 if pageIndex == 0 {

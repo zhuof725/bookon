@@ -44,7 +44,7 @@ jobs:
           set -o pipefail
           ARGS=()
           case "$TEST_SUITE" in
-            bottom-bubble) ARGS=(-only-testing:ReaderInteractionTests/BottomBubbleTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
+            bottom-bubble) ARGS=(-only-testing:ReaderInteractionTests/BottomBubbleTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
             pageflow) ARGS=(-only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             natural) ARGS=(-only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/PunctuationFlowTests -only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests -only-testing:ReaderInteractionTests/ContinuousScrollTests) ;;
             audit) ARGS=(-only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;

@@ -76,19 +76,21 @@ enum ReaderPaginator {
             let lineCount = pageLineCounts.reduce(0, +)
             let capacity = pages.isEmpty ? configuration.firstPageBodyHeight : configuration.bodyHeight
             var justifiedGap: Double?
-            // TextPage.upLinesPosition() from legado-E only distributes the
-            // spare space on a nearly full text page. The first row stays put;
-            // a short terminal page keeps its natural top position.
+            var alignsBodyBottom = false
+            // Never lower the body's top origin to fake bottom alignment.
+            // Only a near-full text page distributes its remaining height,
+            // at most 10% of a natural line advance per inter-row gap.
+            // Sparse/one-row pages stay at the top with natural spacing.
             if configuration.bottomJustify,
                lineCount > 1,
                pageBlocks.allSatisfy({ if case .paragraph = $0 { return true }; return false }) {
                 let lineHeight = ReaderTextLayout.metrics(fontSize: configuration.fontSize).lineHeight
-                let remainingAfterLineAdvance = capacity - used - configuration.lineSpacing
-                if remainingAfterLineAdvance < lineHeight {
-                    let surplus = max(capacity - used, 0)
-                    if surplus > 0.01 {
-                        justifiedGap = Double(surplus / CGFloat(lineCount - 1))
-                    }
+                let advance = max(lineHeight + configuration.lineSpacing, 1)
+                let surplus = capacity - used
+                let extra = max(surplus, 0) / CGFloat(lineCount - 1)
+                if surplus >= -0.01, surplus < advance, extra <= advance * 0.1 {
+                    alignsBodyBottom = true
+                    if surplus > 0 { justifiedGap = Double(extra) }
                 }
             }
             pages.append(BookPage(blocks: pageBlocks, startOffset: pageStart,
@@ -100,8 +102,7 @@ enum ReaderPaginator {
                                   fullJustify: configuration.fullJustify,
                                   zhLayout: configuration.zhLayout,
                                   displayParagraphs: displayParagraphs,
-                                  alignsBodyBottom: configuration.bottomJustify &&
-                                    pageBlocks.allSatisfy({ if case .paragraph = $0 { return true }; return false })))
+                                  alignsBodyBottom: alignsBodyBottom))
             pageBlocks.removeAll(keepingCapacity: true)
             pageHeights.removeAll(keepingCapacity: true)
             pageLineCounts.removeAll(keepingCapacity: true)
@@ -250,7 +251,8 @@ enum ReaderPaginator {
             }
         }
         flush()
-        // 不拉伸非末页行距：所有页面使用相同的原生行距与原始块高。
+        // Page membership uses natural row heights; flush only adds bounded
+        // display spacing after those immutable complete-row cuts are chosen.
         return pages
     }
 
