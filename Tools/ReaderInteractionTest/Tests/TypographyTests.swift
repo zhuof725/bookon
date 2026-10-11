@@ -43,11 +43,11 @@ final class TypographyTests: XCTestCase {
         XCTAssertEqual(Set(quotes.keys), Set(["‘", "’", "“", "”"]))
         XCTAssertEqual(Set(quotes.values).count, 4, raw)
         XCTAssertEqual(try number("bubbleChecks"), 4, raw)
-        // Android distributes spare height only on near-full pure-text pages.
-        // Sparse terminal pages intentionally retain natural top whitespace.
+        // All pure-text pages share the same last baseline, even when no
+        // justifiedGap is needed on a sparse or single-row terminal page.
         XCTAssertGreaterThan(try number("anchoredPages"), 0, raw)
-        XCTAssertLessThanOrEqual(try number("anchoredPages"), try number("pages"), raw)
-        XCTAssertLessThanOrEqual(try number("terminalAnchors"), 3, raw)
+        XCTAssertEqual(try number("anchoredPages"), try number("pages"), raw)
+        XCTAssertEqual(try number("terminalAnchors"), 3, raw)
         XCTAssertEqual(try number("titleChecks"), 3, raw)
         for key in ["pageWithinError", "pageAcrossError", "pageHeightError", "pageWidthError", "pageOverflow", "pageTopError", "pageBottomBaselineError", "terminalBottomError", "titleTopError"] {
             XCTAssertLessThanOrEqual(try number(key), 0.75, "\(key): \(raw)")

@@ -99,7 +99,9 @@ enum ReaderPaginator {
                                   justifiedGap: justifiedGap,
                                   fullJustify: configuration.fullJustify,
                                   zhLayout: configuration.zhLayout,
-                                  displayParagraphs: displayParagraphs))
+                                  displayParagraphs: displayParagraphs,
+                                  alignsBodyBottom: configuration.bottomJustify &&
+                                    pageBlocks.allSatisfy({ if case .paragraph = $0 { return true }; return false })))
             pageBlocks.removeAll(keepingCapacity: true)
             pageHeights.removeAll(keepingCapacity: true)
             pageLineCounts.removeAll(keepingCapacity: true)

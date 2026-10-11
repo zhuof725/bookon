@@ -354,9 +354,9 @@ private enum TypographyInspection {
             for (pageIndex, page) in pages.enumerated() {
                 pagesChecked += 1
                 if pageIndex + 1 < pages.count { nonterminals += 1 }
-                // Android only distributes spare height on near-full pages;
-                // a sparse terminal page keeps its natural top position.
-                naturalPages = naturalPages && (pageIndex + 1 < pages.count || page.justifiedGap == nil)
+                // Every pure-text page opts into bottom alignment, including
+                // sparse/single-row pages whose spacing remains natural.
+                naturalPages = naturalPages && page.alignsBodyBottom
                 offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
                 let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
                     fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
@@ -448,9 +448,10 @@ private enum TypographyInspection {
                 let target = config.pageSize.height - config.safeInsets.bottom - config.bottomInset
                     - config.footerHeight - config.footerGap - metrics.lineHeight + metrics.baseline
                 if let actual = previousBaseline {
-                    // Android only anchors pages that received a justified gap;
-                    // sparse terminal pages intentionally keep their natural top.
-                    if page.justifiedGap != nil {
+                    // The flag is the contract, not the optional extra gap.
+                    // A natural-height final page must reach the same baseline.
+                    naturalPages = naturalPages && abs(actual - target) <= 0.75
+                    if page.alignsBodyBottom {
                         anchoredPages += 1
                         bottomBaselineError = max(bottomBaselineError, abs(actual - target))
                         if pageIndex + 1 == pages.count {

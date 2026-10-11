@@ -53,13 +53,13 @@ enum ReaderTextLayout {
             let cjk = UIFont(name: "PingFangSC-Regular", size: size)
                 ?? UIFont(name: CTFontCopyPostScriptName(fallback) as String, size: size) ?? body
             let emoji = UIFont(name: "AppleColorEmoji", size: size) ?? body
-            let bubbleSize = max(size - 5, 11)
-            let tail = CommentBubble.tailHeight(for: bubbleSize)
-            // 包含气泡（即便本段没有），避免附加气泡或最后一页改变行高。
+            let bubbleBounds = CommentBubble.attachmentBounds(fontSize: size)
+            // Reserve the SAME reference-bubble extents on every row, including
+            // rows without comments: a last-row bubble must not move the baseline.
             let ascent = max(max(body.ascender, cjk.ascender),
-                             max(emoji.ascender, bubbleSize + tail * 0.5 + 2))
+                             max(emoji.ascender, bubbleBounds.maxY))
             let descent = max(max(-body.descender, -cjk.descender),
-                              max(-emoji.descender, tail * 0.5))
+                              max(-emoji.descender, -bubbleBounds.minY))
             // PingFang 负责字形、标点侧边留白和天然 advance；没有宽度均分或逐字 kern。
             fonts = Fonts(body: body, cjk: cjk, quote: cjk,
                           advance: max(advance(of: "汉", font: cjk), 1),
@@ -161,16 +161,16 @@ enum ReaderTextLayout {
         }
         finishFontRun()
         if count > 0 {
-            // 保留原有的一个分隔字符；显式固定为四分之一字格，避免系统空格宽度漂移。
+            // Keep the existing one-character separator for UTF-16 mapping,
+            // but give it zero advance. The reference bubble already has 1pt
+            // optical inset at 23pt; the old quarter-em gap displaced it.
             var gapAttributes = attrs
-            gapAttributes[.kern] = grid.cellWidth * 0.25 - advance(of: " ", font: grid.font)
+            gapAttributes[.kern] = -advance(of: " ", font: grid.font)
             result.append(NSAttributedString(string: " ", attributes: gapAttributes))
-            let size = max(fontSize - 5, 11)
-            let image = CommentBubble.image(count: count, size: size, color: color)
+            let image = CommentBubble.image(count: count, fontSize: fontSize, color: color)
             let attachment = NSTextAttachment()
             attachment.image = image
-            attachment.bounds = CGRect(x: 0, y: -CommentBubble.tailHeight(for: size) * 0.5,
-                                       width: image.size.width, height: image.size.height)
+            attachment.bounds = CommentBubble.attachmentBounds(fontSize: fontSize)
             let bubble = NSMutableAttributedString(attachment: attachment)
             bubble.addAttributes(attrs, range: NSRange(location: 0, length: bubble.length))
             result.append(bubble)

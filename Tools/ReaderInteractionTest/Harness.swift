@@ -18,7 +18,9 @@ struct HarnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--punctuation-flow-mode") {
+            if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
+                BottomBubbleHarnessView()
+            } else if ProcessInfo.processInfo.arguments.contains("--punctuation-flow-mode") {
                 PunctuationFlowHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--reader-page-flow-mode") {
                 ReaderPageFlowHarnessView()

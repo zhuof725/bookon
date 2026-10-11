@@ -39,8 +39,17 @@ struct PageContentView: View {
     }
 
     private func paragraphLeadingGap(at index: Int) -> CGFloat {
-        guard index > 0, case .paragraph = page.blocks[index - 1], case .paragraph = page.blocks[index] else { return 0 }
-        return ReaderTextLayout.paragraphGap(lineSpacing: effectiveLineSpacing, paragraphSpacing: CGFloat(paragraphSpacing))
+        guard index > 0 else { return 0 }
+        if case .paragraph = page.blocks[index - 1], case .paragraph = page.blocks[index] {
+            return ReaderTextLayout.paragraphGap(lineSpacing: effectiveLineSpacing, paragraphSpacing: CGFloat(paragraphSpacing))
+        }
+        return CGFloat(max(paragraphSpacing, 0))
+    }
+
+    private func renderedBlockHeight(at index: Int) -> CGFloat? {
+        guard page.blockHeights.indices.contains(index), page.blockLineCounts.indices.contains(index) else { return nil }
+        return CGFloat(page.blockHeights[index])
+            + CGFloat(max(page.blockLineCounts[index] - 1, 0)) * CGFloat(page.justifiedGap ?? 0)
     }
 
     private var measuredTextHeight: CGFloat? {
@@ -91,12 +100,13 @@ struct PageContentView: View {
                                                 continuation: continuation,
                                                 fullJustify: page.fullJustify,
                                                 zhLayout: page.zhLayout,
-                                                paragraphEnd: page.paragraphEndIndices.isEmpty
-                                                    ? true : page.paragraphEndIndices.contains(blockIndex),
+                                                paragraphEnd: page.blockLineCounts.count == page.blocks.count
+                                                    ? page.paragraphEndIndices.contains(blockIndex) : true,
                                                 onTap: { onTapComment(url) })
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            // 正文 frame 由同一 TextKit 测量，段界只追加基础行距；
-                            // VStack 负责用户段距，不再为了页底等高改变单页行距。
+                            // Use the exact measured row-box height. SwiftUI must
+                            // not add UITextView's trailing line-fragment spacing.
+                            .frame(height: renderedBlockHeight(at: blockIndex), alignment: .topLeading)
                             .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .hotComment(let label, let t, let click):
                         HStack(spacing: 10) {
@@ -109,6 +119,7 @@ struct PageContentView: View {
                         .padding(.horizontal, 12).padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 22).fill(fg.opacity(0.07)))
                         .onTapGesture { onTapComment(click) }
+                        .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .chapterComments(let t, let count, _, let click):
                         HStack {
                             Text(t).font(.system(size: fontSize - 2, weight: .bold))
@@ -118,8 +129,10 @@ struct PageContentView: View {
                         .padding(.horizontal, 14).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 16).fill(fg.opacity(0.07)))
                         .onTapGesture { onTapComment(click) }
+                        .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .image(let src, let click):
                         ContentImageView(src: src).onTapGesture { onTapComment(click) }
+                            .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .inlineBubble:
                         EmptyView()
                     }
@@ -127,7 +140,8 @@ struct PageContentView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(height: measuredTextHeight, alignment: .topLeading)
-                .frame(height: bodyRegionHeight(in: geometry.size), alignment: .topLeading)
+                .frame(height: bodyRegionHeight(in: geometry.size),
+                       alignment: page.alignsBodyBottom ? .bottomLeading : .topLeading)
                 }
             }
             .foregroundStyle(fg)

@@ -1,0 +1,16 @@
+{
+  "reference": "photo_590CCBC1.png",
+  "pixelDimensions": [1206, 2622],
+  "bodyFontPointSizeInferred": 23,
+  "scaleInferred": 3,
+  "bboxConvention": "left, top, right-exclusive, bottom-exclusive",
+  "bubbleInkBoxes": {"3": [741,378,844,457], "1": [465,658,568,737], "23": [603,1220,706,1299], "4": [640,1629,743,1708]},
+  "canvasDimensionsPixels": [109,85],
+  "canvasInkInsetsPixels": [3,3,3,3],
+  "inkDimensionsPixels": [103,79],
+  "digitInkBoxesRelativeToCanvas": {"1": [49,32,59,55], "3": [46,31,63,55], "23": [36,31,74,55], "4": [45,32,64,55]},
+  "bubbleInkTopRelativeToTextBaselinePixels": -70,
+  "bubbleInkBottomRelativeToTextBaselinePixels": 9,
+  "bubbleInkLeftAfterPrecedingGlyphAdvancePixels": 3,
+  "notes": "Baseline inferred by matching PingFang SC glyph metrics; anti-aliasing edges vary about 1px. All counters have the same outline, no two-digit width expansion. SVG outline traced from reference pixels; labels drawn dynamically."
+}

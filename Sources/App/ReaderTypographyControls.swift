@@ -20,7 +20,7 @@ struct ReaderTypographyControls: View {
             Toggle("底部对齐", isOn: $settings.bottomJustify)
                 .accessibilityIdentifier("layout-bottom-justify")
         } header: { Text("对齐") } footer: {
-            Text("底部对齐仅用于翻页模式，近满页时会微调行距。")
+            Text("翻页正文末行统一齐底。近满页微调行距；短页保持原行距，留白在上方。")
         }
         Section {
             ReaderLayoutControl(title: "左边距", identifier: "left", value: $settings.leftMargin, range: 0...60)

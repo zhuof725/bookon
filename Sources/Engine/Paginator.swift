@@ -34,6 +34,9 @@ struct BookPage: Equatable {
     var zhLayout: Bool = false
     /// 等长度排版副本：跨页后沿用整段识别的开闭引号；blocks 仍是原文。
     var displayParagraphs: [Int: String] = [:]
+    /// Bottom alignment is a page contract, not inferred from justifiedGap.
+    /// Sparse/single-row text pages keep natural spacing and anchor the body.
+    var alignsBodyBottom: Bool = false
 }
 
 enum Paginator {

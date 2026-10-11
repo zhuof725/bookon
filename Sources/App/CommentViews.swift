@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import CoreText
 
 extension URL: Identifiable { public var id: String { absoluteString } }
 
@@ -96,42 +97,91 @@ struct SVGWebView: UIViewRepresentable {
 }
 
 
-/// 段尾评论气泡：空心圆角气泡 + 内部数字，画成 UIImage，用 Text(Image) 接在段落文字后面。
-/// 图片的底边对齐文字基线（imageBaseline 由 Text 的 baselineOffset 抵消尾巴），高度不超过一行字高，
-/// 这样既不顶到上一行，也不压到下一行。
+/// Outline traced from the user's photo_590CCBC1.png, not a rounded rectangle
+/// with an extra triangle. Reference: 23pt body, @3x, 109x85px canvas;
+/// ink 103x79px, origin 3px after the preceding glyph advance, baseline -70px.
 enum CommentBubble {
     private static var cache: [String: UIImage] = [:]
 
-    /// 气泡主体高度约为字号的 1.05 倍；尾巴向下伸出，用负的基线偏移补回。
-    static func tailHeight(for size: CGFloat) -> CGFloat { size * 0.22 }
+    static func attachmentBounds(fontSize: CGFloat) -> CGRect {
+        let scale = max(fontSize, 1) / 23
+        return CGRect(x: 0, y: -4 * scale, width: 109 / 3 * scale, height: 85 / 3 * scale)
+    }
 
-    static func image(count: Int, size: CGFloat, color: UIColor) -> UIImage {
-        let label = count > 99 ? "99" : String(count)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        color.getRed(&r, green: &g, blue: &b, alpha: &a)
-        let key = "\(label)|\(Int(size))|\(Int(r * 255)),\(Int(g * 255)),\(Int(b * 255))"
+    /// The 3px inset is INSIDE the image; no extra quarter-em separator.
+    static func image(count: Int, fontSize: CGFloat, color: UIColor) -> UIImage {
+        let label = String(min(max(count, 0), 99))
+        let scale = max(fontSize, 1) / 23
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        let key = "ref590-v1|\(label)|\(fontSize)|\(color)|\(format.scale)"
         if let hit = cache[key] { return hit }
-        let w = size * (label.count > 1 ? 1.55 : 1.25), h = size * 1.0
-        let tail = tailHeight(for: size)
-        let canvas = CGSize(width: w + 2, height: h + tail + 2)
-        let img = UIGraphicsImageRenderer(size: canvas).image { _ in
-            let line = max(size * 0.085, 1)
-            let body = CGRect(x: 1 + line / 2, y: 1 + line / 2, width: w - line, height: h - line)
-            let path = UIBezierPath(roundedRect: body, cornerRadius: body.height / 2)
-            path.move(to: CGPoint(x: body.minX + body.width * 0.24, y: body.maxY - 1))
-            path.addLine(to: CGPoint(x: body.minX + body.width * 0.12, y: body.maxY + tail))
-            path.addLine(to: CGPoint(x: body.minX + body.width * 0.46, y: body.maxY - 1))
-            color.setStroke()
-            path.lineWidth = line
-            path.stroke()
-            let font = UIFont.systemFont(ofSize: size * 0.58, weight: .semibold)
+        let canvas = attachmentBounds(fontSize: fontSize).size
+        let img = UIGraphicsImageRenderer(size: canvas, format: format).image { renderer in
+            let context = renderer.cgContext
+            context.saveGState()
+            context.translateBy(x: 0, y: canvas.height)
+            context.scaleBy(x: scale / 30, y: -scale / 30)
+            context.addPath(outline)
+            context.setFillColor(color.cgColor)
+            context.drawPath(using: .eoFill)
+            context.restoreGState()
+            // Fixed body size for both 1 and 23. Center the number by its ink,
+            // not the font's advance (which biases narrow digits sideways).
+            let font = UIFont.systemFont(ofSize: 11 * scale, weight: .semibold)
             let text = NSAttributedString(string: label, attributes: [.font: font, .foregroundColor: color])
-            let ts = text.size()
-            text.draw(at: CGPoint(x: body.midX - ts.width / 2, y: body.midY - ts.height / 2))
+            let line = CTLineCreateWithAttributedString(text)
+            let ink = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+            context.saveGState()
+            context.translateBy(x: 0, y: canvas.height)
+            context.scaleBy(x: 1, y: -1)
+            context.textMatrix = .identity
+            let center = CGPoint(x: 54.5 / 3 * scale, y: canvas.height - 43 / 3 * scale)
+            context.textPosition = CGPoint(x: center.x - ink.midX, y: center.y - ink.midY)
+            CTLineDraw(line, context)
+            context.restoreGState()
         }.withRenderingMode(.alwaysOriginal)
+        if cache.count >= 128 { cache.removeAll(keepingCapacity: true) }
         cache[key] = img
         return img
     }
+
+    /// Two continuous contours, original units 0.1px, origin bottom-left.
+    private static let outline: CGPath = {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 340, y: 802))
+        p.addCurve(to: CGPoint(x: 149, y: 689), control1: CGPoint(x: 253, y: 773), control2: CGPoint(x: 200, y: 742))
+        p.addCurve(to: CGPoint(x: 40, y: 350), control1: CGPoint(x: 62, y: 600), control2: CGPoint(x: 19, y: 466))
+        p.addCurve(to: CGPoint(x: 115, y: 176), control1: CGPoint(x: 54, y: 273), control2: CGPoint(x: 71, y: 233))
+        p.addCurve(to: CGPoint(x: 144, y: 78), control1: CGPoint(x: 148, y: 132), control2: CGPoint(x: 150, y: 126))
+        p.addLine(to: CGPoint(x: 137, y: 27))
+        p.addLine(to: CGPoint(x: 196, y: 32))
+        p.addCurve(to: CGPoint(x: 327, y: 70), control1: CGPoint(x: 231, y: 36), control2: CGPoint(x: 285, y: 51))
+        p.addCurve(to: CGPoint(x: 447, y: 90), control1: CGPoint(x: 396, y: 101), control2: CGPoint(x: 402, y: 102))
+        p.addCurve(to: CGPoint(x: 765, y: 79), control1: CGPoint(x: 517, y: 72), control2: CGPoint(x: 695, y: 66))
+        p.addCurve(to: CGPoint(x: 1043, y: 291), control1: CGPoint(x: 901, y: 104), control2: CGPoint(x: 1010, y: 187))
+        p.addCurve(to: CGPoint(x: 1039, y: 555), control1: CGPoint(x: 1067, y: 362), control2: CGPoint(x: 1065, y: 472))
+        p.addCurve(to: CGPoint(x: 967, y: 675), control1: CGPoint(x: 1022, y: 610), control2: CGPoint(x: 1008, y: 633))
+        p.addCurve(to: CGPoint(x: 540, y: 816), control1: CGPoint(x: 870, y: 772), control2: CGPoint(x: 753, y: 810))
+        p.addCurve(to: CGPoint(x: 340, y: 802), control1: CGPoint(x: 419, y: 820), control2: CGPoint(x: 386, y: 817))
+        p.closeSubpath()
+        p.move(to: CGPoint(x: 702, y: 735))
+        p.addCurve(to: CGPoint(x: 923, y: 621), control1: CGPoint(x: 795, y: 716), control2: CGPoint(x: 870, y: 678))
+        p.addCurve(to: CGPoint(x: 1000, y: 406), control1: CGPoint(x: 976, y: 564), control2: CGPoint(x: 1000, y: 497))
+        p.addCurve(to: CGPoint(x: 840, y: 171), control1: CGPoint(x: 999, y: 299), control2: CGPoint(x: 946, y: 220))
+        p.addCurve(to: CGPoint(x: 667, y: 142), control1: CGPoint(x: 793, y: 149), control2: CGPoint(x: 768, y: 145))
+        p.addCurve(to: CGPoint(x: 473, y: 156), control1: CGPoint(x: 578, y: 139), control2: CGPoint(x: 531, y: 142))
+        p.addCurve(to: CGPoint(x: 371, y: 163), control1: CGPoint(x: 415, y: 169), control2: CGPoint(x: 392, y: 171))
+        p.addCurve(to: CGPoint(x: 285, y: 126), control1: CGPoint(x: 357, y: 157), control2: CGPoint(x: 318, y: 140))
+        p.addLine(to: CGPoint(x: 225, y: 101))
+        p.addLine(to: CGPoint(x: 219, y: 131))
+        p.addCurve(to: CGPoint(x: 182, y: 198), control1: CGPoint(x: 215, y: 148), control2: CGPoint(x: 199, y: 178))
+        p.addCurve(to: CGPoint(x: 106, y: 400), control1: CGPoint(x: 124, y: 271), control2: CGPoint(x: 106, y: 319))
+        p.addCurve(to: CGPoint(x: 186, y: 629), control1: CGPoint(x: 105, y: 498), control2: CGPoint(x: 129, y: 565))
+        p.addCurve(to: CGPoint(x: 702, y: 735), control1: CGPoint(x: 291, y: 745), control2: CGPoint(x: 467, y: 781))
+        p.closeSubpath()
+        return p
+    }()
 }
 
 
