@@ -17,9 +17,15 @@ enum BottomBubblePixelAudit {
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.translateBy(x: 0, y: CGFloat(height)); ctx.scaleBy(x: 1, y: -1)
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
-        let points = Set((0..<width * height).filter { i in
-            (Int(bytes[i * 4]) + Int(bytes[i * 4 + 1]) + Int(bytes[i * 4 + 2])) < 450
-        })
+        var points = Set<Int>()
+        let pixelCount = width * height
+        for i in 0..<pixelCount {
+            let offset = i * 4
+            let red = Int(bytes[offset])
+            let green = Int(bytes[offset + 1])
+            let blue = Int(bytes[offset + 2])
+            if red + green + blue < 450 { points.insert(i) }
+        }
         return Mask(width: width, height: height, points: points)
     }
     private static func components(_ mask: Mask) -> [Set<Int>] {
