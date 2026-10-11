@@ -15,7 +15,9 @@ enum BottomBubblePixelAudit {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), let cg = image.cgImage else { return nil }
         ctx.setFillColor(UIColor.white.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        ctx.translateBy(x: 0, y: CGFloat(height)); ctx.scaleBy(x: 1, y: -1)
+        // Bitmap memory is read in image row order. A UIKit-style extra flip
+        // would invert both masks, hiding the error in IoU while reversing the
+        // digit's top/bottom coordinates relative to the uploaded screenshot.
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
         var points = Set<Int>()
         let pixelCount = width * height

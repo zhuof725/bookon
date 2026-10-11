@@ -87,18 +87,36 @@ private struct BottomBubbleReferencePage: View {
     var body: some View {
         GeometryReader { geometry in
             let tail = ProcessInfo.processInfo.arguments.contains("--bottom-bubble-tail")
-            let fixture = tail ? BottomBubbleFixtures.fixtures[0] : BottomBubbleFixtures.reference
+            let fixture = tail ? BottomBubbleFixtures.fixtures[0] : BottomBubbleFixtures.Fixture(
+                name: "photo-full-visible-excerpt", texts: BottomBubbleFixtures.referenceTexts + [
+                    "但伊文吃了之后，整个人像被人往脑子里灌了铅水。",
+                    "嗜睡，头晕，走路不稳，有两次差点从楼梯上滚下去。",
+                    "连续服用两周之后，更严重的症"],
+                counts: BottomBubbleFixtures.referenceCounts + [0,1,0], title: "")
             let size = CGSize(width: 402, height: geometry.size.height)
-            let config = BottomBubbleFixtures.configuration(font: 23, bottom: true,
-                title: fixture.title, size: size, horizontalInset: 16)
+            let config: ReaderPaginator.Configuration = {
+                var value = BottomBubbleFixtures.configuration(font: 23, bottom: true,
+                    title: fixture.title, size: size, horizontalInset: 16)
+                value.safeInsets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+                value.topInset = 24; value.bottomInset = 4
+                value.lineSpacing = 10; value.paragraphSpacing = 8
+                return value
+            }()
             let pages = ReaderPaginator.paginate(fixture.blocks, configuration: config)
             let index = tail ? max(pages.count - 1, 0) : 0
             if pages.indices.contains(index) {
-                BottomBubbleFixtures.content(pages[index], index: index, count: pages.count, config: config)
+                PageContentView(page: pages[index], fontSize: 23, lineSpacing: 10,
+                    fg: Color(red: 69.0/255, green: 64.0/255, blue: 54.0/255),
+                    bg: Color(red: 250.0/255, green: 244.0/255, blue: 232.0/255),
+                    title: tail ? fixture.title : "第3章：三龙加持 · 样例", pageNumber: index + 1,
+                    pageCount: pages.count, onTapComment: { _ in },
+                    safeInsets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0),
+                    paragraphSpacing: 8, leftMargin: 16, rightMargin: 16, topMargin: 24, bottomMargin: 4,
+                    showsChapterTitle: tail)
                     .frame(width: size.width, height: size.height)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }.ignoresSafeArea()
+        }.ignoresSafeArea().statusBarHidden(true)
     }
 }
 

@@ -136,7 +136,7 @@ enum CommentBubble {
             context.translateBy(x: 0, y: canvas.height)
             context.scaleBy(x: 1, y: -1)
             context.textMatrix = .identity
-            let center = CGPoint(x: 54.5 / 3 * scale, y: canvas.height - 45 / 3 * scale)
+            let center = CGPoint(x: 54.5 / 3 * scale, y: canvas.height - 42 / 3 * scale)
             context.textPosition = CGPoint(x: center.x - ink.midX, y: center.y - ink.midY)
             CTLineDraw(line, context)
             context.restoreGState()
