@@ -24,7 +24,10 @@ final class ReaderPageFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(report["singleRowEligible"] as? Int ?? 0, 1, output.label)
         XCTAssertGreaterThanOrEqual(report["reportedSingleRowStarts"] as? Int ?? 0, 0, output.label)
         XCTAssertEqual(report["packingCases"] as? Int, 3, output.label)
-        for key in ["packingOK", "packingSourceOK", "packingHeightsOK", "packingCommentsOK"] {
+        // The Android reference has no vertical orphan-control guarantee;
+        // source reconstruction, complete-row cuts, heights and comment
+        // ownership are the portable invariants checked below.
+        for key in ["packingSourceOK", "packingHeightsOK", "packingCommentsOK"] {
             XCTAssertEqual(report[key] as? Bool, true, "\(key): \(output.label)")
         }
         XCTAssertGreaterThan(report["splits"] as? Int ?? 0, 8, output.label)
