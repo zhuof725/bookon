@@ -14,6 +14,7 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: ChromeHarness.swift
       - path: ChapterHarness.swift
       - path: VolumeHarness.swift
       - path: TypographyHarness.swift
@@ -36,6 +37,8 @@ targets:
       - path: ../../Sources/App/PageTurnCoordinator.swift
       - path: ../../Sources/App/ReaderPageHost.swift
       - path: ../../Sources/App/ReaderPaginator.swift
+      - path: ../../Sources/App/ReaderChrome.swift
+      - path: ../../Sources/App/ReaderMenuActions.swift
       - path: ../../Sources/App/VolumeTitleView.swift
       - path: ../../Sources/App/ChapterTitleView.swift
       - path: ../../Sources/App/ReaderTypographyControls.swift

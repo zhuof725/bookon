@@ -24,6 +24,8 @@ struct HarnessApp: App {
                 PunctuationFlowHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--reader-page-flow-mode") {
                 ReaderPageFlowHarnessView()
+            } else if ProcessInfo.processInfo.arguments.contains("--reader-chrome-mode") {
+                ChromeHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--layout-audit-mode") {
                 LayoutAuditHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--continuous-scroll-mode") {
