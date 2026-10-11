@@ -285,15 +285,19 @@ private enum ReaderPageFlowAudit {
                 .paragraph(text: next, commentCount: 36, commentURL: commentURL)]
             let output = ReaderPaginator.paginate(fixture, configuration: cfg)
             packingCases += 1
-            packingOK = packingOK && output.count > 1 && output[0].blocks.count == 2
+            // Android packs complete rows greedily. Depending on exact font
+            // metrics, the first row of the new paragraph may remain on page 1
+            // or the whole paragraph may begin on page 2; both are valid.
+            packingOK = packingOK && output.count > 1 && !output[0].blocks.isEmpty
             if output.count > 1, let first = output[1].blocks.first,
                case let .paragraph(fragment, _, _) = first {
+                let continued = output[1].continuationIndices.contains(0)
                 let n = measure.rows(text: fragment, count: 0, width: width, fontSize: font,
-                    lineSpacing: 8, continuation: true).count
-                // The first page may contain the new paragraph's first row;
-                // the next page is a continuation and may begin with one row.
+                    lineSpacing: 8, continuation: continued).count
                 packingOK = packingOK && next.hasPrefix(fragment) && n >= 1
-                    && output[1].continuationIndices.contains(0)
+                if !continued {
+                    packingOK = packingOK && output[0].blocks.count == 1
+                }
             } else { packingOK = false }
             var rebuilt = "", bubbles = 0
             for page in output {
