@@ -78,8 +78,9 @@ enum ReaderPaginator {
             var justifiedGap: Double?
             var alignsBodyBottom = false
             // Never lower the body's top origin to fake bottom alignment.
-            // Only a near-full text page distributes its remaining height,
-            // at most 10% of a natural line advance per inter-row gap.
+            // Only a near-full text page distributes its remaining height:
+            // the total spare is less than ONE natural line advance. A fixed
+            // per-gap percentage would wrongly reject normal large-font pages.
             // Sparse/one-row pages stay at the top with natural spacing.
             if configuration.bottomJustify,
                lineCount > 1,
@@ -88,7 +89,7 @@ enum ReaderPaginator {
                 let advance = max(lineHeight + configuration.lineSpacing, 1)
                 let surplus = capacity - used
                 let extra = max(surplus, 0) / CGFloat(lineCount - 1)
-                if surplus >= -0.01, surplus < advance, extra <= advance * 0.1 {
+                if surplus >= -0.01, surplus < advance {
                     alignsBodyBottom = true
                     if surplus > 0 { justifiedGap = Double(extra) }
                 }

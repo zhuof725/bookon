@@ -86,6 +86,10 @@ final class BottomBubbleTests: XCTestCase {
             XCTAssertEqual(page["alignsBodyBottom"] as? Bool, shouldFill)
             let font = try XCTUnwrap(page["fontSize"] as? Double)
             let number = try XCTUnwrap(page["pageNumber"] as? Int)
+            let total = try XCTUnwrap(page["pageCount"] as? Int)
+            if bottom && number < total {
+                XCTAssertTrue(shouldFill, "Every ordinary text page must fill both ends")
+            }
             let fixture = try XCTUnwrap(page["fixture"] as? String)
             let detail = "\(fixture), \(font)pt, page \(number), bottom=\(bottom)"
             // Top alignment is mandatory for EVERY page (including short

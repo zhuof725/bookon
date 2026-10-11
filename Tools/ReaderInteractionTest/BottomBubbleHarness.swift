@@ -233,12 +233,16 @@ private enum BottomBubbleAudit {
             let advance = max(metrics.lineHeight + config.lineSpacing, 1)
             let surplus = capacity - naturalHeight
             let candidateGap = rowCount > 1 ? max(surplus, 0) / CGFloat(rowCount - 1) : 0
-            let shouldFill = bottom && rowCount > 1 && surplus >= -0.01
-                && surplus < advance && candidateGap <= advance * 0.1
+            let shouldFill = bottom && rowCount > 1 && surplus >= -0.01 && surplus < advance
             audit.require(page.alignsBodyBottom == shouldFill, "alignmentFlag", detail)
             let extra = CGFloat(page.justifiedGap ?? 0)
             audit.error(extra - (shouldFill ? candidateGap : 0), "gapPolicyError", detail, tolerance: 0.001)
-            audit.require(extra <= advance * 0.1, "boundedGapExpansion", detail)
+            audit.require(extra * CGFloat(max(rowCount - 1, 0)) < advance, "boundedGapExpansion", detail)
+            if bottom && pageIndex + 1 < pages.count {
+                // Ordinary pure-text pages must fill both ends; do not let a
+                // restrictive eligibility condition silently evade this check.
+                audit.require(shouldFill, "normalPageFillsBothEnds", detail)
+            }
             let spacing = config.lineSpacing + extra
             let host = UIHostingController(rootView: BottomBubbleFixtures.content(page, index: pageIndex,
                 count: pages.count, config: config))

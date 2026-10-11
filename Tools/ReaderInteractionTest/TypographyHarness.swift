@@ -361,7 +361,7 @@ private enum TypographyInspection {
                 let advance = max(metrics.lineHeight + line, 1)
                 let spare = capacity - naturalHeight
                 let candidateGap = pageRows > 1 ? max(spare, 0) / CGFloat(pageRows - 1) : 0
-                let shouldFill = pageRows > 1 && spare >= -0.01 && spare < advance && candidateGap <= advance * 0.1
+                let shouldFill = pageRows > 1 && spare >= -0.01 && spare < advance
                 naturalPages = naturalPages && page.alignsBodyBottom == shouldFill
                     && abs(CGFloat(page.justifiedGap ?? 0) - (shouldFill ? candidateGap : 0)) <= 0.001
                 offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
