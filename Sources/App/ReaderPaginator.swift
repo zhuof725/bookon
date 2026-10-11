@@ -255,12 +255,13 @@ enum ReaderPaginator {
     private static func measured(measurer: ReaderTextLayout.Measurer, chars: [Character], start: Int,
                                  count: Int, commentCount: Int, width: CGFloat, fontSize: CGFloat,
                                  lineSpacing: CGFloat, continuation: Bool,
-                                 fullJustify: Bool, zhLayout: Bool) -> (count: Int, height: CGFloat) {
+                                 fullJustify: Bool, zhLayout: Bool,
+                                 paragraphEnd: Bool) -> (count: Int, height: CGFloat) {
         let text = String(chars[start..<(start + count)])
         return measurer.rows(text: text, count: commentCount, width: width, fontSize: fontSize,
                              lineSpacing: lineSpacing, continuation: continuation,
                              fullJustify: fullJustify, zhLayout: zhLayout,
-                             paragraphEnd: count == chars.count - start)
+                             paragraphEnd: paragraphEnd)
     }
 
     private struct LineEnd {
