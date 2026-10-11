@@ -80,57 +80,6 @@ struct SearchView: View {
 
 // MARK: - Detail
 
-struct BookDetailView: View {
-    @EnvironmentObject var store: AppStore
-    @State var book: Book
-    @State private var loading = true
-    @State private var error: String?
-
-    var body: some View {
-        List {
-            Section {
-                BookRow(book: book, subtitle: book.kind ?? "")
-                if let w = book.wordCount { Text("字数：" + w).font(.footnote) }
-                if let l = book.lastChapter { Text("最新：" + l).font(.footnote) }
-                Text("来源：" + book.originName).font(.footnote).foregroundStyle(.secondary)
-            }
-            if loading { ProgressView() }
-            if let e = error { Text(e).foregroundStyle(.red).font(.footnote) }
-            if let intro = book.intro {
-                Section("简介") { Text(intro).font(.callout) }
-            }
-            Section {
-                NavigationLink("开始阅读") { ReaderView(book: book) }
-                if store.isOnShelf(book) {
-                    Button("移出书架", role: .destructive) { store.removeFromShelf(book) }
-                } else {
-                    Button("加入书架") { store.addToShelf(book) }
-                }
-            }
-        }
-        .navigationTitle(book.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-    }
-
-    private func load() async {
-        defer { loading = false }
-        guard let s = store.source(for: book.origin) else { error = "找不到书源"; return }
-        do {
-            let b = try await WebBook.bookInfo(source: s, book: book)
-            var nb = b
-            if let old = store.books.first(where: { $0.bookUrl == b.bookUrl }) {
-                nb.durChapterIndex = old.durChapterIndex
-                nb.durChapterTitle = old.durChapterTitle
-                store.addToShelf(nb)
-            }
-            book = nb
-        } catch {
-            self.error = "详情加载失败：\(error.localizedDescription)"
-        }
-    }
-}
-
 // MARK: - Reader
 
 private enum ChapterLanding {
@@ -186,6 +135,13 @@ struct ReaderView: View {
     @EnvironmentObject var settings: ReadSettings
     @Environment(\.dismiss) private var dismiss
     let book: Book
+    /// Explicit catalog tap takes priority over the saved chapter, without resetting stored progress until loading succeeds.
+    let requestedChapter: Int?
+
+    init(book: Book, requestedChapter: Int? = nil) {
+        self.book = book
+        self.requestedChapter = requestedChapter
+    }
 
     @State private var chapters: [BookChapter] = []
     @State private var index = 0
@@ -511,7 +467,7 @@ struct ReaderView: View {
     private func start() async {
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
-        index = store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex
+        index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         if let c = store.cachedToc(book), !c.isEmpty {
             chapters = c
         } else {
@@ -537,7 +493,7 @@ struct ReaderView: View {
     }
 
     private func startLocal() async {
-        index = store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex
+        index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         guard let toc = store.localToc(book), !toc.isEmpty else { error = "本地书文件已丢失，请重新导入"; loading = false; return }
         chapters = toc
         index = min(max(index, 0), toc.count - 1)
@@ -545,7 +501,7 @@ struct ReaderView: View {
     }
 
     private func loadInitialChapter() async {
-        let saved = store.scrollPosition(book)
+        let saved = requestedChapter == nil ? store.scrollPosition(book) : 0
         let requestID = UUID()
         contentRequestID = requestID
         loading = true

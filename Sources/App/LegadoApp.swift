@@ -66,16 +66,16 @@ struct BookshelfView: View {
     @State private var showImport = false
     @State private var importMessage: String?
     @State private var selectedBook: Book?
-    @State private var showReader = false
+    @State private var showDetail = false
     @State private var showSearch = false
 
     var body: some View {
         BookshelfScreen(books: store.books, localOrigin: AppStore.localOrigin,
-            onOpen: { book in selectedBook = book; showReader = true },
+            onOpen: { book in selectedBook = book; showDetail = true },
             onSearch: { showSearch = true }, onImport: { showImport = true },
             onRemove: { books in books.forEach { store.removeFromShelf($0) } })
-        .navigationDestination(isPresented: $showReader) {
-            if let selectedBook { ReaderView(book: selectedBook) }
+        .navigationDestination(isPresented: $showDetail) {
+            if let selectedBook { BookDetailView(book: selectedBook) }
         }
         .navigationDestination(isPresented: $showSearch) { SearchView() }
         .sheet(isPresented: $showImport) {
