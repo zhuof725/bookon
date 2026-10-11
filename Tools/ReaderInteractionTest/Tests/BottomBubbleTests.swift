@@ -32,10 +32,10 @@ final class BottomBubbleTests: XCTestCase {
         }
         XCTAssertEqual(report["schemaVersion"] as? Int, 1)
         XCTAssertEqual(report["fontSizes"] as? [Double], [19, 24, 28, 32])
-        XCTAssertEqual(try count("cases"), 34) // Core matrix + 20/23pt screenshot geometry.
-        XCTAssertEqual(try count("onFirstPages"), 18)
-        XCTAssertEqual(try count("offFirstPages"), 16)
-        XCTAssertEqual(try count("bottomTerminalPages"), 18)
+        XCTAssertEqual(try count("cases"), 36) // Core matrix, 20/23pt, and 402×874 full reference page.
+        XCTAssertEqual(try count("onFirstPages"), 19)
+        XCTAssertEqual(try count("offFirstPages"), 17)
+        XCTAssertEqual(try count("bottomTerminalPages"), 19)
         XCTAssertEqual(try count("longTitlePages"), 8)
         XCTAssertEqual(try count("sparseBottomPages"), 8)
         XCTAssertEqual(try count("singleLineBottomPages"), 4)
@@ -46,7 +46,7 @@ final class BottomBubbleTests: XCTestCase {
         XCTAssertEqual(try count("offTopBaselinePages"), try count("bottomDisabledPages"))
         XCTAssertEqual(try count("alignmentFlagChecks"), try count("pages"))
         XCTAssertEqual(try count("bottomEnabledPages") + count("bottomDisabledPages"), try count("pages"))
-        XCTAssertEqual(try count("sourceReassemblyChecks"), 34)
+        XCTAssertEqual(try count("sourceReassemblyChecks"), 36)
         XCTAssertEqual(try count("equalSizeBubbleComparisons"), 12)
         XCTAssertEqual(report["pixelReferenceLoaded"] as? Bool, true)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(report["bubbleOutlineMinIoU"] as? Double), 0.90)
@@ -114,7 +114,12 @@ final class BottomBubbleTests: XCTestCase {
             // in firstLineIndentError; normal-page JSON is intentionally compact.
         }
         let cases = try XCTUnwrap(report["caseSamples"] as? [[String: Any]])
-        XCTAssertEqual(cases.count, 34)
+        XCTAssertEqual(cases.count, 36)
+        let fullPage = pages.filter { ($0["fixture"] as? String) == "photo-full-402" }
+        XCTAssertEqual(fullPage.count, 4)
+        for page in fullPage where page["bottomJustify"] as? Bool == true && page["pageNumber"] as? Int == 1 {
+            XCTAssertEqual(page["shouldFill"] as? Bool, true, "Actual screenshot-sized first page must reach both boundaries")
+        }
         for font in [19.0, 24, 28, 32] {
             for bottom in [true, false] {
                 let selected = cases.filter { ($0["fontSize"] as? Double) == font && ($0["bottomJustify"] as? Bool) == bottom }

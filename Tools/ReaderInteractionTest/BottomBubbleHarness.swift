@@ -48,6 +48,19 @@ private enum BottomBubbleFixtures {
 
     static let reference = Fixture(name: "photo-590CCBC1", texts: referenceTexts,
                                    counts: referenceCounts, title: "")
+    static let fullPage = Fixture(name: "photo-full-402", texts: referenceTexts + [
+        "但伊文吃了之后，整个人像被人往脑子里灌了铅水。",
+        "嗜睡，头晕，走路不稳，有两次差点从楼梯上滚下去。",
+        "连续服用两周之后，更严重的症"], counts: referenceCounts + [0,1,0], title: "")
+
+    static func screenshotConfiguration(size: CGSize, bottom: Bool, title: String = "") -> ReaderPaginator.Configuration {
+        var value = configuration(font: 23, bottom: bottom, title: title, size: size, horizontalInset: 16)
+        value.safeInsets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        value.topInset = 24; value.bottomInset = 4
+        value.lineSpacing = 10; value.paragraphSpacing = 8
+        return value
+    }
+
     static let fixtures = [
         Fixture(name: "multipage-long-title", texts: [longText,
             "Café e\u{301}、👨‍👩‍👧‍👦与中文。" + String(repeating: "纸页上仍有完整的故事。", count: 8), "短尾段。"],
@@ -87,21 +100,9 @@ private struct BottomBubbleReferencePage: View {
     var body: some View {
         GeometryReader { geometry in
             let tail = ProcessInfo.processInfo.arguments.contains("--bottom-bubble-tail")
-            let fixture = tail ? BottomBubbleFixtures.fixtures[0] : BottomBubbleFixtures.Fixture(
-                name: "photo-full-visible-excerpt", texts: BottomBubbleFixtures.referenceTexts + [
-                    "但伊文吃了之后，整个人像被人往脑子里灌了铅水。",
-                    "嗜睡，头晕，走路不稳，有两次差点从楼梯上滚下去。",
-                    "连续服用两周之后，更严重的症"],
-                counts: BottomBubbleFixtures.referenceCounts + [0,1,0], title: "")
+            let fixture = tail ? BottomBubbleFixtures.fixtures[0] : BottomBubbleFixtures.fullPage
             let size = CGSize(width: 402, height: geometry.size.height)
-            let config: ReaderPaginator.Configuration = {
-                var value = BottomBubbleFixtures.configuration(font: 23, bottom: true,
-                    title: fixture.title, size: size, horizontalInset: 16)
-                value.safeInsets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
-                value.topInset = 24; value.bottomInset = 4
-                value.lineSpacing = 10; value.paragraphSpacing = 8
-                return value
-            }()
+            let config = BottomBubbleFixtures.screenshotConfiguration(size: size, bottom: true, title: fixture.title)
             let pages = ReaderPaginator.paginate(fixture.blocks, configuration: config)
             let index = tail ? max(pages.count - 1, 0) : 0
             if pages.indices.contains(index) {
@@ -188,8 +189,9 @@ private enum BottomBubbleAudit {
     }
 
     private static func inspectFixture(_ fixture: BottomBubbleFixtures.Fixture,
-                                       font: CGFloat, bottom: Bool, audit: Audit) {
-        let config = BottomBubbleFixtures.configuration(font: font, bottom: bottom, title: fixture.title,
+                                       font: CGFloat, bottom: Bool, audit: Audit,
+                                       configuration: ReaderPaginator.Configuration? = nil) {
+        let config = configuration ?? BottomBubbleFixtures.configuration(font: font, bottom: bottom, title: fixture.title,
             horizontalInset: fixture.name == "photo-590CCBC1" ? 16 : 20)
         let pages = ReaderPaginator.paginate(fixture.blocks, configuration: config)
         let metrics = ReaderTextLayout.metrics(fontSize: font)
@@ -233,11 +235,12 @@ private enum BottomBubbleAudit {
             let advance = max(metrics.lineHeight + config.lineSpacing, 1)
             let surplus = capacity - naturalHeight
             let candidateGap = rowCount > 1 ? max(surplus, 0) / CGFloat(rowCount - 1) : 0
-            let shouldFill = bottom && rowCount > 1 && surplus >= -0.01 && surplus < advance
+            let nextRowAdvance = advance + max(config.paragraphSpacing, 0)
+            let shouldFill = bottom && rowCount > 1 && surplus >= -0.01 && surplus < nextRowAdvance
             audit.require(page.alignsBodyBottom == shouldFill, "alignmentFlag", detail)
             let extra = CGFloat(page.justifiedGap ?? 0)
             audit.error(extra - (shouldFill ? candidateGap : 0), "gapPolicyError", detail, tolerance: 0.001)
-            audit.require(extra * CGFloat(max(rowCount - 1, 0)) < advance, "boundedGapExpansion", detail)
+            audit.require(extra * CGFloat(max(rowCount - 1, 0)) < nextRowAdvance, "boundedGapExpansion", detail)
             if bottom && pageIndex + 1 < pages.count {
                 // Ordinary pure-text pages must fill both ends; do not let a
                 // restrictive eligibility condition silently evade this check.
@@ -569,6 +572,12 @@ private enum BottomBubbleAudit {
         for font: CGFloat in [20, 23] {
             autoreleasepool {
                 inspectFixture(BottomBubbleFixtures.reference, font: font, bottom: true, audit: audit)
+            }
+        }
+        for bottom in [true, false] {
+            autoreleasepool {
+                let config = BottomBubbleFixtures.screenshotConfiguration(size: CGSize(width: 402, height: 874), bottom: bottom)
+                inspectFixture(BottomBubbleFixtures.fullPage, font: 23, bottom: bottom, audit: audit, configuration: config)
             }
         }
         // Compare rendered images AND the independently queried TextKit hit boxes.
