@@ -41,14 +41,20 @@ struct LegadoApp: App {
 }
 
 struct RootView: View {
+    @State private var selection: LibraryTab = .shelf
     var body: some View {
-        TabView {
-            NavigationStack { BookshelfView() }
-                .tabItem { Label("书架", systemImage: "books.vertical") }
-            NavigationStack { SearchView() }
-                .tabItem { Label("搜索", systemImage: "magnifyingglass") }
-            NavigationStack { SourcesView() }
-                .tabItem { Label("书源", systemImage: "square.stack.3d.up") }
+        NavigationStack {
+            Group {
+                switch selection {
+                case .shelf: BookshelfView()
+                case .statistics: LibraryStatisticsView()
+                case .profile: LibraryProfileView()
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                LibraryDock(selection: $selection)
+            }
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         }
     }
 }
@@ -59,28 +65,19 @@ struct BookshelfView: View {
     @EnvironmentObject var store: AppStore
     @State private var showImport = false
     @State private var importMessage: String?
+    @State private var selectedBook: Book?
+    @State private var showReader = false
+    @State private var showSearch = false
 
     var body: some View {
-        List {
-            if store.books.isEmpty {
-                Text("书架是空的。点右上角「+」导入 TXT / EPUB，或先到「书源」导入书源，再去「搜索」找书。")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(store.books.sorted { $0.lastReadAt > $1.lastReadAt }) { b in
-                NavigationLink {
-                    ReaderView(book: b)
-                } label: {
-                    BookRow(book: b, subtitle: b.durChapterTitle.map { "读到：" + $0 } ?? (b.lastChapter ?? ""))
-                }
-                .swipeActions {
-                    Button(role: .destructive) { store.removeFromShelf(b) } label: { Label("删除", systemImage: "trash") }
-                }
-            }
+        BookshelfScreen(books: store.books, localOrigin: AppStore.localOrigin,
+            onOpen: { book in selectedBook = book; showReader = true },
+            onSearch: { showSearch = true }, onImport: { showImport = true },
+            onRemove: { books in books.forEach { store.removeFromShelf($0) } })
+        .navigationDestination(isPresented: $showReader) {
+            if let selectedBook { ReaderView(book: selectedBook) }
         }
-        .navigationTitle("书架")
-        .toolbar {
-            Button { showImport = true } label: { Image(systemName: "plus") }
-        }
+        .navigationDestination(isPresented: $showSearch) { SearchView() }
         .sheet(isPresented: $showImport) {
             DocumentPicker(contentTypes: BookshelfView.localTypes, allowsMultiple: true, onPick: { urls in
                 showImport = false

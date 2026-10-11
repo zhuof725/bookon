@@ -31,6 +31,7 @@ struct SearchView: View {
             }
         }
         .navigationTitle("搜索")
+        .toolbar(.visible, for: .navigationBar)
         .searchable(text: $keyword, prompt: "书名或作者")
         .onSubmit(of: .search) { start() }
         .toolbar {
