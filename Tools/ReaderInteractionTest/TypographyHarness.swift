@@ -345,6 +345,7 @@ private enum TypographyInspection {
             let config = ReaderPaginator.Configuration(pageSize: CGSize(width: width, height: 520),
                 safeInsets: UIEdgeInsets(top: 13, left: 0, bottom: 17, right: 0),
                 fontSize: size, lineSpacing: line, paragraphSpacing: paragraph,
+                fullJustify: true, bottomJustify: true,
                 leftInset: 20, rightInset: 20, topInset: 30, bottomInset: 20,
                 chapterTitle: "章节标题固定在上方而正文最后一行统一到底部")
             let pages = ReaderPaginator.paginate(blocks, configuration: config)
@@ -353,9 +354,9 @@ private enum TypographyInspection {
             for (pageIndex, page) in pages.enumerated() {
                 pagesChecked += 1
                 if pageIndex + 1 < pages.count { nonterminals += 1 }
-                // Nil metadata AND actual glyph baselines: ignoring justifiedGap in a view
-                // cannot make a stale vertically stretched paginator pass this test.
-                naturalPages = naturalPages && page.justifiedGap == nil
+                // Android only distributes spare height on near-full pages;
+                // a sparse terminal page keeps its natural top position.
+                naturalPages = naturalPages && (pageIndex + 1 < pages.count || page.justifiedGap == nil)
                 offsetsOK = offsetsOK && page.startOffset == offset && page.blockHeights.count == page.blocks.count
                 let content = PageContentView(page: page, fontSize: Double(size), lineSpacing: Double(line),
                     fg: .black, bg: .white, title: config.chapterTitle, pageNumber: pageIndex + 1,
@@ -404,21 +405,28 @@ private enum TypographyInspection {
                     sourceOK = sourceOK && view.textStorage.string == expectedDisplay + (count > 0 ? " \u{FFFC}" : "")
                     widthError = max(widthError, abs(view.bounds.width - config.textWidth),
                         abs(view.renderedWidth - config.textWidth), abs(view.textContainer.size.width - config.textWidth))
+                    let extra = CGFloat(page.justifiedGap ?? 0)
+                    let rowSpacing = line + extra
                     let measured = measurer.height(text: expectedDisplay, count: count, width: config.textWidth,
-                        fontSize: size, lineSpacing: line, continuation: continued)
+                        fontSize: size, lineSpacing: line + extra, continuation: continued,
+                        fullJustify: page.fullJustify, zhLayout: page.zhLayout,
+                        paragraphEnd: page.paragraphEndIndices.isEmpty
+                            ? true : page.paragraphEndIndices.contains(index))
                     let stored = index < page.blockHeights.count ? CGFloat(page.blockHeights[index]) : -999
-                    heightError = max(heightError, abs(stored - measured), abs(view.bounds.height - measured))
-                    used += stored + (index > 0 ? config.blockSpacing : 0)
+                    let lineCount = page.blockLineCounts.indices.contains(index) ? page.blockLineCounts[index] : 0
+                    let expectedHeight = stored + CGFloat(max(lineCount - 1, 0)) * extra
+                    heightError = max(heightError, abs(expectedHeight - measured), abs(view.bounds.height - measured))
+                    used += expectedHeight + (index > 0 ? config.blockSpacing + extra : 0)
                     if index == 0 {
                         let minimumTop = config.safeInsets.top + config.topInset + (pageIndex == 0 ? config.headerHeight : 0)
                         topError = max(topError, minimumTop - view.convert(.zero, to: host.view).y)
                     }
                     for pair in zip(rows, rows.dropFirst()) {
-                        within = max(within, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - line)); pairs += 1
+                        within = max(within, abs(pair.1.baseline - pair.0.baseline - metrics.lineHeight - line - extra)); pairs += 1
                     }
                     if let first = rows.first, let previous = previousBaseline {
                         let delta = view.convert(CGPoint(x: 0, y: first.baseline), to: host.view).y - previous
-                        across = max(across, abs(delta - metrics.lineHeight - line - paragraph)); boundaries += 1
+                        across = max(across, abs(delta - metrics.lineHeight - line - extra - paragraph)); boundaries += 1
                     }
                     if let last = rows.last {
                         previousBaseline = view.convert(CGPoint(x: 0, y: last.baseline), to: host.view).y
@@ -440,11 +448,15 @@ private enum TypographyInspection {
                 let target = config.pageSize.height - config.safeInsets.bottom - config.bottomInset
                     - config.footerHeight - config.footerGap - metrics.lineHeight + metrics.baseline
                 if let actual = previousBaseline {
-                    anchoredPages += 1
-                    bottomBaselineError = max(bottomBaselineError, abs(actual - target))
-                    if pageIndex + 1 == pages.count {
-                        terminalAnchors += 1
-                        terminalBottomError = max(terminalBottomError, abs(actual - target))
+                    // Android only anchors pages that received a justified gap;
+                    // sparse terminal pages intentionally keep their natural top.
+                    if page.justifiedGap != nil {
+                        anchoredPages += 1
+                        bottomBaselineError = max(bottomBaselineError, abs(actual - target))
+                        if pageIndex + 1 == pages.count {
+                            terminalAnchors += 1
+                            terminalBottomError = max(terminalBottomError, abs(actual - target))
+                        }
                     }
                 } else { sourceOK = false }
                 if pageIndex == 0 {
