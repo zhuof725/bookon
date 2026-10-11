@@ -220,9 +220,15 @@ struct ReaderView: View {
     @State private var showToc = false
     @State private var showSettings = false
     @State private var showBars = false
+    @State private var showReaderSearch = false
+    @State private var showBookInfo = false
+    @State private var menuProgress = 0.0
+    @State private var scrubbing = false
+    @StateObject private var speech = ReaderSpeechController()
 
     private func toggleBars() {
-        showBars.toggle()
+        if !showBars { persistContinuousProgress(); syncMenuProgress() }
+        withAnimation(.easeInOut(duration: 0.18)) { showBars.toggle() }
     }
 
     private func commentTapped(_ target: String?) {
@@ -254,44 +260,44 @@ struct ReaderView: View {
         .statusBarHidden(true)
         .overlay(alignment: .top) {
             if showBars {
-                HStack(spacing: 18) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 22, weight: .medium))
-                            .frame(width: 44, height: 44)
-                    }
-                    Spacer()
-                    Text(book.name)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Spacer()
-                    Color.clear.frame(width: 44, height: 44)
-                }
-                .foregroundStyle(theme.fg)
-                .padding(.horizontal, 18)
-                .padding(.top, 6)
-                .padding(.bottom, 8)
-                .background(theme.bg.opacity(0.96))
+                ReaderTopChrome(title: book.name, source: readerSourceName,
+                    coverURL: book.coverUrl.flatMap(URL.init(string:)),
+                    background: theme.bg, foreground: theme.fg,
+                    onBack: { dismiss() }, onDetails: { showBookInfo = true })
+                    .transition(.opacity)
             }
         }
         .overlay(alignment: .bottom) {
             if showBars {
-                HStack {
-                    Button { showToc = true } label: {
-                        Label("目录", systemImage: "list.bullet")
-                    }
-                    Spacer()
-                    Button { showSettings = true } label: {
-                        Label("设置", systemImage: "textformat.size")
-                    }
-                }
-                .font(.body)
-                .foregroundStyle(theme.fg)
-                .padding(.horizontal, 24)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
-                .background(theme.bg.opacity(0.96))
+                ReaderBottomChrome(chapter: readerChapterTitle, positionLabel: readerPositionLabel,
+                    progress: $menuProgress, canScrub: canScrubReader,
+                    canPrevious: !loading && readableIndex(from: index - 1, direction: -1) != nil,
+                    canNext: !loading && readableIndex(from: index + 1, direction: 1) != nil,
+                    isSpeaking: speech.isSpeaking, background: theme.bg, foreground: theme.fg,
+                    onScrub: scrubReader, onPrevious: { go(index - 1) }, onNext: { go(index + 1) },
+                    onTOC: { showToc = true }, onSpeech: toggleSpeech,
+                    onSearch: { showReaderSearch = true }, onSettings: { showSettings = true })
+                    .transition(.opacity)
             }
+        }
+        .sheet(isPresented: $showReaderSearch) {
+            ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
+                                pages: settings.pageMode == 1 ? pages : [],
+                                onSelect: selectSearchResult)
+        }
+        .sheet(isPresented: $showBookInfo) {
+            NavigationStack {
+                List {
+                    Section { BookRow(book: book, subtitle: book.author) }
+                    Section("书源") { Text(readerSourceName) }
+                    if let intro = book.intro, !intro.isEmpty { Section("简介") { Text(intro) } }
+                }
+                .navigationTitle("书籍信息")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showToc) {
             NavigationStack {
@@ -388,6 +394,7 @@ struct ReaderView: View {
         .onChange(of: settings.topMargin) { _ in repaginate() }
         .onChange(of: settings.bottomMargin) { _ in repaginate() }
         .onChange(of: settings.pageMode) { mode in
+            speech.stop()
             pendingEdge = nil
             pendingChapterDirection = 0
             if mode == 1 {
@@ -402,9 +409,14 @@ struct ReaderView: View {
                 if chapters.indices.contains(index), !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
             }
         }
+        .onChange(of: pageIndex) { _ in syncMenuProgress() }
+        .onChange(of: pages.count) { _ in syncMenuProgress() }
+        .onChange(of: loading) { value in if !value { syncMenuProgress() } }
+        .onChange(of: index) { _ in speech.stop(); syncMenuProgress() }
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
+            speech.stop()
             persistContinuousProgress()
             cancelScrollLoads()
             cancelPreparation()
@@ -421,6 +433,78 @@ struct ReaderView: View {
             store.flushProgress()
         }
         .task { await start() }
+    }
+
+    private var readerSourceName: String {
+        if !book.originName.isEmpty { return book.originName }
+        return store.source(for: book.origin)?.bookSourceName ?? (store.isLocal(book) ? "本地书籍" : "未知书源")
+    }
+
+    private var readerChapterTitle: String {
+        chapters.indices.contains(index) ? chapters[index].title : "正在加载章节…"
+    }
+
+    private var readerBlocks: [ContentBlock] {
+        blocks.isEmpty ? Paginator.blocks(fromPlain: text) : blocks
+    }
+
+    private var canScrubReader: Bool {
+        !loading && (settings.pageMode == 1 ? pages.count > 1 : !readerBlocks.isEmpty)
+    }
+
+    private var readerPositionLabel: String {
+        if settings.pageMode == 1 {
+            guard !pages.isEmpty else { return "— / —" }
+            let value = scrubbing ? Int((menuProgress * Double(max(pages.count - 1, 0))).rounded()) : pageIndex
+            return "\(min(max(value + 1, 1), pages.count)) / \(pages.count)"
+        }
+        return "\(Int((menuProgress * 100).rounded()))%"
+    }
+
+    private func syncMenuProgress() {
+        guard !scrubbing else { return }
+        if settings.pageMode == 1 {
+            menuProgress = pages.count > 1 ? Double(pageIndex) / Double(pages.count - 1) : 0
+        } else {
+            menuProgress = Double(scrollProgress.position) / 1000
+        }
+    }
+
+    private func scrubReader(_ editing: Bool) {
+        scrubbing = editing
+        guard !editing, canScrubReader else { return }
+        speech.stop()
+        let progress = min(max(menuProgress, 0), 1)
+        if settings.pageMode == 1 {
+            pageIndex = Int((progress * Double(pages.count - 1)).rounded())
+        } else {
+            let position = Int((progress * 1000).rounded())
+            scrollProgress.chapter = index
+            scrollProgress.position = position
+            scrollRequest = ReaderScrollRequest(id: UUID(), chapter: index, permille: position)
+            persistContinuousProgress()
+        }
+    }
+
+    private func toggleSpeech() {
+        if speech.isSpeaking { speech.stop(); return }
+        guard !loading else { return }
+        let paragraphs = ReaderMenuText.paragraphs(readerBlocks)
+        let start = settings.pageMode == 1 && pages.indices.contains(pageIndex) ? pages[pageIndex].startOffset : 0
+        let remaining = paragraphs.compactMap { paragraph -> String? in
+            let skip = max(start - paragraph.offset, 0)
+            guard skip < paragraph.text.count else { return nil }
+            return String(paragraph.text.dropFirst(skip))
+        }.joined(separator: "\n")
+        speech.speak(remaining)
+    }
+
+    private func selectSearchResult(_ offset: Int) {
+        guard settings.pageMode == 1, !pages.isEmpty else { return }
+        speech.stop()
+        pageIndex = Paginator.pageIndex(containing: offset, in: pages)
+        showReaderSearch = false
+        showBars = false
     }
 
     private func start() async {
@@ -490,6 +574,7 @@ struct ReaderView: View {
                 onSettled: { chapter, position in
                     recordContinuousPosition(chapter, position: position)
                     persistContinuousProgress()
+                    if showBars { syncMenuProgress() }
                 })
         }
     }
@@ -967,6 +1052,7 @@ struct ReaderView: View {
 
     private func loadChapter(_ target: Int, landing: ChapterLanding) {
         guard !loading, chapters.indices.contains(target) else { return }
+        speech.stop()
         cancelScrollLoads()
         cancelPreparation()
         chapterTask?.cancel()
