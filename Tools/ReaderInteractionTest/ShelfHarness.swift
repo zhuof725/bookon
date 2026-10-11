@@ -71,8 +71,10 @@ struct ShelfHarnessView: View {
                         }
                 case .statistics:
                     Text("统计占位页").accessibilityIdentifier("shelf.statistics")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .profile:
                     Text("我的占位页").accessibilityIdentifier("shelf.profile")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {

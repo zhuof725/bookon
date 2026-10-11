@@ -100,10 +100,10 @@ final class ShelfTests: XCTestCase {
     func testDockAndReaderPushHidesRootDock() {
         tap("library.tab.1")
         XCTAssertTrue(app.staticTexts["shelf.statistics"].waitForExistence(timeout: 3))
-        status("tab=1")
+        XCTAssertTrue(app.buttons["library.tab.1"].isSelected)
         tap("library.tab.2")
         XCTAssertTrue(app.staticTexts["shelf.profile"].waitForExistence(timeout: 3))
-        status("tab=2")
+        XCTAssertTrue(app.buttons["library.tab.2"].isSelected)
         tap("library.tab.0")
         XCTAssertTrue(a.waitForExistence(timeout: 3))
         status("tab=0")
