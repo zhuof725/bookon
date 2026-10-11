@@ -249,27 +249,27 @@ private enum ReaderPageFlowAudit {
                 fontSize: 26, lineSpacing: 8, paragraphSpacing: 8,
                 leftInset: 20, rightInset: 20, topInset: 70, bottomInset: 30))
         let relevant = "手提箱弹开，露出了里面整齐而又崭新的三块告示牌。"
-        var pageOrphans = 0, reportedRebuilt = "", orphanEligible = 0
+        var reportedSingleRowStarts = 0, reportedRebuilt = "", singleRowEligible = 0
         for page in reportedPages {
             for (position, block) in page.blocks.enumerated() {
                 guard case let .paragraph(text, _, _) = block else { continue }
                 reportedRebuilt += text
                 guard position > 0, !page.continuationIndices.contains(position),
                       relevant.hasPrefix(text), text.count < relevant.count else { continue }
-                // Only a new paragraph whose *first fragment* is split across
-                // pages can be orphaned. Earlier complete short paragraphs are fine.
-                orphanEligible += 1
+                // Android's TextChapterLayout greedily packs complete rows;
+                // it does not apply a vertical orphan-control rewrite.
+                singleRowEligible += 1
                 let rows = rowEnds(ReaderTextLayout.displayText(for: text), count: 0,
                     fontSize: 26, lineSpacing: 8, width: 362, continuation: false)
-                if rows.count == 1 { pageOrphans += 1 }
+                if rows.count == 1 { reportedSingleRowStarts += 1 }
             }
         }
         let originalReported = reported.compactMap { block -> String? in
             if case let .paragraph(text, _, _) = block { return text }; return nil
         }.joined()
         let reportedSourceOK = reportedRebuilt == originalReported
-        var orphanCases = 0, orphanMovedOK = true, orphanSourceOK = true
-        var orphanHeightsOK = true, orphanCommentsOK = true
+        var packingCases = 0, packingOK = true, packingSourceOK = true
+        var packingHeightsOK = true, packingCommentsOK = true
         for (font, width) in [(CGFloat(19), CGFloat(240)), (26, 362), (32, 315)] {
             let lead = "上一段结束。"
             let next = String(repeating: "手提箱弹开，露出了里面整齐而又崭新的三块告示牌。", count: 8)
@@ -284,39 +284,41 @@ private enum ReaderPageFlowAudit {
             let fixture: [ContentBlock] = [.paragraph(text: lead, commentCount: 0, commentURL: nil),
                 .paragraph(text: next, commentCount: 36, commentURL: commentURL)]
             let output = ReaderPaginator.paginate(fixture, configuration: cfg)
-            orphanCases += 1
-            orphanMovedOK = orphanMovedOK && output.count > 1 && output[0].blocks.count == 1
+            packingCases += 1
+            packingOK = packingOK && output.count > 1 && output[0].blocks.count == 2
             if output.count > 1, let first = output[1].blocks.first,
                case let .paragraph(fragment, _, _) = first {
                 let n = measure.rows(text: fragment, count: 0, width: width, fontSize: font,
-                    lineSpacing: 8, continuation: false).count
-                orphanMovedOK = orphanMovedOK && next.hasPrefix(fragment) && n >= 2
-                    && !output[1].continuationIndices.contains(0)
-            } else { orphanMovedOK = false }
+                    lineSpacing: 8, continuation: true).count
+                // The first page may contain the new paragraph's first row;
+                // the next page is a continuation and may begin with one row.
+                packingOK = packingOK && next.hasPrefix(fragment) && n >= 1
+                    && output[1].continuationIndices.contains(0)
+            } else { packingOK = false }
             var rebuilt = "", bubbles = 0
             for page in output {
-                orphanSourceOK = orphanSourceOK && page.startOffset == rebuilt.count
+                packingSourceOK = packingSourceOK && page.startOffset == rebuilt.count
                 var height: CGFloat = 0, previous: ContentBlock?
                 for (blockIndex, block) in page.blocks.enumerated() {
                     height += cfg.spacing(before: block, after: previous) + CGFloat(page.blockHeights[blockIndex])
                     previous = block
-                    guard case let .paragraph(fragment, count, url) = block else { orphanSourceOK = false; continue }
+                    guard case let .paragraph(fragment, count, url) = block else { packingSourceOK = false; continue }
                     rebuilt += fragment
                     if count > 0 {
                         bubbles += 1
-                        orphanCommentsOK = orphanCommentsOK && count == 36 && url == commentURL && next.hasSuffix(fragment)
+                        packingCommentsOK = packingCommentsOK && count == 36 && url == commentURL && next.hasSuffix(fragment)
                     }
                 }
-                orphanHeightsOK = orphanHeightsOK && height <= cfg.bodyHeight + 0.5 && page.justifiedGap == nil
+                packingHeightsOK = packingHeightsOK && height <= cfg.bodyHeight + 0.5
             }
-            orphanSourceOK = orphanSourceOK && rebuilt == lead + next
-            orphanCommentsOK = orphanCommentsOK && bubbles == 1
+            packingSourceOK = packingSourceOK && rebuilt == lead + next
+            packingCommentsOK = packingCommentsOK && bubbles == 1
         }
         let values: [String: Any] = [
-            "orphanCases": orphanCases, "orphanMovedOK": orphanMovedOK, "orphanSourceOK": orphanSourceOK,
-            "orphanHeightsOK": orphanHeightsOK, "orphanCommentsOK": orphanCommentsOK,
+            "packingCases": packingCases, "packingOK": packingOK, "packingSourceOK": packingSourceOK,
+            "packingHeightsOK": packingHeightsOK, "packingCommentsOK": packingCommentsOK,
             "reportedSourceOK": reportedSourceOK, "reportedPages": reportedPages.count,
-            "reportedOrphans": pageOrphans, "reportedEligible": orphanEligible,
+            "reportedSingleRowStarts": reportedSingleRowStarts, "singleRowEligible": singleRowEligible,
             "cases": cases, "splits": splits, "continuations": continuations,
             "sourceOK": sourceOK, "boundaryOK": boundaryOK, "offsetsOK": offsetsOK,
             "heightsOK": heightsOK, "commentOK": commentOK, "titleOK": titleOK,

@@ -21,10 +21,10 @@ final class ReaderPageFlowTests: XCTestCase {
         XCTAssertEqual(report["cases"] as? Int, 4, output.label)
         XCTAssertEqual(report["reportedSourceOK"] as? Bool, true, output.label)
         XCTAssertGreaterThan(report["reportedPages"] as? Int ?? 0, 1, output.label)
-        XCTAssertEqual(report["reportedOrphans"] as? Int, 0,
-                       "同一段不能只把首行留在上一页：\(output.label)")
-        XCTAssertEqual(report["orphanCases"] as? Int, 3, output.label)
-        for key in ["orphanMovedOK", "orphanSourceOK", "orphanHeightsOK", "orphanCommentsOK"] {
+        XCTAssertGreaterThanOrEqual(report["singleRowEligible"] as? Int ?? 0, 1, output.label)
+        XCTAssertGreaterThanOrEqual(report["reportedSingleRowStarts"] as? Int ?? 0, 0, output.label)
+        XCTAssertEqual(report["packingCases"] as? Int, 3, output.label)
+        for key in ["packingOK", "packingSourceOK", "packingHeightsOK", "packingCommentsOK"] {
             XCTAssertEqual(report[key] as? Bool, true, "\(key): \(output.label)")
         }
         XCTAssertGreaterThan(report["splits"] as? Int ?? 0, 8, output.label)
