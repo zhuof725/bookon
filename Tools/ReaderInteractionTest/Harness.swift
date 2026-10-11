@@ -8,6 +8,9 @@ enum WebViewSupport { static let userAgent = "ReaderInteractionTests" }
 @main
 struct HarnessApp: App {
     init() {
+        if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
+            ShelfFixture.resetDefaults()
+        }
         // 仅测试 App：保留 UIKit NSException 的 reason，不能把初次安装崩溃误报为锁未释放。
         NSSetUncaughtExceptionHandler { exception in
             let message = "[ReaderHarness uncaught exception] \(exception.name.rawValue): \(exception.reason ?? "<nil>")\n"
@@ -18,7 +21,9 @@ struct HarnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
+            if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
+                ShelfHarnessView()
+            } else if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
                 BottomBubbleHarnessView()
             } else if ProcessInfo.processInfo.arguments.contains("--punctuation-flow-mode") {
                 PunctuationFlowHarnessView()

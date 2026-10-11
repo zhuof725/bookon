@@ -1,0 +1,94 @@
+import SwiftUI
+
+// Offline fixture: use the production-generated gradient/book-symbol placeholders.
+// No remote covers, AppStore, import picker, or filesystem deletion is involved.
+enum ShelfFixture {
+    static let localOrigin = "fixture-local"
+
+    static func resetDefaults() {
+        UserDefaults.standard.set(ShelfLayout.grid.rawValue, forKey: "shelf.layout.v1")
+        UserDefaults.standard.set(ShelfSort.recent.rawValue, forKey: "shelf.sort.v1")
+    }
+
+    static var books: [Book] {
+        var a = Book(bookUrl: "fixture-a", name: "A 林间札记", author: "离线示例", origin: localOrigin)
+        a.addedAt = Date(timeIntervalSince1970: 200)
+        a.lastReadAt = Date(timeIntervalSince1970: 100)
+        var b = Book(bookUrl: "fixture-b", name: "B 山海手记", author: "合成占位", origin: "fixture-catalog")
+        b.durChapterIndex = 1
+        b.durChapterTitle = "第二章"
+        b.addedAt = Date(timeIntervalSince1970: 100)
+        b.lastReadAt = Date(timeIntervalSince1970: 200)
+        return [a, b]
+    }
+}
+
+struct ShelfHarnessView: View {
+    @State private var books = ShelfFixture.books
+    @State private var selection: LibraryTab = .shelf
+    @State private var selectedBook: Book?
+    @State private var showReader = false
+    @State private var searches = 0
+    @State private var imports = 0
+    @State private var removals = 0
+    @AppStorage("shelf.layout.v1") private var layout = ShelfLayout.grid.rawValue
+    @AppStorage("shelf.sort.v1") private var sort = ShelfSort.recent.rawValue
+
+    private var report: String {
+        let counts = ShelfFilter.allCases.map {
+            ShelfBooks.visible(books, filter: $0, sort: .recent, localOrigin: ShelfFixture.localOrigin).count
+        }.map(String.init).joined(separator: ",")
+        let orders = ShelfSort.allCases.map { order in
+            ShelfBooks.visible(books, filter: .all, sort: order, localOrigin: ShelfFixture.localOrigin)
+                .map(\.id).joined(separator: ",")
+        }.joined(separator: "|")
+        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);tab=\(selection.rawValue)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            // Match RootView: inset belongs to the root content, NOT NavigationStack.
+            Group {
+                switch selection {
+                case .shelf:
+                    BookshelfScreen(books: books, localOrigin: ShelfFixture.localOrigin,
+                        onOpen: { selectedBook = $0; showReader = true },
+                        onSearch: { searches += 1 }, onImport: { imports += 1 },
+                        onRemove: { selected in
+                            removals += selected.count
+                            let ids = Set(selected.map(\.id))
+                            books.removeAll { ids.contains($0.id) }
+                        })
+                        .navigationDestination(isPresented: $showReader) {
+                            VStack(spacing: 24) {
+                                Text(selectedBook?.name ?? "").accessibilityIdentifier("shelf.reader.title")
+                                Text("离线阅读占位页").accessibilityIdentifier("shelf.reader")
+                                Button("返回书架") { showReader = false }
+                                    .accessibilityIdentifier("shelf.reader.back")
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .toolbar(.hidden, for: .navigationBar)
+                        }
+                case .statistics:
+                    Text("统计占位页").accessibilityIdentifier("shelf.statistics")
+                case .profile:
+                    Text("我的占位页").accessibilityIdentifier("shelf.profile")
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                LibraryDock(selection: $selection)
+            }
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .overlay(alignment: .topLeading) {
+                // Accessibility-only diagnostics; no visible debug text in screenshots.
+                Color.clear.frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Offline shelf fixture")
+                    .accessibilityValue(report)
+                    .accessibilityIdentifier("shelf.fixture.report")
+                    .allowsHitTesting(false)
+            }
+        }
+        .preferredColorScheme(.light)
+    }
+}
