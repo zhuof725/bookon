@@ -5,12 +5,16 @@ import CoreText
 enum ReaderTextLayout {
     fileprivate static let baselineKey = NSAttributedString.Key("ReaderTextBaseline")
     fileprivate static let commentTailKey = NSAttributedString.Key("ReaderCommentTailStart")
+    fileprivate static let zhLayoutKey = NSAttributedString.Key("ReaderZhLayout")
+    fileprivate static let fullJustifyKey = NSAttributedString.Key("ReaderFullJustify")
+    fileprivate static let paragraphEndKey = NSAttributedString.Key("ReaderParagraphEnd")
 
     struct Metrics {
         let font: UIFont
         let cjkFont: UIFont
         let quoteFont: UIFont
         let cellWidth: CGFloat
+        let indentWidth: CGFloat
         let tracking: CGFloat
         let lineHeight: CGFloat
         let baseline: CGFloat
@@ -63,9 +67,25 @@ enum ReaderTextLayout {
             fontCache[size] = fonts
         }
         let height = ceil(fonts.ascent + fonts.descent)
+        let indent = advance(of: "　", font: fonts.cjk)
         return Metrics(font: fonts.body, cjkFont: fonts.cjk, quoteFont: fonts.quote, cellWidth: fonts.advance,
-                       tracking: 0, lineHeight: height,
+                       indentWidth: max(indent, fonts.advance), tracking: 0, lineHeight: height,
                        baseline: fonts.ascent + (height - fonts.ascent - fonts.descent) * 0.5)
+    }
+
+    /// Android ReadBookConfig stores line spacing as a tenth of the natural
+    /// line-height multiplier (10 means 1.0H). TextKit wants the extra point
+    /// distance between line fragments, so convert at the shared layout edge.
+    static func androidLineSpacingPoints(fontSize: CGFloat, setting: CGFloat) -> CGFloat {
+        let height = metrics(fontSize: fontSize).lineHeight
+        let multiplier = max(setting, 0) / 10
+        return max(height * multiplier - height, -height * 0.95)
+    }
+
+    /// Android paragraph spacing is also expressed in tenths of the actual
+    /// font height, rather than as a raw point value.
+    static func androidParagraphSpacingPoints(fontSize: CGFloat, setting: CGFloat) -> CGFloat {
+        metrics(fontSize: fontSize).lineHeight * max(setting, 0) / 10
     }
 
     /// 只给单标量字符加字距；组合字符、变体选择符、ZWJ 和 Latin run 不拆开。
@@ -83,16 +103,21 @@ enum ReaderTextLayout {
 
     static func attributedText(text: String, count: Int, fontSize: CGFloat,
                                lineSpacing: CGFloat, color: UIColor,
-                               continuation: Bool = false, width: CGFloat? = nil) -> NSAttributedString {
+                               continuation: Bool = false, width: CGFloat? = nil,
+                               fullJustify: Bool = false, zhLayout: Bool = false,
+                               paragraphEnd: Bool = true) -> NSAttributedString {
         let grid = metrics(fontSize: fontSize, width: width)
         let style = NSMutableParagraphStyle()
-        style.lineSpacing = max(lineSpacing, 0)
+        // `lineSpacing` is already the point value shared by pagination and
+        // rendering. Negative values are valid for Android's lower settings,
+        // but never allow a line fragment to collapse completely.
+        style.lineSpacing = max(lineSpacing, -grid.lineHeight * 0.95)
         style.minimumLineHeight = grid.lineHeight
         style.maximumLineHeight = grid.lineHeight
-        // 段间距和标题仍由外层布局计算；不把最后一行/章尾撑满。
+        // Android adds paragraph spacing outside the paragraph's line layout;
+        // the page/scroll containers do the same on iOS.
         style.paragraphSpacing = 0
-        // TextKit 使用稳定字距决定合法断行；不为填满行尾拉散汉字。
-        style.alignment = .left
+        style.alignment = fullJustify ? .justified : .left
         // 只在显示副本中将纯中文成对 U+0022 识别为开/闭引号；原始正文不动，
         // 每个替换仍占一个 UTF-16 单元，分页、进度和命中索引一一对应。
         let displayed = displayText(for: text)
@@ -101,12 +126,18 @@ enum ReaderTextLayout {
         style.hyphenationFactor = 0
         style.headIndent = 0
         style.tailIndent = 0
-        style.firstLineHeadIndent = continuation ? 0 : grid.cellWidth * 2
+        // Android ContentProcessor inserts two full-width spaces before each
+        // paragraph. Measuring the same glyph keeps the indent out of justify
+        // distribution while preserving the source character offsets.
+        style.firstLineHeadIndent = continuation ? 0 : grid.indentWidth * 2
         let attrs: [NSAttributedString.Key: Any] = [
             .font: grid.font,
             .foregroundColor: color,
             .paragraphStyle: style,
-            baselineKey: NSNumber(value: Double(grid.baseline))
+            baselineKey: NSNumber(value: Double(grid.baseline)),
+            zhLayoutKey: NSNumber(value: zhLayout),
+            fullJustifyKey: NSNumber(value: fullJustify),
+            paragraphEndKey: NSNumber(value: paragraphEnd)
         ]
         let result = NSMutableAttributedString(string: displayed, attributes: attrs)
         // 中文与中文标点统一使用 PingFang SC 的原始横排字形，不设置 fwid、
@@ -254,7 +285,10 @@ enum ReaderTextLayout {
     /// line-fragment spacing. Pagination, intrinsic sizing and scroll use these bounds.
     /// Every following paragraph explicitly adds lineSpacing + paragraphSpacing.
     static func paragraphGap(lineSpacing: CGFloat, paragraphSpacing: CGFloat) -> CGFloat {
-        max(lineSpacing, 0) + max(paragraphSpacing, 0)
+        // Android advances after the final row by H * lineSpacingExtra and
+        // then adds H * paragraphSpacing. Keep a negative line increment when
+        // the user selects a value below 1.0H instead of silently dropping it.
+        lineSpacing + max(paragraphSpacing, 0)
     }
 
     static func height(of view: UITextView, width: CGFloat) -> CGFloat {
@@ -289,16 +323,24 @@ enum ReaderTextLayout {
         }
         /// 不含末行之后的行距；与固定正文块 frame 共用实际 TextKit 行原点。
         func rows(text: String, count: Int, width: CGFloat, fontSize: CGFloat,
-                  lineSpacing: CGFloat, continuation: Bool) -> (count: Int, height: CGFloat) {
+                  lineSpacing: CGFloat, continuation: Bool,
+                  fullJustify: Bool = false, zhLayout: Bool = false,
+                  paragraphEnd: Bool = true) -> (count: Int, height: CGFloat) {
             _ = height(text: text, count: count, width: width, fontSize: fontSize,
-                       lineSpacing: lineSpacing, continuation: continuation)
+                       lineSpacing: lineSpacing, continuation: continuation,
+                       fullJustify: fullJustify, zhLayout: zhLayout,
+                       paragraphEnd: paragraphEnd)
             return ReaderTextLayout.rows(of: view)
         }
 
         func height(text: String, count: Int, width: CGFloat, fontSize: CGFloat,
-                    lineSpacing: CGFloat, continuation: Bool = false) -> CGFloat {
+                    lineSpacing: CGFloat, continuation: Bool = false,
+                    fullJustify: Bool = false, zhLayout: Bool = false,
+                    paragraphEnd: Bool = true) -> CGFloat {
             view.render(text: text, count: count, fontSize: fontSize, lineSpacing: lineSpacing,
-                        color: .black, continuation: continuation)
+                        color: .black, continuation: continuation,
+                        fullJustify: fullJustify, zhLayout: zhLayout,
+                        paragraphEnd: paragraphEnd)
             return ReaderTextLayout.height(of: view, width: width)
         }
     }
@@ -324,6 +366,59 @@ private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate {
         if let start = storage.attribute(ReaderTextLayout.commentTailKey, at: index,
                                          effectiveRange: nil) as? Int, index > start { return false }
         return true
+    }
+
+    func layoutManager(_ manager: NSLayoutManager, didCompleteLayoutFor container: NSTextContainer?,
+                       atEnd layoutFinishedFlag: Bool) {
+        guard let container, let storage = manager.textStorage else { return }
+        let width = container.size.width
+        guard width.isFinite, width > 0 else { return }
+        let source = storage.string as NSString
+        var rows: [(CGRect, CGRect, NSRange)] = []
+        manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) {
+            rect, used, _, glyphs, _ in
+            guard glyphs.length > 0 else { return }
+            rows.append((rect, used, glyphs))
+        }
+        for (rect, used, glyphs) in rows {
+            let start = manager.characterIndexForGlyph(at: glyphs.location)
+            guard start < storage.length,
+                  (storage.attribute(ReaderTextLayout.fullJustifyKey, at: start, effectiveRange: nil) as? NSNumber)?.boolValue == true
+            else { continue }
+            let chars = manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            let paragraphEnd = (storage.attribute(ReaderTextLayout.paragraphEndKey, at: start,
+                                                    effectiveRange: nil) as? NSNumber)?.boolValue ?? true
+            // A real paragraph's final row remains natural. A page fragment
+            // marked paragraphEnd=false is continued on the next page, so its
+            // visible final row follows Android's middle-row justification.
+            if paragraphEnd && NSMaxRange(chars) >= source.length { continue }
+            let remainder = rect.maxX - used.maxX
+            guard remainder > 0.25 else { continue }
+            var boundaries = Set<Int>()
+            for glyph in (glyphs.location + 1)..<NSMaxRange(glyphs) {
+                let previous = manager.characterIndexForGlyph(at: glyph - 1)
+                let current = manager.characterIndexForGlyph(at: glyph)
+                guard previous < source.length, current < source.length else { continue }
+                let prev = Int(source.character(at: previous))
+                let next = Int(source.character(at: current))
+                if (0x4E00...0x9FFF).contains(prev), (0x4E00...0x9FFF).contains(next) {
+                    boundaries.insert(glyph)
+                }
+            }
+            guard !boundaries.isEmpty else { continue }
+            let extra = remainder / CGFloat(boundaries.count)
+            let positions = (glyphs.location..<NSMaxRange(glyphs)).map { manager.location(forGlyphAt: $0) }
+            var shift: CGFloat = 0
+            for (offset, position) in positions.enumerated() {
+                let glyph = glyphs.location + offset
+                if boundaries.contains(glyph) { shift += extra }
+                manager.setLocation(CGPoint(x: position.x + shift, y: position.y),
+                                    forStartOfGlyphRange: NSRange(location: glyph, length: 1))
+            }
+            var filled = used
+            filled.size.width += remainder
+            manager.setLineFragmentRect(rect, forGlyphRange: glyphs, usedRect: filled)
+        }
     }
 
     func layoutManager(_ layoutManager: NSLayoutManager,

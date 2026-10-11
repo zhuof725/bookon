@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 七项版式控制共用同样的单位和步长，保存值仍沿用旧 AppStorage 键。
+/// 字号、边距使用 pt；行高和段后间距使用字高倍率，每步 0.1。
 struct ReaderTypographyControls: View {
     @ObservedObject var settings: ReadSettings
 
@@ -8,9 +8,19 @@ struct ReaderTypographyControls: View {
         Section("字体大小") {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
         }
-        Section("间距") {
-            ReaderLayoutControl(title: "行间距", identifier: "line", value: $settings.lineSpacing, range: 0...30)
-            ReaderLayoutControl(title: "段间距", identifier: "paragraph", value: $settings.paragraphSpacing, range: 0...30)
+        Section {
+            ReaderLayoutControl(title: "行高倍率", identifier: "line", value: $settings.lineSpacing, range: 0...20, usesHeightMultiplier: true)
+            ReaderLayoutControl(title: "段后倍率", identifier: "paragraph", value: $settings.paragraphSpacing, range: 0...20, usesHeightMultiplier: true)
+        } header: { Text("间距") } footer: {
+            Text("按实际字高计算，随字号缩放；每步调整 0.1 倍。行高 1.0 倍表示不增加行间距。")
+        }
+        Section {
+            Toggle("两端对齐", isOn: $settings.fullJustify)
+                .accessibilityIdentifier("layout-full-justify")
+            Toggle("底部对齐", isOn: $settings.bottomJustify)
+                .accessibilityIdentifier("layout-bottom-justify")
+        } header: { Text("对齐") } footer: {
+            Text("底部对齐仅用于翻页模式，近满页时会微调行距。")
         }
         Section {
             ReaderLayoutControl(title: "左边距", identifier: "left", value: $settings.leftMargin, range: 0...60)
@@ -28,24 +38,26 @@ private struct ReaderLayoutControl: View {
     let identifier: String
     @Binding var value: Double
     let range: ClosedRange<Double>
+    var usesHeightMultiplier: Bool = false
 
     var body: some View {
         VStack(spacing: 4) {
             HStack {
                 Text(title)
                 Spacer()
-                Text("\(Int(value)) pt").monospacedDigit().foregroundStyle(.secondary)
+                Text(usesHeightMultiplier ? String(format: "%.1f 倍", value / 10) : "\(Int(value)) pt")
+                    .monospacedDigit().foregroundStyle(.secondary)
                     .accessibilityIdentifier("layout-value-" + identifier)
             }
             HStack(spacing: 8) {
-                Button { value = max(range.lowerBound, value - 1) } label: {
+                Button { value = min(range.upperBound, max(range.lowerBound, value - 1)) } label: {
                     Image(systemName: "minus.circle").frame(width: 44, height: 36)
                 }
                 .buttonStyle(.borderless).disabled(value <= range.lowerBound)
                 .accessibilityLabel("减小" + title).accessibilityIdentifier("layout-minus-" + identifier)
                 Slider(value: $value, in: range, step: 1)
                     .accessibilityLabel(title).accessibilityIdentifier("layout-slider-" + identifier)
-                Button { value = min(range.upperBound, value + 1) } label: {
+                Button { value = min(range.upperBound, max(range.lowerBound, value + 1)) } label: {
                     Image(systemName: "plus.circle").frame(width: 44, height: 36)
                 }
                 .buttonStyle(.borderless).disabled(value >= range.upperBound)

@@ -143,11 +143,16 @@ struct InlineCommentParagraph: UIViewRepresentable {
     let lineSpacing: CGFloat
     let color: UIColor
     let continuation: Bool
+    let fullJustify: Bool
+    let zhLayout: Bool
+    let paragraphEnd: Bool
     let onTextTap: (() -> Void)?
     let onTap: () -> Void
 
     init(text: String, count: Int, fontSize: CGFloat, lineSpacing: CGFloat,
-         color: UIColor, continuation: Bool = false, onTextTap: (() -> Void)? = nil,
+         color: UIColor, continuation: Bool = false, fullJustify: Bool = false,
+         zhLayout: Bool = false, paragraphEnd: Bool = true,
+         onTextTap: (() -> Void)? = nil,
          onTap: @escaping () -> Void) {
         self.text = text
         self.count = count
@@ -155,6 +160,9 @@ struct InlineCommentParagraph: UIViewRepresentable {
         self.lineSpacing = lineSpacing
         self.color = color
         self.continuation = continuation
+        self.fullJustify = fullJustify
+        self.zhLayout = zhLayout
+        self.paragraphEnd = paragraphEnd
         self.onTextTap = onTextTap
         self.onTap = onTap
     }
@@ -172,7 +180,9 @@ struct InlineCommentParagraph: UIViewRepresentable {
         view.onBubbleTap = onTap
         view.onTextTap = onTextTap
         view.render(text: text, count: count, fontSize: fontSize, lineSpacing: lineSpacing,
-                    color: color, continuation: continuation)
+                    color: color, continuation: continuation,
+                    fullJustify: fullJustify, zhLayout: zhLayout,
+                    paragraphEnd: paragraphEnd)
     }
 
     @available(iOS 16.0, *)
@@ -195,6 +205,9 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
         let lineSpacing: CGFloat
         let color: UIColor
         let continuation: Bool
+        let fullJustify: Bool
+        let zhLayout: Bool
+        let paragraphEnd: Bool
     }
     private var paragraph: Paragraph?
     private var needsTypesetting = false
@@ -242,12 +255,16 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
     }
 
     func render(text: String, count: Int, fontSize: CGFloat, lineSpacing: CGFloat,
-                color: UIColor, continuation: Bool = false) {
-        let key = "\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(color)"
+                color: UIColor, continuation: Bool = false,
+                fullJustify: Bool = false, zhLayout: Bool = false,
+                paragraphEnd: Bool = true) {
+        let key = "\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(fullJustify)|\(zhLayout)|\(paragraphEnd)|\(color)"
         guard key != lastRenderKey else { return }
         lastRenderKey = key
         paragraph = Paragraph(text: text, count: count, fontSize: fontSize,
-                              lineSpacing: lineSpacing, color: color, continuation: continuation)
+                              lineSpacing: lineSpacing, color: color, continuation: continuation,
+                              fullJustify: fullJustify, zhLayout: zhLayout,
+                              paragraphEnd: paragraphEnd)
         needsTypesetting = true
         typeset(width: bounds.width > 0 ? bounds.width : renderedWidth)
     }
@@ -263,7 +280,9 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
         let result = ReaderTextLayout.attributedText(
             text: paragraph.text, count: paragraph.count, fontSize: paragraph.fontSize,
             lineSpacing: paragraph.lineSpacing, color: paragraph.color,
-            continuation: paragraph.continuation, width: width > 0 ? width : nil)
+            continuation: paragraph.continuation, width: width > 0 ? width : nil,
+            fullJustify: paragraph.fullJustify, zhLayout: paragraph.zhLayout,
+            paragraphEnd: paragraph.paragraphEnd)
         bubbleIndex = paragraph.count > 0 ? result.length - 1 : nil
         attributedText = result
         textContainerInset = .zero

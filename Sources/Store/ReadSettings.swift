@@ -1,9 +1,13 @@
 import SwiftUI
 
 final class ReadSettings: ObservableObject {
-    @AppStorage("fontSize") var fontSize: Double = 19
-    @AppStorage("lineSpacing") var lineSpacing: Double = 8
-    @AppStorage("paragraphSpacing") var paragraphSpacing: Double = 8
+    // Android ReadBookConfig defaults: 20sp, lineSpacingExtra=12 (1.2H),
+    // paragraphSpacing=2 (0.2H), with two full-width indent cells.
+    @AppStorage("fontSize") var fontSize: Double = 20
+    @AppStorage("readerLineHeightTenths") var lineSpacing: Double = 12
+    @AppStorage("readerParagraphHeightTenths") var paragraphSpacing: Double = 2
+    @AppStorage("readerFullJustify") var fullJustify: Bool = true
+    @AppStorage("readerBottomJustify") var bottomJustify: Bool = true
     @AppStorage("leftMargin") var leftMargin: Double = 20
     @AppStorage("rightMargin") var rightMargin: Double = 20
     @AppStorage("topMargin") var topMargin: Double = 16
@@ -13,17 +17,45 @@ final class ReadSettings: ObservableObject {
     @AppStorage("pageTurnStyle") var pageTurnStyle: Int = 0
 
     init() {
-        // One-time migration of the old cramped default; preserve custom spacing.
-        if !UserDefaults.standard.bool(forKey: "readerOpticalTypographyV1") {
-            if paragraphSpacing == 2 { paragraphSpacing = 8 }
-            UserDefaults.standard.set(true, forKey: "readerOpticalTypographyV1")
+        // Old keys store extra spacing in points; new keys store tenths of
+        // the actual font height. Migrate each value only once, using the
+        // saved font size without changing it or rounding custom spacing.
+        // Missing old keys retain the Android defaults (12 / 2).
+        let defaults = UserDefaults.standard
+        let fontHeight = Double(ReaderTextLayout.androidParagraphSpacingPoints(
+            fontSize: CGFloat(fontSize), setting: 10))
+        if fontHeight.isFinite, fontHeight > 0 {
+            if defaults.object(forKey: "readerLineHeightTenths") == nil,
+               let oldPoints = defaults.object(forKey: "lineSpacing") as? NSNumber,
+               oldPoints.doubleValue.isFinite {
+                lineSpacing = 10 * (1 + max(oldPoints.doubleValue, 0) / fontHeight)
+            }
+            if defaults.object(forKey: "readerParagraphHeightTenths") == nil,
+               let oldPoints = defaults.object(forKey: "paragraphSpacing") as? NSNumber,
+               oldPoints.doubleValue.isFinite {
+                paragraphSpacing = 10 * max(oldPoints.doubleValue, 0) / fontHeight
+            }
         }
         // 旧版淡入淡出值 2 回退到原生滑动，保留字号、主题与阅读进度。
         if pageTurnStyle != 0 && pageTurnStyle != 1 { pageTurnStyle = 0 }
     }
 
+    /// Android stores line/paragraph spacing as tenths of the actual font
+    /// height. Keep those values in settings, and expose point values only at
+    /// the UIKit layout boundary.
+    var lineSpacingPoints: Double {
+        Double(ReaderTextLayout.androidLineSpacingPoints(fontSize: CGFloat(fontSize),
+                                                          setting: CGFloat(lineSpacing)))
+    }
+
+    var paragraphSpacingPoints: Double {
+        Double(ReaderTextLayout.androidParagraphSpacingPoints(fontSize: CGFloat(fontSize),
+                                                               setting: CGFloat(paragraphSpacing)))
+    }
+
     var typographyValues: [Double] {
-        [fontSize, lineSpacing, paragraphSpacing, leftMargin, rightMargin, topMargin, bottomMargin]
+        [fontSize, lineSpacing, paragraphSpacing, leftMargin, rightMargin, topMargin, bottomMargin,
+         fullJustify ? 1 : 0, bottomJustify ? 1 : 0]
     }
 
     static let themes: [(bg: Color, fg: Color, name: String)] = [

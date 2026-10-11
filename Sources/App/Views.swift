@@ -381,6 +381,8 @@ struct ReaderView: View {
         .onChange(of: settings.fontSize) { _ in repaginate() }
         .onChange(of: settings.lineSpacing) { _ in repaginate() }
         .onChange(of: settings.paragraphSpacing) { _ in repaginate() }
+        .onChange(of: settings.fullJustify) { _ in repaginate() }
+        .onChange(of: settings.bottomJustify) { _ in repaginate() }
         .onChange(of: settings.leftMargin) { _ in repaginate() }
         .onChange(of: settings.rightMargin) { _ in repaginate() }
         .onChange(of: settings.topMargin) { _ in repaginate() }
@@ -502,12 +504,12 @@ struct ReaderView: View {
 
     private func scrollParagraphLeadingGap(in blocks: [ContentBlock], at index: Int) -> CGFloat {
         guard index > 0, case .paragraph = blocks[index - 1], case .paragraph = blocks[index] else { return 0 }
-        return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(settings.lineSpacing), paragraphSpacing: 0)
+        return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(settings.lineSpacingPoints), paragraphSpacing: 0)
     }
 
     private func scrollChapterBody(_ content: ScrollReaderChapter) -> some View {
         let chapter = chapters[content.id]
-        return VStack(alignment: .leading, spacing: CGFloat(settings.paragraphSpacing)) {
+        return VStack(alignment: .leading, spacing: CGFloat(settings.paragraphSpacingPoints)) {
             if chapter.isVolume {
                 VolumeTitleView(title: chapter.title, foreground: theme.fg)
                     .padding(.vertical, 36)
@@ -656,8 +658,10 @@ struct ReaderView: View {
             safeInsets: UIEdgeInsets(top: pageInsets.top, left: pageInsets.leading,
                                      bottom: pageInsets.bottom, right: pageInsets.trailing),
             fontSize: CGFloat(settings.fontSize),
-            lineSpacing: CGFloat(settings.lineSpacing),
-            paragraphSpacing: CGFloat(settings.paragraphSpacing),
+            lineSpacing: CGFloat(settings.lineSpacingPoints),
+            paragraphSpacing: CGFloat(settings.paragraphSpacingPoints),
+            fullJustify: settings.fullJustify,
+            bottomJustify: settings.bottomJustify,
             leftInset: CGFloat(settings.leftMargin),
             rightInset: CGFloat(settings.rightMargin),
             topInset: CGFloat(settings.topMargin),
@@ -811,11 +815,11 @@ struct ReaderView: View {
         let chapter = chapters.indices.contains(target) ? chapters[target] : nil
         return chapterPages.enumerated().map { i, page in
             AnyView(PageContentView(page: page, fontSize: settings.fontSize,
-                lineSpacing: settings.lineSpacing, fg: theme.fg, bg: theme.bg,
+                lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
                 title: chapter?.title ?? "",
                 pageNumber: i + 1, pageCount: chapterPages.count,
                 onTapComment: { commentTapped($0) }, safeInsets: pageInsets,
-                paragraphSpacing: settings.paragraphSpacing,
+                paragraphSpacing: settings.paragraphSpacingPoints,
                 leftMargin: settings.leftMargin, rightMargin: settings.rightMargin,
                 topMargin: settings.topMargin, bottomMargin: settings.bottomMargin,
                 volumeTitle: chapter?.isVolume == true ? chapter?.title : nil,
@@ -915,8 +919,9 @@ struct ReaderView: View {
         case .paragraph(let t, let count, let url):
             InlineCommentParagraph(text: t, count: count,
                                     fontSize: settings.fontSize,
-                                    lineSpacing: settings.lineSpacing,
+                                    lineSpacing: settings.lineSpacingPoints,
                                     color: UIColor(theme.fg),
+                                    fullJustify: settings.fullJustify,
                                     onTextTap: { toggleBars() },
                                     onTap: { commentTapped(url) })
                 .frame(maxWidth: .infinity, alignment: .leading)

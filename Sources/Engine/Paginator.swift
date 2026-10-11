@@ -22,9 +22,16 @@ struct BookPage: Equatable {
     /// UIKit 分页器测得的块高度，单位为点；下标对应 blocks。
     /// Engine 分页器不填此字段，保留它不会让 portable paginator 依赖 UIKit。
     var blockHeights: [Double] = []
-    /// 非章末纯正文页的垂直匀排余量；行间和段间各增加此值。
-    /// nil 保留自然排版（滚动、章末、图片/卡片页及稀疏页）。
+    /// 每个文字块实际占用的 TextKit 行数；用于复现 Android 的页面底部匀排。
+    var blockLineCounts: [Int] = []
+    /// 这一页中的段落是否已经到达原段末尾。续段页的最后一行仍可横向两端对齐。
+    var paragraphEndIndices: Set<Int> = []
+    /// Android textBottomJustify 在接近填满的页面上为每个行间隙增加的点数。
+    /// nil 表示保留自然行距；短页、图片页和单行页不会设置它。
     var justifiedGap: Double? = nil
+    /// 生产页采用的横向与中文断行开关，和分页时的布局属性保持一致。
+    var fullJustify: Bool = false
+    var zhLayout: Bool = false
     /// 等长度排版副本：跨页后沿用整段识别的开闭引号；blocks 仍是原文。
     var displayParagraphs: [Int: String] = [:]
 }

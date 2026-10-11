@@ -34,17 +34,24 @@ struct PageContentView: View {
     var volumeTitle: String? = nil
     var showsChapterTitle = false
 
+    private var effectiveLineSpacing: CGFloat {
+        CGFloat(lineSpacing) + CGFloat(page.justifiedGap ?? 0)
+    }
+
     private func paragraphLeadingGap(at index: Int) -> CGFloat {
-        guard index > 0, case .paragraph = page.blocks[index - 1] else { return 0 }
-        return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: 0)
+        guard index > 0, case .paragraph = page.blocks[index - 1], case .paragraph = page.blocks[index] else { return 0 }
+        return ReaderTextLayout.paragraphGap(lineSpacing: effectiveLineSpacing, paragraphSpacing: CGFloat(paragraphSpacing))
     }
 
     private var measuredTextHeight: CGFloat? {
         guard !page.blocks.isEmpty, page.blockHeights.count == page.blocks.count,
               page.blocks.allSatisfy({ if case .paragraph = $0 { return true }; return false }) else { return nil }
+        let naturalGap = ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing),
+                                                       paragraphSpacing: CGFloat(paragraphSpacing))
+        let rows = page.blockLineCounts.reduce(0, +)
+        let extra = CGFloat(page.justifiedGap ?? 0) * CGFloat(max(rows - 1, 0))
         return CGFloat(page.blockHeights.reduce(0, +))
-            + CGFloat(max(page.blocks.count - 1, 0))
-                * ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: CGFloat(paragraphSpacing))
+            + CGFloat(max(page.blocks.count - 1, 0)) * naturalGap + extra
     }
 
     private func bodyRegionHeight(in size: CGSize) -> CGFloat {
@@ -72,16 +79,20 @@ struct PageContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)) + CGFloat(paragraphSpacing))
                 }
-                VStack(alignment: .leading, spacing: CGFloat(paragraphSpacing)) {
+                VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(page.blocks.enumerated()), id: \.offset) { blockIndex, block in
                     switch block {
                     case .paragraph(let t, let count, let url):
                         let continuation = page.continuationIndices.contains(blockIndex)
                         InlineCommentParagraph(text: page.displayParagraphs[blockIndex] ?? t, count: count,
                                                 fontSize: fontSize,
-                                                lineSpacing: lineSpacing,
+                                                lineSpacing: effectiveLineSpacing,
                                                 color: UIColor(fg),
                                                 continuation: continuation,
+                                                fullJustify: page.fullJustify,
+                                                zhLayout: page.zhLayout,
+                                                paragraphEnd: page.paragraphEndIndices.isEmpty
+                                                    ? true : page.paragraphEndIndices.contains(blockIndex),
                                                 onTap: { onTapComment(url) })
                             .frame(maxWidth: .infinity, alignment: .leading)
                             // 正文 frame 由同一 TextKit 测量，段界只追加基础行距；
@@ -116,7 +127,7 @@ struct PageContentView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(height: measuredTextHeight, alignment: .topLeading)
-                .frame(height: bodyRegionHeight(in: geometry.size), alignment: .bottomLeading)
+                .frame(height: bodyRegionHeight(in: geometry.size), alignment: .topLeading)
                 }
             }
             .foregroundStyle(fg)

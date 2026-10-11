@@ -7,8 +7,14 @@ enum ReaderPaginator {
         var pageSize: CGSize
         var safeInsets: UIEdgeInsets = .zero
         var fontSize: CGFloat
+        /// These two values are physical points at the UIKit boundary. The
+        /// ReaderView converts Android's tenth-of-line settings before it
+        /// creates this configuration.
         var lineSpacing: CGFloat
         var paragraphSpacing: CGFloat = 8
+        var fullJustify: Bool = false
+        var zhLayout: Bool = false
+        var bottomJustify: Bool = false
         var leftInset: CGFloat = 20
         var rightInset: CGFloat = 20
         var topInset: CGFloat = 16
@@ -57,7 +63,9 @@ enum ReaderPaginator {
         var pages: [BookPage] = []
         var pageBlocks: [ContentBlock] = []
         var pageHeights: [Double] = []
+        var pageLineCounts: [Int] = []
         var continuations = Set<Int>()
+        var paragraphEnds = Set<Int>()
         var displayParagraphs: [Int: String] = [:]
         var used: CGFloat = 0
         var offset = 0
@@ -65,22 +73,51 @@ enum ReaderPaginator {
 
         func flush() {
             guard !pageBlocks.isEmpty else { return }
+            let lineCount = pageLineCounts.reduce(0, +)
+            let capacity = pages.isEmpty ? configuration.firstPageBodyHeight : configuration.bodyHeight
+            var justifiedGap: Double?
+            // TextPage.upLinesPosition() from legado-E only distributes the
+            // spare space on a nearly full text page. The first row stays put;
+            // a short terminal page keeps its natural top position.
+            if configuration.bottomJustify,
+               lineCount > 1,
+               pageBlocks.allSatisfy({ if case .paragraph = $0 { return true }; return false }) {
+                let lineHeight = ReaderTextLayout.metrics(fontSize: configuration.fontSize).lineHeight
+                let remainingAfterLineAdvance = capacity - used - configuration.lineSpacing
+                if remainingAfterLineAdvance < lineHeight {
+                    let surplus = max(capacity - used, 0)
+                    if surplus > 0.01 {
+                        justifiedGap = Double(surplus / CGFloat(lineCount - 1))
+                    }
+                }
+            }
             pages.append(BookPage(blocks: pageBlocks, startOffset: pageStart,
                                   continuationIndices: continuations,
-                                  blockHeights: pageHeights, displayParagraphs: displayParagraphs))
+                                  blockHeights: pageHeights,
+                                  blockLineCounts: pageLineCounts,
+                                  paragraphEndIndices: paragraphEnds,
+                                  justifiedGap: justifiedGap,
+                                  fullJustify: configuration.fullJustify,
+                                  zhLayout: configuration.zhLayout,
+                                  displayParagraphs: displayParagraphs))
             pageBlocks.removeAll(keepingCapacity: true)
             pageHeights.removeAll(keepingCapacity: true)
+            pageLineCounts.removeAll(keepingCapacity: true)
             continuations.removeAll(keepingCapacity: true)
+            paragraphEnds.removeAll(keepingCapacity: true)
             displayParagraphs.removeAll(keepingCapacity: true)
             used = 0
             pageStart = offset
         }
 
-        func append(_ block: ContentBlock, height: CGFloat, continuation: Bool = false) {
+        func append(_ block: ContentBlock, height: CGFloat, lineCount: Int = 0,
+                    continuation: Bool = false, paragraphEnd: Bool = false) {
             used += configuration.spacing(before: block, after: pageBlocks.last)
             if continuation { continuations.insert(pageBlocks.count) }
+            if paragraphEnd { paragraphEnds.insert(pageBlocks.count) }
             pageBlocks.append(block)
             pageHeights.append(Double(height))
+            pageLineCounts.append(lineCount)
             used += height
         }
 
@@ -135,12 +172,18 @@ enum ReaderPaginator {
                     // 用实际渲染的片段复核高度（独立片段的尾行字距可能稍有差异）。
                     var end = candidate >= 0 ? lineEnds[candidate].characterEnd : index
                     var height: CGFloat = 0
+                    var lineCount = 0
                     while end > index {
-                        height = measured(measurer: measurer, chars: chars, start: index, count: end - index,
-                                          commentCount: end == chars.count ? commentCount : 0,
-                                          width: width, fontSize: configuration.fontSize,
-                                          lineSpacing: configuration.lineSpacing,
-                                          continuation: continuation)
+                        let result = measured(measurer: measurer, chars: chars, start: index, count: end - index,
+                                               commentCount: end == chars.count ? commentCount : 0,
+                                               width: width, fontSize: configuration.fontSize,
+                                               lineSpacing: configuration.lineSpacing,
+                                               continuation: continuation,
+                                               fullJustify: configuration.fullJustify,
+                                               zhLayout: configuration.zhLayout,
+                                               paragraphEnd: end == chars.count)
+                        height = result.height
+                        lineCount = result.count
                         if height <= room + 0.01 { break }
                         candidate -= 1
                         while candidate >= lineCursor && lineEnds[candidate].characterEnd >= end {
@@ -148,16 +191,8 @@ enum ReaderPaginator {
                         }
                         end = candidate >= lineCursor ? lineEnds[candidate].characterEnd : index
                     }
-                    // 页底只容纳新段落首行时，整段起始移到下一页。
-                    // 保留真实 TextKit 行尾，不通过增减行距制造空间。
-                    if index == 0, end > index, end < chars.count, !pageBlocks.isEmpty,
-                       candidate >= lineCursor,
-                       lineEnds[candidate].characterEnd == lineEnds[lineCursor].characterEnd,
-                       let second = lineEnds.dropFirst(candidate + 1).first(where: { $0.characterEnd > end }),
-                       second.bottom - origin <= configuration.bodyHeight + 0.01 {
-                        flush()
-                        continue
-                    }
+                    // legado-E packs complete rows greedily, including a new
+                    // paragraph's first row at the bottom of a page.
                     if end == index {
                         if !pageBlocks.isEmpty {
                             flush()
@@ -169,11 +204,16 @@ enum ReaderPaginator {
                         } else {
                             end = index + 1
                         }
-                        height = measured(measurer: measurer, chars: chars, start: index, count: end - index,
-                                          commentCount: end == chars.count ? commentCount : 0,
-                                          width: width, fontSize: configuration.fontSize,
-                                          lineSpacing: configuration.lineSpacing,
-                                          continuation: continuation)
+                        let result = measured(measurer: measurer, chars: chars, start: index, count: end - index,
+                                              commentCount: end == chars.count ? commentCount : 0,
+                                              width: width, fontSize: configuration.fontSize,
+                                              lineSpacing: configuration.lineSpacing,
+                                              continuation: continuation,
+                                              fullJustify: configuration.fullJustify,
+                                              zhLayout: configuration.zhLayout,
+                                              paragraphEnd: end == chars.count)
+                        height = result.height
+                        lineCount = result.count
                     }
                     let isLast = end == chars.count
                     let piece = String(rawChars[index..<end])
@@ -182,7 +222,8 @@ enum ReaderPaginator {
                     append(.paragraph(text: piece,
                                       commentCount: isLast ? commentCount : 0,
                                       commentURL: isLast ? commentURL : nil),
-                           height: height, continuation: continuation)
+                           height: height, lineCount: lineCount, continuation: continuation,
+                           paragraphEnd: isLast)
                     offset += end - index
                     index = end
                     continuation = true
@@ -213,10 +254,13 @@ enum ReaderPaginator {
 
     private static func measured(measurer: ReaderTextLayout.Measurer, chars: [Character], start: Int,
                                  count: Int, commentCount: Int, width: CGFloat, fontSize: CGFloat,
-                                 lineSpacing: CGFloat, continuation: Bool) -> CGFloat {
+                                 lineSpacing: CGFloat, continuation: Bool,
+                                 fullJustify: Bool, zhLayout: Bool) -> (count: Int, height: CGFloat) {
         let text = String(chars[start..<(start + count)])
-        return measurer.height(text: text, count: commentCount, width: width, fontSize: fontSize,
-                               lineSpacing: lineSpacing, continuation: continuation)
+        return measurer.rows(text: text, count: commentCount, width: width, fontSize: fontSize,
+                             lineSpacing: lineSpacing, continuation: continuation,
+                             fullJustify: fullJustify, zhLayout: zhLayout,
+                             paragraphEnd: count == chars.count - start)
     }
 
     private struct LineEnd {
@@ -234,7 +278,8 @@ enum ReaderPaginator {
         let text = String(chars[start...])
         view.attributedText = ReaderTextLayout.attributedText(text: text, count: commentCount,
             fontSize: configuration.fontSize, lineSpacing: configuration.lineSpacing,
-            color: .black, continuation: continuation, width: width)
+            color: .black, continuation: continuation, width: width,
+            fullJustify: configuration.fullJustify, zhLayout: configuration.zhLayout)
         view.textContainer.widthTracksTextView = false
         view.textContainer.heightTracksTextView = false
         view.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
