@@ -49,6 +49,7 @@ final class BottomBubbleTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(report["bubbleOutlineMinIoU"] as? Double), 0.90)
         XCTAssertLessThanOrEqual(try XCTUnwrap(report["bubbleInkBoxErrorPixels"] as? Double), 2)
         XCTAssertLessThanOrEqual(try XCTUnwrap(report["bubbleCanvasSizeError"] as? Double), 0.02)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(report["bubbleDigitInkBoxErrorPixels"] as? Double), 2)
         for key in ["referenceAttachmentGeometryError", "referenceCanvasBaselineError",
                     "referenceInkBaselineError", "referenceInkTailAdvanceError"] {
             XCTAssertLessThanOrEqual(try XCTUnwrap(errors[key]).doubleValue, 0.5, key)

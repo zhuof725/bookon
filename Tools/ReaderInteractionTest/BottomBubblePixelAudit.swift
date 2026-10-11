@@ -62,6 +62,11 @@ enum BottomBubblePixelAudit {
         let expectedOutline = components(reference).first ?? []
         let expectedBox = CGRect(x: 3, y: 3, width: 103, height: 79)
         var minIoU: Double = 1, maxBoxError: CGFloat = 0, sizeError: CGFloat = 0
+        var digitBoxError: CGFloat = 0
+        let expectedDigits: [Int: CGRect] = [1: CGRect(x: 49, y: 32, width: 10, height: 23),
+            3: CGRect(x: 46, y: 31, width: 17, height: 24),
+            23: CGRect(x: 36, y: 31, width: 38, height: 24),
+            4: CGRect(x: 45, y: 32, width: 19, height: 23)]
         var samples: [[String: Any]] = []
         for count in [1,3,23,4] {
             let rendered = CommentBubble.image(count: count, fontSize: 23, color: .black)
@@ -76,10 +81,15 @@ enum BottomBubblePixelAudit {
             maxBoxError = max(maxBoxError, abs(box.minX - expectedBox.minX), abs(box.minY - expectedBox.minY),
                               abs(box.maxX - expectedBox.maxX), abs(box.maxY - expectedBox.maxY))
             sizeError = max(sizeError, abs(rendered.size.width - 109.0 / 3), abs(rendered.size.height - 85.0 / 3))
-            samples.append(["count": count, "outlineIoU": iou, "inkBox": rect(box), "numberBox": rect(bounds(inside, width: 109))])
+            let digitBox = bounds(inside, width: 109)
+            if let target = expectedDigits[count] {
+                digitBoxError = max(digitBoxError, abs(digitBox.minX - target.minX), abs(digitBox.minY - target.minY),
+                                    abs(digitBox.maxX - target.maxX), abs(digitBox.maxY - target.maxY))
+            }
+            samples.append(["count": count, "outlineIoU": iou, "inkBox": rect(box), "numberBox": rect(digitBox)])
         }
         return ["pixelReferenceLoaded": true, "bubbleOutlineMinIoU": minIoU,
                 "bubbleInkBoxErrorPixels": Double(maxBoxError), "bubbleCanvasSizeError": Double(sizeError),
-                "bubblePixelSamples": samples]
+                "bubbleDigitInkBoxErrorPixels": Double(digitBoxError), "bubblePixelSamples": samples]
     }
 }

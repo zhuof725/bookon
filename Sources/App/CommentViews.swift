@@ -128,7 +128,7 @@ enum CommentBubble {
             context.restoreGState()
             // Fixed body size for both 1 and 23. Center the number by its ink,
             // not the font's advance (which biases narrow digits sideways).
-            let font = UIFont.systemFont(ofSize: 11 * scale, weight: .semibold)
+            let font = UIFont.systemFont(ofSize: 10.8 * scale, weight: .semibold)
             let text = NSAttributedString(string: label, attributes: [.font: font, .foregroundColor: color])
             let line = CTLineCreateWithAttributedString(text)
             let ink = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
@@ -136,7 +136,7 @@ enum CommentBubble {
             context.translateBy(x: 0, y: canvas.height)
             context.scaleBy(x: 1, y: -1)
             context.textMatrix = .identity
-            let center = CGPoint(x: 54.5 / 3 * scale, y: canvas.height - 43 / 3 * scale)
+            let center = CGPoint(x: 54.5 / 3 * scale, y: canvas.height - 45 / 3 * scale)
             context.textPosition = CGPoint(x: center.x - ink.midX, y: center.y - ink.midY)
             CTLineDraw(line, context)
             context.restoreGState()
@@ -284,7 +284,16 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
         let glyphs = layoutManager.glyphRange(forCharacterRange: NSRange(location: bubbleIndex, length: 1),
                                              actualCharacterRange: nil)
         guard glyphs.length > 0 else { return nil }
-        let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+        guard let attachment = textStorage.attribute(.attachment, at: bubbleIndex,
+            effectiveRange: nil) as? NSTextAttachment else { return nil }
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+        let origin = layoutManager.location(forGlyphAt: glyphs.location)
+        // boundingRect(forGlyphRange:) includes the fixed *line box*, not the
+        // actual attachment image. TextKit's attachment glyph origin already
+        // incorporates attachment.bounds.origin.y; subtract the image height.
+        let rect = CGRect(x: line.minX + origin.x + attachment.bounds.minX,
+                          y: line.minY + origin.y - attachment.bounds.height,
+                          width: attachment.bounds.width, height: attachment.bounds.height)
         guard rect.width > 0, rect.height > 0 else { return nil }
         return rect.offsetBy(dx: textContainerInset.left, dy: textContainerInset.top)
     }

@@ -442,7 +442,11 @@ private enum BottomBubbleAudit {
         let manager = view.layoutManager
         let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: storage.length - 1, length: 1),
                                        actualCharacterRange: nil)
-        let glyphRect = manager.boundingRect(forGlyphRange: glyphs, in: view.textContainer)
+        let glyphLine = manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+        let glyphOrigin = manager.location(forGlyphAt: glyphs.location)
+        let glyphRect = CGRect(x: glyphLine.minX + glyphOrigin.x + attachment.bounds.minX,
+            y: glyphLine.minY + glyphOrigin.y - attachment.bounds.height,
+            width: attachment.bounds.width, height: attachment.bounds.height)
             .offsetBy(dx: view.textContainerInset.left, dy: view.textContainerInset.top)
         let lastCharacter = (text as NSString).rangeOfComposedCharacterSequence(at: text.utf16.count - 1)
         let lastGlyphs = manager.glyphRange(forCharacterRange: lastCharacter, actualCharacterRange: nil)
