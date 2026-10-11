@@ -39,9 +39,28 @@ struct PageContentView: View {
         return ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: 0)
     }
 
+    private var measuredTextHeight: CGFloat? {
+        guard !page.blocks.isEmpty, page.blockHeights.count == page.blocks.count,
+              page.blocks.allSatisfy({ if case .paragraph = $0 { return true }; return false }) else { return nil }
+        return CGFloat(page.blockHeights.reduce(0, +))
+            + CGFloat(max(page.blocks.count - 1, 0))
+                * ReaderTextLayout.paragraphGap(lineSpacing: CGFloat(lineSpacing), paragraphSpacing: CGFloat(paragraphSpacing))
+    }
+
+    private func bodyRegionHeight(in size: CGSize) -> CGFloat {
+        let textWidth = max(size.width - CGFloat(leftMargin + rightMargin), 1)
+        let header: CGFloat = showsChapterTitle && pageNumber == 1 && !title.isEmpty
+            ? ChapterTitleLayout.height(title: title, fontSize: CGFloat(fontSize), width: textWidth)
+                + ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)) + CGFloat(paragraphSpacing)
+            : 0
+        return max(size.height - safeInsets.top - safeInsets.bottom
+            - CGFloat(topMargin + bottomMargin) - 24 - header, 0)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             bg.ignoresSafeArea()
+            GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 0) {
                 if let volumeTitle {
                     Spacer(minLength: 0)
@@ -96,7 +115,8 @@ struct PageContentView: View {
                 }
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .frame(height: measuredTextHeight, alignment: .topLeading)
+                .frame(height: bodyRegionHeight(in: geometry.size), alignment: .bottomLeading)
                 }
             }
             .foregroundStyle(fg)
@@ -105,6 +125,7 @@ struct PageContentView: View {
             .padding(.top, safeInsets.top + CGFloat(topMargin))
             .padding(.bottom, safeInsets.bottom + CGFloat(bottomMargin) + 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
             .overlay(alignment: .bottom) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(title).lineLimit(1).accessibilityIdentifier("reader-footer-title")
