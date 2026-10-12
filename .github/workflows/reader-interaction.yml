@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, appearance, theme, full]
+        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -36,7 +36,7 @@ jobs:
           name: toc-rule-regression-log
           path: toc-rule-regression.log
       - name: Body replacement engine and repository regression
-        if: ${{ inputs.suite == 'body-rules' }}
+        if: ${{ (inputs.suite == 'body-rules' || inputs.suite == 'body-only') }}
         run: |
           set -euo pipefail
           {
@@ -46,7 +46,7 @@ jobs:
             "$RUNNER_TEMP/body-replace-regression"
           } 2>&1 | tee body-replace-regression.log
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && inputs.suite == 'body-rules' }}
+        if: ${{ always() && (inputs.suite == 'body-rules' || inputs.suite == 'body-only') }}
         with:
           name: body-replace-regression-log
           path: body-replace-regression.log
@@ -87,6 +87,7 @@ jobs:
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
             detail) ARGS=(-only-testing:ReaderInteractionTests/DetailTests) ;;
             toc-rules) ARGS=(-only-testing:ReaderInteractionTests/TocRulesTests) ;;
+            body-only) ARGS=(-only-testing:ReaderInteractionTests/BodyRulesTests) ;;
             body-rules) ARGS=(-only-testing:ReaderInteractionTests/BodyRulesTests -only-testing:ReaderInteractionTests/TocRulesTests) ;;
             paper) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests/testNativeCurlCachedChaptersThemeAndRefresh) ;;
             scroll) ARGS=(-only-testing:ReaderInteractionTests/ContinuousScrollTests) ;;
@@ -157,7 +158,7 @@ jobs:
           path: reader-screenshots/
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (inputs.suite == 'body-rules' || inputs.suite == 'full') }}
+        if: ${{ always() && ((inputs.suite == 'body-rules' || inputs.suite == 'body-only') || inputs.suite == 'full') }}
         with:
           name: body-rules-screenshots
           path: |

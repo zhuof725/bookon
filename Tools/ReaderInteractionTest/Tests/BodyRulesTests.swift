@@ -39,7 +39,13 @@ final class BodyRulesTests: XCTestCase {
             field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.2)).tap()
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
         }
-        field.typeText(text)
+        var typed = ""
+        for character in text {
+            field.typeText(String(character))
+            typed.append(character)
+            let accepted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", typed), object: field)
+            XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 3), .completed)
+        }
         XCTAssertEqual(field.value as? String, text)
         let hide = app.buttons["bodyRules.hideKeyboard"]
         XCTAssertTrue(hide.waitForExistence(timeout: 4))
