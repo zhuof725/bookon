@@ -87,9 +87,9 @@ struct BookshelfScreen: View {
                     if visibleBooks.isEmpty {
                         VStack(spacing: 14) {
                             Image(systemName: "books.vertical").font(.system(size: 36)).foregroundStyle(.secondary)
-                            Text(books.isEmpty ? "书架是空的" : "这个分类暂无书籍").font(.headline)
+                            Text(books.isEmpty ? "书架是空的" : "这个分类暂无书籍").appFont(.headline)
                             Text(books.isEmpty ? "点击左上角搜索，或在右上角菜单导入 TXT / EPUB。" : "试试切换到「全部」。")
-                                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                .appFont(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }.padding(36).padding(.top, 70).frame(maxWidth: .infinity)
                         .accessibilityIdentifier("shelf.empty")
                     } else if layout == .grid {
@@ -132,7 +132,7 @@ struct BookshelfScreen: View {
                 .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("搜索书籍").accessibilityIdentifier("shelf.search")
             Spacer()
             Button { menu = menu == "filter" ? nil : "filter" } label: {
-                HStack(spacing: 7) { Text(filter.rawValue).font(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
+                HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
                     .padding(.horizontal, 17).frame(height: 42)
             }.modifier(ShelfGlass(shape: Capsule())).accessibilityLabel("分类：" + filter.rawValue).accessibilityIdentifier("shelf.filter")
             Spacer()
@@ -151,7 +151,7 @@ struct BookshelfScreen: View {
             Button("移除（\(selectedBooks.count)）", role: .destructive) { confirmRemoval = true }
                 .disabled(selectedBooks.isEmpty).accessibilityIdentifier("shelf.removeSelected")
             Button("完成") { selecting = false; selection.removeAll() }.padding(.leading, 10).accessibilityIdentifier("shelf.finishSelection")
-        }.font(.subheadline).padding(.horizontal, 24)
+        }.appFont(.subheadline).padding(.horizontal, 24)
     }
 
     private func bookButton(_ book: Book, grid: Bool) -> some View {
@@ -220,9 +220,9 @@ struct BookshelfScreen: View {
         Button(action: action) {
             HStack(spacing: 11) {
                 if let icon { Image(systemName: icon).font(.system(size: 19, weight: .medium)).foregroundStyle(AppPalette.accent).frame(width: 22) }
-                Text(title).font(.system(size: 16))
+                Text(title).appFont(.system(size: 16))
                 Spacer(minLength: 5)
-                if let detail { Text(detail).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1); Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary) }
+                if let detail { Text(detail).appFont(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1); Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary) }
             }.padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
         }.accessibilityIdentifier(id)
     }
@@ -256,8 +256,8 @@ struct ShelfBookCard: View {
                 VStack(spacing: 8) {
                     cover.aspectRatio(0.70, contentMode: .fit)
                     VStack(spacing: 3) {
-                        Text(book.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                        Text(ShelfBooks.subtitle(book)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(book.name).appFont(.system(size: 13, weight: .semibold)).lineLimit(1)
+                        Text(ShelfBooks.subtitle(book)).appFont(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     }.frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
                         .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 13, style: .continuous)))
                 }
@@ -265,8 +265,8 @@ struct ShelfBookCard: View {
                 HStack(spacing: 14) {
                     cover.frame(width: 62, height: 88)
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(book.name).font(.headline).lineLimit(2)
-                        Text(ShelfBooks.subtitle(book)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        Text(book.name).appFont(.headline).lineLimit(2)
+                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
                 }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 18)))

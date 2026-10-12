@@ -22,6 +22,8 @@ targets:
       - path: ../../Sources/Models/TxtTocRule.swift
       - path: ../../Sources/App/TxtTocRulesView.swift
       - path: ../../Sources/App/AppPalette.swift
+      - path: ../../Sources/App/AppTypography.swift
+      - path: AppFontHarness.swift
       - path: ShelfHarness.swift
       - path: DetailHarness.swift
       - path: ../../Sources/App/BookDetailScreen.swift

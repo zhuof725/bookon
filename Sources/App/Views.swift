@@ -17,7 +17,7 @@ struct SearchView: View {
             if searching || !progress.isEmpty {
                 HStack {
                     if searching { ProgressView() }
-                    Text(progress).font(.footnote).foregroundStyle(.secondary)
+                    Text(progress).appFont(.footnote).foregroundStyle(.secondary)
                 }
             }
             ForEach(hits) { h in
@@ -276,7 +276,7 @@ struct ReaderView: View {
                         Group {
                             if c.isVolume {
                                 Button { showToc = false; go(c.index) } label: {
-                                    Text(c.title).font(.headline)
+                                    Text(c.title).appFont(.headline)
                                         .foregroundStyle(c.index == index ? AppPalette.accent : Color.secondary)
                                 }
                                 .listRowBackground(Color.clear)
@@ -341,7 +341,7 @@ struct ReaderView: View {
         .overlay(alignment: .bottom) {
             if let target = retryTarget, !loading {
                 VStack(spacing: 8) {
-                    Text(error ?? "章节加载失败").font(.caption).lineLimit(2)
+                    Text(error ?? "章节加载失败").appFont(.caption).lineLimit(2)
                     HStack {
                         Button("重试加载") { loadChapter(target, landing: retryLanding) }
                         Button("留在本章") { retryTarget = nil; error = nil }
@@ -612,7 +612,7 @@ struct ReaderView: View {
         if let target = scrollNeighbor(direction) {
             if let message = scrollErrors[target] {
                 VStack(spacing: 8) {
-                    Text(message).font(.caption).foregroundStyle(theme.fg.opacity(0.65)).lineLimit(2)
+                    Text(message).appFont(.caption).foregroundStyle(theme.fg.opacity(0.65)).lineLimit(2)
                     Button("重试加载\(direction > 0 ? "下一章" : "上一章")") { loadScrollNeighbor(direction, retry: true) }
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 10).background(theme.bg.opacity(0.96))
@@ -998,10 +998,10 @@ struct ReaderView: View {
                 .onTapGesture { commentTapped(click) }
         case .hotComment(let label, let t, let click):
             HStack(spacing: 10) {
-                Text(label).font(.system(size: max(settings.fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
+                Text(label).appFont(.system(size: max(settings.fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 3)
                     .background(Capsule().fill(Color(white: 0.23)))
-                Text(t).font(.system(size: max(settings.fontSize - 3, 12))).lineLimit(1)
+                Text(t).appFont(.system(size: max(settings.fontSize - 3, 12))).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -1011,9 +1011,9 @@ struct ReaderView: View {
             .onTapGesture { commentTapped(click) }
         case .chapterComments(let title, let count, _, let click):
             HStack {
-                Text(title).font(.system(size: settings.fontSize - 2, weight: .bold))
+                Text(title).appFont(.system(size: settings.fontSize - 2, weight: .bold))
                 Spacer()
-                Text(count).font(.system(size: settings.fontSize - 4)).foregroundStyle(theme.fg.opacity(0.7))
+                Text(count).appFont(.system(size: settings.fontSize - 4)).foregroundStyle(theme.fg.opacity(0.7))
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 16).fill(theme.fg.opacity(0.07)))

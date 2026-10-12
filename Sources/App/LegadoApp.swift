@@ -10,6 +10,7 @@ struct LegadoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .modifier(AppTypographyRoot())
                 .modifier(MonochromeAppStyle())
                 .onAppear { VerifyPresenter.install() }
                 .environmentObject(store)
@@ -127,9 +128,9 @@ struct BookRow: View {
             .frame(width: 48, height: 66)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             VStack(alignment: .leading, spacing: 4) {
-                Text(book.name).font(.headline).lineLimit(1)
-                Text(book.author).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                Text(book.name).appFont(.headline).lineLimit(1)
+                Text(book.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                if !subtitle.isEmpty { Text(subtitle).appFont(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
         }
     }
@@ -151,13 +152,13 @@ struct SourcesView: View {
         List {
             Section {
                 Text("共 \(store.sources.count) 个书源，启用 \(store.sources.filter { $0.isEnabled }.count) 个")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .appFont(.footnote).foregroundStyle(.secondary)
             }
             ForEach(store.sources) { s in
                 HStack {
                     VStack(alignment: .leading) {
                         Text(s.bookSourceName).lineLimit(1)
-                        Text(s.bookSourceGroup ?? s.bookSourceUrl).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(s.bookSourceGroup ?? s.bookSourceUrl).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
                     Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
@@ -188,7 +189,7 @@ struct SourcesView: View {
         .sheet(isPresented: $showImport) {
             NavigationStack {
                 TextEditor(text: $input)
-                    .font(.system(.footnote, design: .monospaced))
+                    .appFont(.system(.footnote, design: .monospaced))
                     .padding()
                     .navigationTitle("输入书源链接或 JSON")
                     .navigationBarTitleDisplayMode(.inline)

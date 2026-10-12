@@ -44,11 +44,11 @@ struct ReaderTopChrome: View {
 
             VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: titleSize, weight: .semibold))
+                    .appFont(.system(size: titleSize, weight: .semibold))
                     .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     .accessibilityIdentifier("reader.title")
                 Text(source)
-                    .font(.system(size: sourceSize))
+                    .appFont(.system(size: sourceSize))
                     .foregroundStyle(foreground.opacity(0.65))
                     .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     .accessibilityIdentifier("reader.source")
@@ -200,14 +200,14 @@ struct ReaderBottomChrome: View {
 
     private var chapterText: some View {
         Text(chapter)
-            .font(.system(size: headerSize, weight: .semibold))
+            .appFont(.system(size: headerSize, weight: .semibold))
             .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
             .accessibilityIdentifier("reader.chapter")
     }
 
     private var positionText: some View {
         Text(positionLabel)
-            .font(.system(size: headerSize))
+            .appFont(.system(size: headerSize))
             .foregroundStyle(foreground.opacity(0.65))
             .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
             .accessibilityIdentifier("reader.position")

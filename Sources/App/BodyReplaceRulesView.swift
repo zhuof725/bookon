@@ -24,13 +24,13 @@ struct BodyReplaceRulesView: View {
                         .frame(width: 46, height: 46).modifier(ShelfGlass(shape: Circle()))
                 }.buttonStyle(.plain).accessibilityLabel("返回").accessibilityIdentifier("bodyRules.back")
                 Spacer()
-                Text("正文替换规则").font(.headline)
+                Text("正文替换规则").appFont(.headline)
                 Spacer()
                 Color.clear.frame(width: 46, height: 46)
             }.padding(.horizontal, 18).padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("规则列表 · \(rules.count)/50").font(.title2.bold()).padding(.horizontal, 18)
+                    Text("规则列表 · \(rules.count)/50").appFont(.title2.bold()).padding(.horizontal, 18)
                     VStack(spacing: 0) {
                         if rules.isEmpty {
                             Text("还没有正文替换规则\n添加规则可清理阅读正文中的指定文字。")
@@ -42,9 +42,9 @@ struct BodyReplaceRulesView: View {
                             HStack(spacing: 12) {
                                 Button { editing = rule } label: {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(rule.name).font(.system(size: 19)).foregroundStyle(.primary)
-                                        Text(rule.isRegex ? "正则表达式" : "字面替换").font(.caption).foregroundStyle(.secondary)
-                                        Text(rule.pattern).font(.system(size: 14, design: .monospaced))
+                                        Text(rule.name).appFont(.system(size: 19)).foregroundStyle(.primary)
+                                        Text(rule.isRegex ? "正则表达式" : "字面替换").appFont(.caption).foregroundStyle(.secondary)
+                                        Text(rule.pattern).appFont(.system(size: 14, design: .monospaced))
                                             .foregroundStyle(.secondary).lineLimit(2)
                                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).accessibilityIdentifier("bodyRules.rule." + rule.id)
@@ -66,14 +66,14 @@ struct BodyReplaceRulesView: View {
                         Button {
                             editing = BodyReplaceRule(id: UUID().uuidString, name: "", pattern: "", replacement: "", isRegex: false, enabled: true)
                         } label: {
-                            Label("添加替换规则", systemImage: "plus.circle").font(.system(size: 20))
+                            Label("添加替换规则", systemImage: "plus.circle").appFont(.system(size: 20))
                                 .padding(18).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain).disabled(rules.count >= 50).accessibilityIdentifier("bodyRules.add")
                     }.background(AppPalette.surface, in: RoundedRectangle(cornerRadius: 25))
                     Text("按列表顺序执行已启用规则，仅改变阅读正文的显示，不修改原文、缓存或标题，也不处理图片或链接。保存后请退出并重新进入阅读器，新阅读会话才会使用新规则。")
-                        .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
+                        .appFont(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
                     Text("每个段落单独匹配，正则表达式不能跨段。替换内容留空表示删除匹配文字；超时或超出长度限制时，该条规则保持处理前的段落。")
-                        .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
+                        .appFont(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
             }
         }
@@ -121,7 +121,7 @@ private struct BodyReplaceRuleEditor: View {
     }
 
     private func editor(_ text: Binding<String>, id: String) -> some View {
-        TextEditor(text: text).font(.system(.callout, design: .monospaced))
+        TextEditor(text: text).appFont(.system(.callout, design: .monospaced))
             .autocorrectionDisabled().textInputAutocapitalization(.never)
             .focused($activeField, equals: id)
             .frame(minHeight: 80).accessibilityIdentifier("bodyRules." + id)
@@ -137,24 +137,24 @@ private struct BodyReplaceRuleEditor: View {
                 }
                 Section("查找内容") {
                     editor($draft.pattern, id: "pattern")
-                    if let invalid = draft.validationMessage { Text(invalid).font(.footnote).foregroundStyle(.secondary) }
+                    if let invalid = draft.validationMessage { Text(invalid).appFont(.footnote).foregroundStyle(.secondary) }
                 }
                 Section("替换内容") {
                     editor($draft.replacement, id: "replacement")
                     Text("留空表示删除。字面替换会原样插入 $ 和反斜杠；正则模式支持 $1、$2 等捕获组。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                 }
                 Section("测试正文") {
                     editor($sample, id: "sample")
                     Text("测试当前规则（忽略启用开关），每行视为一个段落，不跨段匹配。超限时保留该段原文。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                     Button("测试替换") {
                         var candidate = draft; candidate.enabled = true
                         let engine = BodyReplaceEngine(rules: [candidate])
                         preview = sample.components(separatedBy: .newlines).map { engine.apply($0) }.joined(separator: "\n")
                     }.disabled(draft.validationMessage != nil || sample.utf16.count > 20_000)
                         .accessibilityIdentifier("bodyRules.test")
-                    if sample.utf16.count > 20_000 { Text("测试内容不能超过 20000 个 UTF-16 单位").font(.footnote) }
+                    if sample.utf16.count > 20_000 { Text("测试内容不能超过 20000 个 UTF-16 单位").appFont(.footnote) }
                     if let preview {
                         Text(preview.isEmpty ? "（替换结果为空）" : preview).textSelection(.enabled)
                             .accessibilityIdentifier("bodyRules.result")
@@ -162,7 +162,7 @@ private struct BodyReplaceRuleEditor: View {
                 }
                 Section {
                     Text("保存仅影响下一次进入阅读器的会话。原文、缓存、标题、图片与链接不变。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                 }
                 if existing {
                     Section { Button("删除规则", role: .destructive, action: onDelete).accessibilityIdentifier("bodyRules.delete") }

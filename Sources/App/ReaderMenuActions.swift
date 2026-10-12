@@ -85,13 +85,13 @@ struct ReaderChapterSearch: View {
         NavigationStack {
             List {
                 Section {
-                    Text(chapter).font(.subheadline).foregroundStyle(.secondary)
+                    Text(chapter).appFont(.subheadline).foregroundStyle(.secondary)
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("输入关键词，搜索本章正文").foregroundStyle(.secondary)
                     } else if matches.isEmpty {
                         Text("本章没有匹配内容").foregroundStyle(.secondary)
                     } else {
-                        Text("找到 \(matches.count) 个相关段落").font(.caption).foregroundStyle(.secondary)
+                        Text("找到 \(matches.count) 个相关段落").appFont(.caption).foregroundStyle(.secondary)
                     }
                 }
                 ForEach(matches) { result in

@@ -85,7 +85,7 @@ struct BookDetailScreen: View {
         HStack(spacing: 12) {
             navigationButton("返回", symbol: "chevron.left", id: "detail.back", action: onBack)
             Text("书籍详情")
-                .font(.headline)
+                .appFont(.headline)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
@@ -162,12 +162,12 @@ struct BookDetailScreen: View {
     private var metadata: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(book.name)
-                .font(.title2.weight(.bold))
+                .appFont(.title2.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("detail.title")
             Label(nonempty(book.author) ?? "作者未知", systemImage: "person.fill")
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("detail.author")
@@ -189,7 +189,7 @@ struct BookDetailScreen: View {
 
     private func pill(_ text: String) -> some View {
         Text(text)
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(AppPalette.accent)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
@@ -200,7 +200,7 @@ struct BookDetailScreen: View {
     private func readButton(inline: Bool) -> some View {
         Button(action: onRead) {
             Label(hasStarted ? "继续阅读" : "开始阅读", systemImage: "book")
-                .font(.headline)
+                .appFont(.headline)
                 .fixedSize(horizontal: inline, vertical: true)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 18)
@@ -237,7 +237,7 @@ struct BookDetailScreen: View {
             Group {
                 if typeSize.isAccessibilitySize {
                     Label(title, systemImage: symbol)
-                        .font(.body)
+                        .appFont(.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 52)
@@ -246,7 +246,7 @@ struct BookDetailScreen: View {
                 } else {
                     VStack(spacing: 3) {
                         Image(systemName: symbol).font(.title3)
-                        Text(title).font(.caption2).fixedSize()
+                        Text(title).appFont(.caption2).fixedSize()
                     }
                     .frame(width: actionDiameter, height: actionDiameter)
                     .background(AppPalette.surface, in: Circle())
@@ -263,10 +263,10 @@ struct BookDetailScreen: View {
     private var introCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("简介")
-                .font(.title2.weight(.bold))
+                .appFont(.title2.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
             Text(nonempty(book.intro) ?? "暂无简介")
-                .font(.body)
+                .appFont(.body)
                 .foregroundStyle(nonempty(book.intro) == nil ? Color.secondary : Color.primary)
                 .lineSpacing(7)
                 .fixedSize(horizontal: false, vertical: true)
@@ -277,7 +277,7 @@ struct BookDetailScreen: View {
             if book.origin == "local" {
                 Button(action: onEditIntro) {
                     Label("编辑简介", systemImage: "square.and.pencil")
-                        .font(.body.weight(.medium))
+                        .appFont(.body.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
@@ -310,14 +310,14 @@ struct BookDetailScreen: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         pill("最新").fixedSize()
                         Text(latest)
-                            .font(.body)
+                            .appFont(.body)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("detail.latest")
                     }
                 }
                 if let updateTime = nonempty(readableChapters.last?.updateTime) {
                     Label("更新于 " + updateTime, systemImage: "clock")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -333,7 +333,7 @@ struct BookDetailScreen: View {
 
     private var tocHeading: some View {
         Label {
-            Text("目录").font(.title2.weight(.bold))
+            Text("目录").appFont(.title2.weight(.bold))
         } icon: {
             Image(systemName: "list.bullet").foregroundStyle(.secondary)
         }
@@ -348,7 +348,7 @@ struct BookDetailScreen: View {
             }
             Image(systemName: "chevron.right").accessibilityHidden(true)
         }
-        .font(.subheadline)
+        .appFont(.subheadline)
         .foregroundStyle(AppPalette.accent)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -366,7 +366,7 @@ struct BookDetailScreen: View {
                     Text("正在加载…")
                 }
             }
-            .font(.footnote)
+            .appFont(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)

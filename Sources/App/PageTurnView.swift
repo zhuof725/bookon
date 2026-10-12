@@ -110,10 +110,10 @@ struct PageContentView: View {
                             .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .hotComment(let label, let t, let click):
                         HStack(spacing: 10) {
-                            Text(label).font(.system(size: max(fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
+                            Text(label).appFont(.system(size: max(fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 10).padding(.vertical, 3)
                                 .background(Capsule().fill(Color(white: 0.23)))
-                            Text(t).font(.system(size: max(fontSize - 3, 12))).lineLimit(1)
+                            Text(t).appFont(.system(size: max(fontSize - 3, 12))).lineLimit(1)
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -122,9 +122,9 @@ struct PageContentView: View {
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .chapterComments(let t, let count, _, let click):
                         HStack {
-                            Text(t).font(.system(size: fontSize - 2, weight: .bold))
+                            Text(t).appFont(.system(size: fontSize - 2, weight: .bold))
                             Spacer()
-                            Text(count).font(.system(size: fontSize - 4)).foregroundStyle(fg.opacity(0.7))
+                            Text(count).appFont(.system(size: fontSize - 4)).foregroundStyle(fg.opacity(0.7))
                         }
                         .padding(.horizontal, 14).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 16).fill(fg.opacity(0.07)))
@@ -158,7 +158,7 @@ struct PageContentView: View {
                     Spacer()
                     Text("\(pageNumber)/\(pageCount)").monospacedDigit().accessibilityIdentifier("reader-footer-page")
                 }
-                .font(.system(size: 11))
+                .appFont(.system(size: 11))
                 .foregroundStyle(fg.opacity(0.45))
                 .frame(maxWidth: .infinity, minHeight: 16, maxHeight: 16, alignment: .bottom)
                 .padding(.leading, CGFloat(leftMargin))

@@ -11,7 +11,7 @@ struct HarnessApp: App {
         if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
             ShelfFixture.resetDefaults()
         }
-        if ProcessInfo.processInfo.arguments.contains("--font-mode") {
+        if ProcessInfo.processInfo.arguments.contains("--font-mode") || ProcessInfo.processInfo.arguments.contains("--app-font-mode") {
             FontFixture.resetSharedSelectionBeforeLaunch()
         }
         // 仅测试 App：保留 UIKit NSException 的 reason，不能把初次安装崩溃误报为锁未释放。
@@ -25,7 +25,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--font-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--app-font-mode") {
+                    AppFontHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--font-mode") {
                     FontHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--body-rules-mode") {
                     BodyRulesHarnessView()

@@ -26,7 +26,7 @@ struct FontManagerView: View {
                     if isImporting {
                         HStack(spacing: 12) {
                             ProgressView().tint(AppPalette.accent)
-                            Text(importProgress).font(.subheadline)
+                            Text(importProgress).appFont(.subheadline)
                         }
                         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                         .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 16)))
@@ -34,8 +34,8 @@ struct FontManagerView: View {
                     }
                     builtInSection
                     importedSection
-                    Text("仅使用设备已有字体或你选择的本地文件。不会联网下载字体，也不会改变应用界面的字体。请确认你拥有所导入字体的使用权。")
-                        .font(.footnote).foregroundStyle(AppPalette.secondary)
+                    Text("仅使用设备已有字体或你选择的本地文件。不会联网下载字体。所选字体同步用于应用界面与阅读正文；系统选择器、键盘和系统导航栏保持系统字体。请确认你拥有所导入字体的使用权。")
+                        .appFont(.footnote).foregroundStyle(AppPalette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
@@ -84,10 +84,10 @@ struct FontManagerView: View {
             .modifier(ShelfGlass(shape: Circle()))
             .accessibilityLabel("返回").accessibilityIdentifier("fonts.back")
             .disabled(isImporting)
-            Text("阅读字体").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text("全局字体").appFont(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
             Button { showingImporter = true } label: {
-                Label("导入", systemImage: "plus").font(.subheadline.weight(.semibold))
+                Label("导入", systemImage: "plus").appFont(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16).frame(minHeight: 44)
             }
             .modifier(ShelfGlass(shape: Capsule()))
@@ -100,13 +100,13 @@ struct FontManagerView: View {
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("让文字，合你心意。")
-                .font(.system(size: 26, weight: .semibold))
+                .appFont(.system(size: 26, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             Text("当前：\(manager.selectedDisplayName)")
-                .font(.subheadline.weight(.medium))
+                .appFont(.subheadline.weight(.medium))
                 .accessibilityIdentifier("fonts.current")
             Text("支持 TTF / OTF / TTC · 单文件不超过 32 MB · 最多 30 个文件。导入后请点选字体，切换字体会重新分页。")
-                .font(.footnote).foregroundStyle(AppPalette.secondary)
+                .appFont(.footnote).foregroundStyle(AppPalette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -132,9 +132,9 @@ struct FontManagerView: View {
             if manager.importedFonts.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "textformat").font(.system(size: 30, weight: .light))
-                    Text("还没有导入字体").font(.headline)
+                    Text("还没有导入字体").appFont(.headline)
                     Text("点右上角「导入」，从“文件”选择字体。\n只保存应用内副本，不会修改原文件。")
-                        .font(.footnote).foregroundStyle(AppPalette.secondary)
+                        .appFont(.footnote).foregroundStyle(AppPalette.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(28).frame(maxWidth: .infinity)
@@ -148,8 +148,8 @@ struct FontManagerView: View {
 
     private func sectionHeader(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            Text(detail).font(.caption).foregroundStyle(AppPalette.secondary)
+            Text(title).appFont(.headline).accessibilityAddTraits(.isHeader)
+            Text(detail).appFont(.caption).foregroundStyle(AppPalette.secondary)
         }
     }
 
@@ -162,9 +162,9 @@ struct FontManagerView: View {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(choice.name).font(.subheadline.weight(.semibold))
+                        Text(choice.name).appFont(.subheadline.weight(.semibold))
                         if !choice.id.isEmpty {
-                            Text(choice.id).font(.caption2).foregroundStyle(AppPalette.secondary)
+                            Text(choice.id).appFont(.caption2).foregroundStyle(AppPalette.secondary)
                                 .lineLimit(2).textSelection(.disabled)
                         }
                     }
@@ -176,8 +176,8 @@ struct FontManagerView: View {
                     .font(choice.id.isEmpty ? .system(size: 20) : .custom(choice.id, size: 20))
                     .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                Text(choice.id.isEmpty ? "沿用阅读器原有默认字体" : "缺失字形由系统字体补全")
-                    .font(.caption2).foregroundStyle(AppPalette.secondary)
+                Text(choice.id.isEmpty ? "恢复界面与阅读器原有默认字体" : "缺失字形由系统字体补全")
+                    .appFont(.caption2).foregroundStyle(AppPalette.secondary)
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(selected ? AppPalette.selection.opacity(0.55) : Color.clear)
@@ -186,7 +186,7 @@ struct FontManagerView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(choice.name + (choice.id.isEmpty ? "，沿用原有默认字体" : "，" + choice.id))
         .accessibilityValue(selected ? "已选择" : "未选择")
-        .accessibilityHint("设为阅读字体并重新分页")
+        .accessibilityHint("同步界面与阅读字体并重新分页")
         .accessibilityIdentifier(choice.id.isEmpty ? "fonts.system" : "fonts.choice." + choice.id)
     }
 
@@ -194,10 +194,10 @@ struct FontManagerView: View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(file.originalName).font(.subheadline.weight(.semibold))
+                    Text(file.originalName).appFont(.subheadline.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                     Text("\(file.faces.count) 个字形样式 · \(ByteCountFormatter.string(fromByteCount: Int64(file.fileSize), countStyle: .file))")
-                        .font(.caption).foregroundStyle(AppPalette.secondary)
+                        .appFont(.caption).foregroundStyle(AppPalette.secondary)
                 }
                 Spacer(minLength: 0)
                 Button(role: .destructive) {
@@ -214,7 +214,7 @@ struct FontManagerView: View {
             Divider().padding(.horizontal, 16)
             if file.faces.isEmpty {
                 Text("文件缺失或无法加载。可移除后重新导入。")
-                    .font(.footnote).foregroundStyle(AppPalette.secondary)
+                    .appFont(.footnote).foregroundStyle(AppPalette.secondary)
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(file.faces) { choice in
@@ -233,7 +233,7 @@ struct FontManagerView: View {
     private func noticeCard(_ notice: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "info.circle").accessibilityHidden(true)
-            Text(notice).font(.footnote).fixedSize(horizontal: false, vertical: true)
+            Text(notice).appFont(.footnote).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Button { manager.dismissNotice() } label: {
                 Image(systemName: "xmark").font(.caption).frame(width: 28, height: 28)
@@ -272,7 +272,7 @@ struct FontManagerView: View {
                 }
             }
             var summary = "新增 \(added) 个文件，跳过 \(duplicates) 个重复文件，失败 \(failures.count) 个。"
-            summary += "\n当前阅读字体未改变；请在列表中点选要使用的字体。"
+            summary += "\n当前全局字体未改变；请在列表中点选要使用的字体。"
             if !failures.isEmpty { summary += "\n\n" + failures.joined(separator: "\n\n") }
             presentResult(summary)
         }

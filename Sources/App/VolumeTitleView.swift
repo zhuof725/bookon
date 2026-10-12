@@ -6,9 +6,9 @@ struct VolumeTitleView: View {
     let foreground: Color
     var body: some View {
         VStack(spacing: 18) {
-            Text("分卷").font(.caption).foregroundStyle(foreground.opacity(0.5))
+            Text("分卷").appFont(.caption).foregroundStyle(foreground.opacity(0.5))
             Text(title)
-                .font(.system(size: 26, weight: .semibold))
+                .appFont(.system(size: 26, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(foreground)
                 .fixedSize(horizontal: false, vertical: true)

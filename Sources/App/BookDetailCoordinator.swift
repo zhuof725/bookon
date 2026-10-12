@@ -240,7 +240,7 @@ private struct BookDetailSourcePicker: View {
             List {
                 Section {
                     Text("按书名和作者查找相同书籍；选择书源后先预览，不会自动替换书架或删除本地文件。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                 }
                 if loading { ProgressView("查找可用书源…") }
                 if let message { Text(message).foregroundStyle(.secondary) }
@@ -249,7 +249,7 @@ private struct BookDetailSourcePicker: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(found.originName.isEmpty ? found.origin : found.originName)
                             Text(found.name + (found.author.isEmpty ? "" : " · " + found.author))
-                                .font(.subheadline).foregroundStyle(.secondary)
+                                .appFont(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                 }

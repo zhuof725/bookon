@@ -27,7 +27,7 @@ struct SourceLoginView: View {
                                 SecureField(f.name, text: binding(f.name))
                             } else {
                                 HStack {
-                                    Text(f.name).foregroundStyle(.secondary).font(.callout)
+                                    Text(f.name).foregroundStyle(.secondary).appFont(.callout)
                                     TextField(f.name, text: binding(f.name))
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
@@ -54,15 +54,15 @@ struct SourceLoginView: View {
                 if let url = pageURL {
                     Section("网页登录") {
                         Button("打开登录页面") { showWeb = true }
-                        Text(url).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        Text(url).appFont(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
                 if fields.isEmpty && pageURL == nil {
                     Text("这个书源没有可用的登录配置（没有 loginUi，loginUrl 也不是网址）。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                 }
                 if !message.isEmpty {
-                    Section("结果") { Text(message).font(.footnote).textSelection(.enabled) }
+                    Section("结果") { Text(message).appFont(.footnote).textSelection(.enabled) }
                 }
             }
             .navigationTitle(source.bookSourceName)

@@ -13,7 +13,7 @@ struct SourceDebugView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                Text(source.bookSourceName).font(.headline).padding(.top)
+                Text(source.bookSourceName).appFont(.headline).padding(.top)
                 TextField("搜索关键词", text: $keyword)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
@@ -33,10 +33,10 @@ struct SourceDebugView: View {
                     Button("复制日志") { UIPasteboard.general.string = report }
                 }
                 Text("日志只在本机内存里，不上传；请求头、Cookie、正文不记录。可截图或复制给我分析。")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .appFont(.caption).foregroundStyle(.secondary)
                 ScrollView {
                     Text(report)
-                        .font(.system(size: 13, design: .monospaced))
+                        .appFont(.system(size: 13, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)

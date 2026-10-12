@@ -18,13 +18,13 @@ struct LibraryStatisticsView: View {
                     NavigationLink { ReaderView(book: book) } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(book.name)
-                            Text(book.durChapterTitle ?? "阅读中").font(.caption).foregroundStyle(.secondary)
-                            Text(book.lastReadAt, style: .date).font(.caption).foregroundStyle(.secondary)
+                            Text(book.durChapterTitle ?? "阅读中").appFont(.caption).foregroundStyle(.secondary)
+                            Text(book.lastReadAt, style: .date).appFont(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
             }
-            Section { Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。").font(.footnote).foregroundStyle(.secondary) }
+            Section { Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。").appFont(.footnote).foregroundStyle(.secondary) }
         }
         .scrollContentBackground(.hidden)
         .background(AppPalette.background.ignoresSafeArea())
@@ -52,7 +52,7 @@ struct LibraryProfileView: View {
                 LabeledContent("已导入书源", value: "\(store.sources.count) 个")
                 LabeledContent("书架书籍", value: "\(store.books.count) 本")
             }
-            Section { Text("阅读进度、导入书源与本地书籍保存在本机。").foregroundStyle(.secondary).font(.footnote) }
+            Section { Text("阅读进度、导入书源与本地书籍保存在本机。").foregroundStyle(.secondary).appFont(.footnote) }
         }
         .scrollContentBackground(.hidden)
         .background(AppPalette.background.ignoresSafeArea())

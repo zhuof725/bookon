@@ -22,13 +22,13 @@ struct TxtTocRulesView: View {
                         .modifier(ShelfGlass(shape: Circle()))
                 }.buttonStyle(.plain).accessibilityLabel("返回").accessibilityIdentifier("tocRules.back")
                 Spacer()
-                Text("目录规则").font(.headline)
+                Text("目录规则").appFont(.headline)
                 Spacer()
                 Color.clear.frame(width: 46, height: 46)
             }.padding(.horizontal, 18).padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("规则列表").font(.title2.bold()).padding(.horizontal, 18)
+                    Text("规则列表").appFont(.title2.bold()).padding(.horizontal, 18)
                     VStack(spacing: 0) {
                         ForEach(TxtTocRule.builtIns + custom) { rule in
                             if rule.isBuiltIn {
@@ -49,12 +49,12 @@ struct TxtTocRulesView: View {
                             editing = TxtTocRule(id: UUID().uuidString, name: "", pattern: "", isBuiltIn: false)
                         } label: {
                             Label("添加自定义规则", systemImage: "plus.circle")
-                                .font(.system(size: 20)).padding(18)
+                                .appFont(.system(size: 20)).padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityIdentifier("tocRules.add")
                     }.background(AppPalette.surface, in: RoundedRectangle(cornerRadius: 25))
                     Text("适用于新导入的 TXT 文件，内置与自定义规则共同识别标题。已有目录不自动重建，EPUB 和书源目录不受影响。")
-                        .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
+                        .appFont(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
             }
         }
@@ -93,13 +93,13 @@ struct TxtTocRulesView: View {
     private func ruleContent(_ rule: TxtTocRule) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Text(rule.name).font(.system(size: 19)).foregroundStyle(.primary)
+                Text(rule.name).appFont(.system(size: 19)).foregroundStyle(.primary)
                 Text(rule.isBuiltIn ? "内置" : "自定义")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .appFont(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(AppPalette.selection, in: RoundedRectangle(cornerRadius: 5))
             }
-            Text(rule.pattern).font(.system(size: 14, design: .monospaced))
+            Text(rule.pattern).appFont(.system(size: 14, design: .monospaced))
                 .foregroundStyle(.secondary).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
@@ -134,15 +134,15 @@ private struct TxtTocRuleEditor: View {
                     else { TextField("规则名称", text: $name).accessibilityIdentifier("tocRules.name") }
                 }
                 Section("正则表达式") {
-                    if rule.isBuiltIn { Text(pattern).font(.system(.callout, design: .monospaced)).textSelection(.enabled) }
+                    if rule.isBuiltIn { Text(pattern).appFont(.system(.callout, design: .monospaced)).textSelection(.enabled) }
                     else {
-                        TextEditor(text: $pattern).font(.system(.callout, design: .monospaced))
+                        TextEditor(text: $pattern).appFont(.system(.callout, design: .monospaced))
                             .autocorrectionDisabled().textInputAutocapitalization(.never)
                             .frame(minHeight: 100).accessibilityIdentifier("tocRules.pattern")
-                        if let invalid { Text(invalid).font(.footnote).foregroundStyle(.secondary) }
+                        if let invalid { Text(invalid).appFont(.footnote).foregroundStyle(.secondary) }
                     }
                     Text("逐行匹配完整标题；建议使用 ^ 和 $ 限定首尾。标题候选行最多 160 个 UTF-16 单位。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(.secondary)
                 }
                 Section("测试标题") {
                     TextField("输入一行标题", text: $sample).autocorrectionDisabled()
@@ -154,7 +154,7 @@ private struct TxtTocRuleEditor: View {
                     if let preview { Text(preview).accessibilityIdentifier("tocRules.result") }
                 }
                 if rule.isBuiltIn {
-                    Section { Text("内置规则只读，不能修改或删除。需要其他格式时可添加自定义规则。").font(.footnote).foregroundStyle(.secondary) }
+                    Section { Text("内置规则只读，不能修改或删除。需要其他格式时可添加自定义规则。").appFont(.footnote).foregroundStyle(.secondary) }
                 } else if !rule.name.isEmpty {
                     Section { Button("删除规则", role: .destructive, action: onDelete).accessibilityIdentifier("tocRules.delete") }
                 }
