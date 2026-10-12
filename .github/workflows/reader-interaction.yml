@@ -5,7 +5,7 @@ on:
       suite:
         description: Test scope
         type: choice
-        default: smoke
+        default: search-history
         options: [cover-persistence, app-font, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
