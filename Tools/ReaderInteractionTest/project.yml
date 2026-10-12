@@ -37,6 +37,7 @@ targets:
         type: folder
       - path: ../../Sources/App/ReadingFontManager.swift
       - path: ../../Sources/App/FontManagerView.swift
+      - path: ../../Sources/App/FontDocumentPicker.swift
       - path: ../../Sources/App/ReaderFontResolver.swift
       - path: BottomBubbleHarness.swift
       - path: BottomBubblePixelAudit.swift

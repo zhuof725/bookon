@@ -35,6 +35,29 @@ final class FontTests: XCTestCase {
     /// missing-file recovery, selected removal and source immutability.
     func testFontRepositoryImportPersistenceAndRollback() { runAndAssert("repository") }
 
+    func testUIKitPickerCallbacksUseRealFontImporter() { runAndAssert("picker") }
+
+    func testUIKitPickerPresentationAndCancellation() {
+        launch("ui")
+        let current = app.staticTexts["fonts.current"]
+        XCTAssertTrue(current.waitForExistence(timeout: 8))
+        let original = current.label
+        for attempt in 0..<2 {
+            let trigger = app.buttons["fonts.import"]
+            XCTAssertTrue(trigger.isHittable)
+            trigger.tap()
+            let cancel = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "取消", "Cancel")).firstMatch
+            XCTAssertTrue(cancel.waitForExistence(timeout: 12), "UIKit Files picker must be presented")
+            capture("font-uikit-picker-\(attempt)")
+            cancel.tap()
+            let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: trigger)
+            XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 6), .completed)
+            XCTAssertEqual(current.label, original)
+            XCTAssertTrue(app.buttons["fonts.choice.LegadoFixtureSans-Regular"].exists)
+        }
+    }
+
+
     /// OTF and TTC are intentionally separate simulator processes: CoreText
     /// process registration names otherwise make cross-scenario collision tests
     /// ambiguous. TTC asserts both embedded faces create usable UIFonts.

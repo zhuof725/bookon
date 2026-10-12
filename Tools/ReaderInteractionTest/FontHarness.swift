@@ -134,6 +134,7 @@ private final class FontFixtureSession: ObservableObject {
             try checks.require(Thread.isMainThread, "Fixtures must execute on the UIKit main thread")
             try checks.require(FontFixture.startupError == nil, "Harness font reset failed")
             switch scenario {
+            case "picker": try pickerContract()
             case "repository": try repository()
             case "otf": try format(FontFixture.cff + ".otf", names: [FontFixture.cff])
             case "ttc": try format("LegadoFixtureCollection.ttc", names: [FontFixture.sans, FontFixture.wide])
@@ -143,6 +144,47 @@ private final class FontFixtureSession: ObservableObject {
             }
         } catch { checks.error(error) }
         report = checks.report(scenario)
+    }
+
+    private func pickerContract() throws {
+        let first = try source(FontFixture.sans + ".ttf")
+        let second = try source(FontFixture.cff + ".otf")
+        let firstBytes = try Data(contentsOf: first), secondBytes = try Data(contentsOf: second)
+        var picked = 0, cancelled = 0, imported: [ImportedReadingFont] = []
+        let delegate = FontDocumentPicker.Coordinator(onPick: { urls in
+            picked += 1
+            for url in urls {
+                do { imported.append(try self.manager.importFont(from: url)) }
+                catch { self.checks.error(error) }
+            }
+        }, onCancel: { cancelled += 1 })
+        let picker = FontDocumentPicker.makePicker(delegate: delegate)
+        checks.check(picker.documentPickerMode == .import, "UIKit copy/import mode")
+        checks.check(picker.allowsMultipleSelection, "UIKit multiple font selection enabled")
+        checks.check(picker.shouldShowFileExtensions, "UIKit file extensions visible")
+        checks.check(picker.delegate === delegate, "Native delegate installed")
+        let identifiers = FontDocumentPicker.contentTypes.map(\.identifier)
+        checks.check(!identifiers.isEmpty && Set(identifiers).count == identifiers.count, "Font-only type filters unique")
+        delegate.documentPicker(picker, didPickDocumentsAt: [first, second])
+        delegate.documentPicker(picker, didPickDocumentsAt: [first])
+        delegate.documentPickerWasCancelled(picker)
+        checks.check(picked == 1 && cancelled == 0, "Selection delivered exactly once")
+        checks.check(imported.count == 2 && manager.importedFonts.count == 2, "UIKit URLs reach real font importer")
+        checks.check(manager.selectedPostScriptName.isEmpty, "Picking does not auto-select a font")
+        checks.check(try Data(contentsOf: first) == firstBytes && Data(contentsOf: second) == secondBytes,
+                     "Picker import preserves source bytes")
+        let cancelledDelegate = FontDocumentPicker.Coordinator(onPick: { _ in picked += 1 }, onCancel: { cancelled += 1 })
+        let cancelledPicker = FontDocumentPicker.makePicker(delegate: cancelledDelegate)
+        cancelledDelegate.documentPickerWasCancelled(cancelledPicker)
+        cancelledDelegate.documentPicker(cancelledPicker, didPickDocumentsAt: [first])
+        checks.check(cancelled == 1 && picked == 1, "Cancelled picker never imports afterward")
+        checks.check(manager.importedFonts.count == 2, "Cancellation preserves library")
+        var emptyPicks = 0, emptyCancels = 0
+        let emptyDelegate = FontDocumentPicker.Coordinator(onPick: { _ in emptyPicks += 1 }, onCancel: { emptyCancels += 1 })
+        emptyDelegate.documentPicker(picker, didPickDocumentsAt: [])
+        checks.check(emptyPicks == 0 && emptyCancels == 1, "Empty selection acts like cancel")
+        for file in manager.importedFonts { try manager.remove(file) }
+        checks.details["nativePicker"] = "UIDocumentPickerViewController"
     }
 
     private func repository() throws {

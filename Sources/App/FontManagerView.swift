@@ -1,10 +1,10 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct FontManagerView: View {
     @ObservedObject private var manager: ReadingFontManager
     @Environment(\.dismiss) private var dismiss
     @State private var showingImporter = false
+    @State private var pickedFontURLs: [URL] = []
     @State private var isImporting = false
     @State private var importProgress = ""
     @State private var pendingRemoval: ImportedReadingFont?
@@ -14,10 +14,6 @@ struct FontManagerView: View {
 
     init(manager: ReadingFontManager = .shared) {
         _manager = ObservedObject(wrappedValue: manager)
-    }
-
-    private var supportedTypes: [UTType] {
-        [.font] + ["ttf", "otf", "ttc"].compactMap { UTType(filenameExtension: $0) }
     }
 
     var body: some View {
@@ -51,16 +47,20 @@ struct FontManagerView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isImporting)
-        .fileImporter(isPresented: $showingImporter, allowedContentTypes: supportedTypes,
-                      allowsMultipleSelection: true) { result in
-            switch result {
-            case .success(let urls): importFiles(urls)
-            case .failure(let error):
-                let nsError = error as NSError
-                if nsError.domain != NSCocoaErrorDomain || nsError.code != NSUserCancelledError {
-                    presentResult("无法打开字体文件：\(error.localizedDescription)")
-                }
-            }
+        .sheet(isPresented: $showingImporter, onDismiss: {
+            // Present import results only after UIKit's picker has closed.
+            let urls = pickedFontURLs
+            pickedFontURLs = []
+            if !urls.isEmpty { importFiles(urls) }
+        }) {
+            FontDocumentPicker(onPick: { urls in
+                pickedFontURLs = urls
+                showingImporter = false
+            }, onCancel: {
+                pickedFontURLs = []
+                showingImporter = false
+            })
+            .ignoresSafeArea()
         }
         .confirmationDialog("移除字体文件？", isPresented: $showingRemoval, titleVisibility: .visible) {
             Button("移除字体文件", role: .destructive) { removePendingFont() }
