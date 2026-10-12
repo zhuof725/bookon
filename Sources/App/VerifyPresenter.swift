@@ -23,6 +23,7 @@ enum VerifyPresenter {
         return await withCheckedContinuation { c in
             let vc = VerifyViewController(webView: webView) { html in c.resume(returning: html) }
             let nav = UINavigationController(rootViewController: vc)
+            nav.navigationBar.tintColor = .label
             nav.modalPresentationStyle = .fullScreen
             top.present(nav, animated: true)
         }

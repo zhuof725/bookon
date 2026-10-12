@@ -16,6 +16,7 @@ struct DocumentPicker: UIViewControllerRepresentable {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes, asCopy: true)
         picker.allowsMultipleSelection = allowsMultiple
         picker.shouldShowFileExtensions = true
+        picker.view.tintColor = .label
         picker.delegate = context.coordinator
         return picker
     }

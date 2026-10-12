@@ -10,6 +10,7 @@ struct LegadoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .modifier(MonochromeAppStyle())
                 .onAppear { VerifyPresenter.install() }
                 .environmentObject(store)
                 .environmentObject(settings)
@@ -54,7 +55,7 @@ struct RootView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 LibraryDock(selection: $selection)
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background(AppPalette.background.ignoresSafeArea())
         }
     }
 }
@@ -172,6 +173,8 @@ struct SourcesView: View {
             }
             .onDelete { store.deleteSources(at: $0) }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppPalette.background.ignoresSafeArea())
         .navigationTitle("书源")
         .sheet(item: $debugSource) { source in SourceDebugView(source: source) }
         .sheet(item: $loginSource) { source in SourceLoginView(source: source) }

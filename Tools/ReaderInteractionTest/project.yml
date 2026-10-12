@@ -14,6 +14,8 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: ThemeHarness.swift
+      - path: ../../Sources/App/AppPalette.swift
       - path: ShelfHarness.swift
       - path: DetailHarness.swift
       - path: ../../Sources/App/BookDetailScreen.swift

@@ -203,9 +203,9 @@ struct BookDetailChapterList: View {
                             Text(chapter.title).foregroundStyle(chapter.isVolume ? .secondary : .primary)
                             Spacer()
                             if chapter.index == book.durChapterIndex {
-                                Image(systemName: "book.fill").foregroundStyle(.blue)
+                                Image(systemName: "book.fill").foregroundStyle(AppPalette.accent)
                             }
-                            if chapter.isVip { Image(systemName: "lock.fill").foregroundStyle(.orange) }
+                            if chapter.isVip { Image(systemName: "lock.fill").foregroundStyle(AppPalette.secondary) }
                         }
                     }
                     .disabled(chapter.isVolume)

@@ -112,7 +112,7 @@ struct PageContentView: View {
                         HStack(spacing: 10) {
                             Text(label).font(.system(size: max(fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 10).padding(.vertical, 3)
-                                .background(Capsule().fill(Color(red: 1, green: 0.27, blue: 0.27)))
+                                .background(Capsule().fill(Color(white: 0.23)))
                             Text(t).font(.system(size: max(fontSize - 3, 12))).lineLimit(1)
                             Spacer(minLength: 0)
                         }

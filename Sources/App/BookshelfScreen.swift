@@ -43,10 +43,10 @@ struct ShelfGlass<S: InsettableShape>: ViewModifier {
     func body(content: Content) -> some View {
         content.background {
             ZStack {
-                if reduceTransparency { shape.fill(Color(uiColor: .secondarySystemBackground)) }
+                if reduceTransparency { shape.fill(AppPalette.surface) }
                 else {
                     shape.fill(.ultraThinMaterial)
-                    shape.fill(Color(uiColor: .systemBackground).opacity(scheme == .dark ? 0.15 : 0.65))
+                    shape.fill(AppPalette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
                 }
                 shape.strokeBorder(Color.primary.opacity(0.13), lineWidth: 0.5)
             }.allowsHitTesting(false)
@@ -115,7 +115,7 @@ struct BookshelfScreen: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground).opacity(0.35).ignoresSafeArea())
+        .background(AppPalette.background.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog("移除选中的 \(selectedBooks.count) 本书？本地书籍文件也会删除。", isPresented: $confirmRemoval, titleVisibility: .visible) {
             Button("移除书籍", role: .destructive) {
@@ -219,7 +219,7 @@ struct BookshelfScreen: View {
     private func menuRow(_ title: String, icon: String? = nil, detail: String? = nil, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 11) {
-                if let icon { Image(systemName: icon).font(.system(size: 19, weight: .medium)).foregroundStyle(.blue).frame(width: 22) }
+                if let icon { Image(systemName: icon).font(.system(size: 19, weight: .medium)).foregroundStyle(AppPalette.accent).frame(width: 22) }
                 Text(title).font(.system(size: 16))
                 Spacer(minLength: 5)
                 if let detail { Text(detail).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1); Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary) }
@@ -228,7 +228,7 @@ struct BookshelfScreen: View {
     }
     private func choiceRow(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack { Text(title); Spacer(); if selected { Image(systemName: "checkmark").foregroundStyle(.blue) } }
+            HStack { Text(title); Spacer(); if selected { Image(systemName: "checkmark").foregroundStyle(AppPalette.accent) } }
                 .padding(.horizontal, 12).frame(minHeight: 44).contentShape(Rectangle())
         }.accessibilityValue(selected ? "已选择" : "未选择").accessibilityIdentifier(id)
     }
@@ -280,7 +280,7 @@ struct ShelfBookCard: View {
             .overlay(alignment: .topTrailing) {
                 if selecting {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22)).foregroundStyle(selected ? Color.blue : Color.white)
+                        .font(.system(size: 22)).foregroundStyle(selected ? AppPalette.accent : Color.white)
                         .background(Circle().fill(Color.black.opacity(0.35))).padding(7)
                 }
             }
@@ -314,7 +314,7 @@ struct ShelfCoverImage: View {
     }
     private var placeholder: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.83, green: 0.79, blue: 0.66), Color(red: 0.59, green: 0.45, blue: 0.44)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [AppPalette.placeholderTop, AppPalette.placeholderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
             Image(systemName: "book.closed").font(.system(size: 26, weight: .light)).foregroundStyle(.white.opacity(0.55))
         }
     }

@@ -26,6 +26,8 @@ struct LibraryStatisticsView: View {
             }
             Section { Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。").font(.footnote).foregroundStyle(.secondary) }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppPalette.background.ignoresSafeArea())
         .navigationTitle("统计")
         .toolbar(.visible, for: .navigationBar)
     }
@@ -46,6 +48,8 @@ struct LibraryProfileView: View {
             }
             Section { Text("阅读进度、导入书源与本地书籍保存在本机。").foregroundStyle(.secondary).font(.footnote) }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppPalette.background.ignoresSafeArea())
         .navigationTitle("我的")
         .toolbar(.visible, for: .navigationBar)
     }

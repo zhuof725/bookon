@@ -21,33 +21,38 @@ struct HarnessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("--detail-mode") {
-                DetailHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
-                ShelfHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
-                BottomBubbleHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--punctuation-flow-mode") {
-                PunctuationFlowHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--reader-page-flow-mode") {
-                ReaderPageFlowHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--reader-chrome-mode") {
-                ChromeHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--layout-audit-mode") {
-                LayoutAuditHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--continuous-scroll-mode") {
-                ContinuousScrollHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--typography-mode") {
-                TypographyHarnessView()
-            } else if ProcessInfo.processInfo.arguments.contains("--cover-mode") {
-                CoverTurnHarnessView()
-            } else if let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--volume-mode=") }) {
-                VolumeHarnessView(mode: String(mode.dropFirst("--volume-mode=".count)))
-            } else if let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--chapter-mode=") }) {
-                ChapterHarnessView(mode: String(mode.dropFirst("--chapter-mode=".count)))
-            } else {
-                HarnessView()
+            Group {
+                if ProcessInfo.processInfo.arguments.contains("--theme-mode") {
+                    ThemeHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--detail-mode") {
+                    DetailHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
+                    ShelfHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {
+                    BottomBubbleHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--punctuation-flow-mode") {
+                    PunctuationFlowHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--reader-page-flow-mode") {
+                    ReaderPageFlowHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--reader-chrome-mode") {
+                    ChromeHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--layout-audit-mode") {
+                    LayoutAuditHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--continuous-scroll-mode") {
+                    ContinuousScrollHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--typography-mode") {
+                    TypographyHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--cover-mode") {
+                    CoverTurnHarnessView()
+                } else if let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--volume-mode=") }) {
+                    VolumeHarnessView(mode: String(mode.dropFirst("--volume-mode=".count)))
+                } else if let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--chapter-mode=") }) {
+                    ChapterHarnessView(mode: String(mode.dropFirst("--chapter-mode=".count)))
+                } else {
+                    HarnessView()
+                }
             }
+            .modifier(MonochromeAppStyle())
         }
     }
 }

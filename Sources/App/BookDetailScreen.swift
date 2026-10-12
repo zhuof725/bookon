@@ -76,8 +76,7 @@ struct BookDetailScreen: View {
         }
         .foregroundStyle(.primary)
         .background {
-            (scheme == .dark ? Color(uiColor: .systemGroupedBackground)
-             : Color(red: 0.965, green: 0.973, blue: 0.980))
+            AppPalette.background
                 .ignoresSafeArea()
         }
     }
@@ -106,7 +105,7 @@ struct BookDetailScreen: View {
                 .frame(width: 46, height: 46)
                 .background {
                     if reduceTransparency {
-                        Circle().fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        Circle().fill(AppPalette.surface)
                     } else {
                         Circle().fill(.ultraThinMaterial)
                     }
@@ -177,25 +176,25 @@ struct BookDetailScreen: View {
                     pill(wordCount).accessibilityIdentifier("detail.wordCount")
                 }
                 pill(nonempty(category) ?? "未分类").accessibilityIdentifier("detail.category")
-                pill(hasStarted ? "在读" : "未读", tint: hasStarted ? .green : nil)
+                pill(hasStarted ? "在读" : "未读")
                     .accessibilityIdentifier("detail.status")
             }
             if !kindTags.isEmpty {
                 DetailTagLayout(spacing: 7) {
-                    ForEach(kindTags, id: \.self) { tag in pill(tag, tint: .blue) }
+                    ForEach(kindTags, id: \.self) { tag in pill(tag) }
                 }
             }
         }
     }
 
-    private func pill(_ text: String, tint: Color? = nil) -> some View {
+    private func pill(_ text: String) -> some View {
         Text(text)
             .font(.caption)
-            .foregroundStyle(tint ?? .primary)
+            .foregroundStyle(AppPalette.accent)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background((tint ?? Color.secondary).opacity(0.10), in: Capsule())
+            .background(AppPalette.selection, in: Capsule())
     }
 
     private func readButton(inline: Bool) -> some View {
@@ -242,7 +241,7 @@ struct BookDetailScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                        .background(AppPalette.surface, in: Capsule())
                         .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
                 } else {
                     VStack(spacing: 3) {
@@ -250,7 +249,7 @@ struct BookDetailScreen: View {
                         Text(title).font(.caption2).fixedSize()
                     }
                     .frame(width: actionDiameter, height: actionDiameter)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: Circle())
+                    .background(AppPalette.surface, in: Circle())
                     .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
                 }
             }
@@ -309,7 +308,7 @@ struct BookDetailScreen: View {
                 }
                 if let latest = nonempty(book.lastChapter) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        pill("最新", tint: .blue).fixedSize()
+                        pill("最新").fixedSize()
                         Text(latest)
                             .font(.body)
                             .fixedSize(horizontal: false, vertical: true)
@@ -350,7 +349,7 @@ struct BookDetailScreen: View {
             Image(systemName: "chevron.right").accessibilityHidden(true)
         }
         .font(.subheadline)
-        .foregroundStyle(.blue)
+        .foregroundStyle(AppPalette.accent)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -389,7 +388,7 @@ private struct DetailCardSurface: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 25, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    .fill(AppPalette.surface)
                     .shadow(color: .black.opacity(scheme == .dark ? 0.14 : 0.025), radius: 14, x: 0, y: 6)
             }
     }

@@ -119,7 +119,7 @@ struct ReaderChapterSearch: View {
         var cursor = result.startIndex
         while cursor < result.endIndex,
               let range = result[cursor...].range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) {
-            result[range].backgroundColor = Color.yellow.opacity(0.35)
+            result[range].backgroundColor = AppPalette.highlight
             result[range].foregroundColor = .primary
             cursor = range.upperBound
         }

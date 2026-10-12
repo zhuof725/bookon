@@ -30,6 +30,8 @@ struct SearchView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppPalette.background.ignoresSafeArea())
         .navigationTitle("搜索")
         .toolbar(.visible, for: .navigationBar)
         .searchable(text: $keyword, prompt: "书名或作者")
@@ -264,7 +266,7 @@ struct ReaderView: View {
                             if c.isVolume {
                                 Button { showToc = false; go(c.index) } label: {
                                     Text(c.title).font(.headline)
-                                        .foregroundStyle(c.index == index ? Color.accentColor : Color.secondary)
+                                        .foregroundStyle(c.index == index ? AppPalette.accent : Color.secondary)
                                 }
                                 .listRowBackground(Color.clear)
                             } else {
@@ -272,8 +274,8 @@ struct ReaderView: View {
                                     showToc = false; go(c.index)
                                 } label: {
                                     HStack {
-                                        Text(c.title).foregroundStyle(c.index == index ? Color.accentColor : Color.primary)
-                                        if c.isVip { Image(systemName: "lock.fill").font(.caption).foregroundStyle(.orange) }
+                                        Text(c.title).foregroundStyle(c.index == index ? AppPalette.accent : Color.primary)
+                                        if c.isVip { Image(systemName: "lock.fill").font(.caption).foregroundStyle(AppPalette.secondary) }
                                     }
                                 }
                             }
@@ -976,7 +978,7 @@ struct ReaderView: View {
             HStack(spacing: 10) {
                 Text(label).font(.system(size: max(settings.fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 3)
-                    .background(Capsule().fill(Color(red: 1, green: 0.27, blue: 0.27)))
+                    .background(Capsule().fill(Color(white: 0.23)))
                 Text(t).font(.system(size: max(settings.fontSize - 3, 12))).lineLimit(1)
                 Spacer(minLength: 0)
             }
