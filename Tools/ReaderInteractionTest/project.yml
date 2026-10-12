@@ -14,6 +14,9 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: SearchHistoryHarness.swift
+      - path: ../../Sources/Models/BookSearchHistory.swift
+      - path: ../../Sources/App/BookSearchHistoryView.swift
       - path: CoverPersistenceHarness.swift
       - path: ../../Sources/Models/BookCoverLocation.swift
       - path: ../../Sources/App/LocalCoverImageLoader.swift

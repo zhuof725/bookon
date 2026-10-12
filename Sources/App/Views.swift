@@ -11,9 +11,15 @@ struct SearchView: View {
     @State private var searching = false
     @State private var progress = ""
     @State private var task: Task<Void, Never>?
+    @State private var requestID = UUID()
+    @StateObject private var history = BookSearchHistory()
+    @State private var showingHistory = false
 
     var body: some View {
         List {
+            if !searching && (hits.isEmpty || BookSearchHistory.normalized(keyword).isEmpty) {
+                BookSearchHistorySection(history: history, onSelect: searchAgain)
+            }
             if searching || !progress.isEmpty {
                 HStack {
                     if searching { ProgressView() }
@@ -37,14 +43,32 @@ struct SearchView: View {
         .searchable(text: $keyword, prompt: "书名或作者")
         .onSubmit(of: .search) { start() }
         .toolbar {
-            if searching { Button("停止") { task?.cancel(); searching = false } }
+            Button { showingHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
+                .accessibilityLabel("搜索历史").accessibilityIdentifier("searchHistory.open")
+            if searching { Button("停止") { task?.cancel(); requestID = UUID(); searching = false } }
         }
+        .sheet(isPresented: $showingHistory) {
+            BookSearchHistorySheet(history: history, onSelect: searchAgain)
+        }
+        .onAppear { history.reload() }
+        .onDisappear { task?.cancel(); requestID = UUID(); searching = false }
+    }
+
+    private func searchAgain(_ query: String) {
+        keyword = query
+        showingHistory = false
+        start()
     }
 
     private func start() {
-        let key = keyword.trimmingCharacters(in: .whitespaces)
+        let key = BookSearchHistory.normalized(keyword)
         guard !key.isEmpty else { return }
+        keyword = key
+        history.record(key)
         task?.cancel()
+        let token = UUID()
+        requestID = token
+        searching = false
         hits = []
         failedCount = 0
         let sources = store.sources.filter { $0.isEnabled && !($0.searchUrl ?? "").isEmpty }
@@ -65,7 +89,7 @@ struct SearchView: View {
                 }
                 for _ in 0..<8 { addNext() }
                 for await (list, failed) in group {
-                    if Task.isCancelled { group.cancelAll(); break }
+                    if Task.isCancelled || requestID != token { group.cancelAll(); break }
                     done += 1
                     if failed { failedCount += 1 }
                     // 与书名/作者都不相关的结果只在没有相关结果时才保留少量，避免淹没真正的匹配。
@@ -75,7 +99,7 @@ struct SearchView: View {
                     addNext()
                 }
             }
-            searching = false
+            if requestID == token { searching = false }
         }
     }
 }
