@@ -37,8 +37,8 @@ enum BookCoverLocation {
         }
         if url.isFileURL {
             let parts = url.pathComponents
-            if let index = parts.lastIndex(of: "Documents"), index + 4 == parts.count,
-               parts[index + 1] == "LocalBooks", validDigest(parts[index + 2]), parts[index + 3] == "cover.img" {
+            if let index = parts.lastIndex(of: "Documents"), parts.indices.contains(index + 1), parts[index + 1] == "LocalBooks" {
+                guard index + 4 == parts.count, validDigest(parts[index + 2]), parts[index + 3] == "cover.img" else { return nil }
                 if FileManager.default.fileExists(atPath: url.path) { return url }
                 return localPath(parts[index + 2], documentsDirectory)
             }

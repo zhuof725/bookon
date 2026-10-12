@@ -14,6 +14,9 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: CoverPersistenceHarness.swift
+      - path: ../../Sources/Models/BookCoverLocation.swift
+      - path: ../../Sources/App/LocalCoverImageLoader.swift
       - path: ThemeHarness.swift
       - path: TocRulesHarness.swift
       - path: BodyRulesHarness.swift

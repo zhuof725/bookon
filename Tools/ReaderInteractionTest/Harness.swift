@@ -25,7 +25,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--app-font-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--cover-persistence-mode") {
+                    CoverPersistenceHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--app-font-mode") {
                     AppFontHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--font-mode") {
                     FontHarnessView()
