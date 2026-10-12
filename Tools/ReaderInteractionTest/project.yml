@@ -31,6 +31,13 @@ targets:
       - path: ChapterHarness.swift
       - path: VolumeHarness.swift
       - path: TypographyHarness.swift
+      - path: FontHarness.swift
+      - path: Fixtures/Fonts
+        buildPhase: resources
+        type: folder
+      - path: ../../Sources/App/ReadingFontManager.swift
+      - path: ../../Sources/App/FontManagerView.swift
+      - path: ../../Sources/App/ReaderFontResolver.swift
       - path: BottomBubbleHarness.swift
       - path: BottomBubblePixelAudit.swift
       - path: Fixtures/bubble-outline-590.png
