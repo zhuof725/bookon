@@ -61,6 +61,26 @@ final class DetailTests: XCTestCase {
         }
     }
 
+    func testSourceBooksNeverOfferIntroEditing() {
+        for flags in [["--detail-source-book", "--detail-off-shelf"], ["--detail-source-book"]] {
+            launch(flags)
+            let description = app.staticTexts["detail.intro"]
+            reveal(description)
+            XCTAssertEqual(description.label, intro)
+            XCTAssertFalse(app.buttons["detail.editIntro"].exists)
+            XCTAssertFalse(app.buttons["编辑简介"].exists)
+            reveal(app.buttons["detail.toc"])
+            XCTAssertFalse(app.buttons["detail.editIntro"].exists)
+            capture(flags.contains("--detail-off-shelf") ? "detail-source-search-no-editor" : "detail-source-shelf-no-editor")
+            app.terminate()
+        }
+        launch()
+        let editor = app.buttons["detail.editIntro"]
+        reveal(editor)
+        editor.tap()
+        status("editor=1")
+    }
+
     func testFullDetailMetadataAndNativeScreenshots() {
         // Composition reference: photo_BAB718AA.png. Its book, cover, counts and
         // timestamps are NOT test data. All displayed metadata comes from fixtures.

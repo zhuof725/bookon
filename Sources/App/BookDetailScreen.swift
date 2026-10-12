@@ -273,18 +273,22 @@ struct BookDetailScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("detail.intro")
-            Button(action: onEditIntro) {
-                Label("编辑简介", systemImage: "square.and.pencil")
-                    .font(.body.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
-                    .contentShape(Capsule())
+            // Book.origin == "local" is the persisted imported-book marker.
+            // Source books remain read-only, including after joining the shelf.
+            if book.origin == "local" {
+                Button(action: onEditIntro) {
+                    Label("编辑简介", systemImage: "square.and.pencil")
+                        .font(.body.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("detail.editIntro")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("detail.editIntro")
         }
         .modifier(DetailCardSurface())
     }

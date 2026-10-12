@@ -47,9 +47,15 @@ struct DetailHarnessView: View {
             + ";fixtureUnchanged=true;scheme=\(dark ? "dark" : "light")"
     }
 
+    private var fixtureBook: Book {
+        var book = DetailFixture.book(missingMetadata: missing)
+        if arguments.contains("--detail-source-book") { book.origin = "https://fixture.invalid/source" }
+        return book
+    }
+
     var body: some View {
         BookDetailScreen(
-            book: DetailFixture.book(missingMetadata: missing), onShelf: true,
+            book: fixtureBook, onShelf: !arguments.contains("--detail-off-shelf"),
             category: missing ? "" : "随笔", chapters: missing ? [] : DetailFixture.chapters,
             loading: false, message: nil,
             onBack: { record("back") }, onMore: { record("more") },
