@@ -35,6 +35,7 @@ final class LocalCoverImageLoader: ObservableObject {
 
 /// Shared production loader for shelf/detail/list/reader-cover views.
 struct BookCoverImage: View {
+    @ThemePalette private var palette
     let url: URL?
     var pixelSize: Int = 600
     @StateObject private var loader = LocalCoverImageLoader()
@@ -68,8 +69,8 @@ struct BookCoverImage: View {
 
     private var placeholder: some View {
         ZStack {
-            LinearGradient(colors: [AppPalette.placeholderTop, AppPalette.placeholderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: "book.closed").font(.system(size: 26, weight: .light)).foregroundStyle(.white.opacity(0.55))
+            LinearGradient(colors: [palette.placeholderTop, palette.placeholderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Image(systemName: "book.closed").font(.system(size: 26, weight: .light)).foregroundStyle(palette.primary.opacity(0.55))
         }
     }
 }

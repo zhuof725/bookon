@@ -18,6 +18,7 @@ struct LegadoApp: App {
                 .preferredColorScheme(appColorScheme)
                 .modifier(AppTypographyRoot())
                 .modifier(MonochromeAppStyle())
+                .modifier(AppThemeRoot())
                 .onAppear { VerifyPresenter.install() }
                 .environmentObject(store)
                 .environmentObject(settings)
@@ -62,7 +63,7 @@ struct RootView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 LibraryDock(selection: $selection)
             }
-            .background(AppPalette.background.ignoresSafeArea())
+            .background { AppThemeCanvas().ignoresSafeArea() }
         }
     }
 }
@@ -121,6 +122,7 @@ struct BookshelfView: View {
 }
 
 struct BookRow: View {
+    @ThemePalette private var palette
     let book: Book
     var subtitle: String = ""
 
@@ -130,9 +132,9 @@ struct BookRow: View {
             .frame(width: 48, height: 66)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             VStack(alignment: .leading, spacing: 4) {
-                Text(book.name).appFont(.headline).lineLimit(1)
-                Text(book.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                if !subtitle.isEmpty { Text(subtitle).appFont(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                Text(book.name).appFont(.headline).foregroundStyle(palette.primary).lineLimit(1)
+                Text(book.author).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(1)
+                if !subtitle.isEmpty { Text(subtitle).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1) }
             }
         }
     }
@@ -141,6 +143,7 @@ struct BookRow: View {
 // MARK: - Sources
 
 struct SourcesView: View {
+    @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     @State private var showImport = false
     @State private var showFile = false
@@ -154,13 +157,14 @@ struct SourcesView: View {
         List {
             Section {
                 Text("共 \(store.sources.count) 个书源，启用 \(store.sources.filter { $0.isEnabled }.count) 个")
-                    .appFont(.footnote).foregroundStyle(.secondary)
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
             }
+            .listRowBackground(palette.surface)
             ForEach(store.sources) { s in
                 HStack {
                     VStack(alignment: .leading) {
-                        Text(s.bookSourceName).lineLimit(1)
-                        Text(s.bookSourceGroup ?? s.bookSourceUrl).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(s.bookSourceName).foregroundStyle(palette.primary).lineLimit(1)
+                        Text(s.bookSourceGroup ?? s.bookSourceUrl).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
                     }
                     Spacer()
                     Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
@@ -175,9 +179,10 @@ struct SourcesView: View {
                 }
             }
             .onDelete { store.deleteSources(at: $0) }
+            .listRowBackground(palette.surface)
         }
         .scrollContentBackground(.hidden)
-        .background(AppPalette.background.ignoresSafeArea())
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("书源")
         .sheet(item: $debugSource) { source in SourceDebugView(source: source) }
         .sheet(item: $loginSource) { source in SourceLoginView(source: source) }
@@ -192,7 +197,10 @@ struct SourcesView: View {
             NavigationStack {
                 TextEditor(text: $input)
                     .appFont(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(palette.primary)
+                    .scrollContentBackground(.hidden)
                     .padding()
+                    .background { AppThemeCanvas().ignoresSafeArea() }
                     .navigationTitle("输入书源链接或 JSON")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {

@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// App-owned chrome is monochrome. Real covers, external web content and the
-/// reader's saved paper theme are intentionally not desaturated or reset.
+/// The original neutral tokens remain the default and a compatibility reference.
+/// Custom themes are delivered through the environment, never mutable globals.
 enum AppPalette {
     private static func neutral(light: CGFloat, dark: CGFloat) -> Color {
         Color(uiColor: UIColor { traits in
@@ -24,9 +24,10 @@ enum AppPalette {
 /// One root modifier propagates to navigation, controls and presented SwiftUI
 /// sheets. System destructive roles retain their native warning semantics.
 struct MonochromeAppStyle: ViewModifier {
+    @ThemePalette private var palette
     func body(content: Content) -> some View {
         content
-            .tint(AppPalette.accent)
-            .accentColor(AppPalette.accent)
+            .tint(palette.accent)
+            .accentColor(palette.accent)
     }
 }

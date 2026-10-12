@@ -3,6 +3,7 @@ import UIKit
 
 /// Presentation only: the caller owns navigation, loading and all mutations.
 struct BookDetailScreen: View {
+    @ThemePalette private var palette
     let book: Book
     let onShelf: Bool
     let category: String
@@ -18,9 +19,7 @@ struct BookDetailScreen: View {
     let onEditIntro: () -> Void
     let onTOC: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ScaledMetric(relativeTo: .caption2) private var actionDiameter: CGFloat = 52
 
     init(book: Book, onShelf: Bool, category: String, chapters: [BookChapter],
@@ -74,11 +73,8 @@ struct BookDetailScreen: View {
                 .padding(.bottom, 28)
             }
         }
-        .foregroundStyle(.primary)
-        .background {
-            AppPalette.background
-                .ignoresSafeArea()
-        }
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
     }
 
     private var navigationHeader: some View {
@@ -103,13 +99,7 @@ struct BookDetailScreen: View {
             Image(systemName: symbol)
                 .font(.system(size: 21, weight: .semibold))
                 .frame(width: 46, height: 46)
-                .background {
-                    if reduceTransparency {
-                        Circle().fill(AppPalette.surface)
-                    } else {
-                        Circle().fill(.ultraThinMaterial)
-                    }
-                }
+                .modifier(ShelfGlass(shape: Circle()))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -168,7 +158,7 @@ struct BookDetailScreen: View {
                 .accessibilityIdentifier("detail.title")
             Label(nonempty(book.author) ?? "作者未知", systemImage: "person.fill")
                 .appFont(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("detail.author")
             DetailTagLayout(spacing: 7) {
@@ -190,11 +180,11 @@ struct BookDetailScreen: View {
     private func pill(_ text: String) -> some View {
         Text(text)
             .appFont(.caption)
-            .foregroundStyle(AppPalette.accent)
+            .foregroundStyle(palette.accent)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(AppPalette.selection, in: Capsule())
+            .background(palette.selection, in: Capsule())
     }
 
     private func readButton(inline: Bool) -> some View {
@@ -206,8 +196,8 @@ struct BookDetailScreen: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 15)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .foregroundStyle(scheme == .dark ? Color.black : Color.white)
-                .background(scheme == .dark ? Color.white : Color(white: 0.12), in: Capsule())
+                .foregroundStyle(palette.onAccent)
+                .background(palette.accent, in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -241,16 +231,16 @@ struct BookDetailScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(AppPalette.surface, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+                        .background(palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
                 } else {
                     VStack(spacing: 3) {
                         Image(systemName: symbol).font(.title3)
                         Text(title).appFont(.caption2).fixedSize()
                     }
                     .frame(width: actionDiameter, height: actionDiameter)
-                    .background(AppPalette.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+                    .background(palette.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(palette.border, lineWidth: 1))
                 }
             }
             .contentShape(Rectangle())
@@ -267,7 +257,7 @@ struct BookDetailScreen: View {
                 .accessibilityAddTraits(.isHeader)
             Text(nonempty(book.intro) ?? "暂无简介")
                 .appFont(.body)
-                .foregroundStyle(nonempty(book.intro) == nil ? Color.secondary : Color.primary)
+                .foregroundStyle(nonempty(book.intro) == nil ? palette.secondary : palette.primary)
                 .lineSpacing(7)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -282,7 +272,7 @@ struct BookDetailScreen: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
+                        .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -318,7 +308,7 @@ struct BookDetailScreen: View {
                 if let updateTime = nonempty(readableChapters.last?.updateTime) {
                     Label("更新于 " + updateTime, systemImage: "clock")
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -335,7 +325,7 @@ struct BookDetailScreen: View {
         Label {
             Text("目录").appFont(.title2.weight(.bold))
         } icon: {
-            Image(systemName: "list.bullet").foregroundStyle(.secondary)
+            Image(systemName: "list.bullet").foregroundStyle(palette.secondary)
         }
     }
 
@@ -349,7 +339,7 @@ struct BookDetailScreen: View {
             Image(systemName: "chevron.right").accessibilityHidden(true)
         }
         .appFont(.subheadline)
-        .foregroundStyle(AppPalette.accent)
+        .foregroundStyle(palette.accent)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -367,7 +357,7 @@ struct BookDetailScreen: View {
                 }
             }
             .appFont(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
         }
@@ -380,6 +370,7 @@ struct BookDetailScreen: View {
 }
 
 private struct DetailCardSurface: ViewModifier {
+    @ThemePalette private var palette
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
@@ -388,7 +379,7 @@ private struct DetailCardSurface: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 25, style: .continuous)
-                    .fill(AppPalette.surface)
+                    .fill(palette.surface)
                     .shadow(color: .black.opacity(scheme == .dark ? 0.14 : 0.025), radius: 14, x: 0, y: 6)
             }
     }

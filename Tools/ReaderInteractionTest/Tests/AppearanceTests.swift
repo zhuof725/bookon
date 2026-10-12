@@ -17,6 +17,8 @@ final class AppearanceTests: XCTestCase {
         app.launchArguments = ["--appearance-mode", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         if reset { app.launchArguments.append("--appearance-reset") }
         app.launch()
+        let value = app.staticTexts["appearance.current.value"]
+        for _ in 0..<6 where !value.isHittable { app.swipeUp() }
         XCTAssertTrue(app.buttons["appearance.theme.0"].waitForExistence(timeout: 8))
     }
 

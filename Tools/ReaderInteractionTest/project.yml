@@ -25,8 +25,15 @@ targets:
       - path: ../../Sources/Models/BookCoverLocation.swift
       - path: ../../Sources/App/LocalCoverImageLoader.swift
       - path: ThemeHarness.swift
+      - path: CustomThemeHarness.swift
       - path: AppearanceHarness.swift
       - path: ../../Sources/App/AppAppearance.swift
+      - path: ../../Sources/App/AppTheme.swift
+      - path: ../../Sources/App/AppThemeStore.swift
+      - path: ../../Sources/App/ThemePalette.swift
+      - path: ../../Sources/App/ThemeGalleryView.swift
+      - path: ../../Sources/App/ThemeEditorView.swift
+      - path: ../../Sources/App/ThemePreviewCard.swift
       - path: TocRulesHarness.swift
       - path: BodyRulesHarness.swift
       - path: ../../Sources/Models/BodyReplaceRule.swift

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Shared by the search landing list and the history sheet after results appear.
 struct BookSearchHistorySection: View {
+    @ThemePalette private var palette
     @ObservedObject var history: BookSearchHistory
     let onSelect: (String) -> Void
     @State private var confirmingClear = false
@@ -9,15 +10,15 @@ struct BookSearchHistorySection: View {
     var body: some View {
         Section {
             if history.entries.isEmpty {
-                Text("暂无搜索记录").appFont(.subheadline).foregroundStyle(.secondary)
+                Text("暂无搜索记录").appFont(.subheadline).foregroundStyle(palette.secondary)
                     .accessibilityIdentifier("searchHistory.empty")
             } else {
                 ForEach(history.entries, id: \.self) { query in
                     HStack(spacing: 12) {
                         Button { onSelect(query) } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "clock").foregroundStyle(.secondary)
-                                Text(query).appFont(.body).foregroundStyle(.primary).lineLimit(2)
+                                Image(systemName: "clock").foregroundStyle(palette.secondary)
+                                Text(query).appFont(.body).foregroundStyle(palette.primary).lineLimit(2)
                                 Spacer(minLength: 0)
                             }.frame(minHeight: 44).contentShape(Rectangle())
                         }
@@ -26,7 +27,7 @@ struct BookSearchHistorySection: View {
                         .accessibilityIdentifier("searchHistory.query." + query)
                         Button { history.remove(query) } label: {
                             Image(systemName: "xmark").font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
+                                .foregroundStyle(palette.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("删除搜索记录：" + query)
@@ -41,11 +42,12 @@ struct BookSearchHistorySection: View {
                 if !history.entries.isEmpty {
                     Button("清空") { confirmingClear = true }
                         .appFont(.subheadline).buttonStyle(.plain)
-                        .foregroundStyle(AppPalette.accent)
+                        .foregroundStyle(palette.accent)
                         .accessibilityIdentifier("searchHistory.clear")
                 }
             }
         }
+        .listRowBackground(palette.surface)
         .confirmationDialog("清空搜索历史？", isPresented: $confirmingClear, titleVisibility: .visible) {
             Button("清空全部记录", role: .destructive) { history.clear() }
                 .accessibilityIdentifier("searchHistory.confirmClear")
@@ -63,7 +65,8 @@ struct BookSearchHistorySheet: View {
             List {
                 BookSearchHistorySection(history: history) { query in onSelect(query); dismiss() }
             }
-            .scrollContentBackground(.hidden).background(AppPalette.background)
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle("搜索历史").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }

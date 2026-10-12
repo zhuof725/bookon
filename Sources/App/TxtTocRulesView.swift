@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TxtTocRulesView: View {
+    @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var custom: [TxtTocRule] = []
     @State private var editing: TxtTocRule?
@@ -43,7 +44,7 @@ struct TxtTocRulesView: View {
                                         Button("删除", role: .destructive) { deleting = rule }
                                     }
                             }
-                            Divider().overlay(AppPalette.background)
+                            Divider().overlay(palette.background)
                         }
                         Button {
                             editing = TxtTocRule(id: UUID().uuidString, name: "", pattern: "", isBuiltIn: false)
@@ -52,13 +53,14 @@ struct TxtTocRulesView: View {
                                 .appFont(.system(size: 20)).padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityIdentifier("tocRules.add")
-                    }.background(AppPalette.surface, in: RoundedRectangle(cornerRadius: 25))
+                    }.background(palette.surface, in: RoundedRectangle(cornerRadius: 25))
                     Text("适用于新导入的 TXT 文件，内置与自定义规则共同识别标题。已有目录不自动重建，EPUB 和书源目录不受影响。")
-                        .appFont(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8)
+                        .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
             }
         }
-        .background(AppPalette.background.ignoresSafeArea())
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { custom = repository.customRules() }
         .sheet(item: $editing, onDismiss: {
@@ -93,14 +95,14 @@ struct TxtTocRulesView: View {
     private func ruleContent(_ rule: TxtTocRule) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Text(rule.name).appFont(.system(size: 19)).foregroundStyle(.primary)
+                Text(rule.name).appFont(.system(size: 19)).foregroundStyle(palette.primary)
                 Text(rule.isBuiltIn ? "内置" : "自定义")
-                    .appFont(.caption).foregroundStyle(.secondary)
+                    .appFont(.caption).foregroundStyle(palette.secondary)
                     .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(AppPalette.selection, in: RoundedRectangle(cornerRadius: 5))
+                    .background(palette.selection, in: RoundedRectangle(cornerRadius: 5))
             }
             Text(rule.pattern).appFont(.system(size: 14, design: .monospaced))
-                .foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                .foregroundStyle(palette.secondary).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -109,6 +111,7 @@ struct TxtTocRulesView: View {
 }
 
 private struct TxtTocRuleEditor: View {
+    @ThemePalette private var palette
     let rule: TxtTocRule
     let onSave: (TxtTocRule) -> String?
     let onDelete: () -> Void
@@ -129,38 +132,44 @@ private struct TxtTocRuleEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("名称") {
-                    if rule.isBuiltIn { Text(name) }
-                    else { TextField("规则名称", text: $name).accessibilityIdentifier("tocRules.name") }
-                }
-                Section("正则表达式") {
-                    if rule.isBuiltIn { Text(pattern).appFont(.system(.callout, design: .monospaced)).textSelection(.enabled) }
-                    else {
-                        TextEditor(text: $pattern).appFont(.system(.callout, design: .monospaced))
-                            .autocorrectionDisabled().textInputAutocapitalization(.never)
-                            .frame(minHeight: 100).accessibilityIdentifier("tocRules.pattern")
-                        if let invalid { Text(invalid).appFont(.footnote).foregroundStyle(.secondary) }
+                Group {
+                    Section("名称") {
+                        if rule.isBuiltIn { Text(name) }
+                        else { TextField("规则名称", text: $name).accessibilityIdentifier("tocRules.name") }
                     }
-                    Text("逐行匹配完整标题；建议使用 ^ 和 $ 限定首尾。标题候选行最多 160 个 UTF-16 单位。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
+                    Section("正则表达式") {
+                        if rule.isBuiltIn { Text(pattern).appFont(.system(.callout, design: .monospaced)).textSelection(.enabled) }
+                        else {
+                            TextEditor(text: $pattern).appFont(.system(.callout, design: .monospaced))
+                                .scrollContentBackground(.hidden)
+                                .autocorrectionDisabled().textInputAutocapitalization(.never)
+                                .frame(minHeight: 100).accessibilityIdentifier("tocRules.pattern")
+                            if let invalid { Text(invalid).appFont(.footnote).foregroundStyle(.red) }
+                        }
+                        Text("逐行匹配完整标题；建议使用 ^ 和 $ 限定首尾。标题候选行最多 160 个 UTF-16 单位。")
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
+                    }
+                    Section("测试标题") {
+                        TextField("输入一行标题", text: $sample).autocorrectionDisabled()
+                            .textInputAutocapitalization(.never).accessibilityIdentifier("tocRules.sample")
+                        Button("测试匹配") {
+                            let candidate = TxtTocRule(id: rule.id, name: name, pattern: pattern, isBuiltIn: rule.isBuiltIn)
+                            preview = TxtTocMatcher(rules: [candidate]).isHeading(sample) ? "匹配成功" : "未匹配"
+                        }.disabled(invalid != nil).accessibilityIdentifier("tocRules.test")
+                        if let preview { Text(preview).accessibilityIdentifier("tocRules.result") }
+                    }
+                    if rule.isBuiltIn {
+                        Section { Text("内置规则只读，不能修改或删除。需要其他格式时可添加自定义规则。").appFont(.footnote).foregroundStyle(palette.secondary) }
+                    } else if !rule.name.isEmpty {
+                        Section { Button("删除规则", role: .destructive, action: onDelete).foregroundStyle(.red).accessibilityIdentifier("tocRules.delete") }
+                    }
+                    if let savingError { Text(savingError).foregroundStyle(.red) }
                 }
-                Section("测试标题") {
-                    TextField("输入一行标题", text: $sample).autocorrectionDisabled()
-                        .textInputAutocapitalization(.never).accessibilityIdentifier("tocRules.sample")
-                    Button("测试匹配") {
-                        let candidate = TxtTocRule(id: rule.id, name: name, pattern: pattern, isBuiltIn: rule.isBuiltIn)
-                        preview = TxtTocMatcher(rules: [candidate]).isHeading(sample) ? "匹配成功" : "未匹配"
-                    }.disabled(invalid != nil).accessibilityIdentifier("tocRules.test")
-                    if let preview { Text(preview).accessibilityIdentifier("tocRules.result") }
-                }
-                if rule.isBuiltIn {
-                    Section { Text("内置规则只读，不能修改或删除。需要其他格式时可添加自定义规则。").appFont(.footnote).foregroundStyle(.secondary) }
-                } else if !rule.name.isEmpty {
-                    Section { Button("删除规则", role: .destructive, action: onDelete).accessibilityIdentifier("tocRules.delete") }
-                }
-                if let savingError { Text(savingError).foregroundStyle(.red) }
+                .listRowBackground(palette.surface)
             }
-            .scrollContentBackground(.hidden).background(AppPalette.background)
+            .foregroundStyle(palette.primary)
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle(rule.isBuiltIn ? "内置目录规则" : "自定义目录规则")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

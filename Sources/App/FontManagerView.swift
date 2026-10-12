@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FontManagerView: View {
+    @ThemePalette private var palette
     @ObservedObject private var manager: ReadingFontManager
     @Environment(\.dismiss) private var dismiss
     @State private var showingImporter = false
@@ -25,7 +26,7 @@ struct FontManagerView: View {
                     if let notice = manager.notice { noticeCard(notice) }
                     if isImporting {
                         HStack(spacing: 12) {
-                            ProgressView().tint(AppPalette.accent)
+                            ProgressView().tint(palette.accent)
                             Text(importProgress).appFont(.subheadline)
                         }
                         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -35,15 +36,15 @@ struct FontManagerView: View {
                     builtInSection
                     importedSection
                     Text("仅使用设备已有字体或你选择的本地文件。不会联网下载字体。所选字体同步用于应用界面与阅读正文；系统选择器、键盘和系统导航栏保持系统字体。请确认你拥有所导入字体的使用权。")
-                        .appFont(.footnote).foregroundStyle(AppPalette.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
             }
         }
-        .foregroundStyle(AppPalette.accent)
-        .background(AppPalette.background.ignoresSafeArea())
-        .tint(AppPalette.accent)
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .tint(palette.accent)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isImporting)
@@ -106,7 +107,7 @@ struct FontManagerView: View {
                 .appFont(.subheadline.weight(.medium))
                 .accessibilityIdentifier("fonts.current")
             Text("支持 TTF / OTF / TTC · 单文件不超过 32 MB · 最多 30 个文件。导入后请点选字体，切换字体会重新分页。")
-                .appFont(.footnote).foregroundStyle(AppPalette.secondary)
+                .appFont(.footnote).foregroundStyle(palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -134,7 +135,7 @@ struct FontManagerView: View {
                     Image(systemName: "textformat").font(.system(size: 30, weight: .light))
                     Text("还没有导入字体").appFont(.headline)
                     Text("点右上角「导入」，从“文件”选择字体。\n只保存应用内副本，不会修改原文件。")
-                        .appFont(.footnote).foregroundStyle(AppPalette.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(28).frame(maxWidth: .infinity)
@@ -149,7 +150,7 @@ struct FontManagerView: View {
     private func sectionHeader(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).appFont(.headline).accessibilityAddTraits(.isHeader)
-            Text(detail).appFont(.caption).foregroundStyle(AppPalette.secondary)
+            Text(detail).appFont(.caption).foregroundStyle(palette.secondary)
         }
     }
 
@@ -164,7 +165,7 @@ struct FontManagerView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(choice.name).appFont(.subheadline.weight(.semibold))
                         if !choice.id.isEmpty {
-                            Text(choice.id).appFont(.caption2).foregroundStyle(AppPalette.secondary)
+                            Text(choice.id).appFont(.caption2).foregroundStyle(palette.secondary)
                                 .lineLimit(2).textSelection(.disabled)
                         }
                     }
@@ -177,10 +178,10 @@ struct FontManagerView: View {
                     .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 Text(choice.id.isEmpty ? "恢复界面与阅读器原有默认字体" : "缺失字形由系统字体补全")
-                    .appFont(.caption2).foregroundStyle(AppPalette.secondary)
+                    .appFont(.caption2).foregroundStyle(palette.secondary)
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? AppPalette.selection.opacity(0.55) : Color.clear)
+            .background(selected ? palette.selection.opacity(0.55) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -197,7 +198,7 @@ struct FontManagerView: View {
                     Text(file.originalName).appFont(.subheadline.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                     Text("\(file.faces.count) 个字形样式 · \(ByteCountFormatter.string(fromByteCount: Int64(file.fileSize), countStyle: .file))")
-                        .appFont(.caption).foregroundStyle(AppPalette.secondary)
+                        .appFont(.caption).foregroundStyle(palette.secondary)
                 }
                 Spacer(minLength: 0)
                 Button(role: .destructive) {
@@ -207,14 +208,14 @@ struct FontManagerView: View {
                     Image(systemName: "trash").font(.system(size: 16))
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain).foregroundStyle(AppPalette.accent)
+                .buttonStyle(.plain).foregroundStyle(.red)
                 .accessibilityLabel("移除字体文件：" + file.originalName)
                 .accessibilityIdentifier("fonts.delete." + file.id)
             }.padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
             Divider().padding(.horizontal, 16)
             if file.faces.isEmpty {
                 Text("文件缺失或无法加载。可移除后重新导入。")
-                    .appFont(.footnote).foregroundStyle(AppPalette.secondary)
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(file.faces) { choice in

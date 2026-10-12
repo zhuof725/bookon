@@ -3,6 +3,7 @@ import WebKit
 
 /// 书源登录：有 loginUi 时按表单登录；只有网页登录地址时用 WebView 登录并回流 Cookie。
 struct SourceLoginView: View {
+    @ThemePalette private var palette
     let source: BookSource
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -20,51 +21,58 @@ struct SourceLoginView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if !fields.isEmpty {
-                    Section("登录信息") {
-                        ForEach(fields.filter { $0.kind != .button }) { f in
-                            if f.kind == .password {
-                                SecureField(f.name, text: binding(f.name))
-                            } else {
-                                HStack {
-                                    Text(f.name).foregroundStyle(.secondary).appFont(.callout)
-                                    TextField(f.name, text: binding(f.name))
-                                        .textInputAutocapitalization(.never)
-                                        .autocorrectionDisabled()
+                Group {
+                    if !fields.isEmpty {
+                        Section("登录信息") {
+                            ForEach(fields.filter { $0.kind != .button }) { f in
+                                if f.kind == .password {
+                                    SecureField(f.name, text: binding(f.name)).foregroundStyle(palette.primary)
+                                } else {
+                                    HStack {
+                                        Text(f.name).foregroundStyle(palette.secondary).appFont(.callout)
+                                        TextField(f.name, text: binding(f.name))
+                                            .foregroundStyle(palette.primary)
+                                            .textInputAutocapitalization(.never)
+                                            .autocorrectionDisabled()
+                                    }
                                 }
                             }
                         }
-                    }
-                    let buttons = fields.filter { $0.kind == .button }
-                    if !buttons.isEmpty {
-                        Section("操作") {
-                            ForEach(buttons) { f in
-                                Button(f.name) { press(f) }.disabled(busy)
+                        let buttons = fields.filter { $0.kind == .button }
+                        if !buttons.isEmpty {
+                            Section("操作") {
+                                ForEach(buttons) { f in
+                                    Button(f.name) { press(f) }.disabled(busy)
+                                }
                             }
                         }
-                    }
-                    Section {
-                        Button("保存") { save(runLogin: false) }.disabled(busy)
-                        if hasLoginFunction {
-                            Button("登录") { save(runLogin: true) }.disabled(busy)
+                        Section {
+                            Button("保存") { save(runLogin: false) }.disabled(busy)
+                            if hasLoginFunction {
+                                Button("登录") { save(runLogin: true) }.disabled(busy)
+                            }
+                            Button("清除登录信息", role: .destructive) { clear() }.foregroundStyle(.red).disabled(busy)
                         }
-                        Button("清除登录信息", role: .destructive) { clear() }.disabled(busy)
+                    }
+                    if let url = pageURL {
+                        Section("网页登录") {
+                            Button("打开登录页面") { showWeb = true }
+                            Text(url).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(2)
+                        }
+                    }
+                    if fields.isEmpty && pageURL == nil {
+                        Text("这个书源没有可用的登录配置（没有 loginUi，loginUrl 也不是网址）。")
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
+                    }
+                    if !message.isEmpty {
+                        Section("结果") { Text(message).appFont(.footnote).textSelection(.enabled) }
                     }
                 }
-                if let url = pageURL {
-                    Section("网页登录") {
-                        Button("打开登录页面") { showWeb = true }
-                        Text(url).appFont(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                }
-                if fields.isEmpty && pageURL == nil {
-                    Text("这个书源没有可用的登录配置（没有 loginUi，loginUrl 也不是网址）。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
-                }
-                if !message.isEmpty {
-                    Section("结果") { Text(message).appFont(.footnote).textSelection(.enabled) }
-                }
+                .listRowBackground(palette.surface)
             }
+            .foregroundStyle(palette.primary)
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle(source.bookSourceName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }

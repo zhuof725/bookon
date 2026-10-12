@@ -37,18 +37,19 @@ enum ShelfBooks {
 }
 
 struct ShelfGlass<S: InsettableShape>: ViewModifier {
+    @ThemePalette private var palette
     let shape: S
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content.background {
             ZStack {
-                if reduceTransparency { shape.fill(AppPalette.surface) }
+                if reduceTransparency { shape.fill(palette.surface) }
                 else {
                     shape.fill(.ultraThinMaterial)
-                    shape.fill(AppPalette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
+                    shape.fill(palette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
                 }
-                shape.strokeBorder(Color.primary.opacity(0.13), lineWidth: 0.5)
+                shape.strokeBorder(palette.border, lineWidth: 0.5)
             }.allowsHitTesting(false)
         }
     }
@@ -57,6 +58,7 @@ struct ShelfGlass<S: InsettableShape>: ViewModifier {
 /// Independent from AppStore: the production screen and offline UI fixture share
 /// exactly the same card/menu code. Only callbacks may mutate the user's library.
 struct BookshelfScreen: View {
+    @ThemePalette private var palette
     let books: [Book]
     let localOrigin: String
     let onOpen: (Book) -> Void
@@ -86,10 +88,10 @@ struct BookshelfScreen: View {
                 ScrollView {
                     if visibleBooks.isEmpty {
                         VStack(spacing: 14) {
-                            Image(systemName: "books.vertical").font(.system(size: 36)).foregroundStyle(.secondary)
+                            Image(systemName: "books.vertical").font(.system(size: 36)).foregroundStyle(palette.secondary)
                             Text(books.isEmpty ? "书架是空的" : "这个分类暂无书籍").appFont(.headline)
                             Text(books.isEmpty ? "点击左上角搜索，或在右上角菜单导入 TXT / EPUB。" : "试试切换到「全部」。")
-                                .appFont(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                .appFont(.subheadline).foregroundStyle(palette.secondary).multilineTextAlignment(.center)
                         }.padding(36).padding(.top, 70).frame(maxWidth: .infinity)
                         .accessibilityIdentifier("shelf.empty")
                     } else if layout == .grid {
@@ -115,7 +117,8 @@ struct BookshelfScreen: View {
                 }
             }
         }
-        .background(AppPalette.background.ignoresSafeArea())
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog("移除选中的 \(selectedBooks.count) 本书？本地书籍文件也会删除。", isPresented: $confirmRemoval, titleVisibility: .visible) {
             Button("移除书籍", role: .destructive) {
@@ -132,13 +135,13 @@ struct BookshelfScreen: View {
                 .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("搜索书籍").accessibilityIdentifier("shelf.search")
             Spacer()
             Button { menu = menu == "filter" ? nil : "filter" } label: {
-                HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
+                HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.secondary) }
                     .padding(.horizontal, 17).frame(height: 42)
             }.modifier(ShelfGlass(shape: Capsule())).accessibilityLabel("分类：" + filter.rawValue).accessibilityIdentifier("shelf.filter")
             Spacer()
             Button { menu = menu == "main" ? nil : "main" } label: { Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 44, height: 44) }
                 .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("更多").accessibilityIdentifier("shelf.more")
-        }.buttonStyle(.plain).foregroundStyle(.primary).padding(.horizontal, 16).padding(.top, 6)
+        }.buttonStyle(.plain).foregroundStyle(palette.primary).padding(.horizontal, 16).padding(.top, 6)
     }
 
     private var selectionBar: some View {
@@ -149,6 +152,7 @@ struct BookshelfScreen: View {
             }.accessibilityIdentifier("shelf.selectAll")
             Spacer()
             Button("移除（\(selectedBooks.count)）", role: .destructive) { confirmRemoval = true }
+                .foregroundStyle(.red)
                 .disabled(selectedBooks.isEmpty).accessibilityIdentifier("shelf.removeSelected")
             Button("完成") { selecting = false; selection.removeAll() }.padding(.leading, 10).accessibilityIdentifier("shelf.finishSelection")
         }.appFont(.subheadline).padding(.horizontal, 24)
@@ -202,15 +206,15 @@ struct BookshelfScreen: View {
             }
         }
         .padding(9)
-        .foregroundStyle(.primary).buttonStyle(.plain)
+        .foregroundStyle(palette.primary).buttonStyle(.plain)
         .background {
-            RoundedRectangle(cornerRadius: 32, style: .continuous).fill(.regularMaterial)
-                .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5) }
+            RoundedRectangle(cornerRadius: 32, style: .continuous).fill(palette.surface)
+                .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(palette.border, lineWidth: 0.5) }
                 .shadow(color: .black.opacity(0.13), radius: 16, x: 0, y: 12)
         }
         .overlay(alignment: .topTrailing) {
             if page != "filter" {
-                ShelfMenuPointer().fill(.regularMaterial).frame(width: 25, height: 14).offset(x: -15, y: -13)
+                ShelfMenuPointer().fill(palette.surface).frame(width: 25, height: 14).offset(x: -15, y: -13)
                     .allowsHitTesting(false)
             }
         }
@@ -219,16 +223,16 @@ struct BookshelfScreen: View {
     private func menuRow(_ title: String, icon: String? = nil, detail: String? = nil, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 11) {
-                if let icon { Image(systemName: icon).font(.system(size: 19, weight: .medium)).foregroundStyle(AppPalette.accent).frame(width: 22) }
+                if let icon { Image(systemName: icon).font(.system(size: 19, weight: .medium)).foregroundStyle(palette.accent).frame(width: 22) }
                 Text(title).appFont(.system(size: 16))
                 Spacer(minLength: 5)
-                if let detail { Text(detail).appFont(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1); Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary) }
+                if let detail { Text(detail).appFont(.system(size: 14)).foregroundStyle(palette.secondary).lineLimit(1); Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.secondary) }
             }.padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
         }.accessibilityIdentifier(id)
     }
     private func choiceRow(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack { Text(title); Spacer(); if selected { Image(systemName: "checkmark").foregroundStyle(AppPalette.accent) } }
+            HStack { Text(title); Spacer(); if selected { Image(systemName: "checkmark").foregroundStyle(palette.accent) } }
                 .padding(.horizontal, 12).frame(minHeight: 44).contentShape(Rectangle())
         }.accessibilityValue(selected ? "已选择" : "未选择").accessibilityIdentifier(id)
     }
@@ -246,6 +250,7 @@ private struct ShelfMenuPointer: Shape {
 }
 
 struct ShelfBookCard: View {
+    @ThemePalette private var palette
     let book: Book
     let grid: Bool
     let selecting: Bool
@@ -257,7 +262,7 @@ struct ShelfBookCard: View {
                     cover.aspectRatio(0.70, contentMode: .fit)
                     VStack(spacing: 3) {
                         Text(book.name).appFont(.system(size: 13, weight: .semibold)).lineLimit(1)
-                        Text(ShelfBooks.subtitle(book)).appFont(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(ShelfBooks.subtitle(book)).appFont(.system(size: 11)).foregroundStyle(palette.secondary).lineLimit(1)
                     }.frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
                         .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 13, style: .continuous)))
                 }
@@ -266,12 +271,12 @@ struct ShelfBookCard: View {
                     cover.frame(width: 62, height: 88)
                     VStack(alignment: .leading, spacing: 7) {
                         Text(book.name).appFont(.headline).lineLimit(2)
-                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
                 }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 18)))
             }
-        }.foregroundStyle(.primary)
+        }.foregroundStyle(palette.primary)
     }
     private var cover: some View {
         ShelfCoverImage(url: BookCoverLocation.url(for: book))
@@ -280,8 +285,8 @@ struct ShelfBookCard: View {
             .overlay(alignment: .topTrailing) {
                 if selecting {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22)).foregroundStyle(selected ? AppPalette.accent : Color.white)
-                        .background(Circle().fill(Color.black.opacity(0.35))).padding(7)
+                        .font(.system(size: 22)).foregroundStyle(selected ? palette.accent : palette.primary)
+                        .background(Circle().fill(palette.surface)).padding(7)
                 }
             }
     }

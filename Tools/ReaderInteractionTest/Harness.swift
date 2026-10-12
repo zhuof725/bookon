@@ -7,8 +7,20 @@ enum WebViewSupport { static let userAgent = "ReaderInteractionTests" }
 
 @main
 struct HarnessApp: App {
+    @StateObject private var customThemeStore: AppThemeStore
+
     init() {
-        if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
+        let arguments = ProcessInfo.processInfo.arguments
+        let customThemeDefaults = CustomThemeHarnessSupport.defaults
+        if arguments.contains("--custom-theme-seed") {
+            // The custom-theme suite is the only persisted state owned by this
+            // route. Do not relaunch or clear appearance, font, reader, or
+            // other app defaults while seeding a test.
+            customThemeDefaults.removeObject(forKey: AppThemeStore.storageKey)
+        }
+        _customThemeStore = StateObject(wrappedValue: AppThemeStore(defaults: customThemeDefaults))
+
+        if arguments.contains("--shelf-mode") {
             ShelfFixture.resetDefaults()
         }
         if ProcessInfo.processInfo.arguments.contains("--font-mode") || ProcessInfo.processInfo.arguments.contains("--app-font-mode") {
@@ -42,6 +54,9 @@ struct HarnessApp: App {
                     BodyRulesHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--toc-rules-mode") {
                     TocRulesHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--custom-theme-mode") {
+                    CustomThemeHarnessView(store: customThemeStore)
+                        .modifier(AppThemeRoot(store: customThemeStore))
                 } else if ProcessInfo.processInfo.arguments.contains("--theme-mode") {
                     ThemeHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--appearance-mode") {

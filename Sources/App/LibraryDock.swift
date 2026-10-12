@@ -7,6 +7,7 @@ enum LibraryTab: Int, CaseIterable {
 }
 
 struct LibraryDock: View {
+    @ThemePalette private var palette
     @Binding var selection: LibraryTab
     var body: some View {
         HStack(spacing: 0) {
@@ -15,10 +16,10 @@ struct LibraryDock: View {
                     Image(systemName: tab.symbol)
                         .font(.system(size: 29, weight: .semibold))
                         .frame(maxWidth: .infinity).frame(height: 54)
-                        .background { if selection == tab { Capsule().fill(Color.primary.opacity(0.09)) } }
+                        .background { if selection == tab { Capsule().fill(palette.selection) } }
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain).foregroundStyle(.primary)
+                .buttonStyle(.plain).foregroundStyle(palette.primary)
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
                 .accessibilityIdentifier("library.tab." + String(tab.rawValue))

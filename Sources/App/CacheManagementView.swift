@@ -56,6 +56,7 @@ final class CacheManagementModel: ObservableObject {
 
 @MainActor
 struct CacheManagementView: View {
+    @ThemePalette private var palette
     @StateObject private var model: CacheManagementModel
     @Environment(\.dismiss) private var dismiss
     @State private var pending: AppCacheCategory = .all
@@ -83,22 +84,22 @@ struct CacheManagementView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("可管理缓存 · 磁盘").appFont(.subheadline).foregroundStyle(.secondary)
+                        Text("可管理缓存 · 磁盘").appFont(.subheadline).foregroundStyle(palette.secondary)
                         Text(model.hasScanned ? bytes(model.snapshot.diskBytes) : "正在统计…")
                             .appFont(.system(size: 30, weight: .semibold))
                             .accessibilityIdentifier("cache.total")
                         Text("网络内存缓存：\(bytes(model.snapshot.networkMemoryBytes))")
-                            .appFont(.footnote).foregroundStyle(.secondary)
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
                         if model.busy { ProgressView("正在处理…").appFont(.footnote).accessibilityIdentifier("cache.busy") }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
-                        .background(AppPalette.surface, in: RoundedRectangle(cornerRadius: 22))
+                        .background(palette.surface, in: RoundedRectangle(cornerRadius: 22))
                     ForEach([AppCacheCategory.content, .catalog, .network]) { category in
                         categoryCard(category)
                     }
                     Button { requestClear(.all) } label: {
                         Label("清理全部可管理缓存", systemImage: "trash")
                             .appFont(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 50)
-                            .background(AppPalette.selection, in: Capsule())
+                            .background(palette.selection, in: Capsule())
                     }.buttonStyle(.plain).disabled(model.busy || !model.hasScanned)
                         .accessibilityIdentifier("cache.clear.all")
                     if let outcome = model.result {
@@ -111,21 +112,22 @@ struct CacheManagementView: View {
                                 Text("已请求系统清理网络响应缓存；此项不计入文件删除数量。").appFont(.footnote)
                             }
                             ForEach(Array(outcome.failures.enumerated()), id: \.offset) { _, message in
-                                Text(message).appFont(.footnote).foregroundStyle(.secondary)
+                                Text(message).appFont(.footnote).foregroundStyle(.red)
                             }
                         }.accessibilityElement(children: .combine).accessibilityIdentifier("cache.result")
                     }
                     ForEach(Array(model.snapshot.warnings.enumerated()), id: \.offset) { _, message in
-                        Text(message).appFont(.footnote).foregroundStyle(.secondary)
+                        Text(message).appFont(.footnote).foregroundStyle(palette.secondary)
                     }
                     Text("不会删除本地书籍、EPUB 封面、导入字体、书源、登录信息、阅读进度、规则或搜索历史。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                     Text("只统计本页列出的缓存，文件大小为逻辑字节数，网络占用由系统报告。不包含全部网页缓存或当前屏幕持有的图片与排版。阅读和网络请求会再次生成缓存。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
             }
         }
-        .background(AppPalette.background.ignoresSafeArea()).foregroundStyle(.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .foregroundStyle(palette.primary)
         .toolbar(.hidden, for: .navigationBar)
         .modifier(MonochromeAppStyle()).modifier(AppTypographyRoot())
         .task { await model.refresh() }
@@ -146,19 +148,19 @@ struct CacheManagementView: View {
                 Text(model.hasScanned ? bytes(diskBytes(category)) : "—").appFont(.subheadline)
                     .accessibilityIdentifier("cache.size." + category.rawValue)
             }
-            Text(category.explanation).appFont(.footnote).foregroundStyle(.secondary)
+            Text(category.explanation).appFont(.footnote).foregroundStyle(palette.secondary)
             if category == .content {
                 Text("\(model.snapshot.contentFiles) 个文件 · \(model.snapshot.contentMemoryEntries) 条内存正文")
-                    .appFont(.caption).foregroundStyle(.secondary).accessibilityIdentifier("cache.count.content")
+                    .appFont(.caption).foregroundStyle(palette.secondary).accessibilityIdentifier("cache.count.content")
             } else if category == .catalog {
-                Text("\(model.snapshot.catalogFiles) 个文件").appFont(.caption).foregroundStyle(.secondary)
+                Text("\(model.snapshot.catalogFiles) 个文件").appFont(.caption).foregroundStyle(palette.secondary)
                     .accessibilityIdentifier("cache.count.catalog")
             }
             Button("清理") { requestClear(category) }.appFont(.body)
                 .frame(minHeight: 44).disabled(model.busy || !model.hasScanned)
                 .accessibilityLabel("清理" + category.title).accessibilityIdentifier("cache.clear." + category.rawValue)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppPalette.surface, in: RoundedRectangle(cornerRadius: 22))
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 22))
     }
     private func requestClear(_ category: AppCacheCategory) { pending = category; showingConfirmation = true }
     private func diskBytes(_ category: AppCacheCategory) -> Int64 {

@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct SourceDebugView: View {
+    @ThemePalette private var palette
     let source: BookSource
     @Environment(\.dismiss) private var dismiss
     @State private var keyword = "斗罗大陆"
@@ -13,7 +14,7 @@ struct SourceDebugView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                Text(source.bookSourceName).appFont(.headline).padding(.top)
+                Text(source.bookSourceName).appFont(.headline).foregroundStyle(palette.primary).padding(.top)
                 TextField("搜索关键词", text: $keyword)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
@@ -27,24 +28,27 @@ struct SourceDebugView: View {
                 HStack {
                     Button(running ? "正在诊断…" : "开始调试") { start() }
                         .buttonStyle(.borderedProminent)
+                        .tint(palette.accent).foregroundStyle(palette.onAccent)
                         .disabled(running || (keyword.trimmingCharacters(in: .whitespaces).isEmpty && bookURL.isEmpty))
                     if running { ProgressView() }
                     Spacer()
                     Button("复制日志") { UIPasteboard.general.string = report }
                 }
                 Text("日志只在本机内存里，不上传；请求头、Cookie、正文不记录。可截图或复制给我分析。")
-                    .appFont(.caption).foregroundStyle(.secondary)
+                    .appFont(.caption).foregroundStyle(palette.secondary)
                 ScrollView {
                     Text(report)
                         .appFont(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(palette.primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
-                .background(Color(uiColor: .secondarySystemBackground))
+                .background(palette.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .padding(.horizontal)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle("书源调试")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

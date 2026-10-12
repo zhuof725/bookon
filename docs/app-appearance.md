@@ -1,6 +1,6 @@
-# Monochrome app appearance
+# Application appearance
 
-The user explicitly selected the ENTIRE APP for black/white/gray styling, not only the bookshelf.
+Classic Monochrome remains the default. The newer request adds editable user themes and a wallpaper-inspired theme gallery; see [custom-app-themes.md](custom-app-themes.md). The notes below describe the default theme and the original light/dark mode support.
 
 - `AppPalette` owns neutral, dynamic light/dark tokens. `MonochromeAppStyle` on the production root passes a black/white accent to navigation, buttons, links, selection controls and presented SwiftUI sheets.
 - Bookshelf menu glyphs and selection marks use neutral colors. Actual cover images remain full color; missing-cover fallback is a gray gradient.

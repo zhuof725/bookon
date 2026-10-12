@@ -6,10 +6,10 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
+        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, full]
   push:
     branches: [main, fix/source-compat-runtime]
-    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
+    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
 concurrency:
   group: reader-interaction-${{ github.ref }}
   cancel-in-progress: true
@@ -102,6 +102,7 @@ jobs:
             typography) ARGS=(-only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             native) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests) ;;
             theme) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests) ;;
+            custom-themes) ARGS=(-only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests -only-testing:ReaderInteractionTests/ThemeTests) ;;
             appearance) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             chrome) ARGS=(-only-testing:ReaderInteractionTests/ChromeTests) ;;
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
@@ -155,6 +156,17 @@ jobs:
         if: ${{ always() && (inputs.suite == 'app-appearance' || inputs.suite == 'appearance' || inputs.suite == 'theme') }}
         with:
           name: appearance-screenshots
+          path: |
+            reader-screenshots/**/*.png
+            reader-screenshots/**/*.jpg
+            reader-screenshots/**/*.jpeg
+            reader-screenshots/**/*.heic
+            reader-screenshots/manifest.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'custom-themes' }}
+        with:
+          name: custom-theme-screenshots
           path: |
             reader-screenshots/**/*.png
             reader-screenshots/**/*.jpg

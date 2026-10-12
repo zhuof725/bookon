@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Coordinates the actual book, source and TOC; the screen itself is reusable.
 struct BookDetailView: View {
+    @ThemePalette private var palette
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State var book: Book
@@ -61,7 +62,11 @@ struct BookDetailView: View {
                             HStack { Text(value); Spacer(); if value == BookDetailMetadata.category(for: book) { Image(systemName: "checkmark") } }
                         }.accessibilityIdentifier("detail.category." + value)
                     }
+                    .listRowBackground(palette.surface)
                 }
+                .foregroundStyle(palette.primary)
+                .scrollContentBackground(.hidden)
+                .background { AppThemeCanvas().ignoresSafeArea() }
                 .navigationTitle("切换类型").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingCategory = false } } }
             }
@@ -163,13 +168,16 @@ struct BookDetailView: View {
 }
 
 private struct BookDetailIntroEditor: View {
+    @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
     @State var initial: String
     let onSave: (String) -> Void
     var body: some View {
         NavigationStack {
             TextEditor(text: $initial)
+                .foregroundStyle(palette.primary)
                 .padding(14).scrollContentBackground(.hidden)
+                .background { AppThemeCanvas().ignoresSafeArea() }
                 .accessibilityIdentifier("detail.introEditor")
                 .navigationTitle("编辑简介")
                 .navigationBarTitleDisplayMode(.inline)
@@ -183,6 +191,7 @@ private struct BookDetailIntroEditor: View {
 
 /// Modal directory that uses only parsed/cached real chapter entries.
 struct BookDetailChapterList: View {
+    @ThemePalette private var palette
     let book: Book
     let chapters: [BookChapter]
     let loading: Bool
@@ -194,8 +203,11 @@ struct BookDetailChapterList: View {
         NavigationStack {
             List {
                 if chapters.isEmpty {
-                    if loading { ProgressView("正在加载目录…") }
-                    else { Text("暂无目录").foregroundStyle(.secondary) }
+                    Group {
+                        if loading { ProgressView("正在加载目录…") }
+                        else { Text("暂无目录").foregroundStyle(palette.secondary) }
+                    }
+                    .listRowBackground(palette.surface)
                 }
                 ForEach(chapters) { chapter in
                     Button {
@@ -204,18 +216,22 @@ struct BookDetailChapterList: View {
                         showingReader = true
                     } label: {
                         HStack {
-                            Text(chapter.title).foregroundStyle(chapter.isVolume ? .secondary : .primary)
+                            Text(chapter.title).foregroundStyle(chapter.isVolume ? palette.secondary : palette.primary)
                             Spacer()
                             if chapter.index == book.durChapterIndex {
-                                Image(systemName: "book.fill").foregroundStyle(AppPalette.accent)
+                                Image(systemName: "book.fill").foregroundStyle(palette.accent)
                             }
-                            if chapter.isVip { Image(systemName: "lock.fill").foregroundStyle(AppPalette.secondary) }
+                            if chapter.isVip { Image(systemName: "lock.fill").foregroundStyle(palette.secondary) }
                         }
                     }
                     .disabled(chapter.isVolume)
                     .accessibilityIdentifier("detail.chapter.\(chapter.index)")
                 }
+                .listRowBackground(palette.surface)
             }
+            .foregroundStyle(palette.primary)
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle("目录（\(chapters.count)）")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -231,6 +247,7 @@ struct BookDetailChapterList: View {
 
 /// Search actual enabled sources for the same book, never inject example matches.
 private struct BookDetailSourcePicker: View {
+    @ThemePalette private var palette
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     let book: Book
@@ -244,20 +261,24 @@ private struct BookDetailSourcePicker: View {
             List {
                 Section {
                     Text("按书名和作者查找相同书籍；选择书源后先预览，不会自动替换书架或删除本地文件。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                 }
-                if loading { ProgressView("查找可用书源…") }
-                if let message { Text(message).foregroundStyle(.secondary) }
+                .listRowBackground(palette.surface)
+                if loading { ProgressView("查找可用书源…").listRowBackground(palette.surface) }
+                if let message { Text(message).foregroundStyle(palette.secondary).listRowBackground(palette.surface) }
                 ForEach(results) { found in
                     Button { onSelect(found) } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(found.originName.isEmpty ? found.origin : found.originName)
+                            Text(found.originName.isEmpty ? found.origin : found.originName).foregroundStyle(palette.primary)
                             Text(found.name + (found.author.isEmpty ? "" : " · " + found.author))
-                                .appFont(.subheadline).foregroundStyle(.secondary)
+                                .appFont(.subheadline).foregroundStyle(palette.secondary)
                         }
                     }
                 }
+                .listRowBackground(palette.surface)
             }
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle("换源")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }

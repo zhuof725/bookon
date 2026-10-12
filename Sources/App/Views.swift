@@ -4,6 +4,7 @@ import UIKit
 // MARK: - Search
 
 struct SearchView: View {
+    @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     @State private var keyword = ""
     @State private var hits: [SearchHit] = []
@@ -23,8 +24,9 @@ struct SearchView: View {
             if searching || !progress.isEmpty {
                 HStack {
                     if searching { ProgressView() }
-                    Text(progress).appFont(.footnote).foregroundStyle(.secondary)
+                    Text(progress).appFont(.footnote).foregroundStyle(palette.secondary)
                 }
+                .listRowBackground(palette.surface)
             }
             ForEach(hits) { h in
                 NavigationLink {
@@ -35,9 +37,11 @@ struct SearchView: View {
                             : "来源：" + h.book.originName)
                 }
             }
+            .listRowBackground(palette.surface)
         }
         .scrollContentBackground(.hidden)
-        .background(AppPalette.background.ignoresSafeArea())
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("搜索")
         .toolbar(.visible, for: .navigationBar)
         .searchable(text: $keyword, prompt: "书名或作者")
@@ -166,6 +170,7 @@ private final class ReaderScrollProgress {
 }
 
 struct ReaderView: View {
+    @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     @EnvironmentObject var settings: ReadSettings
     @Environment(\.dismiss) private var dismiss
@@ -283,9 +288,16 @@ struct ReaderView: View {
             NavigationStack {
                 List {
                     Section { BookRow(book: book, subtitle: book.author) }
+                        .listRowBackground(palette.surface)
                     Section("书源") { Text(readerSourceName) }
-                    if let intro = book.intro, !intro.isEmpty { Section("简介") { Text(intro) } }
+                        .listRowBackground(palette.surface)
+                    if let intro = book.intro, !intro.isEmpty {
+                        Section("简介") { Text(intro) }.listRowBackground(palette.surface)
+                    }
                 }
+                .foregroundStyle(palette.primary)
+                .scrollContentBackground(.hidden)
+                .background { AppThemeCanvas().ignoresSafeArea() }
                 .navigationTitle("书籍信息")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
@@ -301,22 +313,25 @@ struct ReaderView: View {
                             if c.isVolume {
                                 Button { showToc = false; go(c.index) } label: {
                                     Text(c.title).appFont(.headline)
-                                        .foregroundStyle(c.index == index ? AppPalette.accent : Color.secondary)
+                                        .foregroundStyle(c.index == index ? palette.accent : palette.secondary)
                                 }
-                                .listRowBackground(Color.clear)
+                                .listRowBackground(palette.surface)
                             } else {
                                 Button {
                                     showToc = false; go(c.index)
                                 } label: {
                                     HStack {
-                                        Text(c.title).foregroundStyle(c.index == index ? AppPalette.accent : Color.primary)
-                                        if c.isVip { Image(systemName: "lock.fill").font(.caption).foregroundStyle(AppPalette.secondary) }
+                                        Text(c.title).foregroundStyle(c.index == index ? palette.accent : palette.primary)
+                                        if c.isVip { Image(systemName: "lock.fill").font(.caption).foregroundStyle(palette.secondary) }
                                     }
                                 }
                             }
                         }
+                        .listRowBackground(palette.surface)
                         .id(c.index)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background { AppThemeCanvas().ignoresSafeArea() }
                     .onAppear { p.scrollTo(index, anchor: .center) }
                 }
                 .navigationTitle("目录（\(chapters.count)）")
@@ -339,14 +354,20 @@ struct ReaderView: View {
                             .pickerStyle(.segmented)
                         }
                     }
+                    .listRowBackground(palette.surface)
                     ReaderTypographyControls(settings: settings)
+                        .listRowBackground(palette.surface)
                     Section("背景") {
                         Picker("主题", selection: $settings.theme) {
                             ForEach(0..<ReadSettings.themes.count, id: \.self) { Text(ReadSettings.themes[$0].name).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
+                    .listRowBackground(palette.surface)
                 }
+                .foregroundStyle(palette.primary)
+                .scrollContentBackground(.hidden)
+                .background { AppThemeCanvas().ignoresSafeArea() }
                 .navigationTitle("阅读设置")
                 .navigationBarTitleDisplayMode(.inline)
             }

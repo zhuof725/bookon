@@ -73,6 +73,7 @@ enum ReaderMenuText {
 /// Search stays local to the loaded chapter. Paged results use the paginator's
 /// Character offsets; scroll results expose the complete matching paragraph.
 struct ReaderChapterSearch: View {
+    @ThemePalette private var palette
     let blocks: [ContentBlock]
     let chapter: String
     let pages: [BookPage]
@@ -85,15 +86,16 @@ struct ReaderChapterSearch: View {
         NavigationStack {
             List {
                 Section {
-                    Text(chapter).appFont(.subheadline).foregroundStyle(.secondary)
+                    Text(chapter).appFont(.subheadline).foregroundStyle(palette.secondary)
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("输入关键词，搜索本章正文").foregroundStyle(.secondary)
+                        Text("输入关键词，搜索本章正文").foregroundStyle(palette.secondary)
                     } else if matches.isEmpty {
-                        Text("本章没有匹配内容").foregroundStyle(.secondary)
+                        Text("本章没有匹配内容").foregroundStyle(palette.secondary)
                     } else {
-                        Text("找到 \(matches.count) 个相关段落").appFont(.caption).foregroundStyle(.secondary)
+                        Text("找到 \(matches.count) 个相关段落").appFont(.caption).foregroundStyle(palette.secondary)
                     }
                 }
+                .listRowBackground(palette.surface)
                 ForEach(matches) { result in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(highlighted(result.text)).textSelection(.enabled)
@@ -104,7 +106,11 @@ struct ReaderChapterSearch: View {
                         }
                     }.padding(.vertical, 4)
                 }
+                .listRowBackground(palette.surface)
             }
+            .foregroundStyle(palette.primary)
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .searchable(text: $query, prompt: "搜索本章")
             .navigationTitle("本章搜索")
             .navigationBarTitleDisplayMode(.inline)
@@ -119,8 +125,8 @@ struct ReaderChapterSearch: View {
         var cursor = result.startIndex
         while cursor < result.endIndex,
               let range = result[cursor...].range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) {
-            result[range].backgroundColor = AppPalette.highlight
-            result[range].foregroundColor = .primary
+            result[range].backgroundColor = palette.highlight
+            result[range].foregroundColor = palette.primary
             cursor = range.upperBound
         }
         return result
