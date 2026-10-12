@@ -284,56 +284,5 @@ private struct ReaderChromeSurface<S: InsettableShape>: ViewModifier {
 private struct ReaderChromeCover: View {
     let url: URL?
     let foreground: Color
-    @State private var localImage: UIImage?
-    @State private var loadedURL: URL?
-
-    var body: some View {
-        Group {
-            if let url, url.isFileURL {
-                if loadedURL == url, let localImage {
-                    Image(uiImage: localImage).resizable().scaledToFill()
-                } else {
-                    placeholder
-                }
-            } else if let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .accessibilityHidden(true)
-        .task(id: url) {
-            localImage = nil
-            loadedURL = nil
-            guard let url, url.isFileURL else { return }
-            // File I/O is off the main actor; thumbnail decoding is bounded.
-            let data = await Task.detached(priority: .utility) {
-                try? Data(contentsOf: url)
-            }.value
-            guard !Task.isCancelled, let data,
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 160
-                  ] as CFDictionary) else { return }
-            localImage = UIImage(cgImage: thumbnail)
-            loadedURL = url
-        }
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            foreground.opacity(0.06)
-            Image(systemName: "book.closed")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(foreground.opacity(0.6))
-        }
-    }
+    var body: some View { BookCoverImage(url: url, pixelSize: 160) }
 }

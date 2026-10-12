@@ -274,7 +274,7 @@ struct ShelfBookCard: View {
         }.foregroundStyle(.primary)
     }
     private var cover: some View {
-        ShelfCoverImage(url: book.coverUrl.flatMap(URL.init(string:)))
+        ShelfCoverImage(url: BookCoverLocation.url(for: book))
             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             .shadow(color: .black.opacity(0.16), radius: 8, x: 0, y: 5)
             .overlay(alignment: .topTrailing) {
@@ -289,33 +289,5 @@ struct ShelfBookCard: View {
 
 struct ShelfCoverImage: View {
     let url: URL?
-    @State private var localImage: UIImage?
-    var body: some View {
-        GeometryReader { geometry in
-            Group {
-                if let url, url.isFileURL {
-                    if let localImage { Image(uiImage: localImage).resizable().scaledToFill() } else { placeholder }
-                } else if let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() } else { placeholder }
-                    }
-                } else { placeholder }
-            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
-        }
-        .task(id: url) {
-            localImage = nil
-            guard let url, url.isFileURL else { return }
-            let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
-            guard !Task.isCancelled, let data, let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 600] as CFDictionary) else { return }
-            localImage = UIImage(cgImage: cgImage)
-        }
-        .accessibilityHidden(true)
-    }
-    private var placeholder: some View {
-        ZStack {
-            LinearGradient(colors: [AppPalette.placeholderTop, AppPalette.placeholderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: "book.closed").font(.system(size: 26, weight: .light)).foregroundStyle(.white.opacity(0.55))
-        }
-    }
+    var body: some View { BookCoverImage(url: url) }
 }

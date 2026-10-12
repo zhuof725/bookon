@@ -231,7 +231,7 @@ struct ReaderView: View {
         .overlay(alignment: .top) {
             if showBars {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
-                    coverURL: book.coverUrl.flatMap(URL.init(string:)),
+                    coverURL: BookCoverLocation.url(for: book),
                     background: theme.bg, foreground: theme.fg,
                     onBack: { dismiss() }, onDetails: { showBookInfo = true })
                     .transition(.opacity)

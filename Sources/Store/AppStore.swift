@@ -24,7 +24,20 @@ final class AppStore: ObservableObject {
 
     func load() {
         if let d = try? Data(contentsOf: sourcesFile), let s = try? JSONDecoder().decode([BookSource].self, from: d) { sources = s }
-        if let d = try? Data(contentsOf: booksFile), let b = try? JSONDecoder().decode([Book].self, from: d) { books = b }
+        if let d = try? Data(contentsOf: booksFile), let b = try? JSONDecoder().decode([Book].self, from: d) {
+            // Repair legacy absolute container URLs without reimporting EPUBs or
+            // touching chapter contents/progress. Persist only portable references.
+            books = b.map { saved in
+                guard saved.origin == Self.localOrigin else { return saved }
+                var updated = saved
+                let canonical = BookCoverLocation.localURL(for: saved.bookUrl, documentsDirectory: dir)
+                if saved.coverUrl?.isEmpty == false || FileManager.default.fileExists(atPath: canonical.path) {
+                    updated.coverUrl = BookCoverLocation.localReference(for: saved.bookUrl)
+                }
+                return updated
+            }
+            if books != b { saveBooks() }
+        }
     }
 
     func saveSources() {
@@ -79,8 +92,8 @@ final class AppStore: ObservableObject {
         }
         if let cover = parsed.coverData {
             let f = folder.appendingPathComponent("cover.img")
-            try? cover.write(to: f)
-            book.coverUrl = f.absoluteString
+            try cover.write(to: f, options: .atomic)
+            book.coverUrl = BookCoverLocation.localReference(for: id)
         }
         saveLocalToc(book, toc)
         if let old = books.first(where: { $0.bookUrl == book.bookUrl }) {

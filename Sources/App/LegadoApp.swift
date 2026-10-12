@@ -120,11 +120,7 @@ struct BookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: book.coverUrl ?? "")) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                ZStack { Color.gray.opacity(0.2); Image(systemName: "book").foregroundStyle(.secondary) }
-            }
+            ShelfCoverImage(url: BookCoverLocation.url(for: book))
             .frame(width: 48, height: 66)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             VStack(alignment: .leading, spacing: 4) {
