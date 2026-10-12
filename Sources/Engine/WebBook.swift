@@ -26,16 +26,19 @@ enum WebBook {
         return parsed.name.isEmpty ? [] : [parsed]
     }
 
-    static func parseBookList(source: BookSource, body: String, baseUrl: String, rule: SearchRule, context: RuleContext? = nil, isSearch: Bool = true) -> [Book] {
+    static func parseBookList(source: BookSource, body: String, baseUrl: String, rule: SearchRule, context: RuleContext? = nil, isSearch: Bool = true,
+                              onUnboundResult: ((Book, RuleContext) -> Void)? = nil) -> [Book] {
         let listContext = context ?? RuleContext(source: source)
         let hasPattern = !(source.bookUrlPattern ?? "").isEmpty
         if isSearch, hasPattern, let pattern = source.bookUrlPattern, matchesWholly(baseUrl, pattern: pattern) {
+            guard onUnboundResult == nil else { return [] }
             DebugLog.add("链接为详情页（bookUrlPattern 命中）")
             return bookFromInfoPage(source: source, body: body, url: baseUrl, listContext: listContext)
         }
         let ar = AnalyzeRule(content: body, baseUrl: baseUrl, jsLib: source.jsLib, context: listContext)
         let items = ar.getElements(rule.bookList)
         if items.isEmpty, !hasPattern {
+            guard onUnboundResult == nil else { return [] }
             DebugLog.add("列表为空，按详情页解析")
             return bookFromInfoPage(source: source, body: body, url: baseUrl, listContext: listContext)
         }
@@ -66,7 +69,12 @@ enum WebBook {
             itemContext.book = b
             let bookUrl = itemRule.getString(rule.bookUrl)
             b.bookUrl = bookUrl.isEmpty ? baseUrl : AnalyzeUrl.absolute(bookUrl.components(separatedBy: "\n").first ?? bookUrl, base: baseUrl)
-            itemContext.bindBook(b)
+            if let onUnboundResult {
+                itemContext.book = b
+                onUnboundResult(b, itemContext)
+            } else {
+                itemContext.bindBook(b)
+            }
             out.append(b)
         }
         return out
@@ -76,19 +84,96 @@ enum WebBook {
     static func bookInfo(source: BookSource, book: Book, session: URLSession = .shared) async throws -> Book {
         guard source.ruleBookInfo != nil else { return book }
         let context = RuleContext(source: source, book: book)
-        let au = AnalyzeUrl(rawUrl: book.bookUrl, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
-        let response = try await au.fetchResponse(session: session)
+        let request = AnalyzeUrl(rawUrl: book.bookUrl, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
+        let canRefresh = BookInfoRequestRefresh.canRefresh(source: source, book: book, request: request)
+        // For this saved signed request, try renewal before opening a browser
+        // with the same stale headers. All other request callers keep their policy.
+        let response = try await request.fetchResponse(session: session, deferAuthorizationChallenge: canRefresh)
         try Task.checkCancellation()
+        if canRefresh && [401, 403].contains(response.code) {
+            return try await refreshBookInfo(source: source, book: book, previous: request,
+                                             failedStatus: response.code, session: session)
+        }
         guard response.code == 0 || (200..<300).contains(response.code) else {
-            throw URLError(.badServerResponse)
+            throw BookInfoRequestRefresh.httpError(response.code)
         }
         return parseBookInfo(source: source, book: book, body: response.body, url: response.url, context: context)
     }
 
+    /// Legacy shelf entries contain expanded headers, not an executable recipe.
+    /// Renew using the actual source search rule, with no guessed IDs/signatures.
+    /// There is at most one search and one additional detail request, no recursion.
+    private static func refreshBookInfo(source: BookSource, book: Book, previous: AnalyzeUrl,
+                                        failedStatus: Int, session: URLSession) async throws -> Book {
+        try Task.checkCancellation()
+        guard let searchURL = source.searchUrl, let searchRule = source.ruleSearch else {
+            throw BookInfoRequestRefresh.httpError(failedStatus)
+        }
+        DebugLog.add("详情请求返回 HTTP \(failedStatus)，尝试从原书源重新获取同书请求（仅一次）")
+        let searchContext = RuleContext(source: source)
+        let searchRequest = AnalyzeUrl(rawUrl: searchURL, key: book.name, page: 1,
+            baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: searchContext, jsLib: source.jsLib)
+        guard !searchRequest.webView, searchRequest.webJs?.isEmpty != false else {
+            throw BookInfoRequestRefresh.httpError(failedStatus)
+        }
+        let response = try await searchRequest.fetchResponse(session: session, allowChallengeFallback: false)
+        try Task.checkCancellation()
+        guard (200..<300).contains(response.code) else {
+            throw BookInfoRequestRefresh.httpError(response.code, stage: "搜索")
+        }
+        var candidates: [(Book, RuleContext)] = []
+        _ = parseBookList(source: source, body: response.body, baseUrl: response.url,
+                          rule: searchRule, context: searchContext) { candidate, context in
+            candidates.append((candidate, context))
+        }
+        var matches: [(Book, AnalyzeUrl, RuleContext)] = []
+        for (candidate, candidateContext) in candidates {
+            try Task.checkCancellation()
+            // Reject different metadata before evaluating any candidate URL rule.
+            guard candidate.origin == book.origin,
+                  BookInfoRequestRefresh.hasSavedHeaders(candidate.bookUrl),
+                  BookInfoRequestRefresh.nameKey(candidate.name) == BookInfoRequestRefresh.nameKey(book.name),
+                  BookInfoRequestRefresh.nameKey(candidate.author) == BookInfoRequestRefresh.nameKey(book.author) else { continue }
+            let request = AnalyzeUrl(rawUrl: candidate.bookUrl, baseUrl: source.bookSourceUrl,
+                sourceHeader: source.header, context: candidateContext, jsLib: source.jsLib)
+            if BookInfoRequestRefresh.matches(candidate, saved: book, request: request, savedRequest: previous) {
+                matches.append((candidate, request, candidateContext))
+            }
+        }
+        guard matches.count == 1, let (_, request, candidateContext) = matches.first,
+              BookInfoRequestRefresh.headersChanged(request, from: previous) else {
+            throw BookInfoRequestRefresh.httpError(failedStatus,
+                note: "未取得可确认属于同一本书的新请求，请更新书源或检查登录状态。")
+        }
+        let refreshed = try await request.fetchResponse(session: session, allowChallengeFallback: false)
+        try Task.checkCancellation()
+        guard (200..<300).contains(refreshed.code) else {
+            throw BookInfoRequestRefresh.httpError(refreshed.code)
+        }
+        // Read new search variables, but keep them pending until the detail body
+        // itself proves the identity. Never change the persisted bookUrl/key.
+        let context = candidateContext.forkForBook(book, preservingExisting: true)
+        let result = parseBookInfoResult(source: source, book: book, body: refreshed.body,
+                                         url: refreshed.url, context: context)
+        try Task.checkCancellation()
+        guard BookInfoRequestRefresh.nameKey(result.name) == BookInfoRequestRefresh.nameKey(book.name),
+              BookInfoRequestRefresh.nameKey(result.author) == BookInfoRequestRefresh.nameKey(book.author) else {
+            throw BookInfoRequestRefresh.invalidDetails()
+        }
+        context.bindBook(result.book)
+        DebugLog.add("同书详情请求已恢复，保留原书架标识及阅读进度")
+        return result.book
+    }
+
     /// 解析详情页内容。bookInfo 与“搜索结果直接是详情页”两条路径共用。
     static func parseBookInfo(source: BookSource, book: Book, body: String, url: String, context: RuleContext) -> Book {
+        parseBookInfoResult(source: source, book: book, body: body, url: url, context: context).book
+    }
+
+    private static func parseBookInfoResult(source: BookSource, book: Book, body: String, url: String,
+                                             context: RuleContext) -> (book: Book, name: String, author: String) {
         var b = book
-        guard let rule = source.ruleBookInfo else { return b }
+        guard let rule = source.ruleBookInfo else { return (b, "", "") }
         let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
         var root: Any? = nil
         if let i = rule.`init`, !i.isEmpty {
@@ -125,7 +210,7 @@ enum WebBook {
         let toc = s(rule.tocUrl)
         b.tocUrl = toc.isEmpty ? url : AnalyzeUrl.absolute(toc, base: url)
         context.book = b
-        return b
+        return (b, n, a)
     }
 
     // MARK: TOC

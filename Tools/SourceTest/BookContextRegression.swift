@@ -108,6 +108,26 @@ enum BookContextRegression {
             _ = discarded?.put("discarded", "private")
             discarded = nil
             check(discardedReference == nil && RuleContext(source: src, book: book).get("discarded").isEmpty, "unbound discarded scope is released without shared records")
+
+            // Request renewal keeps prior book-only values while staging fresh
+            // candidate variables, with no publication until identity is verified.
+            let savedContext = RuleContext(source: src, book: book)
+            _ = savedContext.put("oldOnly", "keep-me")
+            _ = savedContext.put("renewed", "old")
+            var candidateBook = book
+            candidateBook.bookUrl = base + "/new-request"
+            let candidate = list.forkForBook(candidateBook)
+            _ = candidate.put("renewed", "new")
+            let renewal = candidate.forkForBook(book, preservingExisting: true)
+            check(renewal.get("oldOnly") == "keep-me" && renewal.get("renewed") == "new",
+                  "renewal retains old-only variables and prefers fresh candidate values")
+            check(savedContext.get("renewed") == "old", "pending renewal does not overwrite saved context")
+            check(list.forkForBook(book).get("oldOnly").isEmpty, "ordinary forks still isolate book-only variables")
+            renewal.bindBook(book)
+            check(savedContext.get("oldOnly") == "keep-me" && savedContext.get("renewed") == "new",
+                  "successful renewal publishes merged variables to the original book identity")
+            check(RuleContext(source: src, book: candidateBook).get("renewed").isEmpty,
+                  "renewal does not publish a second candidate book identity")
         } catch {
             check(false, "BookContextRegression fixture construction: \(error)")
         }

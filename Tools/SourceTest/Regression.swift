@@ -127,6 +127,7 @@ enum RuleRegression {
         BookInfoFallbackRegression.run(check)
         try await HTTPResponseRegression.run(check)
         try await BookCoverHTTPRegression.run(check)
+        try await BookRequestRefreshRegression.run(check)
         CookieStoreRegression.run(check)
         try await CookieBridgeRegression.run(check)
         SourceLoginRegression.run(check)

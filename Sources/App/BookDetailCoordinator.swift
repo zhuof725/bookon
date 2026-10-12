@@ -136,6 +136,10 @@ struct BookDetailView: View {
                 // Avoid silently persisting unrelated metadata on view appearance.
             } else { book = latest }
         } catch {
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                loading = false
+                return
+            }
             message = "详情加载失败：\(error.localizedDescription)"
         }
         await refreshChapters(source: source, force: force)

@@ -210,7 +210,8 @@ struct AnalyzeUrl {
 
     /// HTTP 4xx/5xx remain responses; transport errors and cancellation throw.
     /// Session injection is local and does not register a global URLProtocol.
-    func fetchResponse(session baseSession: URLSession = .shared) async throws -> HTTPResponseData {
+    func fetchResponse(session baseSession: URLSession = .shared, allowChallengeFallback: Bool = true,
+                       deferAuthorizationChallenge: Bool = false) async throws -> HTTPResponseData {
         try Task.checkCancellation()
         // enabledCookieJar=false：用不存 Cookie 的临时会话，既不发送也不保存 Set-Cookie。
         let session: URLSession
@@ -270,7 +271,8 @@ struct AnalyzeUrl {
         DebugLog.add("HTTP \(status)，\(data.count) 字节；\(DebugLog.summary(text ?? ""))")
         #if canImport(UIKit) && canImport(WebKit)
         let blocked = [403, 429, 503].contains(status) && (text ?? "").count < 200
-        if blocked || WebViewSupport.isChallenge(text ?? "") {
+        let deferredAuthorization = deferAuthorizationChallenge && [401, 403].contains(status)
+        if allowChallengeFallback && !deferredAuthorization && (blocked || WebViewSupport.isChallenge(text ?? "")) {
             DebugLog.add("被拦截/需要验证：改用 WebView；验证后会重新请求原接口")
             if let r = try? await WebViewLoader.load(url: finalUrl, method: method, body: body.map { percentEncodedBody($0) },
                                                      headers: headers, js: webJs, cookieJar: cookieJarEnabled) {

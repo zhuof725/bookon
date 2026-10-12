@@ -17,12 +17,18 @@ final class RuleContext {
 
     /// 复制列表阶段可见变量；每个条目拥有独立写入作用域。
     /// book 属性可逐字段更新，但只有 bindBook 才会提交共享存储。
-    func forkForBook(_ book: Book) -> RuleContext {
+    func forkForBook(_ book: Book, preservingExisting: Bool = false) -> RuleContext {
         Self.lock.lock()
         defer { Self.lock.unlock() }
+        let child = RuleContext(source: source, book: book)
         var snapshot = variables
         func overlay(_ values: [String: String]) {
             for (key, value) in values where !value.isEmpty { snapshot[key] = value }
+        }
+        // A recovered request may not regenerate every book variable. Retain
+        // existing values as a base, then prefer the fresh candidate snapshot.
+        if preservingExisting, let id = child.bookID {
+            overlay(Self.bookVariables[id] ?? [:])
         }
         if let pending = pendingBookVariables {
             overlay(inheritedBookVariables)
@@ -32,7 +38,6 @@ final class RuleContext {
             if let id = bookID { overlay(Self.bookVariables[id] ?? [:]) }
             if let id = chapterID { overlay(Self.chapterVariables[id] ?? [:]) }
         }
-        let child = RuleContext(source: source, book: book)
         child.inheritedBookVariables = snapshot
         child.pendingBookVariables = [:]
         return child
