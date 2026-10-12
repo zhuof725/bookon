@@ -348,7 +348,11 @@ private final class FontFixtureSession: ObservableObject {
         checks.check(abs(advance - metrics.cellWidth) < 0.02, "TextKit advance equals selected native Han metric")
         let measured = measurer.rows(text: paragraphs[0], count: counts[0], width: width,
             fontSize: size, lineSpacing: spacing, continuation: false)
-        let actual = ReaderTextLayout.rows(of: view)
+        var actualCount = 0
+        layout.enumerateLineFragments(forGlyphRange: layout.glyphRange(for: view.textContainer)) { _, _, _, glyphs, _ in
+            if glyphs.length > 0 { actualCount += 1 }
+        }
+        let actual = (count: actualCount, height: height)
         checks.check(measured.count == actual.count && abs(measured.height - height) < 0.02,
                      "Reused measurer agrees with real rendered layout")
         let attachment = attributed.attribute(.attachment, at: attributed.length - 1,
