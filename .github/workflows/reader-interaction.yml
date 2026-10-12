@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, appearance, theme, full]
+        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -35,6 +35,21 @@ jobs:
         with:
           name: toc-rule-regression-log
           path: toc-rule-regression.log
+      - name: Body replacement engine and repository regression
+        if: ${{ inputs.suite == 'body-rules' }}
+        run: |
+          set -euo pipefail
+          {
+            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+              Sources/Models/BodyReplaceRule.swift Tools/BodyReplaceTest/main.swift \
+              -framework Foundation -o "$RUNNER_TEMP/body-replace-regression"
+            "$RUNNER_TEMP/body-replace-regression"
+          } 2>&1 | tee body-replace-regression.log
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'body-rules' }}
+        with:
+          name: body-replace-regression-log
+          path: body-replace-regression.log
       - name: Install XcodeGen and diagnostic tools
         run: brew install xcodegen ripgrep
       - name: Generate focused test project
@@ -72,6 +87,7 @@ jobs:
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
             detail) ARGS=(-only-testing:ReaderInteractionTests/DetailTests) ;;
             toc-rules) ARGS=(-only-testing:ReaderInteractionTests/TocRulesTests) ;;
+            body-rules) ARGS=(-only-testing:ReaderInteractionTests/BodyRulesTests -only-testing:ReaderInteractionTests/TocRulesTests) ;;
             paper) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests/testNativeCurlCachedChaptersThemeAndRefresh) ;;
             scroll) ARGS=(-only-testing:ReaderInteractionTests/ContinuousScrollTests) ;;
             continuity) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests -only-testing:ReaderInteractionTests/ContinuousScrollTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
@@ -139,6 +155,17 @@ jobs:
         with:
           name: detail-screenshots
           path: reader-screenshots/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && (inputs.suite == 'body-rules' || inputs.suite == 'full') }}
+        with:
+          name: body-rules-screenshots
+          path: |
+            reader-screenshots/**/*.png
+            reader-screenshots/**/*.jpg
+            reader-screenshots/**/*.jpeg
+            reader-screenshots/**/*.heic
+            reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: ${{ always() && (inputs.suite == 'toc-rules' || inputs.suite == 'full') }}

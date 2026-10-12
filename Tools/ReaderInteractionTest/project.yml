@@ -16,6 +16,9 @@ targets:
       - path: Harness.swift
       - path: ThemeHarness.swift
       - path: TocRulesHarness.swift
+      - path: BodyRulesHarness.swift
+      - path: ../../Sources/Models/BodyReplaceRule.swift
+      - path: ../../Sources/App/BodyReplaceRulesView.swift
       - path: ../../Sources/Models/TxtTocRule.swift
       - path: ../../Sources/App/TxtTocRulesView.swift
       - path: ../../Sources/App/AppPalette.swift

@@ -66,26 +66,24 @@ final class TocRulesTests: XCTestCase {
         assertGone(button)
     }
 
-    func testBuiltInListAndReadOnlyEditor() {
+    private func builtin(_ suffix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "tocRules.rule.builtin." + suffix).firstMatch
+    }
+
+    func testBuiltInListCannotOpen() {
         launch()
-        capture("toc-rules-01-light-list")
-        // Scroll to each ID rather than relying on offscreen accessibility nodes.
-        for suffix in builtIns { reveal(app.buttons["tocRules.rule.builtin." + suffix]) }
-        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tocRules.rule.builtin."))
-        XCTAssertEqual(rows.count, 15, "Production uses VStack, not a virtualized list")
+        capture("toc-rules-static-list")
+        for suffix in builtIns {
+            let row = builtin(suffix)
+            reveal(row)
+            XCTAssertFalse(app.buttons["tocRules.rule.builtin." + suffix].exists)
+            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            XCTAssertFalse(app.buttons["tocRules.close"].exists)
+            XCTAssertFalse(app.textFields["tocRules.name"].exists)
+        }
         reveal(app.buttons["tocRules.add"])
-        capture("toc-rules-02-light-list-bottom")
-        app.terminate()
-        launch(["--toc-rules-keep"])
-        openRule("tocRules.rule.builtin.chapter")
-        XCTAssertFalse(app.textFields["tocRules.name"].exists)
-        XCTAssertFalse(app.textViews["tocRules.pattern"].exists)
-        XCTAssertFalse(app.buttons["tocRules.save"].exists)
-        XCTAssertFalse(app.buttons["tocRules.delete"].exists)
-        XCTAssertTrue(app.staticTexts["第 X 章 / 节 / 回"].exists)
-        capture("toc-rules-03-builtin-readonly")
-        app.buttons["tocRules.close"].tap()
-        XCTAssertTrue(app.buttons["tocRules.rule.builtin.chapter"].exists)
+        capture("toc-rules-static-list-bottom")
+        XCTAssertTrue(app.buttons["tocRules.add"].isEnabled)
     }
 
     func testCustomValidationPersistenceEditAndConfirmedDelete() {
@@ -137,15 +135,15 @@ final class TocRulesTests: XCTestCase {
         launch(["--toc-rules-keep"])
         reveal(app.buttons["tocRules.add"])
         XCTAssertFalse(app.buttons[id].exists, "Deletion must survive screen recreation")
-        XCTAssertTrue(app.buttons["tocRules.rule.builtin.dashes"].exists)
+        XCTAssertTrue(builtin("dashes").exists)
     }
 
     func testDarkListScreenshot() {
         launch(["--toc-rules-dark"])
-        XCTAssertTrue(app.buttons["tocRules.rule.builtin.chapter"].exists)
+        XCTAssertTrue(builtin("chapter").exists)
         capture("toc-rules-04-dark-list")
         reveal(app.buttons["tocRules.add"])
-        XCTAssertTrue(app.buttons["tocRules.rule.builtin.dashes"].exists)
+        XCTAssertTrue(builtin("dashes").exists)
         capture("toc-rules-05-dark-list-bottom")
     }
 }
