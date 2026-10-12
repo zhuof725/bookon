@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [search-history, cover-persistence, app-font, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
+        options: [cache-management, search-history, cover-persistence, app-font, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -50,6 +50,22 @@ jobs:
         with:
           name: body-replace-regression-log
           path: body-replace-regression.log
+      - name: Cache management regression
+        if: ${{ inputs.suite == 'cache-management' }}
+        run: |
+          set -euo pipefail
+          {
+            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+              Sources/Engine/ChapterContentCache.swift Sources/Engine/AppCacheService.swift \
+              Tools/SourceTest/ChapterContentCacheRegression.swift Tools/CacheManagementTest/main.swift \
+              -framework Foundation -framework CryptoKit -o "$RUNNER_TEMP/cache-management-regression"
+            "$RUNNER_TEMP/cache-management-regression"
+          } 2>&1 | tee cache-management-regression.log
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'cache-management' }}
+        with:
+          name: cache-management-regression-log
+          path: cache-management-regression.log
       - name: Install XcodeGen and diagnostic tools
         run: brew install xcodegen ripgrep
       - name: Generate focused test project
@@ -75,6 +91,7 @@ jobs:
           set -o pipefail
           ARGS=()
           case "$TEST_SUITE" in
+            cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
             cover-persistence) ARGS=(-only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
             bottom-bubble) ARGS=(-only-testing:ReaderInteractionTests/BottomBubbleTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
@@ -210,6 +227,14 @@ jobs:
             reader-screenshots/**/*.jpg
             reader-screenshots/**/*.jpeg
             reader-screenshots/**/*.heic
+            reader-screenshots/manifest.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'cache-management' }}
+        with:
+          name: cache-management-screenshots
+          path: |
+            reader-screenshots/**/*.png
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4

@@ -14,6 +14,10 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: CacheManagementHarness.swift
+      - path: ../../Sources/App/CacheManagementView.swift
+      - path: ../../Sources/Engine/AppCacheService.swift
+      - path: ../../Sources/Engine/ChapterContentCache.swift
       - path: SearchHistoryHarness.swift
       - path: ../../Sources/Models/BookSearchHistory.swift
       - path: ../../Sources/App/BookSearchHistoryView.swift

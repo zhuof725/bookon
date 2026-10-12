@@ -33,6 +33,21 @@ actor ChapterContentCache {
     private var memory: [ChapterContentKey: String] = [:]
     private var recent: [ChapterContentKey] = []
     private var flights: [ChapterContentKey: Flight] = [:]
+    private var generation = UUID()
+
+    var memoryEntryCount: Int { memory.count }
+
+    /// A synchronous deletion closure runs on this actor, preventing chapter
+    /// reads or writeback from interleaving with the purge.
+    func invalidate<Result: Sendable>(_ removeFiles: @Sendable () -> Result) -> Result {
+        generation = UUID()
+        let oldFlights = Array(flights.values)
+        flights.removeAll()
+        memory.removeAll()
+        recent.removeAll()
+        oldFlights.forEach { $0.task.cancel() }
+        return removeFiles()
+    }
     /// 诊断计数，不含书名、地址或正文，可验证前台是否复用了预读请求。
     private(set) var coalescedRequestCount = 0
 
@@ -57,6 +72,7 @@ actor ChapterContentCache {
     func content(for key: ChapterContentKey, priority: TaskPriority = .userInitiated,
                  load: @escaping @Sendable () async throws -> String) async throws -> String {
         try Task.checkCancellation()
+        let requestedGeneration = generation
         if let hit = cached(for: key) { return hit }
         let task: Task<String, Error>
         if let flight = flights[key] {
@@ -71,7 +87,7 @@ actor ChapterContentCache {
                         throw CacheError.emptyContent
                     }
                     // 所有等待者拿到结果前先完成写盘，不依赖最早等待者是否已取消。
-                    await self.storeLoaded(raw, for: key, flightID: id)
+                    try await self.storeLoaded(raw, for: key, flightID: id)
                     return raw
                 } catch {
                     await self.finishFlight(for: key, id: id)
@@ -82,10 +98,13 @@ actor ChapterContentCache {
         }
         let raw = try await task.value
         try Task.checkCancellation()
+        guard generation == requestedGeneration else { throw CancellationError() }
         return raw
     }
 
-    private func storeLoaded(_ raw: String, for key: ChapterContentKey, flightID: UUID) {
+    private func storeLoaded(_ raw: String, for key: ChapterContentKey, flightID: UUID) throws {
+        // A loader may ignore cancellation. Only the currently registered flight may publish.
+        guard flights[key]?.id == flightID else { throw CancellationError() }
         remember(raw, for: key)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

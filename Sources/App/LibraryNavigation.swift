@@ -49,6 +49,8 @@ struct LibraryProfileView: View {
                 NavigationLink { SearchView() } label: { Label("搜索书籍", systemImage: "magnifyingglass") }
             }
             Section("本机数据") {
+                NavigationLink { CacheManagementView() } label: { Label("缓存管理", systemImage: "internaldrive") }
+                    .accessibilityIdentifier("library.cache")
                 LabeledContent("已导入书源", value: "\(store.sources.count) 个")
                 LabeledContent("书架书籍", value: "\(store.books.count) 本")
             }

@@ -25,7 +25,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--search-history-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--cache-management-mode") {
+                    CacheManagementHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--search-history-mode") {
                     SearchHistoryHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--cover-persistence-mode") {
                     CoverPersistenceHarnessView()
