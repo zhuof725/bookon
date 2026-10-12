@@ -117,6 +117,22 @@ final class AnalyzeRule {
 
     // MARK: - Public API
 
+    private var validatingCoverTemplate = false
+
+    /// An absent ID in a literal image URL is not a new cover. Keep this policy
+    /// scoped to covers: other fields and scripts may intentionally use blanks.
+    func getCoverString(_ rule: String?, from obj: Any? = nil) -> String {
+        let previous = validatingCoverTemplate
+        validatingCoverTemplate = true
+        defer { validatingCoverTemplate = previous }
+        let result = getString(rule, from: obj)
+        return Self.missingCoverValue(result) ? "" : result
+    }
+
+    private static func missingCoverValue(_ value: String) -> Bool {
+        ["", "null", "undefined"].contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
     func getString(_ rule: String?, from obj: Any? = nil) -> String {
         guard var rule = rule, !rule.isEmpty else { return "" }
         rule = resolvePut(rule, from: obj)
@@ -255,7 +271,26 @@ final class AnalyzeRule {
     }
 
     private func template(_ obj: Any, _ rule: String) -> String {
-        RuleScanner.replaceGroups(rule, marker: "{{") { inner in
+        // Mask balanced expressions before locating the URL's query/options:
+        // a '?' inside JavaScript/JSONPath is not a query delimiter. No rule
+        // gets evaluated twice (java.put and other JS can have side effects).
+        var required: [Bool] = []
+        if validatingCoverTemplate {
+            let marker = "__cover_" + UUID().uuidString + "_"
+            var index = 0
+            let skeleton = RuleScanner.replaceGroups(rule, marker: "{{") { _ in
+                defer { index += 1 }
+                return marker + String(index) + "__"
+            }
+            let query = skeleton.firstIndex(where: { $0 == "?" || $0 == "#" }) ?? skeleton.endIndex
+            // A comma in the image path is legal; only ', { ... }' starts
+            // Legado request options. Do not re-evaluate/execute that JSON here.
+            let options = skeleton.range(of: ",\\s*\\{", options: .regularExpression)?.lowerBound ?? skeleton.endIndex
+            let boundary = min(query, options)
+            let address = String(skeleton[..<boundary])
+            required = (0..<index).map { address.contains(marker + String($0) + "__") }
+        }
+        func evaluate(_ inner: String) -> String {
             let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
             if t == "baseUrl" { return self.baseUrl }
             if t == "host" { return self.resolvedHost() }
@@ -273,6 +308,17 @@ final class AnalyzeRule {
             }
             return AnalyzeRule.asString(self.runJS(t, obj))
         }
+        var index = 0, missingAddress = false
+        let result = RuleScanner.replaceGroups(rule, marker: "{{") { inner in
+            let value = evaluate(inner)
+            if required.indices.contains(index), required[index], Self.missingCoverValue(value) {
+                missingAddress = true
+            }
+            index += 1
+            return value
+        }
+        // A later JS stage can still supply an explicit fallback for this blank.
+        return missingAddress ? "" : result
     }
 
     private func replaceBraces(_ s: String, pattern: String, _ f: (String) -> String) -> String {

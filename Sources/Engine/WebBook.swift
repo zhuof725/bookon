@@ -61,7 +61,7 @@ enum WebBook {
             itemContext.book = b
             b.intro = nilIfEmpty(itemRule.getString(rule.intro))
             itemContext.book = b
-            let cover = itemRule.getString(rule.coverUrl)
+            let cover = itemRule.getCoverString(rule.coverUrl)
             b.coverUrl = cover.isEmpty ? nil : AnalyzeUrl.absolute(cover, base: baseUrl)
             itemContext.book = b
             let bookUrl = itemRule.getString(rule.bookUrl)
@@ -73,13 +73,16 @@ enum WebBook {
     }
 
     // MARK: Book info
-    static func bookInfo(source: BookSource, book: Book) async throws -> Book {
-        var b = book
-        guard let rule = source.ruleBookInfo else { return b }
-        let context = RuleContext(source: source, book: b)
+    static func bookInfo(source: BookSource, book: Book, session: URLSession = .shared) async throws -> Book {
+        guard source.ruleBookInfo != nil else { return book }
+        let context = RuleContext(source: source, book: book)
         let au = AnalyzeUrl(rawUrl: book.bookUrl, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
-        let (body, url) = try await au.fetch()
-        return parseBookInfo(source: source, book: b, body: body, url: url, context: context)
+        let response = try await au.fetchResponse(session: session)
+        try Task.checkCancellation()
+        guard response.code == 0 || (200..<300).contains(response.code) else {
+            throw URLError(.badServerResponse)
+        }
+        return parseBookInfo(source: source, book: book, body: response.body, url: response.url, context: context)
     }
 
     /// 解析详情页内容。bookInfo 与“搜索结果直接是详情页”两条路径共用。
@@ -116,7 +119,9 @@ enum WebBook {
         if let v = nilIfEmpty(s(rule.kind)) { b.kind = v }
         if let v = nilIfEmpty(s(rule.lastChapter)) { b.lastChapter = v }
         if let v = nilIfEmpty(s(rule.wordCount)) { b.wordCount = v }
-        if let v = nilIfEmpty(s(rule.coverUrl)) { b.coverUrl = AnalyzeUrl.absolute(v, base: url) }
+        if let v = nilIfEmpty(ar.getCoverString(rule.coverUrl, from: root)) {
+            b.coverUrl = AnalyzeUrl.absolute(v, base: url)
+        }
         let toc = s(rule.tocUrl)
         b.tocUrl = toc.isEmpty ? url : AnalyzeUrl.absolute(toc, base: url)
         context.book = b

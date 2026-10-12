@@ -3,10 +3,15 @@ import Foundation
 /// 柒默中文（起点 App 接口移植）书源：不联网，验证 jsLib 能加载、签名函数能在引擎里算出结果，
 /// 搜索/目录/正文/详情规则能解码，以及段评相关函数存在。
 enum QimoSourceRegression {
-    static func run(_ check: (Bool, String) -> Void) throws {
+    /// 与封面回归共用真实 fixture；调用方可隔离 source ID，但不改写规则或 jsLib。
+    static func loadFixture() throws -> BookSource {
         let dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Tools/SourceTest/Fixtures")
         let data = try Data(contentsOf: dir.appendingPathComponent("qimo-source.json"))
-        let source = try JSONDecoder().decode(BookSource.self, from: data)
+        return try JSONDecoder().decode(BookSource.self, from: data)
+    }
+
+    static func run(_ check: (Bool, String) -> Void) throws {
+        let source = try loadFixture()
         check(source.bookSourceName == "柒默中文" && !(source.jsLib ?? "").isEmpty, "柒默：书源与 jsLib 可解码")
         check(source.ruleToc?.chapterList?.contains("transformChapters") == true
               && source.ruleContent?.content?.contains("qidianggetComments") == true, "柒默：目录与正文规则已读入")
@@ -35,7 +40,7 @@ enum QimoSourceRegression {
         check((req.headers["QDSign"] ?? "").isEmpty == false && (req.headers["QDInfo"] ?? "").isEmpty == false, "柒默：搜索请求头带 QDSign/QDInfo")
 
         // loginUi 脚本里的 java.put('dev', …) 必须在读取正文前生效，否则正文会走 Android 的大图评论分支。
-        let fresh = try JSONDecoder().decode(BookSource.self, from: data)
+        let fresh = try loadFixture()
         check(JSEngine.shared.evalString("java.get('dev')", context: RuleContext(source: fresh)) == "", "柒默：未初始化时 dev 为空")
         WebBook.primeLoginUi(fresh)
         let dev = JSEngine.shared.evalString("java.get('dev')", context: RuleContext(source: fresh)) ?? ""

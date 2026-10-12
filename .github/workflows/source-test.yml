@@ -8,6 +8,10 @@ on:
       key:
         description: 搜索关键词
         default: 斗罗大陆
+      offline:
+        description: Only run deterministic regressions without downloading public sources
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -52,11 +56,11 @@ jobs:
           $RUNNER_TEMP/pkg/.build/release/SourceTest --regression 2>&1 | tee regression.log
 
       - name: Download sources
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline }}
         run: curl -sSL --retry 3 https://cdn.jsdelivr.net/gh/XIU2/Yuedu@master/shuyuan -o sources.json && ls -la sources.json
 
       - name: Run test
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline }}
         env:
           TEST_KEY: ${{ github.event.inputs.key }}
         run: |

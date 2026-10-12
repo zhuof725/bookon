@@ -54,5 +54,6 @@ enum BookInfoFallbackRegression {
         } catch {
             check(false, "BookInfoFallbackRegression 构造失败：\(error)")
         }
+        BookCoverRegression.run(check)
     }
 }
