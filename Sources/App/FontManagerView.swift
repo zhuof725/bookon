@@ -184,7 +184,6 @@ struct FontManagerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(choice.name + (choice.id.isEmpty ? "，沿用原有默认字体" : "，" + choice.id))
         .accessibilityValue(selected ? "已选择" : "未选择")
         .accessibilityHint("设为阅读字体并重新分页")

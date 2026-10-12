@@ -299,7 +299,16 @@ private final class FontFixtureSession: ObservableObject {
         checks.check(wide.rows > sans.rows && wide.height > sans.height, "Reused view and measurer relayout wider font")
         checks.check(wide.pages.count > sans.pages.count && wide.pages != sans.pages, "Real paginator changes page membership/count")
         checks.check(before.config == restored.config && before.pages == restored.pages, "System page layout restored exactly")
-        checks.check(before.attributes.isEqual(to: restored.attributes), "System attributed text restored exactly")
+        // Each render creates a fresh NSTextAttachment instance. Compare its
+        // geometry and bytes, not NSObject identity, then compare every text attribute.
+        let beforeText = NSMutableAttributedString(attributedString: before.attributes)
+        let restoredText = NSMutableAttributedString(attributedString: restored.attributes)
+        let priorAttachment = beforeText.attribute(.attachment, at: beforeText.length - 1, effectiveRange: nil) as? NSTextAttachment
+        let restoredAttachment = restoredText.attribute(.attachment, at: restoredText.length - 1, effectiveRange: nil) as? NSTextAttachment
+        checks.check(priorAttachment?.bounds == restoredAttachment?.bounds, "Restored attachment geometry matches")
+        beforeText.removeAttribute(.attachment, range: NSRange(location: 0, length: beforeText.length))
+        restoredText.removeAttribute(.attachment, range: NSRange(location: 0, length: restoredText.length))
+        checks.check(beforeText.isEqual(to: restoredText), "System text and non-attachment attributes restored exactly")
         checks.check(before.titleFont.fontDescriptor.isEqual(restored.titleFont.fontDescriptor), "Default title font restored")
         checks.check(before.cellWidth == restored.cellWidth && before.glyphAdvance == restored.glyphAdvance &&
             before.rows == restored.rows && before.height == restored.height, "Default measurements restored exactly")

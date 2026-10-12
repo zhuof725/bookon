@@ -71,6 +71,7 @@ final class FontTests: XCTestCase {
         capture("font-management-light")
         reveal(sans)
         sans.tap()
+        reveal(current, upward: false)
         XCTAssertEqual(waitLabel(current, contains: "LegadoFixtureSans-Regular"), true)
         XCTAssertEqual(app.buttons["fonts.choice.LegadoFixtureSans-Regular"].value as? String, "已选择")
 

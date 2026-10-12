@@ -38,10 +38,16 @@ enum ReaderTextLayout {
     // UIKit 排版入口均在主线程；分页二分测量不重复解析字体。
     private struct FontKey: Hashable { let name: String; let size: CGFloat }
     private static var fontCache: [FontKey: Fonts] = [:]
+    private static var cachedIdentity = ""
 
     static func metrics(fontSize: CGFloat, width: CGFloat? = nil) -> Metrics {
         let size = fontSize.isFinite ? max(fontSize, 1) : 19
-        let key = FontKey(name: ReaderFontResolver.identity, size: size)
+        let identity = ReaderFontResolver.identity
+        if cachedIdentity != identity {
+            fontCache.removeAll()
+            cachedIdentity = identity
+        }
+        let key = FontKey(name: identity, size: size)
         let fonts: Fonts
         if let cached = fontCache[key] {
             fonts = cached
