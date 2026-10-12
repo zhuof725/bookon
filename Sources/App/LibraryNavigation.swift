@@ -42,6 +42,8 @@ struct LibraryProfileView: View {
                     .accessibilityIdentifier("library.sources")
                 NavigationLink { TxtTocRulesView() } label: { Label("目录规则", systemImage: "list.bullet.rectangle") }
                     .accessibilityIdentifier("library.tocRules")
+                NavigationLink { BodyReplaceRulesView() } label: { Label("替换规则", systemImage: "text.badge.checkmark") }
+                    .accessibilityIdentifier("library.replaceRules")
                 NavigationLink { SearchView() } label: { Label("搜索书籍", systemImage: "magnifyingglass") }
             }
             Section("本机数据") {

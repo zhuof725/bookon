@@ -31,27 +31,17 @@ struct TxtTocRulesView: View {
                     Text("规则列表").font(.title2.bold()).padding(.horizontal, 18)
                     VStack(spacing: 0) {
                         ForEach(TxtTocRule.builtIns + custom) { rule in
-                            Button { editing = rule } label: {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 9) {
-                                        Text(rule.name).font(.system(size: 19)).foregroundStyle(.primary)
-                                        Text(rule.isBuiltIn ? "内置" : "自定义")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                            .padding(.horizontal, 8).padding(.vertical, 3)
-                                            .background(AppPalette.selection, in: RoundedRectangle(cornerRadius: 5))
+                            if rule.isBuiltIn {
+                                ruleContent(rule)
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityIdentifier("tocRules.rule." + rule.id)
+                            } else {
+                                Button { editing = rule } label: { ruleContent(rule) }
+                                    .buttonStyle(.plain).accessibilityIdentifier("tocRules.rule." + rule.id)
+                                    .contextMenu {
+                                        Button("编辑") { editing = rule }
+                                        Button("删除", role: .destructive) { deleting = rule }
                                     }
-                                    Text(rule.pattern).font(.system(size: 14, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }.buttonStyle(.plain).accessibilityIdentifier("tocRules.rule." + rule.id)
-                            .contextMenu {
-                                if !rule.isBuiltIn {
-                                    Button("编辑") { editing = rule }
-                                    Button("删除", role: .destructive) { deleting = rule }
-                                }
                             }
                             Divider().overlay(AppPalette.background)
                         }
@@ -100,6 +90,22 @@ struct TxtTocRulesView: View {
             Button("好") { error = nil }
         } message: { Text(error ?? "") }
     }
+    private func ruleContent(_ rule: TxtTocRule) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 9) {
+                Text(rule.name).font(.system(size: 19)).foregroundStyle(.primary)
+                Text(rule.isBuiltIn ? "内置" : "自定义")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(AppPalette.selection, in: RoundedRectangle(cornerRadius: 5))
+            }
+            Text(rule.pattern).font(.system(size: 14, design: .monospaced))
+                .foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+    }
+
 }
 
 private struct TxtTocRuleEditor: View {

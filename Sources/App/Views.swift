@@ -101,13 +101,22 @@ private struct PreparedReaderChapter {
 }
 
 private enum ReaderChapterParser {
-    static func content(raw: String, isVolume: Bool) -> (text: String, blocks: [ContentBlock]) {
+    static func content(raw: String, isVolume: Bool, replacement: BodyReplaceEngine) -> (text: String, blocks: [ContentBlock]) {
         if isVolume { return (raw, []) }
         let parsed = ContentBlocks.parse(raw)
         let hasRich = parsed.contains { if case .paragraph(_, let c, _) = $0 { return c > 0 }; if case .paragraph = $0 { return false }; return true }
-        if hasRich { return ("", parsed) }
+        if hasRich {
+            let displayed = parsed.map { block -> ContentBlock in
+                guard case .paragraph(let text, let count, let url) = block else { return block }
+                return .paragraph(text: replacement.apply(text), commentCount: count, commentURL: url)
+            }
+            return ("", displayed)
+        }
         let clean = WebBook.cleanText(raw)
-        return (clean.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "（本章没有内容）" : clean, [])
+        let display = clean.components(separatedBy: "\n").map { replacement.apply($0) }.joined(separator: "\n")
+        if clean.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return ("（本章没有内容）", []) }
+        if display.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return ("（正文已被替换规则过滤）", []) }
+        return (display, [])
     }
 }
 
@@ -145,6 +154,7 @@ struct ReaderView: View {
         self.requestedChapter = requestedChapter
     }
 
+    @State private var bodyReplacement = BodyReplaceEngine(rules: [])
     @State private var chapters: [BookChapter] = []
     @State private var index = 0
     @State private var text = ""
@@ -467,6 +477,8 @@ struct ReaderView: View {
     }
 
     private func start() async {
+        // Stable per-reader snapshot: current and prefetched chapters use identical rules.
+        bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
         index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
@@ -645,8 +657,9 @@ struct ReaderView: View {
                 guard scrollGeneration == generation, settings.pageMode == 0,
                       scrollNeighbor(direction) == target else { return }
                 let isVolume = chapters[target].isVolume
+                let replacement = bodyReplacement
                 let chapter = await Task.detached(priority: .utility) {
-                    let parsed = ReaderChapterParser.content(raw: raw, isVolume: isVolume)
+                    let parsed = ReaderChapterParser.content(raw: raw, isVolume: isVolume, replacement: replacement)
                     return ScrollReaderChapter(id: target, text: parsed.text, blocks: parsed.blocks)
                 }.value
                 try Task.checkCancellation()
@@ -783,7 +796,7 @@ struct ReaderView: View {
                         content = (existing.text, existing.blocks)
                     } else {
                         let raw = try await rawContent(at: target, priority: .utility)
-                        content = ReaderChapterParser.content(raw: raw, isVolume: chapters[target].isVolume)
+                        content = ReaderChapterParser.content(raw: raw, isVolume: chapters[target].isVolume, replacement: bodyReplacement)
                     }
                     try Task.checkCancellation()
                     guard preparationID == token, index == center,
@@ -1098,7 +1111,7 @@ struct ReaderView: View {
 
     /// 前台与预排版使用同一解析流程，保留原始段评标记和续段字符偏移。
     private func show(raw: String, landing: ChapterLanding) {
-        let content = ReaderChapterParser.content(raw: raw, isVolume: currentVolume != nil)
+        let content = ReaderChapterParser.content(raw: raw, isVolume: currentVolume != nil, replacement: bodyReplacement)
         text = content.text
         blocks = content.blocks
         pages = []
