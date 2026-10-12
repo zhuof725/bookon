@@ -40,6 +40,8 @@ struct LibraryProfileView: View {
             Section("书库管理") {
                 NavigationLink { SourcesView() } label: { Label("书源管理", systemImage: "square.stack.3d.up") }
                     .accessibilityIdentifier("library.sources")
+                NavigationLink { TxtTocRulesView() } label: { Label("目录规则", systemImage: "list.bullet.rectangle") }
+                    .accessibilityIdentifier("library.tocRules")
                 NavigationLink { SearchView() } label: { Label("搜索书籍", systemImage: "magnifyingglass") }
             }
             Section("本机数据") {

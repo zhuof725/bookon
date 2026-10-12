@@ -42,7 +42,11 @@ enum LocalBook {
         return titlePattern.firstMatch(in: t, range: NSRange(location: 0, length: (t as NSString).length)) != nil
     }
 
-    static func parseTXT(_ data: Data, fileName: String) throws -> LocalBookData {
+    static func parseTXT(_ data: Data, fileName: String, rules: [TxtTocRule]? = nil) throws -> LocalBookData {
+        // Compile the user's rule snapshot once, not on every source line.
+        let matcher = TxtTocMatcher(rules: rules ?? TxtTocRuleRepository().rules)
+        var matchedHeadings = 0
+        var hadPreamble = false
         guard var text = decode(data), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalBookError.empty }
         text = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         let name = (fileName as NSString).deletingPathExtension
@@ -59,23 +63,27 @@ enum LocalBook {
             let body = buf.map { $0.trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: "\u{3000}"))) }
                 .filter { !$0.isEmpty }.joined(separator: "\n")
             if let t = curTitle { chapters.append(LocalChapter(title: t, text: body)) }
-            else if !body.isEmpty { chapters.append(LocalChapter(title: "前言", text: body)) }
+            else if !body.isEmpty { hadPreamble = true; chapters.append(LocalChapter(title: "前言", text: body)) }
             buf = []
         }
         for line in text.components(separatedBy: "\n") {
-            if isChapterTitle(line) { flush(); curTitle = line.trimmingCharacters(in: .whitespaces) } else { buf.append(line) }
+            if matcher.isHeading(line) {
+                flush()
+                matchedHeadings += 1
+                curTitle = line.trimmingCharacters(in: .whitespaces)
+            } else { buf.append(line) }
         }
         flush()
         // 第一个标题之前的「前言」如果只有寥寥几行（多半是书名、作者这种头部信息），不单独成章，
         // 并尝试从中补全书名与作者。
-        if chapters.count > 1, chapters[0].title == "前言", chapters[0].text.count <= 80 {
+        if hadPreamble, chapters.count > 1, chapters[0].title == "前言", chapters[0].text.count <= 80 {
             let head = chapters.removeFirst().text
             if author.isEmpty, let m = try? NSRegularExpression(pattern: "作者[：:\\s]*([^\\n]+)").firstMatch(in: head, range: NSRange(location: 0, length: (head as NSString).length)) {
                 author = (head as NSString).substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
             }
         }
         // 没识别出任何章节标题：按固定字数切段，避免整本是一章。
-        if chapters.count <= 1 {
+        if matchedHeadings == 0 {
             chapters = splitBySize(text, size: 5000)
         }
         chapters = chapters.filter { !$0.text.isEmpty || !$0.title.isEmpty }

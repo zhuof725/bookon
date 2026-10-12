@@ -1,0 +1,41 @@
+name: TXT TOC rules regression
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run standalone regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            swift --version
+            xcrun --sdk macosx swiftc \
+              -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+              Sources/Models/TxtTocRule.swift \
+              Sources/Engine/LocalBook.swift \
+              Sources/Engine/ZipReader.swift \
+              Tools/SourceTest/LocalBookRegression.swift \
+              Tools/TxtTocRuleTest/main.swift \
+              -framework Foundation -lcompression \
+              -o "$RUNNER_TEMP/txt-toc-rule-regression"
+            "$RUNNER_TEMP/txt-toc-rule-regression"
+          } 2>&1 | tee toc-rule-regression.log
+
+      - name: Upload regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toc-rule-regression-log
+          path: toc-rule-regression.log
+          if-no-files-found: warn
+          retention-days: 7
