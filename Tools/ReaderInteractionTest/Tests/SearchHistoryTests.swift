@@ -51,10 +51,14 @@ final class SearchHistoryTests: XCTestCase {
         expect("fixture.entries", "dUNE|Foundation")
         capture("history-restarted")
         app.buttons["fixture.sheet"].tap()
-        let query = app.buttons["searchHistory.query.Foundation"]
-        XCTAssertTrue(query.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 4))
+        let matches = app.buttons.matching(identifier: "searchHistory.query.Foundation")
+        let visible = matches.allElementsBoundByIndex.filter { $0.isHittable }
+        XCTAssertEqual(visible.count, 1, "Only the sheet row should be tappable")
         capture("history-production-sheet")
-        query.tap()
+        visible.first!.tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["完成"])
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
         expect("fixture.selected", "Foundation")
         expect("fixture.entries", "Foundation|dUNE")
         app.terminate(); launch()
