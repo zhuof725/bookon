@@ -21,9 +21,11 @@ final class BodyRulesTests: XCTestCase {
     private func reveal(_ element: XCUIElement) {
         for _ in 0..<14 {
             if element.exists && element.isHittable { return }
-            let form = app.collectionViews.firstMatch
-            if form.exists { form.swipeUp(velocity: .slow) }
-            else { app.scrollViews.firstMatch.swipeUp(velocity: .slow) }
+            // Drag along the outer form gutter, not inside a nested TextEditor.
+            let down = element.exists && element.frame.maxY < app.frame.height * 0.25
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: down ? 0.35 : 0.75))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: down ? 0.75 : 0.35))
+            start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTAssertTrue(element.exists && element.isHittable, element.debugDescription)
     }
@@ -39,6 +41,9 @@ final class BodyRulesTests: XCTestCase {
         }
         field.typeText(text)
         XCTAssertEqual(field.value as? String, text)
+        let hide = app.buttons["bodyRules.hideKeyboard"]
+        XCTAssertTrue(hide.waitForExistence(timeout: 4))
+        hide.tap()
     }
     private func capture(_ name: String) {
         let image = XCTAttachment(screenshot: app.screenshot())

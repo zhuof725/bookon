@@ -113,6 +113,7 @@ private struct BodyReplaceRuleEditor: View {
     @State private var sample = ""
     @State private var preview: String?
     @State private var savingError: String?
+    @FocusState private var activeField: String?
 
     init(rule: BodyReplaceRule, existing: Bool, onSave: @escaping (BodyReplaceRule) -> String?, onDelete: @escaping () -> Void) {
         self.existing = existing; self.onSave = onSave; self.onDelete = onDelete
@@ -122,6 +123,7 @@ private struct BodyReplaceRuleEditor: View {
     private func editor(_ text: Binding<String>, id: String) -> some View {
         TextEditor(text: text).font(.system(.callout, design: .monospaced))
             .autocorrectionDisabled().textInputAutocapitalization(.never)
+            .focused($activeField, equals: id)
             .frame(minHeight: 80).accessibilityIdentifier("bodyRules." + id)
     }
 
@@ -169,7 +171,13 @@ private struct BodyReplaceRuleEditor: View {
             }
             .scrollContentBackground(.hidden).background(AppPalette.background)
             .navigationTitle(existing ? "编辑正文替换" : "添加正文替换").navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("收起键盘") { activeField = nil }
+                        .accessibilityIdentifier("bodyRules.hideKeyboard")
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }.accessibilityIdentifier("bodyRules.close")
                 }
