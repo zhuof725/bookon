@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, appearance, full]
+        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -50,6 +50,7 @@ jobs:
             audit) ARGS=(-only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             typography) ARGS=(-only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             native) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests) ;;
+            theme) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests) ;;
             appearance) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             chrome) ARGS=(-only-testing:ReaderInteractionTests/ChromeTests) ;;
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
@@ -94,7 +95,7 @@ jobs:
         if: always()
         run: xcrun xcresulttool export attachments --path reader-interaction.xcresult --output-path reader-screenshots || true
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && inputs.suite == 'appearance' }}
+        if: ${{ always() && (inputs.suite == 'appearance' || inputs.suite == 'theme') }}
         with:
           name: appearance-screenshots
           path: |
@@ -102,6 +103,7 @@ jobs:
             reader-screenshots/**/*.jpg
             reader-screenshots/**/*.jpeg
             reader-screenshots/**/*.heic
+            reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: ${{ always() && inputs.suite == 'chrome' }}

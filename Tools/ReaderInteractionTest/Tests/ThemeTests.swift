@@ -29,7 +29,9 @@ final class ThemeTests: XCTestCase {
     private func toggle(_ element: XCUIElement) throws {
         XCTAssertTrue(element.waitForExistence(timeout: 4))
         let before = try XCTUnwrap(element.value as? String)
-        element.tap()
+        // SwiftUI Form exposes the whole labeled row as a Switch; its center
+        // is the label area, not the trailing UISwitch thumb.
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         let changed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value != %@", before), object: element)
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 4), .completed)
