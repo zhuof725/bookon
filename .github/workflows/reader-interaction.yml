@@ -152,7 +152,7 @@ jobs:
         if: always()
         run: xcrun xcresulttool export attachments --path reader-interaction.xcresult --output-path reader-screenshots || true
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (inputs.suite == 'appearance' || inputs.suite == 'theme') }}
+        if: ${{ always() && (inputs.suite == 'app-appearance' || inputs.suite == 'appearance' || inputs.suite == 'theme') }}
         with:
           name: appearance-screenshots
           path: |
