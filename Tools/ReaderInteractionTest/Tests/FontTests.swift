@@ -48,7 +48,8 @@ final class FontTests: XCTestCase {
 
     private func reveal(_ element: XCUIElement, upward: Bool = true) {
         for _ in 0..<10 {
-            if element.exists && element.isHittable { return }
+            if element.exists && element.isHittable,
+               element.frame.minY >= 125, element.frame.maxY <= app.frame.maxY - 120 { return }
             let scroll = app.scrollViews.firstMatch
             if upward { scroll.swipeUp(velocity: .slow) }
             else { scroll.swipeDown(velocity: .slow) }
