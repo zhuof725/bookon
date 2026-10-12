@@ -8,7 +8,7 @@
 
 ## 验证
 
-`reader-interaction.yml` 的 `search-history` suite 仅运行 `SearchHistoryTests` 三项：
+`reader-interaction.yml` 的 `search-history` suite（默认分支尚未识别新选项时，修复分支提供 `smoke` dispatch 兼容别名）仅运行 `SearchHistoryTests` 三项：
 
 1. 未提交／空白不记入、trim、大小写去重、最新优先，终止进程再启动保留，点击生产历史弹窗触发真实回调并持久化。
 2. 单条删除后重启、清空取消与确认、清空后重启为空。

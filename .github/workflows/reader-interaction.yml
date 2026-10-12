@@ -201,7 +201,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && inputs.suite == 'search-history' }}
+        if: ${{ always() && (inputs.suite == 'search-history' || inputs.suite == 'smoke') }}
         with:
           name: search-history-screenshots
           path: |
