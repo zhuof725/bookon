@@ -23,6 +23,8 @@ enum ReaderPaginator {
         /// PageContentView 底部页码栏及与正文间的固定距离。
         var footerHeight: CGFloat = 16
         var footerGap: CGFloat = 8
+        /// Font identity makes a prepared chapter invalid after a font switch.
+        var fontIdentity: String = ReaderFontResolver.identity
         var blockSpacing: CGFloat {
             ReaderTextLayout.paragraphGap(lineSpacing: lineSpacing, paragraphSpacing: paragraphSpacing)
         }

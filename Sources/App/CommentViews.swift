@@ -317,7 +317,7 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
                 color: UIColor, continuation: Bool = false,
                 fullJustify: Bool = false, zhLayout: Bool = false,
                 paragraphEnd: Bool = true) {
-        let key = "\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(fullJustify)|\(zhLayout)|\(paragraphEnd)|\(color)"
+        let key = "\(ReaderFontResolver.identity)|\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(fullJustify)|\(zhLayout)|\(paragraphEnd)|\(color)"
         guard key != lastRenderKey else { return }
         lastRenderKey = key
         paragraph = Paragraph(text: text, count: count, fontSize: fontSize,

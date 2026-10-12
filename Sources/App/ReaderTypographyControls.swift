@@ -3,8 +3,14 @@ import SwiftUI
 /// 字号、边距使用 pt；行高和段后间距使用字高倍率，每步 0.1。
 struct ReaderTypographyControls: View {
     @ObservedObject var settings: ReadSettings
+    @ObservedObject private var readingFonts = ReadingFontManager.shared
 
     var body: some View {
+        Section("阅读字体") {
+            NavigationLink { FontManagerView() } label: {
+                HStack { Text("字体管理"); Spacer(); Text(readingFonts.selectedDisplayName).foregroundStyle(.secondary).lineLimit(1) }
+            }.accessibilityIdentifier("reader.fontManager")
+        }
         Section("字体大小") {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
         }

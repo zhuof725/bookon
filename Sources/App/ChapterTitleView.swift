@@ -8,7 +8,7 @@ enum ChapterTitleLayout {
         let label = UILabel()
         label.numberOfLines = 0
         label.textAlignment = .center
-        label.font = .systemFont(ofSize: max(fontSize + 2, 20), weight: .semibold)
+        label.font = ReaderFontResolver.chapterFont(size: max(fontSize + 2, 20))
         label.textColor = color
         label.text = title
         return label
@@ -34,7 +34,7 @@ struct ChapterTitleView: UIViewRepresentable {
     }
     func updateUIView(_ label: UILabel, context: Context) {
         label.text = title
-        label.font = .systemFont(ofSize: max(fontSize + 2, 20), weight: .semibold)
+        label.font = ReaderFontResolver.chapterFont(size: max(fontSize + 2, 20))
         label.textColor = color
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {

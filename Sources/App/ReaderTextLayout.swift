@@ -36,35 +36,41 @@ enum ReaderTextLayout {
     }
 
     // UIKit 排版入口均在主线程；分页二分测量不重复解析字体。
-    private static var fontCache: [CGFloat: Fonts] = [:]
+    private struct FontKey: Hashable { let name: String; let size: CGFloat }
+    private static var fontCache: [FontKey: Fonts] = [:]
 
     static func metrics(fontSize: CGFloat, width: CGFloat? = nil) -> Metrics {
         let size = fontSize.isFinite ? max(fontSize, 1) : 19
+        let key = FontKey(name: ReaderFontResolver.identity, size: size)
         let fonts: Fonts
-        if let cached = fontCache[size] {
+        if let cached = fontCache[key] {
             fonts = cached
         } else {
-            let body = UIFont.systemFont(ofSize: size)
+            let selected = ReaderFontResolver.customFont(size: size)
+            let body = selected ?? UIFont.systemFont(ofSize: size)
             let fallback = CTFontCreateForString(body as CTFont, "汉" as CFString,
                                                 CFRange(location: 0, length: 1))
             // 系统 fallback 会随设备语言选择 PingFang HK/TC：其句读可能居中。
             // 阅读正文采用简体横排字形，让句读落在左下、开闭标点贴向文字侧。
             // 仍由字体提供 ink bearings，不移动 glyph origin 或破坏整格 advance。
-            let cjk = UIFont(name: "PingFangSC-Regular", size: size)
+            let defaultCJK = UIFont(name: "PingFangSC-Regular", size: size)
                 ?? UIFont(name: CTFontCopyPostScriptName(fallback) as String, size: size) ?? body
+            let cjk = selected ?? defaultCJK
+            let measuredCJK = selected.map { ReaderFontResolver.chineseFont(for: $0, fallback: defaultCJK, size: size) } ?? defaultCJK
             let emoji = UIFont(name: "AppleColorEmoji", size: size) ?? body
             let bubbleBounds = CommentBubble.attachmentBounds(fontSize: size)
             // Reserve the SAME reference-bubble extents on every row, including
             // rows without comments: a last-row bubble must not move the baseline.
-            let ascent = max(max(body.ascender, cjk.ascender),
+            let ascent = max(max(body.ascender, max(cjk.ascender, measuredCJK.ascender)),
                              max(emoji.ascender, bubbleBounds.maxY))
-            let descent = max(max(-body.descender, -cjk.descender),
+            let descent = max(max(-body.descender, max(-cjk.descender, -measuredCJK.descender)),
                               max(-emoji.descender, -bubbleBounds.minY))
             // PingFang 负责字形、标点侧边留白和天然 advance；没有宽度均分或逐字 kern。
             fonts = Fonts(body: body, cjk: cjk, quote: cjk,
                           advance: max(advance(of: "汉", font: cjk), 1),
                           ascent: ascent, descent: descent)
-            fontCache[size] = fonts
+            if fontCache.count > 128 { fontCache.removeAll() }
+            fontCache[key] = fonts
         }
         let height = ceil(fonts.ascent + fonts.descent)
         let indent = advance(of: "　", font: fonts.cjk)

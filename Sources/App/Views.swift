@@ -154,6 +154,7 @@ struct ReaderView: View {
         self.requestedChapter = requestedChapter
     }
 
+    @ObservedObject private var readingFonts = ReadingFontManager.shared
     @State private var bodyReplacement = BodyReplaceEngine(rules: [])
     @State private var chapters: [BookChapter] = []
     @State private var index = 0
@@ -353,6 +354,14 @@ struct ReaderView: View {
         .onChange(of: scenePhase) { phase in
             if phase != .active { persistContinuousProgress(); store.flushProgress() }
         }
+        .onChange(of: readingFonts.selectedPostScriptName) { _ in
+            speech.stop()
+            cancelPreparation()
+            preparedChapters.removeAll()
+            // Existing Character offsets keep paged reading at the nearest page;
+            // scroll layoutID below asks the native container to preserve its anchor.
+            repaginate()
+        }
         .onChange(of: settings.fontSize) { _ in repaginate() }
         .onChange(of: settings.lineSpacing) { _ in repaginate() }
         .onChange(of: settings.paragraphSpacing) { _ in repaginate() }
@@ -538,7 +547,7 @@ struct ReaderView: View {
                                     content: AnyView(scrollChapterBody(chapter)),
                                     appearanceID: "\(settings.theme)-\(scrollBoundaryRevision(for: chapter.id))")
             }, request: scrollRequest,
-                layoutID: "\(settings.typographyValues)",
+                layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)",
                 background: UIColor(theme.bg),
                 onPosition: { chapter, position in recordContinuousPosition(chapter, position: position) },
                 onApproachEdge: { direction in loadScrollNeighbor(direction) },

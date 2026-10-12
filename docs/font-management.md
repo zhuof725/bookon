@@ -1,0 +1,12 @@
+# Reading font management
+
+Entry points: My → Library Management → Font Management (我的 → 字体管理), and reader typography settings → Font Management.
+
+- System Default preserves the existing reader's Latin system font / PingFang SC CJK behavior. Only locally available builtin choices are shown; no downloadable-font catalog, account or license bypass is added.
+- Users can import TTF / OTF / TTC through the native file picker, preview actual font faces and explicitly select one. Import alone does not change reading. Original files remain untouched; the app copies to an owned ReadingFonts directory and registers faces at process scope.
+- All faces of a valid TTC are listed. Duplicate bytes or identical face sets reuse an existing entry; name collisions with installed/registered fonts are rejected rather than overwriting them. Max 30 files / 32 MB each. Invalid, missing or corrupt fonts produce readable notices instead of crashes.
+- Selection and owned-file manifest persist; saved fonts are registered again before reading. Removing an imported file requires confirmation, never removes the external original, and falls back to System Default when the selected face belongs to it. A font still retained by system rendering caches may finish releasing after the process exits.
+- TextKit rendering and pagination share the selected font. Font identity is included in metric cache keys, paragraph render keys, prepared-chapter configuration and continuous-scroll layout IDs. Selection triggers repagination and preserves approximate Character/scroll anchors using existing reader behavior. Font, glyph widths and missing-glyph fallback can change page count; exact previous page numbers cannot be promised.
+- Body and ordinary chapter headings use the selection; application UI, page footer, numeric comment bubbles and volume presentation stay as before. Emoji / characters absent from a custom face can fall back to system fonts. Existing title/body content, rules, cached text, reading background and black/white app palette are unchanged.
+
+The test font files in Tools/ReaderInteractionTest/Fixtures/Fonts are synthetic hollow-box glyphs generated with a short local FontTools script, not third-party assets. They exist only in the test target. Native fixture tests cover import/selection/removal/persistence, TTF/OTF/TTC validation and actual TextKit/paginator cache invalidation. System picker/iCloud provider behavior and user-provided fonts still need on-device validation.
