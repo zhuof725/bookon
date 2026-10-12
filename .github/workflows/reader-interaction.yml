@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, appearance, theme, full]
+        options: [smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -19,6 +19,22 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: TXT rule parser regression
+        if: ${{ inputs.suite == 'toc-rules' }}
+        run: |
+          set -euo pipefail
+          {
+            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+              Sources/Models/TxtTocRule.swift Sources/Engine/LocalBook.swift Sources/Engine/ZipReader.swift \
+              Tools/SourceTest/LocalBookRegression.swift Tools/TxtTocRuleTest/main.swift \
+              -framework Foundation -lcompression -o "$RUNNER_TEMP/txt-toc-rule-regression"
+            "$RUNNER_TEMP/txt-toc-rule-regression"
+          } 2>&1 | tee toc-rule-regression.log
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'toc-rules' }}
+        with:
+          name: toc-rule-regression-log
+          path: toc-rule-regression.log
       - name: Install XcodeGen and diagnostic tools
         run: brew install xcodegen ripgrep
       - name: Generate focused test project
@@ -55,6 +71,7 @@ jobs:
             chrome) ARGS=(-only-testing:ReaderInteractionTests/ChromeTests) ;;
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
             detail) ARGS=(-only-testing:ReaderInteractionTests/DetailTests) ;;
+            toc-rules) ARGS=(-only-testing:ReaderInteractionTests/TocRulesTests) ;;
             paper) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests/testNativeCurlCachedChaptersThemeAndRefresh) ;;
             scroll) ARGS=(-only-testing:ReaderInteractionTests/ContinuousScrollTests) ;;
             continuity) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests -only-testing:ReaderInteractionTests/ContinuousScrollTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
@@ -122,6 +139,17 @@ jobs:
         with:
           name: detail-screenshots
           path: reader-screenshots/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && (inputs.suite == 'toc-rules' || inputs.suite == 'full') }}
+        with:
+          name: toc-rules-screenshots
+          path: |
+            reader-screenshots/**/*.png
+            reader-screenshots/**/*.jpg
+            reader-screenshots/**/*.jpeg
+            reader-screenshots/**/*.heic
+            reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()

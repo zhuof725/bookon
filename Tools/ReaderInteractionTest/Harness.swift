@@ -22,7 +22,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--theme-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--toc-rules-mode") {
+                    TocRulesHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--theme-mode") {
                     ThemeHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--detail-mode") {
                     DetailHarnessView()
