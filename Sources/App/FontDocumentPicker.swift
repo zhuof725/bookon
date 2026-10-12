@@ -16,11 +16,12 @@ struct FontDocumentPicker: UIViewControllerRepresentable {
 
     static func makePicker(delegate: UIDocumentPickerDelegate) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes, asCopy: true)
+        picker.loadViewIfNeeded()
+        picker.view.tintColor = .label
         picker.allowsMultipleSelection = true
         picker.shouldShowFileExtensions = true
         picker.delegate = delegate
         picker.title = "导入字体"
-        picker.view.tintColor = .label
         return picker
     }
 
