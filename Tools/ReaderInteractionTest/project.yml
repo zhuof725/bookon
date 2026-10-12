@@ -25,6 +25,8 @@ targets:
       - path: ../../Sources/Models/BookCoverLocation.swift
       - path: ../../Sources/App/LocalCoverImageLoader.swift
       - path: ThemeHarness.swift
+      - path: AppearanceHarness.swift
+      - path: ../../Sources/App/AppAppearance.swift
       - path: TocRulesHarness.swift
       - path: BodyRulesHarness.swift
       - path: ../../Sources/Models/BodyReplaceRule.swift

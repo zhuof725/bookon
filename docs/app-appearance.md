@@ -10,5 +10,7 @@ The user explicitly selected the ENTIRE APP for black/white/gray styling, not on
 - Real book images, external login/verification/comment website content, emoji, and user-selected reader paper themes are not globally desaturated. Existing stored reader theme/font/pagination/progress are untouched.
 - Native destructive-role red and existing explicit error red stay available for warning semantics. No delete/confirmation protections are changed.
 - Source books still have no Edit Introduction entry; local books keep it.
+- `AppAppearance` adds a separate app-shell appearance preference with three choices: follow the system, always light, or always dark. It is stored under `app.appearance.v1`, applied at the production `WindowGroup` with `preferredColorScheme`, and exposed from 我的 → 书库管理 → 外观主题. Unknown stored values fall back to follow-system.
+- The setting changes the app shell and inherited SwiftUI sheets/navigation surfaces. It does not rewrite the reader's `theme` key, paper colors, font, pagination, progress, covers, or external web content.
 
-Validation: main app compile plus the focused `appearance` simulator suite covering theme tokens/native controls, bookshelf, detail and reader menus. Offline component fixtures do not certify live-network or device-specific system-picker/web-content styling.
+Validation: main app compile plus the focused `app-appearance` simulator suite covering selection, immediate mode updates, and persistence across relaunch. Offline component fixtures do not certify live-network or device-specific system-picker/web-content styling.

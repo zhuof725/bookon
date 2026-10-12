@@ -5,11 +5,17 @@ import UniformTypeIdentifiers
 struct LegadoApp: App {
     @StateObject private var store = AppStore.shared
     @StateObject private var settings = ReadSettings()
+    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @State private var importMessage: String?
+
+    private var appColorScheme: ColorScheme? {
+        (AppAppearance(rawValue: appearanceRawValue) ?? .system).colorScheme
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                .preferredColorScheme(appColorScheme)
                 .modifier(AppTypographyRoot())
                 .modifier(MonochromeAppStyle())
                 .onAppear { VerifyPresenter.install() }

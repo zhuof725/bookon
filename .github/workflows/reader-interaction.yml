@@ -6,10 +6,10 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [cache-management, search-history, cover-persistence, app-font, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
+        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
-    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
+    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
 concurrency:
   group: reader-interaction-${{ github.ref }}
   cancel-in-progress: true
@@ -94,6 +94,7 @@ jobs:
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
             cover-persistence) ARGS=(-only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
+            app-appearance) ARGS=(-only-testing:ReaderInteractionTests/AppearanceTests) ;;
             bottom-bubble) ARGS=(-only-testing:ReaderInteractionTests/BottomBubbleTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
             pageflow) ARGS=(-only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             natural) ARGS=(-only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/PunctuationFlowTests -only-testing:ReaderInteractionTests/LayoutAuditTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests -only-testing:ReaderInteractionTests/ContinuousScrollTests) ;;

@@ -46,6 +46,8 @@ struct LibraryProfileView: View {
                     .accessibilityIdentifier("library.replaceRules")
                 NavigationLink { FontManagerView() } label: { Label("字体管理", systemImage: "textformat") }
                     .accessibilityIdentifier("library.fonts")
+                NavigationLink { AppAppearanceSettingsView() } label: { Label("外观主题", systemImage: "circle.lefthalf.filled") }
+                    .accessibilityIdentifier("library.appearance")
                 NavigationLink { SearchView() } label: { Label("搜索书籍", systemImage: "magnifyingglass") }
             }
             Section("本机数据") {
