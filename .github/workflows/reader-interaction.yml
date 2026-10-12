@@ -5,7 +5,7 @@ on:
       suite:
         description: Test scope
         type: choice
-        default: search-history
+        default: smoke
         options: [search-history, cover-persistence, app-font, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, full]
   push:
     branches: [main, fix/source-compat-runtime]
@@ -202,7 +202,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (inputs.suite == 'search-history' || inputs.suite == 'smoke') }}
+        if: ${{ always() && inputs.suite == 'search-history' }}
         with:
           name: search-history-screenshots
           path: |
