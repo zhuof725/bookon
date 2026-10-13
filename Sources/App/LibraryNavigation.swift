@@ -134,15 +134,7 @@ private struct LibraryCard<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background {
                     let shape = RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
-                    if palette.interfaceEffect != nil {
-                        ThemeSurface(shape: shape, isCard: true)
-                    } else {
-                        shape.fill(palette.surface)
-                            .overlay {
-                                if palette.cardBorder { shape.strokeBorder(palette.border, lineWidth: 0.5) }
-                            }
-                            .allowsHitTesting(false)
-                    }
+                    ThemeSurface(shape: shape, isCard: true)
                 }
         }
     }

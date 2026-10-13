@@ -1,0 +1,8 @@
+# App controls: native glass
+
+- iOS 26: app-owned surfaces use SwiftUI `glassEffect(.regular.tint(...), in:)`; the root TabView remains the real system tab bar. iOS 16–18 use ultraThinMaterial. Reduce Transparency uses solid backgrounds.
+- Shared ShelfGlass / ThemeSurface covers shelf controls, titles, fonts, default detail/profile/statistics cards. ReaderChrome uses the same native glass primitive but keeps reader-paper-derived light/dark appearance. No changes to reader text layout, covers, pagination, data or actions.
+- Detail buttons/tags, shelf menu, search/history/source/TOC/form rows, cache/rule panels, theme editor panels and search field use glass. Selection fills remain as state indicators; color swatches/previews remain accurate colors rather than glass. System search bars, switches, sliders, sheets and toolbar items retain native rendering; no private UIKit traversal.
+- New themes default to frosted/glass. Existing saved explicit transparent/opaque **card** choices and card-background-off remain respected. Controls always use glass regardless of card choices. Old JSON missing effect retains its original transparent decoding default. No saved-theme migration or deletion.
+- Native glass is system-adaptive, not a promised 4.5:1 contrast guarantee over every image/custom color. Reduce Transparency is the accessibility fallback. Sliders adjust card tint/glow, not native TabBar material.
+- Native glass regression uses a real displayed checker/color backdrop (not ImageRenderer), checks blur and chroma, controls with opaque theme/cards off, and solid accessibility fallback. Includes existing shelf/detail/chrome interactions. CI now uses macos-26 for this suite and compiles harness before booting with a bounded boot timeout.

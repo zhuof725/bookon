@@ -27,9 +27,13 @@ struct NativeTabsGlassHarness: View {
 /// A real displayed backdrop, not ImageRenderer (which cannot test native blur).
 struct NativeGlassHarness: View {
     @State private var effect: ThemeInterfaceEffect = .transparent
+    @State private var control = false
+    @State private var reduced = false
+    @State private var hideCards = false
     private var theme: AppTheme {
         var value = AppTheme.custom()
         value.customization?.effect = effect
+        value.customization?.cardBackground = !hideCards
         value.customization?.glowIntensity = 0
         value.customization?.surfaceOpacity = 0.85
         return value
@@ -47,7 +51,9 @@ struct NativeGlassHarness: View {
                         }
                     }
                 }
-                ThemeSurface(shape: RoundedRectangle(cornerRadius: 16), isCard: true)
+                ThemeSurfaceRendering(shape: RoundedRectangle(cornerRadius: 16), isCard: !control,
+                                      palette: ResolvedAppPalette(theme: theme, scheme: .light),
+                                      reduceTransparency: reduced)
             }
             .frame(width: 280, height: 200)
             .accessibilityElement(children: .ignore)
@@ -57,6 +63,9 @@ struct NativeGlassHarness: View {
                     .accessibilityIdentifier("glass.mode.\(item.rawValue)")
             }
             Text(effect.rawValue).accessibilityIdentifier("glass.current")
+            Button("控件模式") { control.toggle() }.accessibilityIdentifier("glass.control")
+            Button("关闭卡片") { hideCards.toggle() }.accessibilityIdentifier("glass.hideCards")
+            Button("降低透明度") { reduced.toggle() }.accessibilityIdentifier("glass.reduced")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.gray)

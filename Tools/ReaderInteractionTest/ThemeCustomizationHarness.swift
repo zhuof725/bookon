@@ -64,9 +64,11 @@ enum ThemeCustomizationProbe {
         checks["customizationDefaults"] = neutral.tabStyle == .iconsAndText && neutral.shelfColumns == 3
             && neutral.coverWidth == 112 && neutral.defaultCoverImage == nil && neutral.launchImage == nil
             && neutral.pageBackgroundImage == nil && neutral.fontPostScriptName == nil
-            && neutral.effect == .transparent && neutral.cardBackground
+            && neutral.effect == .frosted && neutral.cardBackground
+        var legacyDefaults = neutral
+        legacyDefaults.effect = .transparent
         checks["customizationPartialDecodeDefaults"] = (try? JSONDecoder().decode(
-            ThemeCustomization.self, from: Data("{}".utf8))) == neutral
+            ThemeCustomization.self, from: Data("{}".utf8))) == legacyDefaults
         let store = AppThemeStore(defaults: defaults, assets: assets)
         var config = neutral
         config.tabStyle = .text; config.shelfColumns = 2; config.coverWidth = 96

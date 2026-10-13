@@ -37,29 +37,10 @@ enum ShelfBooks {
 }
 
 struct ShelfGlass<S: InsettableShape>: ViewModifier {
-    @ThemePalette private var palette
     let shape: S
     var isCard: Bool = false
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
-        content.background {
-            if palette.interfaceEffect != nil {
-                ThemeSurface(shape: shape, isCard: isCard)
-            } else {
-                ZStack {
-                    if reduceTransparency || palette.usesOpaqueSurfaces { shape.fill(palette.surface) }
-                    else {
-                        shape.fill(.ultraThinMaterial)
-                        shape.fill(palette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
-                    }
-                    // The card switch never removes control or dock outlines.
-                    if !isCard || palette.cardBorder {
-                        shape.strokeBorder(palette.border, lineWidth: 0.5)
-                    }
-                }.allowsHitTesting(false)
-            }
-        }
+        content.background { ThemeSurface(shape: shape, isCard: isCard) }
     }
 }
 
@@ -219,17 +200,7 @@ struct BookshelfScreen: View {
         }
         .padding(9)
         .foregroundStyle(palette.primary).buttonStyle(.plain)
-        .background {
-            RoundedRectangle(cornerRadius: 32, style: .continuous).fill(palette.surface)
-                .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(palette.border, lineWidth: 0.5) }
-                .shadow(color: .black.opacity(0.13), radius: 16, x: 0, y: 12)
-        }
-        .overlay(alignment: .topTrailing) {
-            if page != "filter" {
-                ShelfMenuPointer().fill(palette.surface).frame(width: 25, height: 14).offset(x: -15, y: -13)
-                    .allowsHitTesting(false)
-            }
-        }
+        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 32, style: .continuous)))
     }
 
     private func menuRow(_ title: String, icon: String? = nil, detail: String? = nil, id: String, action: @escaping () -> Void) -> some View {

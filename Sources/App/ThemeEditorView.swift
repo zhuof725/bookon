@@ -62,7 +62,7 @@ struct ThemePaletteEditor: View {
                 }
             }
         }
-        .background(surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .appGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: surface)
     }
 
     private var backgroundSection: some View {
@@ -101,7 +101,7 @@ struct ThemePaletteEditor: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .background(surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .appGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: surface)
     }
 
     private var cardsSection: some View {
@@ -132,7 +132,7 @@ struct ThemePaletteEditor: View {
             }
         }
         .padding(16)
-        .background(surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .appGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: surface)
     }
 
     private var cardRadiusBinding: Binding<Double> {

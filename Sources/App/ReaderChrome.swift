@@ -265,15 +265,8 @@ private struct ReaderChromeSurface<S: InsettableShape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            ZStack {
-                if reduceTransparency {
-                    shape.fill(background)
-                } else {
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(background.opacity(0.55))
-                }
-                shape.strokeBorder(foreground.opacity(0.14), lineWidth: 0.5)
-            }
+            AppGlassSurface(shape: shape, tint: background,
+                            reduceTransparency: reduceTransparency)
             .environment(\.colorScheme, materialScheme)
             .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 4)
             .allowsHitTesting(false)

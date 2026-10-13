@@ -218,7 +218,7 @@ struct AppAppearanceSettingsView: View {
                 }
             }
             .padding(3)
-            .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
+            .appGlass(in: RoundedRectangle(cornerRadius: 13))
             valueRow(title: "当前主题") {
                 Text(store.selectedTheme.name).appFont(.body)
                     .accessibilityIdentifier("theme.gallery.selected")
@@ -304,7 +304,7 @@ struct AppAppearanceSettingsView: View {
         }
         .padding(.leading, 13).padding(.trailing, searchText.isEmpty ? 13 : 0)
         .frame(minHeight: 46)
-        .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
+        .appGlass(in: RoundedRectangle(cornerRadius: 13))
     }
 
     private var filterPicker: some View {

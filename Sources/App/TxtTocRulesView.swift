@@ -53,7 +53,7 @@ struct TxtTocRulesView: View {
                                 .appFont(.system(size: 20)).padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityIdentifier("tocRules.add")
-                    }.background(palette.surface, in: RoundedRectangle(cornerRadius: 25))
+                    }.appGlass(in: RoundedRectangle(cornerRadius: 25), tint: palette.surface)
                     Text("适用于新导入的 TXT 文件，内置与自定义规则共同识别标题。已有目录不自动重建，EPUB 和书源目录不受影响。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
@@ -165,7 +165,7 @@ private struct TxtTocRuleEditor: View {
                     }
                     if let savingError { Text(savingError).foregroundStyle(.red) }
                 }
-                .listRowBackground(palette.surface)
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

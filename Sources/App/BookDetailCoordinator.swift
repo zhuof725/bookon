@@ -62,7 +62,7 @@ struct BookDetailView: View {
                             HStack { Text(value); Spacer(); if value == BookDetailMetadata.category(for: book) { Image(systemName: "checkmark") } }
                         }.accessibilityIdentifier("detail.category." + value)
                     }
-                    .listRowBackground(palette.surface)
+                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                 }
                 .foregroundStyle(palette.primary)
                 .scrollContentBackground(.hidden)
@@ -207,7 +207,7 @@ struct BookDetailChapterList: View {
                         if loading { ProgressView("正在加载目录…") }
                         else { Text("暂无目录").foregroundStyle(palette.secondary) }
                     }
-                    .listRowBackground(palette.surface)
+                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                 }
                 ForEach(chapters) { chapter in
                     Button {
@@ -227,7 +227,7 @@ struct BookDetailChapterList: View {
                     .disabled(chapter.isVolume)
                     .accessibilityIdentifier("detail.chapter.\(chapter.index)")
                 }
-                .listRowBackground(palette.surface)
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)
@@ -263,9 +263,9 @@ private struct BookDetailSourcePicker: View {
                     Text("按书名和作者查找相同书籍；选择书源后先预览，不会自动替换书架或删除本地文件。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
                 }
-                .listRowBackground(palette.surface)
-                if loading { ProgressView("查找可用书源…").listRowBackground(palette.surface) }
-                if let message { Text(message).foregroundStyle(palette.secondary).listRowBackground(palette.surface) }
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                if loading { ProgressView("查找可用书源…").listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12))) }
+                if let message { Text(message).foregroundStyle(palette.secondary).listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12))) }
                 ForEach(results) { found in
                     Button { onSelect(found) } label: {
                         VStack(alignment: .leading, spacing: 5) {
@@ -275,7 +275,7 @@ private struct BookDetailSourcePicker: View {
                         }
                     }
                 }
-                .listRowBackground(palette.surface)
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
             }
             .scrollContentBackground(.hidden)
             .background { AppThemeCanvas().ignoresSafeArea() }

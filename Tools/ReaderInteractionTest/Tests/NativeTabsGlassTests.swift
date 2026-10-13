@@ -63,6 +63,19 @@ final class NativeTabsGlassTests: XCTestCase {
         let count = Double(h * (w - 1))
         return [edge / count, squared / count - pow(sum / count, 2)]
     }
+    func testControlsStayGlassWithOpaqueThemeAndCardsHidden() throws {
+        start("--native-glass-mode")
+        let transparent = try pixels()
+        app.buttons["glass.mode.opaque"].tap()
+        app.buttons["glass.control"].tap()
+        app.buttons["glass.hideCards"].tap()
+        let glass = try pixels(); shot("all-controls-native-glass")
+        XCTAssertLessThan(glass[0], transparent[0] * 0.65)
+        XCTAssertGreaterThan(glass[1], 5, "Control must retain translucent backdrop even with cards off")
+        app.buttons["glass.reduced"].tap()
+        let reduced = try pixels(); shot("all-controls-reduced-transparency")
+        XCTAssertLessThan(reduced[1], 5, "Accessibility must override glass with a solid surface")
+    }
     func testFrostedActuallyBlursBackdropNotOpaqueTint() throws {
         start("--native-glass-mode")
         let transparent = try pixels(); shot("glass-transparent")

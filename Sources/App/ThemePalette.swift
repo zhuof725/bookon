@@ -163,6 +163,48 @@ struct AppThemeCanvas: View {
     }
 }
 
+/// Native glass shared by app-owned controls; content and hit regions stay untouched.
+/// Older iOS uses real backdrop material, not a translucent solid imitation.
+struct AppGlassSurface<S: InsettableShape>: View {
+    let shape: S
+    var tint: Color = Color(uiColor: .secondarySystemBackground)
+    var tintOpacity: Double = 0.10
+    var reduceTransparency: Bool = false
+
+    var body: some View {
+        Group {
+            if reduceTransparency {
+                shape.fill(tint)
+            } else if #available(iOS 26.0, *) {
+                Color.clear.glassEffect(.regular.tint(tint.opacity(tintOpacity)), in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+                    .overlay { shape.fill(tint.opacity(tintOpacity)) }
+                    .overlay { shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5) }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+struct AppGlassModifier<S: InsettableShape>: ViewModifier {
+    let shape: S
+    var tint: Color = Color(uiColor: .secondarySystemBackground)
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        content.background {
+            AppGlassSurface(shape: shape, tint: tint, reduceTransparency: reduceTransparency)
+        }
+    }
+}
+
+extension View {
+    func appGlass<S: InsettableShape>(in shape: S, tint: Color = Color(uiColor: .secondarySystemBackground)) -> some View {
+        modifier(AppGlassModifier(shape: shape, tint: tint))
+    }
+}
+
 /// Shared custom-theme surface for shelf glass, detail cards and library cards.
 /// Card backgrounds never control buttons/dock; Reduce Transparency keeps those opaque.
 struct ThemeSurface<S: InsettableShape>: View {
@@ -192,7 +234,7 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                 if reduceTransparency {
                     shape.fill(palette.surface)
                 } else {
-                    switch palette.interfaceEffect ?? .opaque {
+                    switch isCard ? (palette.interfaceEffect ?? .frosted) : .frosted {
                     case .transparent:
                         // Real transparency: the contrast-protected canvas shows through.
                         shape.fill(Color.clear)
@@ -210,14 +252,13 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                             )
                         }
                     case .frosted:
-                        shape.fill(.ultraThinMaterial)
+                        AppGlassSurface(shape: shape, tint: palette.surface,
+                                        tintOpacity: palette.frostedSurfaceOpacity)
                         if palette.glowIntensity > 0 {
                             shape.fill(RadialGradient(
-                                colors: [palette.accent.opacity(0.28 * palette.glowIntensity), .clear],
+                                colors: [palette.accent.opacity(0.12 * palette.glowIntensity), .clear],
                                 center: .center, startRadius: 0, endRadius: 160))
                         }
-                        // Keep the backdrop visible; do not paint an opaque card over it.
-                        shape.fill(palette.surface.opacity(palette.frostedSurfaceOpacity))
                     case .opaque:
                         shape.fill(palette.surface)
                     }

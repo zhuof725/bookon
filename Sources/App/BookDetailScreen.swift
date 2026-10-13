@@ -184,7 +184,7 @@ struct BookDetailScreen: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(palette.selection, in: Capsule())
+            .appGlass(in: Capsule(), tint: palette.selection)
     }
 
     private func readButton(inline: Bool) -> some View {
@@ -196,8 +196,8 @@ struct BookDetailScreen: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 15)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .foregroundStyle(palette.onAccent)
-                .background(palette.accent, in: Capsule())
+                .foregroundStyle(palette.primary)
+                .appGlass(in: Capsule(), tint: palette.accent)
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -231,7 +231,7 @@ struct BookDetailScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(palette.surface, in: Capsule())
+                        .appGlass(in: Capsule(), tint: palette.surface)
                         .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
                 } else {
                     VStack(spacing: 3) {
@@ -239,7 +239,7 @@ struct BookDetailScreen: View {
                         Text(title).appFont(.caption2).fixedSize()
                     }
                     .frame(width: actionDiameter, height: actionDiameter)
-                    .background(palette.surface, in: Circle())
+                    .appGlass(in: Circle(), tint: palette.surface)
                     .overlay(Circle().strokeBorder(palette.border, lineWidth: 1))
                 }
             }
@@ -379,17 +379,7 @@ private struct DetailCardSurface: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 let shape = RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous)
-                if palette.interfaceEffect != nil {
-                    ThemeSurface(shape: shape, isCard: true)
-                } else {
-                    // Preserve legacy detail cards, including their subtle shadow.
-                    shape
-                        .fill(palette.surface)
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.14 : 0.025), radius: 14, x: 0, y: 6)
-                        .overlay {
-                            if palette.cardBorder { shape.strokeBorder(palette.border, lineWidth: 0.5) }
-                        }
-                }
+                ThemeSurface(shape: shape, isCard: true)
             }
     }
 }

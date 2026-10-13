@@ -112,7 +112,7 @@ enum ThemeInterfaceEffect: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .transparent: return "透明"
-        case .frosted: return "毛玻璃"
+        case .frosted: return "玻璃"
         case .opaque: return "不透明"
         }
     }
@@ -127,7 +127,7 @@ struct ThemeCustomization: Codable, Equatable {
     var pageBackgroundImage: String? = nil
     /// nil follows the existing font manager; an empty string explicitly means system.
     var fontPostScriptName: String? = nil
-    var effect: ThemeInterfaceEffect = .transparent
+    var effect: ThemeInterfaceEffect = .frosted
     var cardBackground: Bool = true
     /// Optional per-tab icon override. Keys are LibraryTab raw names
     /// ("shelf"/"statistics"/"profile"); values are either an SF Symbol name
@@ -147,7 +147,7 @@ struct ThemeCustomization: Codable, Equatable {
     init(tabStyle: ThemeTabStyle = .iconsAndText, shelfColumns: Int = 3,
          coverWidth: Double = 112, defaultCoverImage: String? = nil,
          launchImage: String? = nil, pageBackgroundImage: String? = nil,
-         fontPostScriptName: String? = nil, effect: ThemeInterfaceEffect = .transparent,
+         fontPostScriptName: String? = nil, effect: ThemeInterfaceEffect = .frosted,
          cardBackground: Bool = true, tabIcons: [String: String]? = nil,
          glowIntensity: Double = 0.5, surfaceOpacity: Double = 0.85) {
         self.tabStyle = tabStyle

@@ -92,14 +92,14 @@ struct CacheManagementView: View {
                             .appFont(.footnote).foregroundStyle(palette.secondary)
                         if model.busy { ProgressView("正在处理…").appFont(.footnote).accessibilityIdentifier("cache.busy") }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
-                        .background(palette.surface, in: RoundedRectangle(cornerRadius: 22))
+                        .appGlass(in: RoundedRectangle(cornerRadius: 22), tint: palette.surface)
                     ForEach([AppCacheCategory.content, .catalog, .network]) { category in
                         categoryCard(category)
                     }
                     Button { requestClear(.all) } label: {
                         Label("清理全部可管理缓存", systemImage: "trash")
                             .appFont(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 50)
-                            .background(palette.selection, in: Capsule())
+                            .appGlass(in: Capsule(), tint: palette.selection)
                     }.buttonStyle(.plain).disabled(model.busy || !model.hasScanned)
                         .accessibilityIdentifier("cache.clear.all")
                     if let outcome = model.result {
@@ -160,7 +160,7 @@ struct CacheManagementView: View {
                 .frame(minHeight: 44).disabled(model.busy || !model.hasScanned)
                 .accessibilityLabel("清理" + category.title).accessibilityIdentifier("cache.clear." + category.rawValue)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 22))
+            .appGlass(in: RoundedRectangle(cornerRadius: 22), tint: palette.surface)
     }
     private func requestClear(_ category: AppCacheCategory) { pending = category; showingConfirmation = true }
     private func diskBytes(_ category: AppCacheCategory) -> Int64 {

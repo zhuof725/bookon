@@ -26,7 +26,7 @@ struct SearchView: View {
                     if searching { ProgressView() }
                     Text(progress).appFont(.footnote).foregroundStyle(palette.secondary)
                 }
-                .listRowBackground(palette.surface)
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
             }
             ForEach(hits) { h in
                 NavigationLink {
@@ -37,7 +37,7 @@ struct SearchView: View {
                             : "来源：" + h.book.originName)
                 }
             }
-            .listRowBackground(palette.surface)
+            .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
         }
         .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
@@ -288,11 +288,11 @@ struct ReaderView: View {
             NavigationStack {
                 List {
                     Section { BookRow(book: book, subtitle: book.author) }
-                        .listRowBackground(palette.surface)
+                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                     Section("书源") { Text(readerSourceName) }
-                        .listRowBackground(palette.surface)
+                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                     if let intro = book.intro, !intro.isEmpty {
-                        Section("简介") { Text(intro) }.listRowBackground(palette.surface)
+                        Section("简介") { Text(intro) }.listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                     }
                 }
                 .foregroundStyle(palette.primary)
@@ -315,7 +315,7 @@ struct ReaderView: View {
                                     Text(c.title).appFont(.headline)
                                         .foregroundStyle(c.index == index ? palette.accent : palette.secondary)
                                 }
-                                .listRowBackground(palette.surface)
+                                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                             } else {
                                 Button {
                                     showToc = false; go(c.index)
@@ -327,7 +327,7 @@ struct ReaderView: View {
                                 }
                             }
                         }
-                        .listRowBackground(palette.surface)
+                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                         .id(c.index)
                     }
                     .scrollContentBackground(.hidden)
@@ -354,16 +354,16 @@ struct ReaderView: View {
                             .pickerStyle(.segmented)
                         }
                     }
-                    .listRowBackground(palette.surface)
+                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                     ReaderTypographyControls(settings: settings)
-                        .listRowBackground(palette.surface)
+                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                     Section("背景") {
                         Picker("主题", selection: $settings.theme) {
                             ForEach(0..<ReadSettings.themes.count, id: \.self) { Text(ReadSettings.themes[$0].name).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
-                    .listRowBackground(palette.surface)
+                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
                 }
                 .foregroundStyle(palette.primary)
                 .scrollContentBackground(.hidden)

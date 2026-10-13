@@ -70,7 +70,7 @@ struct BodyReplaceRulesView: View {
                             Label("添加替换规则", systemImage: "plus.circle").appFont(.system(size: 20))
                                 .padding(18).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain).disabled(rules.count >= 50).accessibilityIdentifier("bodyRules.add")
-                    }.background(palette.surface, in: RoundedRectangle(cornerRadius: 25))
+                    }.appGlass(in: RoundedRectangle(cornerRadius: 25), tint: palette.surface)
                     Text("按列表顺序执行已启用规则，仅改变阅读正文的显示，不修改原文、缓存或标题，也不处理图片或链接。保存后请退出并重新进入阅读器，新阅读会话才会使用新规则。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                     Text("每个段落单独匹配，正则表达式不能跨段。替换内容留空表示删除匹配文字；超时或超出长度限制时，该条规则保持处理前的段落。")
@@ -174,7 +174,7 @@ private struct BodyReplaceRuleEditor: View {
                     }
                     if let savingError { Text(savingError).foregroundStyle(.red) }
                 }
-                .listRowBackground(palette.surface)
+                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

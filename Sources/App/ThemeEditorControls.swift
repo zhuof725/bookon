@@ -81,7 +81,7 @@ struct ThemeEditorColorRow: View {
                 .accessibilityIdentifier("theme.editor.color.\(field.pickerID)")
         }
         .padding(.leading, 6)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
+        .appGlass(in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.primary.opacity(0.10), lineWidth: 0.7))
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -136,7 +136,7 @@ struct ThemeHexEditor: View {
                 TextField("#RRGGBB", text: $input)
                     .appFont(.system(size: 20, weight: .medium, design: .monospaced)).textInputAutocapitalization(.characters)
                     .autocorrectionDisabled().keyboardType(.asciiCapable)
-                    .padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+                    .padding(16).appGlass(in: RoundedRectangle(cornerRadius: 14))
                     .focused($focused).submitLabel(.done)
                     .onSubmit { save() }
                     .accessibilityLabel("十六进制颜色")
@@ -198,7 +198,7 @@ struct ThemeEditorSchemePicker: View {
             mode(.dark, title: "深色主题", symbol: "moon", id: "dark")
         }
         .padding(4)
-        .background(Color.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 14))
+        .appGlass(in: RoundedRectangle(cornerRadius: 14))
     }
     private func mode(_ scheme: ColorScheme, title: String, symbol: String, id: String) -> some View {
         Button { selection = scheme } label: {

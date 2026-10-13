@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: ${{ inputs.suite == 'native-tabs-glass' && 'macos-26' || 'macos-15' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +89,15 @@ jobs:
           assert phones
           print('SIMULATOR_ID=' + phones[0]['udid'])
           PY
+      - name: Compile native glass harness before simulator boot
+        if: ${{ inputs.suite == 'native-tabs-glass' }}
+        run: |
+          set -o pipefail
+          xcodebuild -project Tools/ReaderInteractionTest/ReaderInteraction.xcodeproj \
+            -scheme ReaderHarness -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build-for-testing 2>&1 | tee reader-interaction.log
       - name: Boot selected simulator
+        timeout-minutes: 5
         run: |
           xcrun simctl boot "$SIMULATOR_ID" || true
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
@@ -100,7 +108,7 @@ jobs:
           set -o pipefail
           ARGS=()
           case "$TEST_SUITE" in
-            native-tabs-glass) ARGS=(-only-testing:ReaderInteractionTests/NativeTabsGlassTests) ;;
+            native-tabs-glass) ARGS=(-only-testing:ReaderInteractionTests/NativeTabsGlassTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
             cover-persistence) ARGS=(-only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
