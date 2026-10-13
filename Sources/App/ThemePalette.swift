@@ -22,6 +22,10 @@ struct ResolvedAppPalette {
     let cardBackground: Bool
     let pageScrimOpacity: Double
     let frostedSurfaceOpacity: Double
+    /// Bounded 0...1; only meaningful for themed (non-legacy) surfaces.
+    let glowIntensity: Double
+    /// Bounded 0...1; drives the frosted effect's tint layer.
+    let surfaceOpacity: Double
     private let cardRadiusOverride: CGFloat?
 
     /// Existing cards keep their own geometry until a radius is explicitly set.
@@ -57,6 +61,10 @@ struct ResolvedAppPalette {
         } else {
             frostedSurfaceOpacity = 1
         }
+        let glow = theme.customization?.glowIntensity ?? 0.5
+        glowIntensity = glow.isFinite ? min(max(glow, 0), 1) : 0.5
+        let opacity = theme.customization?.surfaceOpacity ?? 0.85
+        surfaceOpacity = opacity.isFinite ? min(max(opacity, 0), 1) : 0.85
         // Geometry-only edits must not change Classic Monochrome's native colors.
         var colorDefaults = colors
         colorDefaults.cardRadius = nil
@@ -129,6 +137,17 @@ struct AppThemeCanvas: View {
                         Image(uiImage: image).resizable().scaledToFill()
                             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
                             .overlay { base.opacity(palette.pageScrimOpacity) }
+                            .overlay {
+                                if theme.customization?.effect == .transparent, palette.glowIntensity > 0 {
+                                    RadialGradient(
+                                        colors: [palette.accent.opacity(0.18 * palette.glowIntensity),
+                                                 palette.accent.opacity(0)],
+                                        center: .center,
+                                        startRadius: 0,
+                                        endRadius: max(geometry.size.width, geometry.size.height) * 0.6
+                                    )
+                                }
+                            }
                     }
                 }
             }
@@ -179,9 +198,22 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                     case .transparent:
                         // Real transparency: the contrast-protected canvas shows through.
                         shape.fill(Color.clear)
+                        // Subtle radial glow behind the content; brightness stays
+                        // capped so it never reads as a filled background.
+                        if palette.glowIntensity > 0 {
+                            shape.fill(
+                                RadialGradient(
+                                    colors: [palette.accent.opacity(0.28 * palette.glowIntensity),
+                                             palette.accent.opacity(0)],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 160
+                                )
+                            )
+                        }
                     case .frosted:
                         shape.fill(.ultraThinMaterial)
-                        shape.fill(palette.surface.opacity(palette.frostedSurfaceOpacity))
+                        shape.fill(palette.surface.opacity(palette.surfaceOpacity * palette.frostedSurfaceOpacity))
                     case .opaque:
                         shape.fill(palette.surface)
                     }

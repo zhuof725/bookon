@@ -147,6 +147,92 @@ enum ThemeCustomizationProbe {
                 guard let actual = defaults.object(forKey: key) else { return false }
                 return (actual as? NSObject)?.isEqual(value) == true
             }
+        checks.merge(tabIconAndSliderChecks(defaults: defaults, assets: assets, store: store, theme: theme)) { _, new in new }
+        return checks
+    }
+
+    /// Tab icon and glow/opacity slider contract: decode defaults for themes
+    /// saved before these fields existed, key/value validation, range and
+    /// finite guards, asset-ID bookkeeping and save atomicity.
+    private static func tabIconAndSliderChecks(defaults: UserDefaults, assets: ThemeAssetStore,
+                                               store: AppThemeStore, theme: AppTheme) -> [String: Bool] {
+        var checks: [String: Bool] = [:]
+        let neutral = ThemeCustomization()
+        checks["customizationTabIconDefaults"] = neutral.tabIcons == nil && neutral.glowIntensity == 0.5
+            && neutral.surfaceOpacity == 0.85 && roundTrip(neutral)
+        func decode(_ raw: String) -> ThemeCustomization? {
+            try? JSONDecoder().decode(ThemeCustomization.self, from: Data(raw.utf8))
+        }
+        // Snapshots written before tabIcons/glow/surfaceOpacity existed must
+        // decode with the documented defaults, including explicit JSON nulls.
+        let legacySettings = decode("{\"tabStyle\":\"text\"}")
+        let partialIcons = decode("{\"tabIcons\":{\"shelf\":\"star.fill\"}}")
+        let nullFields = decode("{\"tabIcons\":null,\"glowIntensity\":null,\"surfaceOpacity\":null}")
+        checks["customizationTabIconsNilEmptyPartialDecode"] = legacySettings?.tabStyle == .text
+            && legacySettings?.tabIcons == nil && legacySettings?.glowIntensity == 0.5
+            && legacySettings?.surfaceOpacity == 0.85
+            && partialIcons?.tabIcons == ["shelf": "star.fill"] && partialIcons?.shelfColumns == 3
+            && partialIcons?.glowIntensity == 0.5 && partialIcons?.surfaceOpacity == 0.85
+            && nullFields?.tabIcons == nil && nullFields?.glowIntensity == 0.5
+            && nullFields?.surfaceOpacity == 0.85
+        let emptyIcons = decode("{\"tabIcons\":{}}")
+        checks["customizationTabIconsEmptyRejected"] = emptyIcons?.tabIcons == [:]
+            && emptyIcons?.validationMessage != nil
+        checks["customizationTabIconsMalformedDecodeRejected"] = [
+            "{\"tabIcons\":[]}", "{\"tabIcons\":{\"shelf\":3}}", "{\"tabIcons\":\"star.fill\"}",
+            "{\"glowIntensity\":\"high\"}", "{\"glowIntensity\":\"NaN\"}", "{\"surfaceOpacity\":true}"
+        ].allSatisfy { raw in rejects { _ = try JSONDecoder().decode(ThemeCustomization.self, from: Data(raw.utf8)) } }
+        let iconsBefore = defaults.data(forKey: AppThemeStore.storageKey)
+        var iconsRejected = true
+        for icons in [["unknown": "star.fill"], ["shelf": "star.fill", "extra": "book.fill"],
+                      ["shelf": "../icon"], ["shelf": "bad icon"], ["shelf": ""],
+                      ["shelf": "a:b"], ["shelf": String(repeating: "s", count: 129)]] {
+            var draft = theme; draft.customization?.tabIcons = icons
+            let check = draft.validationMessage != nil && rejects { try store.save(draft, apply: true) }
+            iconsRejected = check && iconsRejected
+        }
+        checks["customizationTabIconKeysAndValuesRejected"] = iconsRejected
+        checks["customizationTabIconInvalidSaveAtomic"] = defaults.data(forKey: AppThemeStore.storageKey) == iconsBefore
+        // Validation is format-based: a valid asset ID is accepted even before
+        // the file exists, exactly like the other image settings.
+        let validIconID = UUID().uuidString.lowercased() + ".jpg"
+        var iconsAccepted = true
+        for icons in [["shelf": "star.fill"], ["statistics": validIconID],
+                      ["shelf": "star.fill", "statistics": "chart.bar", "profile": validIconID]] {
+            var draft = theme; draft.customization?.tabIcons = icons
+            let check = draft.validationMessage == nil && roundTrip(draft)
+            do { try store.save(draft, apply: true) } catch { iconsAccepted = false }
+            iconsAccepted = check && iconsAccepted
+        }
+        checks["customizationTabIconValuesAccepted"] = iconsAccepted
+        var assetTheme = theme
+        assetTheme.customization?.tabIcons = ["shelf": "star.fill", "profile": validIconID]
+        checks["customizationAssetIDsIncludeTabIcons"] = assetTheme.assetIDs.contains(validIconID)
+            && !assetTheme.assetIDs.contains("star.fill")
+        let slidersBefore = defaults.data(forKey: AppThemeStore.storageKey)
+        var slidersRejected = true
+        for value in [-0.01, 1.01, -1.0, 2.0, Double.nan, Double.infinity, -Double.infinity] {
+            var glowDraft = theme; glowDraft.customization?.glowIntensity = value
+            let glowCheck = glowDraft.validationMessage != nil && rejects { try store.save(glowDraft, apply: true) }
+            var opacityDraft = theme; opacityDraft.customization?.surfaceOpacity = value
+            let opacityCheck = opacityDraft.validationMessage != nil && rejects { try store.save(opacityDraft, apply: true) }
+            slidersRejected = glowCheck && opacityCheck && slidersRejected
+        }
+        checks["customizationGlowOpacityRangeRejected"] = slidersRejected
+            && defaults.data(forKey: AppThemeStore.storageKey) == slidersBefore
+        var slidersPersist = true
+        for value in [0.0, 0.25, 0.5, 1.0] {
+            var draft = theme
+            draft.customization?.glowIntensity = value
+            draft.customization?.surfaceOpacity = 1 - value
+            do {
+                try store.save(draft, apply: true)
+                slidersPersist = slidersPersist && roundTrip(draft)
+                    && AppThemeStore(defaults: defaults, assets: assets).selectedTheme == draft
+            } catch { slidersPersist = false }
+        }
+        checks["customizationGlowOpacityEndpointsPersist"] = slidersPersist
+        try? store.save(theme, apply: true)
         return checks
     }
 
@@ -235,6 +321,22 @@ enum ThemeCustomizationProbe {
         let afterLinks = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
         checks["assetSymlinkRootRejected"] = linkedImportRejected && linkedReadRejected
             && ThemeAssetStore(directory: directory).image(for: dataID) != nil && afterLinks == beforeLinks
+        checks["assetSymbolImageValidation"] = assets.symbolImage(for: "star.fill") != nil
+            && assets.symbolImage(for: "book.fill") != nil
+            && assets.symbolImage(for: "") == nil && assets.symbolImage(for: "bad icon") == nil
+            && assets.symbolImage(for: "../icon") == nil && assets.symbolImage(for: "a:b") == nil
+            && assets.symbolImage(for: "a\u{0000}b") == nil
+            && assets.symbolImage(for: String(repeating: "s", count: 129)) == nil
+            && assets.symbolImage(for: "not.a.symbol.name.here") == nil
+            && ThemeAssetStore.isValidSymbolName("star.fill") && !ThemeAssetStore.isValidSymbolName("bad icon")
+        let tabIconID = try assets.importData(png(.purple))
+        var iconTheme = AppTheme.custom()
+        iconTheme.customization?.tabIcons = ["shelf": "star.fill", "profile": tabIconID]
+        checks["assetTabIconImportSharedPipeline"] = ThemeAssetStore.isValidID(tabIconID)
+            && ThemeAssetStore(directory: directory).image(for: tabIconID) != nil
+            && iconTheme.assetIDs.contains(tabIconID) && !iconTheme.assetIDs.contains("star.fill")
+        try assets.remove(tabIconID)
+        checks["assetTabIconCleanupSharedPipeline"] = ThemeAssetStore(directory: directory).image(for: tabIconID) == nil
         return checks
     }
 

@@ -17,6 +17,8 @@ struct ThemeEditorView: View {
     @State private var imageTarget: ThemeEditorImageKind?
     @State private var pendingImage: (url: URL, kind: ThemeEditorImageKind)?
     @State private var newlyImportedIDs: Set<String> = []
+    @State private var iconImportTab: LibraryTab?
+    @State private var pendingIcon: (url: URL, tab: LibraryTab)?
     @FocusState private var nameFocused: Bool
 
     init(theme: AppTheme, store: AppThemeStore = .shared,
@@ -51,7 +53,7 @@ struct ThemeEditorView: View {
                     }
                 }
                 Section("界面") {
-                    row(.tab, value: draft.customization == nil ? "仅图标 · 原有" : settings.tabStyle.title)
+                    row(.tab, value: draft.customization == nil ? "仅图标 · 原有" : tabSummary)
                     row(.shelf, value: draft.customization == nil ? "自动适配 · 原有" : "\(settings.shelfColumns)列 · \(Int(settings.coverWidth.rounded()))pt")
                     row(.cover, value: imageSummary(settings.defaultCoverImage, empty: "系统默认"))
                     row(.launch, value: imageSummary(settings.launchImage, empty: "关"))
@@ -59,7 +61,7 @@ struct ThemeEditorView: View {
                 Section("外观") {
                     row(.colors, value: ThemeEditorFonts.name(settings.fontPostScriptName, manager: fonts))
                     row(.background, value: imageSummary(settings.pageBackgroundImage, empty: draft.backgroundStyle.title))
-                    row(.effect, value: draft.customization == nil ? "原有样式" : settings.effect.title)
+                    row(.effect, value: draft.customization == nil ? "原有样式" : effectSummary)
                     row(.cards, value: settings.cardBackground ? "已开启" : "已关闭")
                 }
                 Section {
@@ -107,7 +109,12 @@ struct ThemeEditorView: View {
             }
             .navigationDestination(for: ThemeEditorDestination.self) { destination in
                 ThemeCustomizationEditor(draft: $draft, previewScheme: $previewScheme,
-                                         destination: destination, importImage: { imageTarget = $0 })
+                                         destination: destination, importImage: { imageTarget = $0 },
+                                         importIcon: { iconImportTab = $0 })
+            }
+            .navigationDestination(for: LibraryTab.self) { tab in
+                ThemeEditorTabIconPicker(tab: tab, icon: tabIconBinding(for: tab),
+                                         importIcon: { iconImportTab = tab })
             }
         }
         .environment(\.appTheme, draft)
@@ -119,6 +126,12 @@ struct ThemeEditorView: View {
             ThemeImagePicker(onPick: { url in
                 pendingImage = (url, target); imageTarget = nil
             }, onCancel: { pendingImage = nil; imageTarget = nil })
+                .ignoresSafeArea()
+        }
+        .sheet(item: $iconImportTab, onDismiss: importPendingIcon) { tab in
+            ThemeImagePicker(onPick: { url in
+                pendingIcon = (url, tab); iconImportTab = nil
+            }, onCancel: { pendingIcon = nil; iconImportTab = nil })
                 .ignoresSafeArea()
         }
         .alert("放弃更改？", isPresented: $showingDiscardConfirmation) {
@@ -150,6 +163,43 @@ struct ThemeEditorView: View {
     private func imageSummary(_ id: String?, empty: String) -> String {
         guard let id else { return empty }
         return ThemeAssetStore.shared.image(for: id) == nil ? "图片不可用" : "自定义"
+    }
+    private var tabSummary: String {
+        let count = LibraryTab.allCases.filter { settings.tabIcons?[$0.key] != nil }.count
+        return count > 0 ? "\(settings.tabStyle.title) · \(count)个自定义" : settings.tabStyle.title
+    }
+    private var effectSummary: String {
+        let glow = Int((min(max(settings.glowIntensity, 0), 1) * 100).rounded())
+        let opacity = Int((min(max(settings.surfaceOpacity, 0), 1) * 100).rounded())
+        return "\(settings.effect.title) · 光晕\(glow)% · 透明\(opacity)%"
+    }
+    /// Tab icons share the same import transaction: the entry is created only
+    /// after the store accepts the file, and cancel/save still own cleanup.
+    private func tabIconBinding(for tab: LibraryTab) -> Binding<String?> {
+        Binding<String?>(
+            get: { (draft.customization ?? ThemeCustomization()).tabIcons?[tab.key] },
+            set: { value in
+                var theme = draft
+                var settings = theme.customization ?? ThemeCustomization()
+                var icons = settings.tabIcons ?? [:]
+                if let value, ThemeAssetStore.isValidSymbolName(value) || ThemeAssetStore.isValidID(value) {
+                    icons[tab.key] = value
+                } else {
+                    icons.removeValue(forKey: tab.key)
+                }
+                settings.tabIcons = icons.isEmpty ? nil : icons
+                theme.customization = settings
+                draft = theme
+            })
+    }
+    private func importPendingIcon() {
+        guard let pendingIcon else { return }
+        self.pendingIcon = nil
+        do {
+            let id = try ThemeAssetStore.shared.importFile(pendingIcon.url)
+            newlyImportedIDs.insert(id)
+            tabIconBinding(for: pendingIcon.tab).wrappedValue = id
+        } catch { errorMessage = error.localizedDescription }
     }
     private func importPendingImage() {
         guard let pendingImage else { return }
@@ -186,6 +236,13 @@ struct ThemeEditorView: View {
             onSaved(); dismiss()
         } catch { isSaving = false; errorMessage = error.localizedDescription }
     }
+}
+
+// Identifiable conformance lets the editor present an image picker per tab
+// without touching the shared model file; `LibraryTab.key` (the tabIcons
+// dictionary key) is owned by the model layer.
+extension LibraryTab: Identifiable {
+    var id: Int { rawValue }
 }
 
 enum ThemeEditorDestination: String, Hashable {
@@ -257,13 +314,14 @@ struct ThemeCustomizationEditor: View {
     @Binding var previewScheme: ColorScheme
     let destination: ThemeEditorDestination
     let importImage: (ThemeEditorImageKind) -> Void
+    let importIcon: (LibraryTab) -> Void
     private var settings: ThemeCustomization { draft.customization ?? ThemeCustomization() }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if draft.customization == nil {
-                    note("正在保留原有布局。下方界面设置展示自定义初始值，首次更改后启用；颜色与圆角可独立修改。")
+                    note(legacyNote)
                 }
                 page
             }
@@ -274,6 +332,16 @@ struct ThemeCustomizationEditor: View {
         .navigationTitle(destination.title)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("theme.editor.page.\(destination.rawValue)")
+    }
+    private var legacyNote: String {
+        switch destination {
+        case .tab:
+            return "正在保留原有布局。下方显示方式展示自定义初始值，选择任一方式后可继续自定义标签图标；颜色与圆角可独立修改。"
+        case .effect:
+            return "正在保留原有布局。下方界面效果展示自定义初始值（光晕50% · 透明85%），首次更改后启用；颜色与圆角可独立修改。"
+        default:
+            return "正在保留原有布局。下方界面设置展示自定义初始值，首次更改后启用；颜色与圆角可独立修改。"
+        }
     }
     @ViewBuilder private var page: some View {
         switch destination {
@@ -311,8 +379,45 @@ struct ThemeCustomizationEditor: View {
                 choice(ThemeTabStyle.text.title, selected: draft.customization?.tabStyle == .text,
                        id: "theme.editor.tab.text") { $draft.themeSetting(\.tabStyle).wrappedValue = .text }
             }.padding(.horizontal, 16).themeEditorSurface()
+            if draft.customization == nil {
+                note("自定义每个标签的图标前，请先选择上方任一显示方式。")
+            } else {
+                tabIconSection
+            }
             ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
+    }
+    private var tabIconSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("自定义标签图标").appFont(.headline)
+            VStack(spacing: 0) {
+                ForEach(LibraryTab.allCases, id: \.rawValue) { tab in
+                    if tab != LibraryTab.allCases.first { Divider() }
+                    tabIconRow(tab)
+                }
+            }.padding(.horizontal, 16).themeEditorSurface()
+            note("每个标签可使用内置图标或导入的自定义图片；图片不超过 20 MB，导入时压缩至最长边 2000 像素。恢复默认后使用应用原有图标。")
+        }
+    }
+    private func tabIconRow(_ tab: LibraryTab) -> some View {
+        NavigationLink(value: tab) {
+            HStack(spacing: 12) {
+                Text(tab.title).appFont(.body)
+                Spacer(minLength: 8)
+                Text(settings.tabIcons?[tab.key] == nil ? "默认" : "自定义")
+                    .appFont(.caption).foregroundStyle(.secondary)
+                ThemeEditorTabIcon(value: settings.tabIcons?[tab.key], fallback: tab.symbol)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+                    .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 52).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(tab.title)图标")
+        .accessibilityValue(settings.tabIcons?[tab.key] == nil ? "默认" : "自定义")
+        .accessibilityIdentifier("theme.editor.tab.icon.\(tab.key)")
     }
     private var shelfPage: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -346,8 +451,35 @@ struct ThemeCustomizationEditor: View {
                        id: "theme.editor.effect.opaque") { $draft.themeSetting(\.effect).wrappedValue = .opaque }
             }.padding(.horizontal, 16).themeEditorSurface()
             note("透明保留背景层次，毛玻璃柔化背景，不透明使用卡片底色。系统的降低透明度设置及文字可读性要求可能优先使用不透明背景。")
+            effectSliderSection
+            note("光晕仅在透明效果下围绕控件与卡片可见；透明度影响毛玻璃和卡片底色。两个数值仅在保存主题后生效，取消编辑不会应用。")
             ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
+    }
+    private var effectSliderSection: some View {
+        let glow = Int((min(max(settings.glowIntensity, 0), 1) * 100).rounded())
+        let opacity = Int((min(max(settings.surfaceOpacity, 0), 1) * 100).rounded())
+        return VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("光晕强度 · \(glow)%").appFont(.body)
+                Slider(value: $draft.themeSetting(\.glowIntensity), in: 0...1)
+                    .accessibilityLabel("光晕强度")
+                    .accessibilityValue("\(glow)%")
+                    .accessibilityIdentifier("theme.editor.effect.glow")
+                HStack { Text("0%"); Spacer(); Text("100%") }
+                    .appFont(.caption2).foregroundStyle(.secondary)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("透明度 · \(opacity)%").appFont(.body)
+                Slider(value: $draft.themeSetting(\.surfaceOpacity), in: 0...1)
+                    .accessibilityLabel("透明度")
+                    .accessibilityValue("\(opacity)%")
+                    .accessibilityIdentifier("theme.editor.effect.opacity")
+                HStack { Text("0%"); Spacer(); Text("100%") }
+                    .appFont(.caption2).foregroundStyle(.secondary)
+            }
+        }.padding(16).themeEditorSurface()
     }
     private func imagePage(_ kind: ThemeEditorImageKind) -> some View {
         ThemeEditorImageSettings(kind: kind, assetID: $draft.themeSetting(kind.keyPath),
@@ -366,6 +498,124 @@ struct ThemeCustomizationEditor: View {
     private func note(_ text: String) -> some View {
         Text(text).appFont(.footnote).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Icon choice for one tab, pushed inside the editor's NavigationStack.
+/// The parent binding applies immediately so back reveals the updated row.
+struct ThemeEditorTabIconPicker: View {
+    static let symbols = [
+        "book.fill", "chart.bar.fill", "person.fill", "house.fill",
+        "magnifyingglass", "star.fill", "heart.fill", "bookmark.fill",
+        "folder.fill", "gearshape.fill", "books.vertical.fill", "clock.fill"
+    ]
+
+    let tab: LibraryTab
+    @Binding var icon: String?
+    let importIcon: () -> Void
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: 62, maximum: 88), spacing: 8)]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                note("为“\(tab.title)”选择内置图标，或导入图片作为自定义图标。更改即时预览，仅随主题保存后生效。")
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("内置图标").appFont(.headline)
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(Self.symbols, id: \.self) { name in
+                            symbolButton(name)
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(action: importIcon) {
+                        Label("从文件选择图片", systemImage: "folder")
+                            .appFont(.body).frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("theme.editor.tab.icon.import")
+                    Text("图片导入后保存为主题素材，不超过 20 MB，最长边压缩至 2000 像素。")
+                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(role: .destructive) { icon = nil } label: {
+                        Label("恢复默认", systemImage: "arrow.counterclockwise")
+                            .appFont(.body).frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(icon == nil)
+                    .accessibilityIdentifier("theme.editor.tab.icon.reset")
+                    Text("恢复应用原有的“\(tab.title)”图标。")
+                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(18).frame(maxWidth: 640).frame(maxWidth: .infinity)
+        }
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle("\(tab.title)图标")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("theme.editor.tab.icon.page")
+    }
+
+    private func symbolButton(_ name: String) -> some View {
+        let selected = icon == name
+        return Button { icon = selected ? nil : name } label: {
+            ThemeEditorTabIcon(value: name, fallback: tab.symbol)
+                .font(.system(size: 22, weight: .regular))
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(selected ? Color.primary.opacity(0.12) : Color.primary.opacity(0.035),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(selected ? Color.primary : Color.clear, lineWidth: 1.2)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("图标 \(name)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("theme.editor.tab.icon.grid.\(name)")
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text).appFont(.footnote).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Resolves one stored icon value the way LibraryDock does: asset identifiers
+/// load through the same async loader; other values are SF Symbol names.
+struct ThemeEditorTabIcon: View {
+    let value: String?
+    let fallback: String
+    @StateObject private var imageLoader = ThemeAssetImageLoader()
+
+    private var assetID: String? {
+        guard let value, ThemeAssetStore.isValidID(value) else { return nil }
+        return value
+    }
+    private var symbolName: String? {
+        guard let value, !ThemeAssetStore.isValidID(value),
+              ThemeAssetStore.isValidSymbolName(value) else { return nil }
+        return value
+    }
+
+    var body: some View {
+        Group {
+            if let symbolName {
+                Image(systemName: symbolName)
+            } else if let image = imageLoader.image, imageLoader.assetID == assetID {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else {
+                Image(systemName: fallback)
+            }
+        }
+        .task(id: value) {
+            await imageLoader.load(assetID)
+        }
     }
 }
 

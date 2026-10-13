@@ -129,15 +129,27 @@ struct ThemeCustomization: Codable, Equatable {
     var fontPostScriptName: String? = nil
     var effect: ThemeInterfaceEffect = .transparent
     var cardBackground: Bool = true
+    /// Optional per-tab icon override. Keys are LibraryTab raw names
+    /// ("shelf"/"statistics"/"profile"); values are either an SF Symbol name
+    /// or a ThemeAssetStore identifier (UUID.jpg) for an imported image.
+    var tabIcons: [String: String]? = nil
+    /// Strength of the subtle glow behind transparent surfaces, 0 disables it.
+    var glowIntensity: Double = 0.5
+    /// Opacity of the frosted effect's surface tint layer.
+    var surfaceOpacity: Double = 0.85
 
     static let shelfColumnsRange = 2...5
     static let coverWidthRange: ClosedRange<Double> = 60...180
+    static let glowIntensityRange: ClosedRange<Double> = 0...1
+    static let surfaceOpacityRange: ClosedRange<Double> = 0...1
+    static let tabIconKeys: Set<String> = ["shelf", "statistics", "profile"]
 
     init(tabStyle: ThemeTabStyle = .iconsAndText, shelfColumns: Int = 3,
          coverWidth: Double = 112, defaultCoverImage: String? = nil,
          launchImage: String? = nil, pageBackgroundImage: String? = nil,
          fontPostScriptName: String? = nil, effect: ThemeInterfaceEffect = .transparent,
-         cardBackground: Bool = true) {
+         cardBackground: Bool = true, tabIcons: [String: String]? = nil,
+         glowIntensity: Double = 0.5, surfaceOpacity: Double = 0.85) {
         self.tabStyle = tabStyle
         self.shelfColumns = shelfColumns
         self.coverWidth = coverWidth
@@ -147,11 +159,15 @@ struct ThemeCustomization: Codable, Equatable {
         self.fontPostScriptName = fontPostScriptName
         self.effect = effect
         self.cardBackground = cardBackground
+        self.tabIcons = tabIcons
+        self.glowIntensity = glowIntensity
+        self.surfaceOpacity = surfaceOpacity
     }
 
     private enum CodingKeys: String, CodingKey {
         case tabStyle, shelfColumns, coverWidth, defaultCoverImage, launchImage
         case pageBackgroundImage, fontPostScriptName, effect, cardBackground
+        case tabIcons, glowIntensity, surfaceOpacity
     }
 
     /// Newly added fields get their defaults; malformed present values still fail.
@@ -166,10 +182,14 @@ struct ThemeCustomization: Codable, Equatable {
         fontPostScriptName = try values.decodeIfPresent(String.self, forKey: .fontPostScriptName)
         effect = try values.decodeIfPresent(ThemeInterfaceEffect.self, forKey: .effect) ?? .transparent
         cardBackground = try values.decodeIfPresent(Bool.self, forKey: .cardBackground) ?? true
+        tabIcons = try values.decodeIfPresent([String: String].self, forKey: .tabIcons)
+        glowIntensity = try values.decodeIfPresent(Double.self, forKey: .glowIntensity) ?? 0.5
+        surfaceOpacity = try values.decodeIfPresent(Double.self, forKey: .surfaceOpacity) ?? 0.85
     }
 
     var assetIDs: Set<String> {
         Set([defaultCoverImage, launchImage, pageBackgroundImage].compactMap { $0 })
+            .union((tabIcons ?? [:]).values.filter(ThemeAssetStore.isValidID))
     }
 
     var validationMessage: String? {
@@ -178,6 +198,21 @@ struct ThemeCustomization: Codable, Equatable {
         if let font = fontPostScriptName,
            font.count > 128 || font.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
             return "字体标识无效，最多允许 128 个字符。"
+        }
+        guard glowIntensity.isFinite, Self.glowIntensityRange.contains(glowIntensity) else {
+            return "光晕强度须在 0–1 之间。"
+        }
+        guard surfaceOpacity.isFinite, Self.surfaceOpacityRange.contains(surfaceOpacity) else {
+            return "透明度须在 0–1 之间。"
+        }
+        if let tabIcons {
+            guard !tabIcons.isEmpty, tabIcons.count <= Self.tabIconKeys.count,
+                  tabIcons.keys.allSatisfy(Self.tabIconKeys.contains) else {
+                return "标签页图标设置无效，请重新配置。"
+            }
+            guard tabIcons.values.allSatisfy({
+                ThemeAssetStore.isValidID($0) || ThemeAssetStore.isValidSymbolName($0)
+            }) else { return "标签页图标无效，请重新选择图标或图片。" }
         }
         guard assetIDs.allSatisfy(ThemeAssetStore.isValidID) else { return "主题图片标识无效，请重新导入图片。" }
         return nil

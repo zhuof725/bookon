@@ -42,6 +42,12 @@ final class ThemeCustomizationTests: XCTestCase {
         XCTAssertTrue(app.textFields["theme.editor.name"].waitForExistence(timeout: 5))
     }
     private func page(_ id: String) { tap("theme.editor.row." + id) }
+    private func backFromIconPicker() {
+        let button = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(button.exists && button.isHittable)
+        button.tap()
+        XCTAssertTrue(app.buttons["theme.editor.tab.icon.shelf"].waitForExistence(timeout: 5))
+    }
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
@@ -79,11 +85,17 @@ final class ThemeCustomizationTests: XCTestCase {
             "customizationColumnRangeRejected", "customizationWidthNonfiniteRejected",
             "customizationInvalidFontsRejected", "customizationInvalidSaveAtomic",
             "customizationEndpointsAndEnumsPersist", "customizationFontTriStatePersists", "customizationReaderSettingsIsolated",
+            "customizationTabIconDefaults", "customizationTabIconsNilEmptyPartialDecode",
+            "customizationTabIconsEmptyRejected", "customizationTabIconsMalformedDecodeRejected",
+            "customizationTabIconKeysAndValuesRejected", "customizationTabIconInvalidSaveAtomic",
+            "customizationTabIconValuesAccepted", "customizationAssetIDsIncludeTabIcons",
+            "customizationGlowOpacityRangeRejected", "customizationGlowOpacityEndpointsPersist",
             "assetImportImageAndID", "assetSourceUnchanged", "assetDurableIndependentCopy", "assetIDsDeduplicateAllSlots",
             "assetMalformedTraversalRejected", "assetInvalidReferencesRejected", "assetTraversalRemoveConfined",
             "assetNonImageRejected", "assetOversizeDataRejected", "assetOversizeFileRejected",
             "assetFailedImportsLeaveNoFiles", "assetRemoveIdempotentAndDurable", "assetImportedDimensionsBounded",
             "assetSymlinkFileRejected", "assetSymlinkRemovalConfined", "assetSymlinkRootRejected",
+            "assetSymbolImageValidation", "assetTabIconImportSharedPipeline", "assetTabIconCleanupSharedPipeline",
             "assetReplacementCleansOnlyUnreferenced", "assetFailedSaveDoesNotClean", "assetApplyDoesNotClean",
             "assetDeletePreservesOtherTheme", "assetLastReferenceDeleteCleans",
             "renderTransparentSurface", "renderOpaqueSurface", "renderCardBackgroundOff",
@@ -108,7 +120,35 @@ final class ThemeCustomizationTests: XCTestCase {
         }
         capture("customization-summary-eight-rows-bottom")
         page("tab"); tap("theme.editor.tab.text")
-        XCTAssertTrue(app.buttons["theme.editor.tab.text"].isSelected); back()
+        XCTAssertTrue(app.buttons["theme.editor.tab.text"].isSelected)
+        // Three per-tab icon rows: 书架/统计/我的.
+        for key in ["shelf", "statistics", "profile"] {
+            let row = app.buttons["theme.editor.tab.icon.\(key)"]
+            visible(row)
+            XCTAssertEqual(row.value as? String, "默认")
+        }
+        // Grid selection updates the draft and the row summary immediately.
+        tap("theme.editor.tab.icon.shelf")
+        let gridIcon = app.buttons["theme.editor.tab.icon.grid.star.fill"]
+        XCTAssertTrue(gridIcon.waitForExistence(timeout: 5)); gridIcon.tap()
+        XCTAssertTrue(gridIcon.isSelected)
+        XCTAssertTrue(app.buttons["theme.editor.tab.icon.import"].exists)
+        backFromIconPicker()
+        XCTAssertEqual(app.buttons["theme.editor.tab.icon.shelf"].value as? String, "自定义")
+        // Re-selecting the same grid icon toggles back to the default.
+        tap("theme.editor.tab.icon.shelf")
+        gridIcon.tap(); XCTAssertFalse(gridIcon.isSelected); backFromIconPicker()
+        XCTAssertEqual(app.buttons["theme.editor.tab.icon.shelf"].value as? String, "默认")
+        tap("theme.editor.tab.icon.profile")
+        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected)
+        // Reset restores the default icon for this tab.
+        tap("theme.editor.tab.icon.reset")
+        XCTAssertFalse(gridIcon.isSelected); backFromIconPicker()
+        XCTAssertEqual(app.buttons["theme.editor.tab.icon.profile"].value as? String, "默认")
+        // Persist one custom SF Symbol icon for the saved theme.
+        tap("theme.editor.tab.icon.shelf")
+        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected); backFromIconPicker()
+        back()
         page("shelf")
         let stepper = app.steppers["theme.editor.shelf.columns"]
         visible(stepper)
@@ -119,7 +159,16 @@ final class ThemeCustomizationTests: XCTestCase {
         visible(width); width.adjust(toNormalizedSliderPosition: 0)
         XCTAssertEqual(width.value as? String, "60 点"); back()
         page("effect"); tap("theme.editor.effect.opaque")
-        XCTAssertTrue(app.buttons["theme.editor.effect.opaque"].isSelected); back()
+        XCTAssertTrue(app.buttons["theme.editor.effect.opaque"].isSelected)
+        let glow = app.sliders["theme.editor.effect.glow"]
+        let opacity = app.sliders["theme.editor.effect.opacity"]
+        visible(glow)
+        XCTAssertEqual(glow.value as? String, "50%")
+        glow.adjust(toNormalizedSliderPosition: 0.75)
+        XCTAssertEqual(glow.value as? String, "75%")
+        opacity.adjust(toNormalizedSliderPosition: 0.6)
+        XCTAssertEqual(opacity.value as? String, "60%")
+        back()
         page("cards")
         let toggle = app.switches["theme.editor.cards.enabled"]
         visible(toggle)
@@ -134,6 +183,9 @@ final class ThemeCustomizationTests: XCTestCase {
         let saved = try stored()
         let config = try XCTUnwrap(saved["customization"] as? [String: Any])
         XCTAssertEqual(config["tabStyle"] as? String, "text")
+        XCTAssertEqual(config["tabIcons"] as? [String: String], ["shelf": "star.fill"])
+        XCTAssertEqual(config["glowIntensity"] as? Double, 0.75, accuracy: 0.01)
+        XCTAssertEqual(config["surfaceOpacity"] as? Double, 0.6, accuracy: 0.01)
         XCTAssertEqual(config["shelfColumns"] as? Int, 2)
         XCTAssertEqual(config["coverWidth"] as? Double, 60)
         XCTAssertEqual(config["effect"] as? String, "opaque")

@@ -4,6 +4,8 @@ enum LibraryTab: Int, CaseIterable {
     case shelf, statistics, profile
     var title: String { switch self { case .shelf: return "书架"; case .statistics: return "统计"; case .profile: return "我的" } }
     var symbol: String { switch self { case .shelf: return "book.fill"; case .statistics: return "chart.bar.fill"; case .profile: return "person.fill" } }
+    /// Customization key for ThemeCustomization.tabIcons.
+    var key: String { switch self { case .shelf: return "shelf"; case .statistics: return "statistics"; case .profile: return "profile" } }
 }
 
 struct LibraryDock: View {
@@ -23,8 +25,8 @@ struct LibraryDock: View {
                         } else {
                             VStack(spacing: 3) {
                                 if style != .text {
-                                    Image(systemName: tab.symbol)
-                                        .font(.system(size: style == .icons ? 29 : 22, weight: .semibold))
+                                    TabIconView(tab: tab, iconOverride: theme.customization?.tabIcons?[tab.key],
+                                                size: style == .icons ? 29 : 22)
                                         .accessibilityHidden(true)
                                 }
                                 if style != .icons {
@@ -50,5 +52,40 @@ struct LibraryDock: View {
         .modifier(ShelfGlass(shape: Capsule()))
         .shadow(color: .black.opacity(0.035), radius: 10, x: 0, y: 4)
         .padding(.horizontal, 28).padding(.top, 6).padding(.bottom, 2)
+    }
+}
+
+/// Custom-theme tab icon: imported image, SF Symbol name, or the default symbol.
+/// Fills at most a square the size of the legacy glyph, so hit targets and layout
+/// match an unstyled dock; decode failures silently fall back to the default.
+private struct TabIconView: View {
+    let tab: LibraryTab
+    let iconOverride: String?
+    let size: CGFloat
+    @StateObject private var imageLoader = ThemeAssetImageLoader()
+
+    private var assetID: String? {
+        guard let iconOverride, ThemeAssetStore.isValidID(iconOverride) else { return nil }
+        return iconOverride
+    }
+    private var symbolName: String {
+        guard let iconOverride, !ThemeAssetStore.isValidID(iconOverride),
+              ThemeAssetStore.isValidSymbolName(iconOverride) else { return tab.symbol }
+        return iconOverride
+    }
+
+    var body: some View {
+        Group {
+            if let image = imageLoader.image, imageLoader.assetID == assetID {
+                Image(uiImage: image).resizable().scaledToFit()
+                    .frame(width: 22, height: 22)
+            } else {
+                Image(systemName: symbolName)
+                    .font(.system(size: size, weight: .semibold))
+            }
+        }
+        .task(id: iconOverride) {
+            await imageLoader.load(assetID)
+        }
     }
 }

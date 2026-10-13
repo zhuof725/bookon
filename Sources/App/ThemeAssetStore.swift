@@ -63,6 +63,22 @@ final class ThemeAssetStore {
         return uuid.uuidString.lowercased() == stem.lowercased()
     }
 
+    /// Bounded plain symbol names only: never a path, URL or control sequence.
+    static func isValidSymbolName(_ name: String) -> Bool {
+        guard !name.isEmpty, name.utf8.count <= 128,
+              !name.unicodeScalars.contains(where: {
+                  CharacterSet.controlCharacters.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0)
+              }),
+              !name.contains("/"), !name.contains("\\"), !name.contains(":") else { return false }
+        return true
+    }
+
+    /// nil when the name fails validation or matches no SF Symbol.
+    func symbolImage(for name: String) -> UIImage? {
+        guard Self.isValidSymbolName(name) else { return nil }
+        return UIImage(systemName: name)
+    }
+
     func importFile(_ url: URL) throws -> String {
         guard url.isFileURL else { throw AssetError.invalidFile }
         let access = url.startAccessingSecurityScopedResource()
