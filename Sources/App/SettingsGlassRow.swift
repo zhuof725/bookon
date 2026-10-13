@@ -7,9 +7,9 @@ struct SettingsGlassSurface: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
         content
-            .appGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous), tint: palette.surface)
+            .appGlass(in: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 24), style: .continuous), tint: palette.surface)
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: palette.cornerRadius(default: 24), style: .continuous)
                     .strokeBorder(.white.opacity(scheme == .dark ? 0.12 : 0.42), lineWidth: 0.5)
                     .allowsHitTesting(false).accessibilityHidden(true)
             }
@@ -46,7 +46,7 @@ struct SettingsGlassLabel: View {
         .padding(.horizontal, 20).padding(.vertical, 14)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
         .modifier(SettingsGlassSurface())
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: 24), style: .continuous))
     }
 }
 

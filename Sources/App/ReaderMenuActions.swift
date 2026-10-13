@@ -95,7 +95,7 @@ struct ReaderChapterSearch: View {
                         Text("找到 \(matches.count) 个相关段落").appFont(.caption).foregroundStyle(palette.secondary)
                     }
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
                 ForEach(matches) { result in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(highlighted(result.text)).textSelection(.enabled)
@@ -106,7 +106,7 @@ struct ReaderChapterSearch: View {
                         }
                     }.padding(.vertical, 4)
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

@@ -26,7 +26,7 @@ struct SearchView: View {
                     if searching { ProgressView() }
                     Text(progress).appFont(.footnote).foregroundStyle(palette.secondary)
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
             }
             ForEach(hits) { h in
                 NavigationLink {
@@ -37,7 +37,7 @@ struct SearchView: View {
                             : "来源：" + h.book.originName)
                 }
             }
-            .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+            .independentGlassRow()
         }
         .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
@@ -288,11 +288,11 @@ struct ReaderView: View {
             NavigationStack {
                 List {
                     Section { BookRow(book: book, subtitle: book.author) }
-                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                        .independentGlassRow()
                     Section("书源") { Text(readerSourceName) }
-                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                        .independentGlassRow()
                     if let intro = book.intro, !intro.isEmpty {
-                        Section("简介") { Text(intro) }.listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                        Section("简介") { Text(intro) }.independentGlassRow()
                     }
                 }
                 .foregroundStyle(palette.primary)
@@ -315,7 +315,7 @@ struct ReaderView: View {
                                     Text(c.title).appFont(.headline)
                                         .foregroundStyle(c.index == index ? palette.accent : palette.secondary)
                                 }
-                                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                                .independentGlassRow()
                             } else {
                                 Button {
                                     showToc = false; go(c.index)
@@ -327,7 +327,7 @@ struct ReaderView: View {
                                 }
                             }
                         }
-                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                        .independentGlassRow()
                         .id(c.index)
                     }
                     .scrollContentBackground(.hidden)
@@ -354,20 +354,23 @@ struct ReaderView: View {
                             .pickerStyle(.segmented)
                         }
                     }
-                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                    .independentGlassRow()
                     ReaderTypographyControls(settings: settings)
-                        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                        .independentGlassRow()
                     Section("背景") {
                         Picker("主题", selection: $settings.theme) {
                             ForEach(0..<ReadSettings.themes.count, id: \.self) { Text(ReadSettings.themes[$0].name).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
-                    .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                    .independentGlassRow()
                 }
                 .foregroundStyle(palette.primary)
                 .scrollContentBackground(.hidden)
                 .background { AppThemeCanvas().ignoresSafeArea() }
+                .safeAreaInset(edge: .top, spacing: 8) {
+                    ReaderAppearancePreview(settings: settings).padding(.horizontal, 16)
+                }
                 .navigationTitle("阅读设置")
                 .navigationBarTitleDisplayMode(.inline)
             }
@@ -379,7 +382,7 @@ struct ReaderView: View {
                 ZStack {
                     Color.clear.contentShape(Rectangle())
                     ProgressView("正在加载章节…")
-                        .padding(18).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(18).modifier(SettingsGlassSurface())
                 }
             }
         }
@@ -392,7 +395,7 @@ struct ReaderView: View {
                         Button("留在本章") { retryTarget = nil; error = nil }
                     }
                 }
-                .padding().frame(maxWidth: .infinity).background(.regularMaterial)
+                .padding().frame(maxWidth: .infinity).modifier(SettingsGlassSurface()).padding(12)
             }
         }
         .sheet(item: $commentURL) { link in CommentSheet(url: link) }

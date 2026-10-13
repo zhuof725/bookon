@@ -158,7 +158,7 @@ struct SourcesView: View {
                 Text("共 \(store.sources.count) 个书源，启用 \(store.sources.filter { $0.isEnabled }.count) 个")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
             }
-            .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+            .independentGlassRow()
             ForEach(store.sources) { s in
                 HStack {
                     VStack(alignment: .leading) {
@@ -178,7 +178,7 @@ struct SourcesView: View {
                 }
             }
             .onDelete { store.deleteSources(at: $0) }
-            .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+            .independentGlassRow()
         }
         .scrollContentBackground(.hidden)
         .background { AppThemeCanvas().ignoresSafeArea() }

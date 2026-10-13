@@ -67,7 +67,7 @@ struct ThemeGalleryView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(24)
-                        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 16))
+                        .modifier(SettingsGlassSurface())
                     } else {
                         LazyVStack(spacing: 12) {
                             ForEach(templates) { template in
@@ -143,7 +143,7 @@ struct ThemeGalleryView: View {
         .padding(.trailing, searchText.isEmpty ? 13 : 0)
         .padding(.vertical, 2)
         .frame(minHeight: 46)
-        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 13))
+        .appGlass(in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(ThemeHubSurface.border, lineWidth: 0.5))
     }
 
@@ -166,7 +166,7 @@ struct ThemeGalleryView: View {
             }
         }
         .padding(3)
-        .background(ThemeHubSurface.control, in: RoundedRectangle(cornerRadius: 12))
+        .appGlass(in: RoundedRectangle(cornerRadius: 20))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("模板分类")
     }

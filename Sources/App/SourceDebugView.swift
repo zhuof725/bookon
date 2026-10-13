@@ -16,11 +16,11 @@ struct SourceDebugView: View {
             VStack(spacing: 12) {
                 Text(source.bookSourceName).appFont(.headline).foregroundStyle(palette.primary).padding(.top)
                 TextField("搜索关键词", text: $keyword)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain).padding(14).modifier(SettingsGlassSurface())
                     .submitLabel(.search)
                     .disabled(running)
                 TextField("可选：书籍详情网址（用来直接查目录）", text: $bookURL)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain).padding(14).modifier(SettingsGlassSurface())
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -44,8 +44,8 @@ struct SourceDebugView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
-                .background(palette.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .modifier(SettingsGlassSurface())
+                .clipShape(RoundedRectangle(cornerRadius: 24))
             }
             .padding(.horizontal)
             .background { AppThemeCanvas().ignoresSafeArea() }

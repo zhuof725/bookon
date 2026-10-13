@@ -47,22 +47,17 @@ struct ThemePaletteEditor: View {
     }
 
     private var colorsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             sectionHeader("颜色", detail: "浅色与深色分别设置")
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
             ThemeAccentSwatches(scheme: previewScheme, selectedHex: colors.accent) {
                 update(.accent, hex: $0)
             }
             .padding(.horizontal, 8).padding(.bottom, 8)
-            Divider().padding(.horizontal, 16)
             ForEach(colorFields, id: \.rawValue) { field in
-                colorRow(field)
-                if field.rawValue != colorFields.last?.rawValue {
-                    Divider().padding(.leading, 16)
-                }
+                colorRow(field).modifier(SettingsGlassSurface())
             }
         }
-        .appGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: surface)
     }
 
     private var backgroundSection: some View {

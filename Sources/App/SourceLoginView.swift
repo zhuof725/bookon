@@ -68,7 +68,7 @@ struct SourceLoginView: View {
                         Section("结果") { Text(message).appFont(.footnote).textSelection(.enabled) }
                     }
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

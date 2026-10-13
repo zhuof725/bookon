@@ -47,7 +47,7 @@ struct BookSearchHistorySection: View {
                 }
             }
         }
-        .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+        .independentGlassRow()
         .confirmationDialog("清空搜索历史？", isPresented: $confirmingClear, titleVisibility: .visible) {
             Button("清空全部记录", role: .destructive) { history.clear() }
                 .accessibilityIdentifier("searchHistory.confirmClear")

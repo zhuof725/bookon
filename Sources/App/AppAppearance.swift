@@ -267,6 +267,7 @@ struct AppAppearanceSettingsView: View {
             value().fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(14).modifier(SettingsGlassSurface())
     }
 
     private func settingLabel(title: String, symbol: String, value: String, chevron: Bool) -> some View {
@@ -285,6 +286,8 @@ struct AppAppearanceSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .modifier(SettingsGlassSurface())
         .contentShape(Rectangle())
     }
 

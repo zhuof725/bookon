@@ -41,7 +41,11 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--appearance-fix-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--live-appearance-mode") {
+                    LiveAppearanceHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--independent-rows-mode") {
+                    IndependentRowsHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--appearance-fix-mode") {
                     AppearanceFixHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--settings-glass-mode") {
                     SettingsGlassHarness()

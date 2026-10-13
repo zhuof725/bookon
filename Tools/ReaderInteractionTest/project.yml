@@ -17,6 +17,9 @@ targets:
       - path: NativeTabsGlassHarness.swift
       - path: SettingsGlassHarness.swift
       - path: AppearanceFixHarness.swift
+      - path: LiveAppearanceHarness.swift
+      - path: ../../Sources/App/ThemeSettingPreview.swift
+      - path: ../../Sources/App/ReaderAppearancePreview.swift
       - path: ../../Sources/App/ThemeIconTransparency.swift
       - path: ../../Sources/App/SettingsGlassRow.swift
       - path: ../../Sources/App/LibraryNativeTabs.swift

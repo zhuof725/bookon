@@ -115,14 +115,11 @@ struct FontManagerView: View {
     private var builtInSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("设备字体", detail: "仅显示本机可用字体")
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 ForEach(manager.builtInFonts) { choice in
                     choiceRow(choice)
-                    if choice.id != manager.builtInFonts.last?.id { Divider().padding(.horizontal, 16) }
                 }
             }
-            .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 20)))
-            .clipShape(RoundedRectangle(cornerRadius: 20))
             .disabled(isImporting)
         }
     }
@@ -181,7 +178,8 @@ struct FontManagerView: View {
                     .appFont(.caption2).foregroundStyle(palette.secondary)
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? palette.selection.opacity(0.55) : Color.clear)
+            .modifier(SettingsGlassSurface())
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(selected ? palette.accent : .clear, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -192,7 +190,7 @@ struct FontManagerView: View {
     }
 
     private func fileCard(_ file: ImportedReadingFont) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(file.originalName).appFont(.subheadline.weight(.semibold))
@@ -212,7 +210,7 @@ struct FontManagerView: View {
                 .accessibilityLabel("移除字体文件：" + file.originalName)
                 .accessibilityIdentifier("fonts.delete." + file.id)
             }.padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
-            Divider().padding(.horizontal, 16)
+            .modifier(SettingsGlassSurface())
             if file.faces.isEmpty {
                 Text("文件缺失或无法加载。可移除后重新导入。")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
@@ -220,12 +218,9 @@ struct FontManagerView: View {
             } else {
                 ForEach(file.faces) { choice in
                     choiceRow(choice)
-                    if choice.id != file.faces.last?.id { Divider().padding(.horizontal, 16) }
                 }
             }
         }
-        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 20)))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
         .disabled(isImporting)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("fonts.file." + file.id)

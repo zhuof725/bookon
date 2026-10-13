@@ -246,17 +246,15 @@ struct ThemeEditorFontChoices: View {
             Text("仅影响应用界面，不改变阅读字体或分页。以下选择会随主题保存。")
                 .appFont(.footnote).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 row("跟随全局字体", detail: "当前：\(manager.selectedDisplayName)", value: nil,
                     id: "theme.editor.font.follow")
-                Divider()
                 row("系统默认", detail: nil, value: "", id: "theme.editor.font.system")
                 ForEach(ThemeEditorFonts.choices(manager)) { choice in
-                    Divider()
                     row(choice.name, detail: ThemeEditorFonts.isAvailable(choice.id, manager: manager) ? nil : "字体不可用",
                         value: choice.id, id: "theme.editor.font.\(choice.id)")
                 }
-            }.padding(.horizontal, 16).themeEditorSurface()
+            }
             if let selection, !ThemeEditorFonts.isAvailable(selection, manager: manager) {
                 Label("已选字体不可用，暂以系统字体显示；可选择其他字体。", systemImage: "exclamationmark.circle")
                     .appFont(.footnote).foregroundStyle(.secondary)
@@ -282,7 +280,7 @@ struct ThemeEditorFontChoices: View {
                 Spacer(minLength: 6)
                 if selection == value { Image(systemName: "checkmark").accessibilityHidden(true) }
             }
-            .padding(.vertical, 8).frame(minHeight: 48).contentShape(Rectangle())
+            .padding(16).frame(minHeight: 48).modifier(SettingsGlassSurface()).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(value.map { !ThemeEditorFonts.isAvailable($0, manager: manager) } ?? false)

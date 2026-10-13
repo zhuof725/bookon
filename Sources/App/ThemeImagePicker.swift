@@ -72,7 +72,7 @@ enum ThemeEditorImageKind: String, Identifiable {
     var detail: String {
         switch self {
         case .cover: return "仅用于没有可用封面的书籍，不替换书籍已有封面。预览显示所选原图，书架会按封面比例裁切。"
-        case .launch: return "这是应用打开后的启动展示层，并非 iOS 系统启动屏。应用主题后，下次打开时显示，且始终可以跳过。移除图片即可关闭。"
+        case .launch: return "这是应用打开后的启动展示层，并非 iOS 系统启动屏。应用主题后，下次启动显示约 1.2 秒后自动结束，没有跳过按钮。移除图片即可关闭。"
         case .background: return "应用页面使用所选图片，文字区域仍保留可读底色。移除图片后，恢复下方设置的纯色或渐变。阅读纸张不受影响。"
         }
     }

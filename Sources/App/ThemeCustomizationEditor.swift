@@ -34,7 +34,7 @@ struct ThemeEditorView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
             Form {
                 Section {
                     TextField("主题名称", text: $draft.name)
@@ -330,6 +330,9 @@ struct ThemeCustomizationEditor: View {
             .padding(18).frame(maxWidth: 640).frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ThemeSettingPreview(theme: draft, scheme: previewScheme, destination: destination)
+        }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(destination.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -354,51 +357,44 @@ struct ThemeCustomizationEditor: View {
         case .colors:
             ThemePaletteEditor(draft: $draft, previewScheme: $previewScheme, page: .colors)
             ThemeEditorFontChoices(selection: $draft.themeSetting(\.fontPostScriptName))
-            ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         case .background:
             imagePage(.background)
             ThemePaletteEditor(draft: $draft, previewScheme: $previewScheme, page: .background)
-            ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         case .effect: effectPage
         case .cards:
             Toggle("显示卡片背景", isOn: $draft.themeSetting(\.cardBackground))
                 .appFont(.body).accessibilityIdentifier("theme.editor.cards.enabled")
             note("关闭后，卡片内容直接显示在页面背景上；圆角和边框设置会保留。")
             ThemePaletteEditor(draft: $draft, previewScheme: $previewScheme, page: .cards)
-            ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
     }
     private var tabPage: some View {
         VStack(alignment: .leading, spacing: 18) {
             note("iOS 26 使用系统原生底栏，保留自定义图标；标签文字、布局和玻璃外观由系统管理。下方显示方式用于旧版 iOS 的自定义底栏。")
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 choice(ThemeTabStyle.iconsAndText.title, selected: draft.customization?.tabStyle == .iconsAndText,
                        id: "theme.editor.tab.iconsAndText") { $draft.themeSetting(\.tabStyle).wrappedValue = .iconsAndText }
-                Divider()
                 choice(ThemeTabStyle.icons.title, selected: (draft.customization?.tabStyle ?? .icons) == .icons,
                        id: "theme.editor.tab.icons") { $draft.themeSetting(\.tabStyle).wrappedValue = .icons }
-                Divider()
                 choice(ThemeTabStyle.text.title, selected: draft.customization?.tabStyle == .text,
                        id: "theme.editor.tab.text") { $draft.themeSetting(\.tabStyle).wrappedValue = .text }
-            }.padding(.horizontal, 16).themeEditorSurface()
+            }
             if draft.customization == nil {
                 note("自定义每个标签的图标前，请先选择上方任一显示方式。")
             } else {
                 tabIconSection
             }
-            ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
     }
     private var tabIconSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("自定义标签图标").appFont(.headline)
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 ForEach(LibraryTab.allCases, id: \.rawValue) { tab in
-                    if tab != LibraryTab.allCases.first { Divider() }
                     tabIconRow(tab)
                 }
-            }.padding(.horizontal, 16).themeEditorSurface()
-            note("每个标签可使用内置图标或导入的自定义图片；图片不超过 20 MB，导入时压缩至最长边 2000 像素。恢复默认后使用应用原有图标。")
+            }
+            note("每个标签可导入自定义 PNG 图标；图片不超过 20 MB，最长边 2000 像素。恢复默认后使用应用原有图标。")
         }
     }
     private func tabIconRow(_ tab: LibraryTab) -> some View {
@@ -414,7 +410,8 @@ struct ThemeCustomizationEditor: View {
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
             }
-            .frame(minHeight: 52).contentShape(Rectangle())
+            .frame(minHeight: 52).padding(.horizontal, 16)
+            .modifier(SettingsGlassSurface()).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(tab.title)图标")
@@ -427,7 +424,6 @@ struct ThemeCustomizationEditor: View {
                 Stepper(value: $draft.themeSetting(\.shelfColumns), in: 2...5) {
                     Text("每行 \(settings.shelfColumns) 列").appFont(.body)
                 }.accessibilityIdentifier("theme.editor.shelf.columns")
-                Divider()
                 Text("封面宽度 · \(Int(settings.coverWidth.rounded())) pt").appFont(.body)
                 Slider(value: $draft.themeSetting(\.coverWidth), in: 60...180, step: 1)
                     .accessibilityLabel("封面宽度")
@@ -442,20 +438,17 @@ struct ThemeCustomizationEditor: View {
     }
     private var effectPage: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 choice(ThemeInterfaceEffect.transparent.title, selected: settings.effect == .transparent,
                        id: "theme.editor.effect.transparent") { $draft.themeSetting(\.effect).wrappedValue = .transparent }
-                Divider()
                 choice(ThemeInterfaceEffect.frosted.title, selected: settings.effect == .frosted,
                        id: "theme.editor.effect.frosted") { $draft.themeSetting(\.effect).wrappedValue = .frosted }
-                Divider()
                 choice(ThemeInterfaceEffect.opaque.title, selected: settings.effect == .opaque,
                        id: "theme.editor.effect.opaque") { $draft.themeSetting(\.effect).wrappedValue = .opaque }
-            }.padding(.horizontal, 16).themeEditorSurface()
+            }
             note("此选项控制内容卡片：透明保留背景，玻璃柔化背景，不透明使用卡片底色。按钮、搜索框和浮动菜单统一使用玻璃；iOS 26 使用原生 Liquid Glass。开启系统降低透明度时使用实色。")
             effectSliderSection
             note("光晕用于透明和毛玻璃效果；透明度越高，毛玻璃底色越淡。系统材质会自适应明暗，滑条调节叠加底色，不会移除模糊；系统开启降低透明度时改用实色。不透明效果不使用这两个数值；取消编辑不会应用。")
-            ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
     }
     private var effectSliderSection: some View {
@@ -495,7 +488,8 @@ struct ThemeCustomizationEditor: View {
                 Text(title).appFont(.body).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
-            }.frame(minHeight: 52).contentShape(Rectangle())
+            }.frame(minHeight: 52).padding(.horizontal, 16)
+                .modifier(SettingsGlassSurface()).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityIdentifier(id)
     }

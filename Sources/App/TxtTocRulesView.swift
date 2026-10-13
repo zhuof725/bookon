@@ -30,7 +30,7 @@ struct TxtTocRulesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("规则列表").appFont(.title2.bold()).padding(.horizontal, 18)
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(TxtTocRule.builtIns + custom) { rule in
                             if rule.isBuiltIn {
                                 ruleContent(rule)
@@ -44,7 +44,6 @@ struct TxtTocRulesView: View {
                                         Button("删除", role: .destructive) { deleting = rule }
                                     }
                             }
-                            Divider().overlay(palette.background)
                         }
                         Button {
                             editing = TxtTocRule(id: UUID().uuidString, name: "", pattern: "", isBuiltIn: false)
@@ -52,8 +51,8 @@ struct TxtTocRulesView: View {
                             Label("添加自定义规则", systemImage: "plus.circle")
                                 .appFont(.system(size: 20)).padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }.buttonStyle(.plain).accessibilityIdentifier("tocRules.add")
-                    }.appGlass(in: RoundedRectangle(cornerRadius: 25), tint: palette.surface)
+                        }.buttonStyle(.plain).modifier(SettingsGlassSurface()).accessibilityIdentifier("tocRules.add")
+                    }
                     Text("适用于新导入的 TXT 文件，内置与自定义规则共同识别标题。已有目录不自动重建，EPUB 和书源目录不受影响。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                 }.padding(.horizontal, 18).padding(.bottom, 28)
@@ -106,6 +105,7 @@ struct TxtTocRulesView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }.padding(.horizontal, 18).padding(.vertical, rule.isBuiltIn ? 10 : 18)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(SettingsGlassSurface())
             .contentShape(Rectangle())
     }
 
@@ -166,7 +166,7 @@ private struct TxtTocRuleEditor: View {
                     }
                     if let savingError { Text(savingError).foregroundStyle(.red) }
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

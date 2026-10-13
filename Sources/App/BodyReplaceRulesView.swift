@@ -32,11 +32,12 @@ struct BodyReplaceRulesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("规则列表 · \(rules.count)/50").appFont(.title2.bold()).padding(.horizontal, 18)
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         if rules.isEmpty {
                             Text("还没有正文替换规则\n添加规则可清理阅读正文中的指定文字。")
                                 .foregroundStyle(palette.secondary).padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .modifier(SettingsGlassSurface())
                                 .accessibilityIdentifier("bodyRules.empty")
                         }
                         ForEach(rules) { rule in
@@ -57,20 +58,19 @@ struct BodyReplaceRulesView: View {
                                         updated[index].enabled = enabled; error = persist(updated)
                                     }
                                 })).labelsHidden().accessibilityIdentifier("bodyRules.enabled." + rule.id)
-                            }.padding(18)
+                            }.padding(18).modifier(SettingsGlassSurface())
                             .contextMenu {
                                 Button("编辑") { editing = rule }
                                 Button("删除", role: .destructive) { deleting = rule }
                             }
-                            Divider().overlay(palette.background)
                         }
                         Button {
                             editing = BodyReplaceRule(id: UUID().uuidString, name: "", pattern: "", replacement: "", isRegex: false, enabled: true)
                         } label: {
                             Label("添加替换规则", systemImage: "plus.circle").appFont(.system(size: 20))
                                 .padding(18).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }.buttonStyle(.plain).disabled(rules.count >= 50).accessibilityIdentifier("bodyRules.add")
-                    }.appGlass(in: RoundedRectangle(cornerRadius: 25), tint: palette.surface)
+                        }.buttonStyle(.plain).modifier(SettingsGlassSurface()).disabled(rules.count >= 50).accessibilityIdentifier("bodyRules.add")
+                    }
                     Text("按列表顺序执行已启用规则，仅改变阅读正文的显示，不修改原文、缓存或标题，也不处理图片或链接。保存后请退出并重新进入阅读器，新阅读会话才会使用新规则。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                     Text("每个段落单独匹配，正则表达式不能跨段。替换内容留空表示删除匹配文字；超时或超出长度限制时，该条规则保持处理前的段落。")
@@ -174,7 +174,7 @@ private struct BodyReplaceRuleEditor: View {
                     }
                     if let savingError { Text(savingError).foregroundStyle(.red) }
                 }
-                .listRowBackground(ThemeSurface(shape: RoundedRectangle(cornerRadius: 12)))
+                .independentGlassRow()
             }
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)

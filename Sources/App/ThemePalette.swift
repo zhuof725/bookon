@@ -201,7 +201,21 @@ struct AppGlassModifier<S: InsettableShape>: ViewModifier {
     }
 }
 
+struct IndependentGlassListRow: ViewModifier {
+    @ThemePalette private var palette
+    func body(content: Content) -> some View {
+        content
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 18))
+            .listRowBackground(
+                ThemeSurface(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 20)))
+                    .padding(.vertical, 4)
+            )
+    }
+}
+
 extension View {
+    func independentGlassRow() -> some View { modifier(IndependentGlassListRow()) }
     func appGlass<S: InsettableShape>(in shape: S, tint: Color = Color(uiColor: .secondarySystemBackground)) -> some View {
         modifier(AppGlassModifier(shape: shape, tint: tint))
     }

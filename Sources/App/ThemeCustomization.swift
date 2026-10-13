@@ -44,20 +44,18 @@ struct ThemeLaunchOverlay: View {
                     .frame(width: geometry.size.width, height: geometry.size.height)
             }
             .ignoresSafeArea().accessibilityHidden(true)
-            Button("跳过", action: onDismiss)
-                .appFont(.body.weight(.semibold))
-                .foregroundStyle(Color.black)
-                .padding(.horizontal, 20).frame(minHeight: 44)
-                .background(Color.white, in: Capsule())
-                .padding(20)
-                .accessibilityLabel("跳过启动图片")
-                .accessibilityIdentifier("theme.launch.skip")
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityAction(.escape, onDismiss)
         .accessibilityIdentifier("theme.launch.overlay")
+        .task {
+            do { try await Task.sleep(nanoseconds: 1_200_000_000) }
+            catch { return }
+            onDismiss()
+        }
     }
 }
 
@@ -83,12 +81,7 @@ struct ThemeLaunchHost: ViewModifier {
                 await imageLoader.load(id)
                 guard !Task.isCancelled, imageLoader.image != nil else { return }
                 presented = true
-                // No forced delay: Skip works immediately. VoiceOver gets time to
-                // reach Skip instead of having focus disappear under it.
-                guard !UIAccessibility.isVoiceOverRunning else { return }
-                do { try await Task.sleep(nanoseconds: 1_200_000_000) }
-                catch { presented = false; return }
-                presented = false
+                // Overlay owns the same automatic dismissal in production and preview.
             }
     }
 }
