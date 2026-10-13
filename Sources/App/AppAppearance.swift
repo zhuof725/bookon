@@ -1,16 +1,12 @@
 import SwiftUI
 
-/// The appearance mode of the app-owned interface. Reader paper themes remain
-/// a separate preference because they are part of reading layout and content.
+/// App-owned appearance, independent from reader paper preferences.
 enum AppAppearance: Int, CaseIterable, Identifiable {
     case system = 0
     case light = 1
     case dark = 2
-
     static let storageKey = "app.appearance.v1"
-
     var id: Int { rawValue }
-
     var title: String {
         switch self {
         case .system: return "跟随系统"
@@ -18,7 +14,6 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
         case .dark: return "深色"
         }
     }
-
     var detail: String {
         switch self {
         case .system: return "根据系统外观自动切换"
@@ -26,7 +21,6 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
         case .dark: return "始终使用深色界面"
         }
     }
-
     var symbol: String {
         switch self {
         case .system: return "circle.lefthalf.filled"
@@ -34,7 +28,6 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
         case .dark: return "moon.fill"
         }
     }
-
     var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
@@ -44,26 +37,24 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
     }
 }
 
-/// The appearance entry point combines the saved theme selection with the
-/// system/light/dark mode preference. Browsing a card never changes selection;
-/// the explicit “使用主题” action does that.
+/// Palette grid first, then quiet setting rows. This is a presentation change:
+/// storage, templates, editing and explicit application remain unchanged.
 struct AppAppearanceSettingsView: View {
     @ObservedObject private var store: AppThemeStore
     @AppStorage(AppAppearance.storageKey) private var rawAppearance = AppAppearance.system.rawValue
-
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var searchFocused: Bool
     @State private var browsedID: String?
     @State private var showingTemplateGallery = false
     @State private var pendingDraft: AppTheme?
     @State private var editorTheme: AppTheme?
     @State private var pendingDelete: AppTheme?
     @State private var notice: String?
+    @State private var showingSearch = false
     @State private var searchText = ""
     @State private var themeFilter: ThemeFilter = .all
-    @State private var revealBrowsedTheme = 0
-    @FocusState private var searchFocused: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var revealEditor = 0
 
     private enum ThemeFilter: String, CaseIterable, Identifiable {
         case all, builtin, custom
@@ -87,22 +78,10 @@ struct AppAppearanceSettingsView: View {
     init(store: AppThemeStore = .shared) {
         _store = ObservedObject(wrappedValue: store)
     }
-
-    private var appearance: AppAppearance {
-        AppAppearance(rawValue: rawAppearance) ?? .system
+    private var appearance: AppAppearance { AppAppearance(rawValue: rawAppearance) ?? .system }
+    private var browsedTheme: AppTheme {
+        store.themes.first { $0.id == browsedID } ?? store.selectedTheme
     }
-
-    private var browsedTheme: AppTheme? {
-        if let browsedID,
-           let theme = store.themes.first(where: { $0.id == browsedID }) {
-            return theme
-        }
-        if let theme = store.themes.first(where: { $0.id == store.selectedID }) {
-            return theme
-        }
-        return store.themes.first
-    }
-
     private var filteredThemes: [AppTheme] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return store.themes.filter {
@@ -113,43 +92,59 @@ struct AppAppearanceSettingsView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    modeSection.id("theme.hub.top")
-                    browsedThemeActions
+                VStack(alignment: .leading, spacing: 32) {
+                    paletteSection.id("theme.hub.top")
+                    modeSection
+                    interfaceSection.id("theme.hub.editor")
                     if let message = notice ?? store.notice {
-                        Text(message)
-                            .appFont(.footnote)
-                            .foregroundStyle(.secondary)
+                        Text(message).appFont(.footnote).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 4)
+                            .accessibilityIdentifier("theme.notice")
                     }
-                    themeGallerySection
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 28)
+                .padding(.horizontal, 28)
+                .padding(.top, 28)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: revealBrowsedTheme) { _ in
+            .onChange(of: revealEditor) { _ in
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                    proxy.scrollTo("theme.hub.top", anchor: .top)
+                    proxy.scrollTo("theme.hub.editor", anchor: .center)
+                }
+            }
+            .onChange(of: showingSearch) { expanded in
+                if expanded {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                        proxy.scrollTo("theme.hub.top", anchor: .top)
+                    }
                 }
             }
         }
         .foregroundStyle(.primary)
-        .tint(.primary)
-        .background(ThemeHubSurface.canvas.ignoresSafeArea())
+        .tint(Color.primary)
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .navigationTitle("外观主题")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    searchFocused = false
+                    showingSearch.toggle()
+                    if !showingSearch { searchText = ""; themeFilter = .all }
+                } label: {
+                    Image(systemName: showingSearch ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 16, weight: .regular))
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(showingSearch ? "收起搜索与筛选" : "搜索与筛选主题")
+                .accessibilityIdentifier("theme.search.toggle")
+            }
+        }
         .modifier(AppTypographyRoot())
-        // Browsing never changes the saved environment or navigation identity.
         .environment(\.appTheme, store.selectedTheme)
         .onAppear { normalizeBrowsedTheme() }
-        .onChange(of: store.selectedID) { _ in
-            if browsedID == nil { normalizeBrowsedTheme() }
-        }
         .onChange(of: store.customThemes) { _ in normalizeBrowsedTheme() }
         .fullScreenCover(isPresented: $showingTemplateGallery, onDismiss: {
             if let pendingDraft {
@@ -157,368 +152,207 @@ struct AppAppearanceSettingsView: View {
                 self.pendingDraft = nil
             }
         }) {
-            ThemeGalleryView(
-                onCancel: {
-                    pendingDraft = nil
-                    showingTemplateGallery = false
-                },
-                onSelect: { draft in
-                    pendingDraft = draft
-                    showingTemplateGallery = false
-                }
-            )
+            ThemeGalleryView(onCancel: {
+                pendingDraft = nil; showingTemplateGallery = false
+            }, onSelect: { draft in
+                pendingDraft = draft; showingTemplateGallery = false
+            })
         }
         .fullScreenCover(item: $editorTheme) { theme in
-            ThemeEditorView(
-                theme: theme,
-                store: store,
-                onCancel: { editorTheme = nil },
-                onSaved: {
-                    editorTheme = nil
-                    browsedID = theme.id
-                    searchText = ""
-                    themeFilter = .all
-                    revealBrowsedTheme += 1
-                    notice = "主题已保存"
-                }
-            )
+            ThemeEditorView(theme: theme, store: store, onCancel: { editorTheme = nil }, onSaved: {
+                editorTheme = nil
+                browsedID = theme.id
+                searchText = ""; themeFilter = .all; showingSearch = false
+                notice = "主题已保存"
+                revealEditor += 1
+            })
         }
         .alert("删除主题？", isPresented: Binding(
             get: { pendingDelete != nil },
             set: { if !$0 { pendingDelete = nil } }
         ), presenting: pendingDelete) { theme in
             Button("取消", role: .cancel) { pendingDelete = nil }
-                .appFont(.body)
             Button("删除", role: .destructive) {
-                delete(theme)
-                pendingDelete = nil
-            }
-            .appFont(.body)
-            .accessibilityIdentifier("theme.delete.confirm")
+                delete(theme); pendingDelete = nil
+            }.accessibilityIdentifier("theme.delete.confirm")
         } message: { theme in
             Text("“\(theme.name)”将从本机移除。")
-                .appFont(.body)
         }
     }
 
-    private var themeGallerySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text("我的主题")
-                    .appFont(.headline)
-                Text("\(store.themes.count)")
-                    .appFont(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                Button {
-                    searchFocused = false
-                    pendingDraft = nil
-                    showingTemplateGallery = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .background(ThemeHubSurface.card, in: Circle())
-                        .overlay(Circle().strokeBorder(ThemeHubSurface.border, lineWidth: 0.5))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("添加主题")
-                .accessibilityIdentifier("theme.add")
+    private var paletteSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if showingSearch {
+                searchField
+                filterPicker
             }
-            searchField
-            filterPicker
+            // No artificial eight-item cap: every saved custom theme stays reachable.
+            ThemeHomeGrid(themes: filteredThemes, selectedID: store.selectedID,
+                          browsedID: browsedTheme.id, onBrowse: { theme in
+                searchFocused = false
+                browsedID = theme.id
+            }, onCreate: {
+                searchFocused = false; pendingDraft = nil; showingTemplateGallery = true
+            })
             if filteredThemes.isEmpty {
-                emptyGallery
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(filteredThemes) { theme in
-                        Button { browse(theme) } label: {
-                            ThemeSplitPreview(theme: theme, isSelected: theme.id == store.selectedID)
-                                .overlay(alignment: .topLeading) {
-                                    if theme.id == browsedTheme?.id {
-                                        Text("浏览中")
-                                            .appFont(.caption2.weight(.medium))
-                                            .foregroundStyle(.primary)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(ThemeHubSurface.card, in: Capsule())
-                                            .padding(9)
-                                            .accessibilityHidden(true)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(theme.name)，\(theme.isBuiltIn ? "内置" : "自创")主题")
-                        .accessibilityValue(browseStatus(for: theme))
-                        .accessibilityHint("查看此主题的操作，不会立即应用")
-                        .accessibilityAddTraits(theme.id == store.selectedID ? .isSelected : [])
-                        .accessibilityIdentifier("theme.browse.\(theme.id)")
-                    }
-                }
+                Text(searchText.isEmpty ? "暂无此类主题，点按新建开始。" : "没有匹配的主题，请调整搜索或筛选。")
+                    .appFont(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField("搜索 \(store.themes.count) 个主题", text: $searchText)
-                .appFont(.subheadline)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
-                .submitLabel(.search)
-                .focused($searchFocused)
-                .onSubmit { searchFocused = false }
-                .accessibilityLabel("搜索主题")
-                .accessibilityIdentifier("theme.search")
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("清除搜索")
-            }
-        }
-        .padding(.leading, 13)
-        .padding(.trailing, searchText.isEmpty ? 13 : 0)
-        .padding(.vertical, 2)
-        .frame(minHeight: 46)
-        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(ThemeHubSurface.border, lineWidth: 0.5))
-    }
-
-    private var filterPicker: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 3))
-        return layout {
-            ForEach(ThemeFilter.allCases) { filter in
-                Button { themeFilter = filter } label: {
-                    Text(filter.title)
-                        .appFont(.subheadline.weight(themeFilter == filter ? .semibold : .regular))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(themeFilter == filter ? ThemeHubSurface.card : .clear,
-                                    in: RoundedRectangle(cornerRadius: 9))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("theme.filter.\(filter.rawValue)")
-                .accessibilityAddTraits(themeFilter == filter ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(ThemeHubSurface.control, in: RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("主题筛选")
-    }
-
-    private var emptyGallery: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "rectangle.stack")
-                .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(searchText.isEmpty ? "暂无\(themeFilter == .custom ? "自创" : "可用")主题" : "没有找到匹配的主题")
-                .appFont(.headline)
-            Text(searchText.isEmpty ? "点按加号，从内置模板创建主题。" : "试试其他名称，或调整筛选条件。")
-                .appFont(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private func browseStatus(for theme: AppTheme) -> String {
-        let active = theme.id == store.selectedID
-        let browsed = theme.id == browsedTheme?.id
-        if active { return browsed ? "当前使用，正在浏览" : "当前使用" }
-        return browsed ? "正在浏览，尚未使用" : "尚未使用"
-    }
-
-    private func browse(_ theme: AppTheme) {
-        searchFocused = false
-        browsedID = theme.id
-        revealBrowsedTheme += 1
-    }
-
-    @ViewBuilder
-    private var browsedThemeActions: some View {
-        if let theme = browsedTheme {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(theme.id == store.selectedID ? "正在使用" : "正在浏览 · 尚未使用")
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(theme.name)
-                            .appFont(.headline)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("theme.gallery.name")
-                        ThemeSwatchStrip(theme: theme)
-                            .padding(.top, 2)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if !theme.isBuiltIn {
-                        Button(role: .destructive) {
-                            searchFocused = false
-                            pendingDelete = theme
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(.red)
-                                .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("删除主题")
-                        .accessibilityIdentifier("theme.delete")
-                    }
-                }
-                themeActions(for: theme)
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11, weight: .medium))
-                        .accessibilityHidden(true)
-                    Text("当前使用")
-                        .appFont(.caption)
-                    Text(store.selectedTheme.name)
-                        .appFont(.caption.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("theme.gallery.selected")
-                }
-                .foregroundStyle(.secondary)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(ThemeHubSurface.border, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.025), radius: 6, x: 0, y: 2)
-        }
-    }
-
-    private func themeActions(for theme: AppTheme) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-        return layout {
-            Button { customizeBrowsedTheme() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .medium))
-                    Text("自定")
-                        .appFont(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(ThemeHubSurface.control, in: RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(theme.isBuiltIn ? "从此主题创建副本" : "编辑此自创主题")
-            .accessibilityIdentifier("theme.customize")
-            Button { apply(theme) } label: {
-                HStack(spacing: 6) {
-                    if theme.id == store.selectedID {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    Text(theme.id == store.selectedID ? "正在使用" : "使用主题")
-                        .appFont(.subheadline.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 8)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .foregroundStyle(ThemeHubSurface.card)
-                .background(Color.primary, in: RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .disabled(theme.id == store.selectedID)
-            .accessibilityIdentifier("theme.use")
         }
     }
 
     private var modeSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            modePicker
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("应用外观")
-                    .appFont(.caption)
-                Text(appearance.title)
-                    .appFont(.caption.weight(.medium))
+        VStack(alignment: .leading, spacing: 18) {
+            Text("主题切换").appFont(.title3.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            valueRow(title: "应用外观") {
+                Text(appearance.title).appFont(.body)
                     .accessibilityIdentifier("appearance.current.value")
             }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
+            layout {
+                ForEach(AppAppearance.allCases) { mode in
+                    Button { rawAppearance = mode.rawValue } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: mode.symbol).font(.system(size: 13))
+                            Text(mode == .system ? "系统" : mode.title)
+                                .appFont(.subheadline.weight(mode == appearance ? .semibold : .regular))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(mode == appearance ? Color(uiColor: .secondarySystemGroupedBackground) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(mode.title)
+                    .accessibilityHint(mode.detail)
+                    .accessibilityIdentifier("appearance.theme.\(mode.rawValue)")
+                    .accessibilityAddTraits(mode == appearance ? .isSelected : [])
+                }
+            }
+            .padding(3)
+            .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
+            valueRow(title: "当前主题") {
+                Text(store.selectedTheme.name).appFont(.body)
+                    .accessibilityIdentifier("theme.gallery.selected")
+            }
         }
     }
 
-    private var modePicker: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 3))
-        return layout {
-            ForEach(AppAppearance.allCases) { mode in
-                Button { rawAppearance = mode.rawValue } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: mode.symbol)
-                            .font(.system(size: 13, weight: .medium))
-                            .accessibilityHidden(true)
-                        Text(mode == .system ? "系统" : mode.title)
-                            .appFont(.subheadline.weight(mode == appearance ? .semibold : .regular))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(mode == appearance ? ThemeHubSurface.card : .clear,
-                                in: RoundedRectangle(cornerRadius: 9))
+    private var interfaceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("界面").appFont(.title3.weight(.semibold))
+                .padding(.bottom, 10).accessibilityAddTraits(.isHeader)
+            valueRow(title: "配色方案") {
+                Text(browsedTheme.name).appFont(.body)
+                    .accessibilityIdentifier("theme.gallery.name")
+            }
+            Button { customizeBrowsedTheme() } label: {
+                settingLabel(title: "颜色与样式", symbol: "paintpalette",
+                             value: browsedTheme.isBuiltIn ? "创建副本" : "编辑", chevron: true)
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("theme.customize")
+            Button { apply(browsedTheme) } label: {
+                settingLabel(title: browsedTheme.id == store.selectedID ? "正在使用" : "使用主题",
+                             symbol: "checkmark.circle", value: "", chevron: false)
+            }
+            .buttonStyle(.plain)
+            .disabled(browsedTheme.id == store.selectedID)
+            .accessibilityIdentifier("theme.use")
+            if !browsedTheme.isBuiltIn {
+                Button(role: .destructive) { pendingDelete = browsedTheme } label: {
+                    settingLabel(title: "删除主题", symbol: "trash", value: "", chevron: false)
+                        .foregroundStyle(.red)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(mode.title)
-                .accessibilityHint(mode.detail)
-                .accessibilityIdentifier("appearance.theme.\(mode.rawValue)")
-                .accessibilityAddTraits(mode == appearance ? .isSelected : [])
+                .buttonStyle(.plain).accessibilityIdentifier("theme.delete")
             }
         }
-        .padding(3)
-        .background(ThemeHubSurface.control, in: RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("应用外观")
+    }
+
+    private func valueRow<Value: View>(title: String, @ViewBuilder value: () -> Value) -> some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        return layout {
+            Text(title).appFont(.body)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
+            value().fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    }
+
+    private func settingLabel(title: String, symbol: String, value: String, chevron: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 23, weight: .regular))
+                .frame(width: 28).accessibilityHidden(true)
+            Text(title).appFont(.body).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if !value.isEmpty {
+                Text(value).appFont(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if chevron {
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary).accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("搜索 \(store.themes.count) 个主题", text: $searchText)
+                .appFont(.subheadline).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .focused($searchFocused).submitLabel(.search).onSubmit { searchFocused = false }
+                .accessibilityLabel("搜索主题").accessibilityIdentifier("theme.search")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain).accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.leading, 13).padding(.trailing, searchText.isEmpty ? 13 : 0)
+        .frame(minHeight: 46)
+        .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
+    }
+
+    private var filterPicker: some View {
+        HStack(spacing: 5) {
+            ForEach(ThemeFilter.allCases) { filter in
+                Button { themeFilter = filter } label: {
+                    Text(filter.title).appFont(.subheadline)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(themeFilter == filter ? Color(uiColor: .tertiarySystemFill) : .clear, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(themeFilter == filter ? .isSelected : [])
+                .accessibilityIdentifier("theme.filter.\(filter.rawValue)")
+            }
+        }
     }
 
     private func normalizeBrowsedTheme() {
-        guard !store.themes.isEmpty else {
-            browsedID = nil
-            return
-        }
         if let browsedID, store.themes.contains(where: { $0.id == browsedID }) { return }
-        browsedID = store.themes.first(where: { $0.id == store.selectedID })?.id ?? store.themes[0].id
+        browsedID = store.selectedID
     }
-
     private func customizeBrowsedTheme() {
-        guard let theme = browsedTheme else { return }
         searchFocused = false
-        editorTheme = theme.isBuiltIn ? theme.draft() : theme
+        editorTheme = browsedTheme.isBuiltIn ? browsedTheme.draft() : browsedTheme
     }
-
     private func apply(_ theme: AppTheme) {
-        searchFocused = false
-        do {
-            try store.apply(id: theme.id)
-            notice = "已使用“\(theme.name)”"
-        } catch {
-            notice = "使用主题失败：\(error.localizedDescription)"
-        }
+        do { try store.apply(id: theme.id); notice = "已使用“\(theme.name)”" }
+        catch { notice = "使用主题失败：\(error.localizedDescription)" }
     }
-
     private func delete(_ theme: AppTheme) {
         do {
             try store.delete(id: theme.id)
             normalizeBrowsedTheme()
             notice = "已删除“\(theme.name)”"
-        } catch {
-            notice = "删除主题失败：\(error.localizedDescription)"
-        }
+        } catch { notice = "删除主题失败：\(error.localizedDescription)" }
     }
 }

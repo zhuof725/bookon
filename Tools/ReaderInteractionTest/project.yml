@@ -35,6 +35,7 @@ targets:
       - path: ../../Sources/App/ThemeEditorView.swift
       - path: ../../Sources/App/ThemeEditorControls.swift
       - path: ../../Sources/App/ThemePreviewCard.swift
+      - path: ../../Sources/App/ThemeHomeGrid.swift
       - path: TocRulesHarness.swift
       - path: BodyRulesHarness.swift
       - path: ../../Sources/Models/BodyReplaceRule.swift

@@ -259,6 +259,44 @@ final class CustomThemeTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["theme.harness.custom.count"].label, "0")
     }
 
+    func testPaletteGridPlacementLightAndDark320() throws {
+        let ids = ["builtin.monochrome", "builtin.mist", "builtin.sage", "builtin.rose", "builtin.sand"]
+        let names = ["经典黑白", "晨雾", "松间", "暮色", "暖沙"]
+        for dark in [false, true] {
+            launch(dark: dark, narrow: dark, clean: true)
+            XCTAssertFalse(app.textFields["theme.search"].exists)
+            XCTAssertFalse(app.buttons["theme.filter.all"].exists)
+            let tiles = ids.map { app.buttons["theme.browse.\($0)"] }
+            for (index, tile) in tiles.enumerated() {
+                XCTAssertTrue(tile.waitForExistence(timeout: 4))
+                XCTAssertTrue(tile.isHittable)
+                XCTAssertEqual(tile.label, names[index])
+            }
+            let first = tiles[0].frame
+            let inset = dark ? (app.frame.width - 320) / 2 : 0
+            for index in 0..<4 {
+                XCTAssertEqual(tiles[index].frame.minY, first.minY, accuracy: 2)
+                XCTAssertGreaterThanOrEqual(tiles[index].frame.minX, inset)
+                XCTAssertLessThanOrEqual(tiles[index].frame.maxX, app.frame.width - inset + 1)
+                if index > 0 { XCTAssertGreaterThan(tiles[index].frame.minX, tiles[index - 1].frame.maxX) }
+            }
+            let add = app.buttons["theme.add"]
+            XCTAssertGreaterThan(tiles[4].frame.minY, first.maxY)
+            XCTAssertEqual(add.frame.minY, tiles[4].frame.minY, accuracy: 2)
+            XCTAssertEqual(add.frame.minX, tiles[1].frame.minX, accuracy: 2)
+            XCTAssertGreaterThan(app.staticTexts["主题切换"].frame.minY, add.frame.maxY)
+            XCTAssertTrue(tiles[0].isSelected)
+            capture(dark ? "theme-grid-dark-320" : "theme-grid-light")
+            tiles[1].tap()
+            XCTAssertEqual(tiles[0].frame.minY, first.minY, accuracy: 2, "Browsing must not scroll the grid away")
+            XCTAssertEqual(try storeReport()["selectedID"] as? String, "builtin.monochrome")
+            XCTAssertTrue(tiles[0].isSelected)
+            XCTAssertFalse(tiles[1].isSelected)
+            XCTAssertEqual(app.staticTexts["theme.gallery.name"].label, "晨雾")
+            app.terminate()
+        }
+    }
+
     func testHubSearchFilterAndBrowseDoesNotApply() throws {
         launch(clean: true)
         XCTAssertFalse(app.textFields["theme.harness.input"].exists)
@@ -269,6 +307,7 @@ final class CustomThemeTests: XCTestCase {
         tap("theme.editor.save")
         XCTAssertTrue(app.staticTexts["theme.gallery.name"].waitForExistence(timeout: 6))
         let customID = try XCTUnwrap(try storedTheme()["id"] as? String)
+        tap("theme.search.toggle")
         let search = app.textFields["theme.search"]
         replace(search, with: "Search Custom")
         tap("theme.filter.custom")
