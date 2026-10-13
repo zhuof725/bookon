@@ -39,17 +39,21 @@ enum ShelfBooks {
 struct ShelfGlass<S: InsettableShape>: ViewModifier {
     @ThemePalette private var palette
     let shape: S
+    var isCard: Bool = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content.background {
             ZStack {
-                if reduceTransparency { shape.fill(palette.surface) }
+                if reduceTransparency || palette.usesOpaqueSurfaces { shape.fill(palette.surface) }
                 else {
                     shape.fill(.ultraThinMaterial)
                     shape.fill(palette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
                 }
-                shape.strokeBorder(palette.border, lineWidth: 0.5)
+                // The card switch never removes control or dock outlines.
+                if !isCard || palette.cardBorder {
+                    shape.strokeBorder(palette.border, lineWidth: 0.5)
+                }
             }.allowsHitTesting(false)
         }
     }
@@ -264,7 +268,7 @@ struct ShelfBookCard: View {
                         Text(book.name).appFont(.system(size: 13, weight: .semibold)).lineLimit(1)
                         Text(ShelfBooks.subtitle(book)).appFont(.system(size: 11)).foregroundStyle(palette.secondary).lineLimit(1)
                     }.frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
-                        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 13, style: .continuous)))
+                        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 13), style: .continuous), isCard: true))
                 }
             } else {
                 HStack(spacing: 14) {
@@ -274,7 +278,7 @@ struct ShelfBookCard: View {
                         Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
-                }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: 18)))
+                }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 18)), isCard: true))
             }
         }.foregroundStyle(palette.primary)
     }

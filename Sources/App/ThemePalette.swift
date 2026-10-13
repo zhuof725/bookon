@@ -14,9 +14,34 @@ struct ResolvedAppPalette {
     let highlight: Color
     let onAccent: Color
     let gradient: Bool
+    let cardRadius: CGFloat
+    let cardBorder: Bool
+    /// Custom text needs a known backing rather than an unpredictable material.
+    let usesOpaqueSurfaces: Bool
+    private let cardRadiusOverride: CGFloat?
+
+    /// Existing cards keep their own geometry until a radius is explicitly set.
+    func cornerRadius(default legacyRadius: CGFloat) -> CGFloat {
+        cardRadiusOverride ?? legacyRadius
+    }
 
     init(theme: AppTheme, scheme: ColorScheme) {
-        if theme.id == AppTheme.defaultID {
+        let colors = theme.swatches(for: scheme)
+        let radius = colors.cardRadius.flatMap { value -> CGFloat? in
+            guard value.isFinite else { return nil }
+            return CGFloat(min(max(value, AppTheme.cardRadiusRange.lowerBound), AppTheme.cardRadiusRange.upperBound))
+        }
+        cardRadiusOverride = radius
+        cardRadius = radius ?? CGFloat(AppTheme.defaultCardRadius)
+        cardBorder = colors.cardBorder ?? true
+        usesOpaqueSurfaces = colors.hasCustomTextOrSelection
+        // Geometry-only edits must not change Classic Monochrome's native colors.
+        var colorDefaults = colors
+        colorDefaults.cardRadius = nil
+        colorDefaults.cardBorder = nil
+        if theme.id == AppTheme.defaultID,
+           theme.backgroundStyle == AppTheme.monochrome.backgroundStyle,
+           colorDefaults == AppTheme.monochrome.swatches(for: scheme) {
             accent = AppPalette.accent
             background = AppPalette.background
             backgroundEnd = AppPalette.background
@@ -29,29 +54,20 @@ struct ResolvedAppPalette {
             gradient = false
             return
         }
-        let colors = theme.swatches(for: scheme)
-        let backgrounds = theme.backgroundStyle == .gradient
-            ? [colors.surface] + (0...12).map { AppThemeColor.mix(colors.background, colors.backgroundEnd, fraction: Double($0) / 12) }
-            : [colors.background, colors.surface]
-        let ink = AppThemeColor.foreground(over: backgrounds)
+        let ink = colors.resolvedInk(style: theme.backgroundStyle)
         accent = AppThemeColor.color(colors.accent)
         background = AppThemeColor.color(colors.background)
         backgroundEnd = AppThemeColor.color(colors.backgroundEnd)
         surface = AppThemeColor.color(colors.surface)
-        primary = AppThemeColor.color(ink)
-        // Use opaque colors so labels stay legible over both gradient endpoints.
-        let muted = AppThemeColor.mix(ink, colors.surface, fraction: 0.25)
-        secondary = AppThemeColor.color(backgrounds.allSatisfy { AppThemeColor.contrast(muted, $0) >= 4.5 } ? muted : ink)
-        let selectionHex = AppThemeColor.mix(colors.surface, colors.accent, fraction: 0.12)
-        let highlightHex = AppThemeColor.mix(colors.surface, colors.accent, fraction: 0.18)
-        // Tinted pills still carry accent-colored labels; never trade their
-        // readability for a stronger selected/background tint.
-        selection = AppThemeColor.color(AppThemeColor.contrast(colors.accent, selectionHex) >= 4.5
-            && AppThemeColor.contrast(ink, selectionHex) >= 4.5 ? selectionHex : colors.surface)
-        border = AppThemeColor.color(AppThemeColor.mix(colors.surface, ink, fraction: 0.20))
+        // Opaque resolved text and selection exactly match save-time validation.
+        primary = AppThemeColor.color(ink.primary)
+        secondary = AppThemeColor.color(ink.secondary)
+        selection = AppThemeColor.color(ink.selection)
+        border = AppThemeColor.color(colors.border ?? AppThemeColor.mix(colors.surface, ink.primary, fraction: 0.20))
         placeholderTop = AppThemeColor.color(AppThemeColor.mix(colors.surface, colors.accent, fraction: 0.25))
         placeholderBottom = AppThemeColor.color(AppThemeColor.mix(colors.surface, colors.accent, fraction: 0.48))
-        highlight = AppThemeColor.color(AppThemeColor.contrast(ink, highlightHex) >= 4.5 ? highlightHex : colors.surface)
+        let highlightHex = AppThemeColor.mix(colors.surface, colors.accent, fraction: 0.18)
+        highlight = AppThemeColor.color(AppThemeColor.contrast(ink.primary, highlightHex) >= 4.5 ? highlightHex : colors.surface)
         let buttonInk = AppThemeColor.contrast("000000", colors.accent) >= AppThemeColor.contrast("FFFFFF", colors.accent)
             ? "000000" : "FFFFFF"
         onAccent = AppThemeColor.color(buttonInk)

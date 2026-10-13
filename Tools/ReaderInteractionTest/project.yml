@@ -33,6 +33,7 @@ targets:
       - path: ../../Sources/App/ThemePalette.swift
       - path: ../../Sources/App/ThemeGalleryView.swift
       - path: ../../Sources/App/ThemeEditorView.swift
+      - path: ../../Sources/App/ThemeEditorControls.swift
       - path: ../../Sources/App/ThemePreviewCard.swift
       - path: TocRulesHarness.swift
       - path: BodyRulesHarness.swift

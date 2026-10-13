@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Full-screen template picker. Choosing a template only creates an in-memory
-/// draft; persistence is deliberately owned by ThemeEditorView's save action.
+/// Picking a template creates only a draft. The editor owns persistence.
 struct ThemeGalleryView: View {
     let onCancel: () -> Void
     let onSelect: (AppTheme) -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var searchText = ""
     @State private var category: GalleryCategory = .all
-    @State private var selectedScheme: ColorScheme = .light
+    @FocusState private var searchFocused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(onCancel: @escaping () -> Void = {}, onSelect: @escaping (AppTheme) -> Void = { _ in }) {
         self.onCancel = onCancel
@@ -35,126 +35,139 @@ struct ThemeGalleryView: View {
     }
 
     private var templates: [AppTheme] {
-        let style = category.style
-        return AppTheme.templates.filter { style == nil || $0.backgroundStyle == style }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AppTheme.templates.filter {
+            (category.style == nil || $0.backgroundStyle == category.style)
+                && (query.isEmpty || $0.name.localizedStandardContains(query))
+        }
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .center, spacing: 8) {
-                        categoryPicker
-                        previewModePicker
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("从模板开始")
+                        .appFont(.headline)
+                    Text("同时查看浅色与深色。选取后可编辑，保存前不会更改当前主题。")
+                        .appFont(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    searchField
+                    categoryPicker
+                    if templates.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 24))
+                                .accessibilityHidden(true)
+                            Text("没有找到匹配的模板")
+                                .appFont(.headline)
+                            Text("试试其他名称或分类。")
+                                .appFont(.footnote)
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 16))
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(templates) { template in
+                                Button {
+                                    searchFocused = false
+                                    onSelect(template.draft())
+                                } label: {
+                                    ThemeSplitPreview(theme: template, isSelected: false)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("模板 \(template.name)")
+                                .accessibilityHint("创建草稿并进入编辑，不会立即应用")
+                                .accessibilityIdentifier("theme.template.\(template.id)")
+                            }
+                        }
                     }
-                    templateGrid
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 34)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
-            .background(galleryBackground.ignoresSafeArea())
-            .navigationTitle("选择主题")
+            .scrollDismissesKeyboard(.interactively)
+            .background(ThemeHubSurface.canvas.ignoresSafeArea())
+            .navigationTitle("选择模板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
+                        searchFocused = false
                         onCancel()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(width: 44, height: 44)
+                        Text("取消")
+                            .appFont(.body)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("关闭")
                     .accessibilityIdentifier("theme.editor.cancel")
                 }
             }
         }
-        .onAppear { selectedScheme = colorScheme }
+        .foregroundStyle(.primary)
+        .tint(.primary)
         .modifier(AppTypographyRoot())
     }
 
-    private var galleryBackground: some View {
-        Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(white: 0.055, alpha: 1)
-                : UIColor(white: 0.965, alpha: 1)
-        })
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("搜索 \(AppTheme.templates.count) 个模板", text: $searchText)
+                .appFont(.subheadline)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .submitLabel(.search)
+                .focused($searchFocused)
+                .onSubmit { searchFocused = false }
+                .accessibilityLabel("搜索模板")
+                .accessibilityIdentifier("theme.template.search")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.leading, 13)
+        .padding(.trailing, searchText.isEmpty ? 13 : 0)
+        .padding(.vertical, 2)
+        .frame(minHeight: 46)
+        .background(ThemeHubSurface.card, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(ThemeHubSurface.border, lineWidth: 0.5))
     }
 
     private var categoryPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 9) {
-                ForEach(GalleryCategory.allCases) { item in
-                    Button {
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                            category = item
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(item.title)
-                                .appFont(.subheadline.weight(.semibold))
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 42)
-                        .background(category == item ? Color.primary.opacity(0.10) : .clear, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(category == item ? .isSelected : [])
-                }
-            }
-        }
-        .accessibilityLabel("主题类型")
-    }
-
-    private var previewModePicker: some View {
-        Button {
-            selectedScheme = selectedScheme == .light ? .dark : .light
-        } label: {
-            Image(systemName: selectedScheme == .light ? "sun.max" : "moon")
-                .font(.system(size: 17, weight: .medium))
-                .frame(width: 44, height: 44)
-                .background(Color.primary.opacity(0.05), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(selectedScheme == .light ? "切换深色预览" : "切换浅色预览")
-    }
-
-    private var templateGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
-            ForEach(templates) { template in
-                Button {
-                    onSelect(template.draft())
-                } label: {
-                    VStack(alignment: .leading, spacing: 9) {
-                        ThemePreviewCard(theme: template, scheme: selectedScheme, isSelected: false)
-                            .frame(height: 260)
-                        HStack(spacing: 6) {
-                            Text(template.name)
-                                .appFont(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                            Circle().fill(AppThemeColor.color(template.swatches(for: selectedScheme).accent))
-                                .frame(width: 10, height: 10)
-                                .accessibilityHidden(true)
-                        }
-                    }
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 3))
+        return layout {
+            ForEach(GalleryCategory.allCases) { item in
+                Button { category = item } label: {
+                    Text(item.title)
+                        .appFont(.subheadline.weight(category == item ? .semibold : .regular))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(category == item ? ThemeHubSurface.card : .clear,
+                                    in: RoundedRectangle(cornerRadius: 9))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("模板 \(template.name)")
-                .accessibilityIdentifier("theme.template.\(template.id)")
+                .accessibilityIdentifier("theme.template.filter.\(item.rawValue)")
+                .accessibilityAddTraits(category == item ? .isSelected : [])
             }
         }
-    }
-
-    private var reduceMotion: Bool {
-        #if os(iOS)
-        return UIAccessibility.isReduceMotionEnabled
-        #else
-        return false
-        #endif
+        .padding(3)
+        .background(ThemeHubSurface.control, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("模板分类")
     }
 }

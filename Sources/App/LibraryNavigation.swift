@@ -5,32 +5,53 @@ struct LibraryStatisticsView: View {
     @EnvironmentObject var store: AppStore
     private var started: Int { store.books.filter(ShelfBooks.isStarted).count }
     var body: some View {
-        List {
-            Section("书库概览") {
-                LabeledContent("书架书籍", value: "\(store.books.count) 本")
-                LabeledContent("已开始阅读", value: "\(started) 本")
-                LabeledContent("未读", value: "\(store.books.count - started) 本")
-                LabeledContent("本地书籍", value: "\(store.books.filter { store.isLocal($0) }.count) 本")
-            }
-            .listRowBackground(palette.surface)
-            Section("最近阅读") {
-                let recent = store.books.filter(ShelfBooks.isStarted).sorted { $0.lastReadAt > $1.lastReadAt }
-                if recent.isEmpty { Text("暂无阅读记录").foregroundStyle(palette.secondary) }
-                ForEach(Array(recent.prefix(10))) { book in
-                    NavigationLink { ReaderView(book: book) } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(book.name)
-                            Text(book.durChapterTitle ?? "阅读中").appFont(.caption).foregroundStyle(palette.secondary)
-                            Text(book.lastReadAt, style: .date).appFont(.caption).foregroundStyle(palette.secondary)
+        ScrollView {
+            VStack(spacing: 20) {
+                LibraryCard("书库概览") {
+                    LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
+                    LibraryCardDivider()
+                    LibraryValueRow(title: "已开始阅读", value: "\(started) 本")
+                    LibraryCardDivider()
+                    LibraryValueRow(title: "未读", value: "\(store.books.count - started) 本")
+                    LibraryCardDivider()
+                    LibraryValueRow(title: "本地书籍", value: "\(store.books.filter { store.isLocal($0) }.count) 本")
+                }
+                LibraryCard("最近阅读") {
+                    let recent = Array(store.books.filter(ShelfBooks.isStarted).sorted { $0.lastReadAt > $1.lastReadAt }.prefix(10))
+                    if recent.isEmpty {
+                        Text("暂无阅读记录").foregroundStyle(palette.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                    }
+                    ForEach(recent) { book in
+                        NavigationLink { ReaderView(book: book) } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(book.name).foregroundStyle(palette.primary)
+                                    Text(book.durChapterTitle ?? "阅读中").appFont(.caption).foregroundStyle(palette.secondary)
+                                    Text(book.lastReadAt, style: .date).appFont(.caption).foregroundStyle(palette.secondary)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                                    .foregroundStyle(palette.secondary).accessibilityHidden(true)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        if book.id != recent.last?.id { LibraryCardDivider() }
                     }
                 }
+                LibraryCard {
+                    Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。")
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                }
             }
-            .listRowBackground(palette.surface)
-            Section { Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。").appFont(.footnote).foregroundStyle(palette.secondary) }
-                .listRowBackground(palette.surface)
+            .padding(.horizontal, 20).padding(.vertical, 16)
         }
-        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("统计")
@@ -42,35 +63,137 @@ struct LibraryProfileView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     var body: some View {
-        List {
-            Section("书库管理") {
-                NavigationLink { SourcesView() } label: { Label("书源管理", systemImage: "square.stack.3d.up") }
-                    .accessibilityIdentifier("library.sources")
-                NavigationLink { TxtTocRulesView() } label: { Label("目录规则", systemImage: "list.bullet.rectangle") }
-                    .accessibilityIdentifier("library.tocRules")
-                NavigationLink { BodyReplaceRulesView() } label: { Label("替换规则", systemImage: "text.badge.checkmark") }
-                    .accessibilityIdentifier("library.replaceRules")
-                NavigationLink { FontManagerView() } label: { Label("字体管理", systemImage: "textformat") }
-                    .accessibilityIdentifier("library.fonts")
-                NavigationLink { AppAppearanceSettingsView() } label: { Label("外观主题", systemImage: "circle.lefthalf.filled") }
-                    .accessibilityIdentifier("library.appearance")
-                NavigationLink { SearchView() } label: { Label("搜索书籍", systemImage: "magnifyingglass") }
+        ScrollView {
+            VStack(spacing: 20) {
+                LibraryCard("书库管理") {
+                    Group {
+                        NavigationLink { SourcesView() } label: { LibraryLinkLabel(title: "书源管理", symbol: "square.stack.3d.up") }
+                            .accessibilityIdentifier("library.sources")
+                        LibraryCardDivider()
+                        NavigationLink { TxtTocRulesView() } label: { LibraryLinkLabel(title: "目录规则", symbol: "list.bullet.rectangle") }
+                            .accessibilityIdentifier("library.tocRules")
+                        LibraryCardDivider()
+                        NavigationLink { BodyReplaceRulesView() } label: { LibraryLinkLabel(title: "替换规则", symbol: "text.badge.checkmark") }
+                            .accessibilityIdentifier("library.replaceRules")
+                        LibraryCardDivider()
+                    }
+                    Group {
+                        NavigationLink { FontManagerView() } label: { LibraryLinkLabel(title: "字体管理", symbol: "textformat") }
+                            .accessibilityIdentifier("library.fonts")
+                        LibraryCardDivider()
+                        NavigationLink { AppAppearanceSettingsView() } label: { LibraryLinkLabel(title: "外观主题", symbol: "circle.lefthalf.filled") }
+                            .accessibilityIdentifier("library.appearance")
+                        LibraryCardDivider()
+                        NavigationLink { SearchView() } label: { LibraryLinkLabel(title: "搜索书籍", symbol: "magnifyingglass") }
+                    }
+                }
+                LibraryCard("本机数据") {
+                    NavigationLink { CacheManagementView() } label: { LibraryLinkLabel(title: "缓存管理", symbol: "internaldrive") }
+                        .accessibilityIdentifier("library.cache")
+                    LibraryCardDivider()
+                    LibraryValueRow(title: "已导入书源", value: "\(store.sources.count) 个")
+                    LibraryCardDivider()
+                    LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
+                }
+                LibraryCard {
+                    Text("阅读进度、导入书源与本地书籍保存在本机。")
+                        .foregroundStyle(palette.secondary).appFont(.footnote)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                }
             }
-            .listRowBackground(palette.surface)
-            Section("本机数据") {
-                NavigationLink { CacheManagementView() } label: { Label("缓存管理", systemImage: "internaldrive") }
-                    .accessibilityIdentifier("library.cache")
-                LabeledContent("已导入书源", value: "\(store.sources.count) 个")
-                LabeledContent("书架书籍", value: "\(store.books.count) 本")
-            }
-            .listRowBackground(palette.surface)
-            Section { Text("阅读进度、导入书源与本地书籍保存在本机。").foregroundStyle(palette.secondary).appFont(.footnote) }
-                .listRowBackground(palette.surface)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20).padding(.vertical, 16)
         }
-        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("我的")
         .toolbar(.visible, for: .navigationBar)
+    }
+}
+
+/// App-owned grouped surfaces, not a UIKit list background: card geometry and
+/// outlines therefore respond to the selected theme without UIAppearance hacks.
+private struct LibraryCard<Content: View>: View {
+    @ThemePalette private var palette
+    let title: String?
+    let content: Content
+
+    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title).appFont(.footnote).foregroundStyle(palette.secondary)
+                    .padding(.horizontal, 16).accessibilityAddTraits(.isHeader)
+            }
+            VStack(spacing: 0) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(palette.surface, in: RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
+                .overlay {
+                    if palette.cardBorder {
+                        RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
+                            .strokeBorder(palette.border, lineWidth: 0.5)
+                            .allowsHitTesting(false)
+                    }
+                }
+        }
+    }
+}
+
+private struct LibraryCardDivider: View {
+    @ThemePalette private var palette
+    var body: some View {
+        Rectangle().fill(palette.border).frame(height: 0.5)
+            .padding(.leading, 16).accessibilityHidden(true)
+    }
+}
+
+private struct LibraryLinkLabel: View {
+    @ThemePalette private var palette
+    let title: String
+    let symbol: String
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(palette.accent).frame(width: 24)
+                .accessibilityHidden(true)
+            Text(title).appFont(.body).foregroundStyle(palette.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                .foregroundStyle(palette.secondary).accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Native LabeledContent's value style can bypass a custom secondary color.
+/// These app-owned values use explicit palette labels and wrap at large sizes.
+private struct LibraryValueRow: View {
+    @ThemePalette private var palette
+    let title: String
+    let value: String
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title).foregroundStyle(palette.primary).fixedSize()
+                Spacer(minLength: 0)
+                Text(value).foregroundStyle(palette.secondary).fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).foregroundStyle(palette.primary)
+                Text(value).foregroundStyle(palette.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .appFont(.body)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

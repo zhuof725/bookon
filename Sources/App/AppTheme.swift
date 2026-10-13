@@ -13,8 +13,49 @@ struct AppThemeSwatches: Codable, Equatable {
     var backgroundEnd: String
     var surface: String
     var accent: String
+    // Optional additions keep v1 snapshots and the four-color initializer valid.
+    // Synthesized Codable uses decodeIfPresent / encodeIfPresent for these.
+    var primaryText: String? = nil
+    var secondaryText: String? = nil
+    var border: String? = nil
+    var selection: String? = nil
+    // Shape is independently configurable in each light/dark variant too.
+    var cardRadius: Double? = nil
+    var cardBorder: Bool? = nil
 
-    var allColors: [String] { [background, backgroundEnd, surface, accent] }
+    var allColors: [String] {
+        [background, backgroundEnd, surface, accent]
+            + [primaryText, secondaryText, border, selection].compactMap { $0 }
+    }
+
+    var hasCustomTextOrSelection: Bool {
+        primaryText != nil || secondaryText != nil || selection != nil
+    }
+
+    func readableBackgrounds(style: AppThemeBackgroundStyle) -> [String] {
+        style == .gradient
+            ? [surface] + (0...12).map { AppThemeColor.mix(background, backgroundEnd, fraction: Double($0) / 12) }
+            : [background, surface]
+    }
+
+    /// Shared by validation and rendering: the selection checked at save time
+    /// must be the same background used by real pills and selected controls.
+    func resolvedInk(style: AppThemeBackgroundStyle) -> (primary: String, secondary: String, selection: String) {
+        let backgrounds = readableBackgrounds(style: style)
+        let primary = primaryText ?? AppThemeColor.foreground(over: backgrounds)
+        let muted = AppThemeColor.mix(primary, surface, fraction: 0.25)
+        let tint = AppThemeColor.mix(surface, accent, fraction: 0.12)
+        let pillLabels = [accent, primary] + [secondaryText].compactMap { $0 }
+        let automaticSelection = pillLabels.allSatisfy { AppThemeColor.contrast($0, tint) >= 4.5 } ? tint : surface
+        let selected = selection ?? automaticSelection
+        // Preserve the exact legacy secondary default when all additions are nil.
+        // New selected colors also participate in automatic secondary resolution.
+        let secondaryBackgrounds = backgrounds + (hasCustomTextOrSelection ? [selected] : [])
+        let secondary = secondaryText ?? (secondaryBackgrounds.allSatisfy {
+            AppThemeColor.contrast(muted, $0) >= 4.5
+        } ? muted : primary)
+        return (primary, secondary, selected)
+    }
 }
 
 struct AppTheme: Codable, Equatable, Identifiable {
@@ -24,6 +65,8 @@ struct AppTheme: Codable, Equatable, Identifiable {
     var light: AppThemeSwatches
     var dark: AppThemeSwatches
 
+    static let cardRadiusRange: ClosedRange<Double> = 8...30
+    static let defaultCardRadius: Double = 20
     static let defaultID = "builtin.monochrome"
     var isBuiltIn: Bool { id.hasPrefix("builtin.") }
     func swatches(for scheme: ColorScheme) -> AppThemeSwatches { scheme == .dark ? dark : light }
@@ -41,18 +84,36 @@ struct AppTheme: Codable, Equatable, Identifiable {
         if trimmed.isEmpty { return "请为主题填写名称。" }
         if trimmed.count > 40 { return "主题名称最多 40 个字。" }
         for (label, colors) in [("浅色", light), ("深色", dark)] {
+            if let radius = colors.cardRadius,
+               !radius.isFinite || !Self.cardRadiusRange.contains(radius) {
+                return "\(label)卡片圆角须在 8–30 点之间。"
+            }
             guard colors.allColors.allSatisfy(AppThemeColor.isValid) else { return "\(label)配色包含无效颜色，请重新选择。" }
-            let backgrounds = backgroundStyle == .gradient
-                ? [colors.surface] + (0...12).map { AppThemeColor.mix(colors.background, colors.backgroundEnd, fraction: Double($0) / 12) }
-                : [colors.background, colors.surface]
+            let backgrounds = colors.readableBackgrounds(style: backgroundStyle)
             // Keep native labels/navigation legible in the chosen system mode.
-            // A dark background belongs to the dark variant, not the light one.
+            // Custom text cannot make a dark canvas valid in the light variant.
             let text = label == "深色" ? "F5F5F5" : "101010"
             guard backgrounds.allSatisfy({ AppThemeColor.contrast(text, $0) >= 4.5 }) else {
                 return "\(label)背景与卡片明暗不合适，请调整颜色，以保证文字清晰。"
             }
             guard backgrounds.allSatisfy({ AppThemeColor.contrast(colors.accent, $0) >= 4.5 }) else {
                 return "\(label)强调色与背景太接近，请提高对比度。"
+            }
+            if let primary = colors.primaryText,
+               !backgrounds.allSatisfy({ AppThemeColor.contrast(primary, $0) >= 4.5 }) {
+                return "\(label)主要文字与背景或卡片太接近，请提高对比度。"
+            }
+            if let secondary = colors.secondaryText,
+               !backgrounds.allSatisfy({ AppThemeColor.contrast(secondary, $0) >= 4.5 }) {
+                return "\(label)辅助文字与背景或卡片太接近，请提高对比度。"
+            }
+            if colors.hasCustomTextOrSelection {
+                let ink = colors.resolvedInk(style: backgroundStyle)
+                guard [ink.primary, ink.secondary, colors.accent].allSatisfy({
+                    AppThemeColor.contrast($0, ink.selection) >= 4.5
+                }) else {
+                    return "\(label)选中背景与文字或强调色太接近，请调整选中背景或文字颜色。"
+                }
             }
         }
         return nil

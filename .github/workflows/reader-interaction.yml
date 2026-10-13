@@ -102,7 +102,7 @@ jobs:
             typography) ARGS=(-only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             native) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests) ;;
             theme) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests) ;;
-            custom-themes) ARGS=(-only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests -only-testing:ReaderInteractionTests/ThemeTests) ;;
+            custom-themes) ARGS=(-only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests -only-testing:ReaderInteractionTests/ThemeTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests) ;;
             appearance) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             chrome) ARGS=(-only-testing:ReaderInteractionTests/ChromeTests) ;;
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
