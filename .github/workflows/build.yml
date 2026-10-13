@@ -18,6 +18,7 @@ jobs:
           echo "Using $X"
           [ -n "$X" ] && sudo xcode-select -s "$X"
           xcodebuild -version
+          python3 -c 'import subprocess; v=subprocess.check_output(["xcrun","--sdk","iphoneos","--show-sdk-version"],text=True); assert int(v.split(".")[0]) >= 26, "iOS26 SDK required for native Liquid Glass"'
 
       - name: Install XcodeGen
         run: brew install xcodegen

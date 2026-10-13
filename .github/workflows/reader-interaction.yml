@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
+        options: [native-tabs-glass, cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -66,17 +66,26 @@ jobs:
         with:
           name: cache-management-regression-log
           path: cache-management-regression.log
+      - name: Select iOS 26 SDK for native glass verification
+        if: ${{ inputs.suite == 'native-tabs-glass' }}
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          test -n "$X"
+          sudo xcode-select -s "$X"
+          xcodebuild -version
       - name: Install XcodeGen and diagnostic tools
         run: brew install xcodegen ripgrep
       - name: Generate focused test project
         run: cd Tools/ReaderInteractionTest && xcodegen generate
       - name: Pick available iPhone simulator
+        env:
+          NATIVE_GLASS: ${{ inputs.suite == 'native-tabs-glass' }}
         run: |
           xcrun simctl list devices available -j > /tmp/devices.json
           python3 - <<'PY' >> "$GITHUB_ENV"
-          import json
+          import json, os
           devices = json.load(open('/tmp/devices.json'))['devices']
-          phones = [d for group in devices.values() for d in group if d['name'].startswith('iPhone')]
+          phones = [d for runtime,group in devices.items() for d in group if d['name'].startswith('iPhone') and (os.environ.get('NATIVE_GLASS') != 'true' or 'iOS-26-' in runtime)]
           assert phones
           print('SIMULATOR_ID=' + phones[0]['udid'])
           PY
@@ -91,6 +100,7 @@ jobs:
           set -o pipefail
           ARGS=()
           case "$TEST_SUITE" in
+            native-tabs-glass) ARGS=(-only-testing:ReaderInteractionTests/NativeTabsGlassTests) ;;
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
             cover-persistence) ARGS=(-only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
@@ -167,7 +177,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
+        if: ${{ always() && (inputs.suite == 'native-tabs-glass' || inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
         with:
           name: custom-theme-screenshots
           path: |

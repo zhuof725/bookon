@@ -84,7 +84,8 @@ enum ThemeCustomizationRenderProbe {
         let frostedSolid = pixels(.frosted, card: false, enabled: true, reduced: false)
         theme.customization?.surfaceOpacity = 0
         let frostedClearer = pixels(.frosted, card: false, enabled: true, reduced: false)
-        checks["renderFrostedOpacityChangesPixels"] = frostedSolid == opaque && frostedClearer != nil && frostedClearer != frostedSolid
+        checks["renderFrostedOpacityChangesPixels"] = frostedSolid != nil && frostedSolid != opaque && frostedClearer != nil && frostedClearer != frostedSolid
+        // Actual backdrop blur is separately measured on-screen by NativeTabsGlassTests.
         // Native font metrics: a missing theme font must fall back safely and
         // changing the theme must not select a different reading font.
         let style = AppFontStyle.body

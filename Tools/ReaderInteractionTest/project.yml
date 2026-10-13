@@ -14,6 +14,8 @@ targets:
     platform: iOS
     sources:
       - path: Harness.swift
+      - path: NativeTabsGlassHarness.swift
+      - path: ../../Sources/App/LibraryNativeTabs.swift
       - path: CacheManagementHarness.swift
       - path: ../../Sources/App/CacheManagementView.swift
       - path: ../../Sources/Engine/AppCacheService.swift

@@ -368,7 +368,7 @@ struct ThemeCustomizationEditor: View {
     }
     private var tabPage: some View {
         VStack(alignment: .leading, spacing: 18) {
-            note("选择底部导航栏的显示方式。")
+            note("iOS 26 使用系统原生底栏，保留自定义图标；标签文字、布局和玻璃外观由系统管理。下方显示方式用于旧版 iOS 的自定义底栏。")
             VStack(spacing: 0) {
                 choice(ThemeTabStyle.iconsAndText.title, selected: draft.customization?.tabStyle == .iconsAndText,
                        id: "theme.editor.tab.iconsAndText") { $draft.themeSetting(\.tabStyle).wrappedValue = .iconsAndText }
@@ -452,7 +452,7 @@ struct ThemeCustomizationEditor: View {
             }.padding(.horizontal, 16).themeEditorSurface()
             note("透明保留背景层次，毛玻璃柔化背景，不透明使用卡片底色。系统的降低透明度设置及文字可读性要求可能优先使用不透明背景。")
             effectSliderSection
-            note("光晕用于透明和毛玻璃效果；透明度越高，毛玻璃底色越淡。为保持文字清晰，实际透明度可能受限。不透明效果不使用这两个数值；取消编辑不会应用。")
+            note("光晕用于透明和毛玻璃效果；透明度越高，毛玻璃底色越淡。系统材质会自适应明暗，滑条调节叠加底色，不会移除模糊；系统开启降低透明度时改用实色。不透明效果不使用这两个数值；取消编辑不会应用。")
             ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
     }

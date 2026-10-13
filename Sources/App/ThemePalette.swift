@@ -55,12 +55,10 @@ struct ResolvedAppPalette {
         } else {
             pageScrimOpacity = 1
         }
-        if theme.customization?.effect == .frosted {
-            let labels = [ink.primary, ink.secondary, colors.accent, scheme == .dark ? "F5F5F5" : "101010"]
-            frostedSurfaceOpacity = ThemeReadability.scrimOpacity(backgrounds: [colors.surface], labels: labels)
-        } else {
-            frostedSurfaceOpacity = 1
-        }
+        // Native material already provides adaptive contrast. A photographic
+        // scrim (72–100% opaque) here hides the very blur it is meant to protect.
+        let tint = theme.customization?.surfaceOpacity ?? 0.85
+        frostedSurfaceOpacity = 0.18 * (tint.isFinite ? min(max(tint, 0), 1) : 0.85)
         let glow = theme.customization?.glowIntensity ?? 0.5
         glowIntensity = glow.isFinite ? min(max(glow, 0), 1) : 0.5
         let opacity = theme.customization?.surfaceOpacity ?? 0.85
@@ -218,8 +216,8 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                                 colors: [palette.accent.opacity(0.28 * palette.glowIntensity), .clear],
                                 center: .center, startRadius: 0, endRadius: 160))
                         }
-                        // A slider must not reduce the computed readability floor.
-                        shape.fill(palette.surface.opacity(max(palette.surfaceOpacity, palette.frostedSurfaceOpacity)))
+                        // Keep the backdrop visible; do not paint an opaque card over it.
+                        shape.fill(palette.surface.opacity(palette.frostedSurfaceOpacity))
                     case .opaque:
                         shape.fill(palette.surface)
                     }

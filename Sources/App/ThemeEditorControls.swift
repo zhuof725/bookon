@@ -300,6 +300,10 @@ struct ThemeEditorLivePreview: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("当前主题预览").appFont(.caption).foregroundStyle(.secondary)
             ThemePreviewCard(theme: theme, scheme: scheme, isSelected: false)
+            if #available(iOS 26.0, *) {
+                Text("下方为图标示意；主界面使用 iOS 26 原生底栏，样式由系统管理。")
+                    .appFont(.caption).foregroundStyle(.secondary)
+            }
             LibraryDock(selection: $tab)
                 .padding(.vertical, 14)
                 .background { AppThemeCanvas() }

@@ -41,7 +41,11 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--cache-management-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--native-tabs-mode") {
+                    NativeTabsGlassHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--native-glass-mode") {
+                    NativeGlassHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--cache-management-mode") {
                     CacheManagementHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--search-history-mode") {
                     SearchHistoryHarnessView()

@@ -54,15 +54,12 @@ struct RootView: View {
     @State private var selection: LibraryTab = .shelf
     var body: some View {
         NavigationStack {
-            Group {
-                switch selection {
-                case .shelf: BookshelfView()
-                case .statistics: LibraryStatisticsView()
-                case .profile: LibraryProfileView()
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                LibraryDock(selection: $selection)
+            LibraryTabContainer(selection: $selection) {
+                BookshelfView()
+            } statistics: {
+                LibraryStatisticsView()
+            } profile: {
+                LibraryProfileView()
             }
             .background { AppThemeCanvas().ignoresSafeArea() }
         }
