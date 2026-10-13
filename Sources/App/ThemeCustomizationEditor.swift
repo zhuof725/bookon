@@ -336,7 +336,7 @@ struct ThemeCustomizationEditor: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(destination.title)
         .navigationBarTitleDisplayMode(.inline)
-        .accessibilityIdentifier("theme.editor.page.\(destination.rawValue)")
+
     }
     private var legacyNote: String {
         switch destination {

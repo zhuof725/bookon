@@ -47,6 +47,7 @@ struct ThemeSettingPreview: View {
         .background { AppThemeCanvas() }
         .environment(\.appTheme, theme)
         .environment(\.colorScheme, scheme)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("theme.preview.live." + destination.rawValue)
     }
 
