@@ -65,7 +65,10 @@ final class CustomThemeTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Text input must have an active keyboard")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count + 2))
         for character in value { field.typeText(String(character)) }
-        if !value.isEmpty { XCTAssertEqual(field.value as? String, value) }
+        if !value.isEmpty {
+            let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: field)
+            XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 3), .completed, "Theme name should be \(value), got \(field.value ?? "nil")")
+        }
         // Hex onSubmit SAVES. Modal tests always pass submit:false and use
         // the explicit save/cancel buttons, including the invalid-input case.
         if submit { field.typeText("\n") }
