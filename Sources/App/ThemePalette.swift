@@ -155,6 +155,21 @@ struct ThemeSurface<S: InsettableShape>: View {
     var isCard: Bool = false
 
     var body: some View {
+        ThemeSurfaceRendering(shape: shape, isCard: isCard, palette: palette,
+                              reduceTransparency: reduceTransparency)
+    }
+}
+
+/// Explicit inputs let the native renderer be checked without attempting to
+/// write SwiftUI's read-only accessibility environment. Production passes the
+/// real system value through ThemeSurface above.
+struct ThemeSurfaceRendering<S: InsettableShape>: View {
+    let shape: S
+    let isCard: Bool
+    let palette: ResolvedAppPalette
+    let reduceTransparency: Bool
+
+    var body: some View {
         ZStack {
             if !isCard || palette.cardBackground {
                 if reduceTransparency {

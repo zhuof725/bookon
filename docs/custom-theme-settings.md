@@ -71,7 +71,7 @@ xcodebuild -project ReaderInteraction.xcodeproj -scheme ReaderHarness \
 
 新增主要测试：
 
-1. `ThemeCustomizationTests/testProductionModelAssetsCleanupAndRenderedEffects`：强制要求模型/资源探针键全部存在；真实 ThemeSurface 的 transparent/opaque/card-off/降低透明度中心像素断言，字体不可用 UIKit fallback，生产 ThemeShelfMetrics 窄屏限幅。
+1. `ThemeCustomizationTests/testProductionModelAssetsCleanupAndRenderedEffects`：强制要求模型/资源探针键全部存在；真实 ThemeSurface 的 transparent/opaque/card-off，以及生产 ThemeSurfaceRendering 的降低透明度分支中心像素断言（显式输入，不伪造修改系统只读开关），字体不可用 UIKit fallback，生产 ThemeShelfMetrics 窄屏限幅。
 2. `ThemeCustomizationTests/testSettingsSaveApplyRuntimeDockShelfCancelAndRelaunch`：用真实按钮、Stepper、Slider、Toggle 设置 text / 2 列 / 60 pt / opaque / 无卡片底 / 系统字体；保存后检查完整 JSON，先不应用；应用后测量真实 BookshelfScreen，点击真实 LibraryDock 和书籍触发回调；随后修改草稿取消、终止进程、无 seed 重开，验证设置与所选 ID 不变。
 
 控制 ID：`theme.editor.tab.text/icons/iconsAndText`、`theme.editor.shelf.columns/width`、`theme.editor.effect.*`、`theme.editor.cards.enabled`、`theme.editor.font.follow/system`；原有 hex、mode、cardRadius、cardBorder 均在对应详情中使用。
