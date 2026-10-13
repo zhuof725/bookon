@@ -66,9 +66,13 @@ enum ThemeCustomizationRenderProbe {
         let opaque = pixels(.opaque, card: false, enabled: true, reduced: false)
         let disabled = pixels(.opaque, card: true, enabled: false, reduced: false)
         let reduced = pixels(.transparent, card: false, enabled: false, reduced: true)
-        checks["renderTransparentSurface"] = transparent == [255, 0, 0]
+        // Transparent with default glow adds a subtle radial gradient; the exact
+        // center pixel may differ from pure red. Card-off must match pure red
+        // (no fill, no glow) — verify it equals the raw background, not transparent.
+        let pureRed: [Int] = [255, 0, 0]
+        checks["renderTransparentSurface"] = transparent == pureRed
         checks["renderOpaqueSurface"] = opaque == [255, 255, 255]
-        checks["renderCardBackgroundOff"] = disabled == transparent
+        checks["renderCardBackgroundOff"] = disabled == pureRed
         checks["renderControlsRemainOpaqueWhenCardsOff"] = reduced == opaque
         // Native font metrics: a missing theme font must fall back safely and
         // changing the theme must not select a different reading font.

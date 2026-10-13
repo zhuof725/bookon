@@ -462,7 +462,7 @@ struct ThemeCustomizationEditor: View {
         return VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("光晕强度 · \(glow)%").appFont(.body)
-                Slider(value: $draft.themeSetting(\.glowIntensity), in: 0...1)
+                Slider(value: $draft.themeSetting(\.glowIntensity), in: 0...1, step: 0.01)
                     .accessibilityLabel("光晕强度")
                     .accessibilityValue("\(glow)%")
                     .accessibilityIdentifier("theme.editor.effect.glow")
