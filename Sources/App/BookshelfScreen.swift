@@ -55,6 +55,7 @@ struct BookshelfScreen: View {
     let onSearch: () -> Void
     let onImport: () -> Void
     let onRemove: ([Book]) -> Void
+    var loadListChapters: (Book) -> [BookChapter]? = { _ in nil }
     @AppStorage("shelf.layout.v1") private var layoutValue = ShelfLayout.grid.rawValue
     @AppStorage("shelf.sort.v1") private var sortValue = ShelfSort.recent.rawValue
     @State private var filter: ShelfFilter = .all
@@ -92,9 +93,20 @@ struct BookshelfScreen: View {
                             ForEach(visibleBooks) { book in bookButton(book, grid: true, coverWidth: metrics?.coverWidth) }
                         }.padding(.horizontal, 24).padding(.top, 2).padding(.bottom, 24)
                     } else {
-                        LazyVStack(spacing: 14) {
-                            ForEach(visibleBooks) { book in bookButton(book, grid: false) }
-                        }.padding(.horizontal, 24).padding(.bottom, 24)
+                        LazyVStack(spacing: 10) {
+                            ForEach(visibleBooks) { book in
+                                ShelfListBookButton(book: book, localOrigin: localOrigin,
+                                    selecting: selecting, selected: selection.contains(book.id),
+                                    loadChapters: loadListChapters, action: {
+                                        if selecting {
+                                            if selection.contains(book.id) { selection.remove(book.id) }
+                                            else { selection.insert(book.id) }
+                                        } else { onOpen(book) }
+                                    }, open: { onOpen(book) }, select: {
+                                        selecting = true; selection.insert(book.id)
+                                    })
+                            }
+                        }.padding(.horizontal, 10).padding(.bottom, 24)
                     }
                 }
             }
@@ -260,15 +272,8 @@ struct ShelfBookCard: View {
                         .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 13), style: .continuous), isCard: true))
                 }
             } else {
-                HStack(spacing: 14) {
-                    // The cover-width preference is grid-only: lists retain room for text.
-                    cover.frame(width: 62, height: 88)
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(book.name).appFont(.headline).lineLimit(accessibleCustom ? nil : 2)
-                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(accessibleCustom ? nil : 2)
-                    }.fixedSize(horizontal: false, vertical: accessibleCustom)
-                    Spacer(minLength: 0)
-                }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 18)), isCard: true))
+                ShelfListRow(book: book, localOrigin: "local", summary: ShelfListSummary(book: book),
+                             selecting: selecting, selected: selected)
             }
         }.foregroundStyle(palette.primary)
     }

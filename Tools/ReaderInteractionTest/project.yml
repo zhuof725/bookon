@@ -58,6 +58,7 @@ targets:
       - path: ../../Sources/App/AppTypography.swift
       - path: AppFontHarness.swift
       - path: ShelfHarness.swift
+      - path: ../../Sources/App/ShelfListRow.swift
       - path: DetailHarness.swift
       - path: ../../Sources/App/BookDetailScreen.swift
       - path: ../../Sources/App/BookshelfScreen.swift

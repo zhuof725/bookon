@@ -87,6 +87,44 @@ final class ShelfTests: XCTestCase {
         XCTAssertTrue(a.exists && b.exists)
     }
 
+    func testReferenceListMetadataAndSelection() {
+        tap("shelf.more"); tap("shelf.view"); tap("shelf.layout.list")
+        status("layout=列表")
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '共169章'"), object: b)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 6), .completed)
+        XCTAssertTrue(b.label.contains("已读：第二章"))
+        XCTAssertTrue(b.label.contains("2026-10-13：第169章 测试章节"))
+        XCTAssertTrue(a.label.contains("来源：本地书籍"))
+        XCTAssertFalse(a.label.contains("共0章"))
+        XCTAssertTrue(a.label.contains("最新章节：暂无信息"))
+        XCTAssertEqual(a.frame.minX, 10, accuracy: 2)
+        XCTAssertEqual(a.frame.width, app.frame.width - 20, accuracy: 2)
+        XCTAssertGreaterThanOrEqual(a.frame.height, 130)
+        XCTAssertLessThan(b.frame.maxY, a.frame.minY)
+        capture("shelf-reference-list-light")
+        tap("shelf.more"); tap("shelf.select"); b.tap()
+        XCTAssertEqual(b.value as? String, "已选择")
+        b.tap(); XCTAssertEqual(b.value as? String, "未选择")
+        tap("shelf.finishSelection"); status("removed=0")
+        b.tap(); XCTAssertTrue(app.staticTexts["shelf.reader"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shelf.reader.title"].label, "B 山海手记")
+    }
+
+    func testReferenceListDarkLarge320() {
+        app.terminate()
+        app.launchArguments += ["--shelf-dark", "--shelf-large"]
+        app.launch()
+        XCTAssertTrue(a.waitForExistence(timeout: 10))
+        tap("shelf.more"); tap("shelf.view"); tap("shelf.layout.list")
+        XCTAssertTrue(b.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(b.frame.width, 301)
+        XCTAssertGreaterThan(b.frame.height, 130)
+        XCTAssertGreaterThanOrEqual(b.frame.minX, 0)
+        XCTAssertLessThanOrEqual(b.frame.maxX, app.frame.maxX)
+        capture("shelf-reference-list-dark-large320")
+        b.tap(); XCTAssertTrue(app.staticTexts["shelf.reader"].waitForExistence(timeout: 5))
+    }
+
     func testImportAndSearchCallbacks() {
         tap("shelf.search")
         status("search=1")

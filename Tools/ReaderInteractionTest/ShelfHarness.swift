@@ -58,6 +58,11 @@ struct ShelfHarnessView: View {
                             removals += selected.count
                             let ids = Set(selected.map(\.id))
                             books.removeAll { ids.contains($0.id) }
+                        }, loadListChapters: { book in
+                            guard book.id == "fixture-b" else { return nil }
+                            return (0..<169).map { BookChapter(url: "fixture-chapter-\($0)",
+                                title: "第\($0 + 1)章 测试章节", index: $0,
+                                updateTime: $0 == 168 ? "2026-10-13" : nil) }
                         })
                         .navigationDestination(isPresented: $showReader) {
                             VStack(spacing: 24) {
@@ -91,6 +96,8 @@ struct ShelfHarnessView: View {
                     .allowsHitTesting(false)
             }
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--shelf-dark") ? .dark : .light)
+        .frame(maxWidth: ProcessInfo.processInfo.arguments.contains("--shelf-large") ? 320 : .infinity)
+        .environment(\.dynamicTypeSize, ProcessInfo.processInfo.arguments.contains("--shelf-large") ? .accessibility3 : .large)
     }
 }

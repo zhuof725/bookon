@@ -80,7 +80,8 @@ struct BookshelfView: View {
         BookshelfScreen(books: store.books, localOrigin: AppStore.localOrigin,
             onOpen: { book in selectedBook = book; showDetail = true },
             onSearch: { showSearch = true }, onImport: { showImport = true },
-            onRemove: { books in books.forEach { store.removeFromShelf($0) } })
+            onRemove: { books in books.forEach { store.removeFromShelf($0) } },
+            loadListChapters: { book in store.isLocal(book) ? store.localToc(book) : store.cachedToc(book) })
         .navigationDestination(isPresented: $showDetail) {
             if let selectedBook { BookDetailView(book: selectedBook) }
         }
