@@ -38,6 +38,9 @@ struct ThemeEditorView: View {
                     TextField("主题名称", text: $draft.name)
                         .appFont(.body).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .focused($nameFocused).submitLabel(.done).onSubmit { nameFocused = false }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture { nameFocused = true }
                         .accessibilityLabel("主题名称").accessibilityIdentifier("theme.editor.name")
                 } header: { Text("主题名称") }
                 if draft.customization == nil {

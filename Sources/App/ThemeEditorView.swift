@@ -44,7 +44,6 @@ struct ThemePaletteEditor: View {
     private func colorRow(_ field: ThemeColorField) -> some View {
         ThemeEditorColorRow(field: field, hex: hex(for: field),
                             color: colorBinding(for: field), editHex: { hexField = field })
-            .accessibilityIdentifier("theme.editor.color.row.\(field.rawValue)")
     }
 
     private var colorsSection: some View {

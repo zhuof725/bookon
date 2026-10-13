@@ -62,6 +62,7 @@ final class ThemeCustomizationTests: XCTestCase {
         visible(field)
         let old = field.value as? String ?? ""
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Theme name must be editable across its whole row")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count + 2) + value + "\n")
         XCTAssertEqual(field.value as? String, value)
     }

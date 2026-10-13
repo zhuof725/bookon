@@ -62,6 +62,7 @@ final class CustomThemeTests: XCTestCase {
         visible(field)
         let old = field.value as? String ?? ""
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Text input must have an active keyboard")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count + 2) + value)
         if !value.isEmpty { XCTAssertEqual(field.value as? String, value) }
         // Hex onSubmit SAVES. Modal tests always pass submit:false and use
