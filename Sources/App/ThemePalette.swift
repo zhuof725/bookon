@@ -213,7 +213,13 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                         }
                     case .frosted:
                         shape.fill(.ultraThinMaterial)
-                        shape.fill(palette.surface.opacity(palette.surfaceOpacity * palette.frostedSurfaceOpacity))
+                        if palette.glowIntensity > 0 {
+                            shape.fill(RadialGradient(
+                                colors: [palette.accent.opacity(0.28 * palette.glowIntensity), .clear],
+                                center: .center, startRadius: 0, endRadius: 160))
+                        }
+                        // A slider must not reduce the computed readability floor.
+                        shape.fill(palette.surface.opacity(max(palette.surfaceOpacity, palette.frostedSurfaceOpacity)))
                     case .opaque:
                         shape.fill(palette.surface)
                     }

@@ -112,7 +112,7 @@ enum ThemeInterfaceEffect: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .transparent: return "透明"
-        case .frosted: return "磨砂"
+        case .frosted: return "毛玻璃"
         case .opaque: return "不透明"
         }
     }

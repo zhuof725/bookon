@@ -99,7 +99,8 @@ final class ThemeCustomizationTests: XCTestCase {
             "assetReplacementCleansOnlyUnreferenced", "assetFailedSaveDoesNotClean", "assetApplyDoesNotClean",
             "assetDeletePreservesOtherTheme", "assetLastReferenceDeleteCleans",
             "renderTransparentSurface", "renderOpaqueSurface", "renderCardBackgroundOff",
-            "renderControlsRemainOpaqueWhenCardsOff", "renderMissingFontFallback", "runtimeShelfMetricsClamp"
+            "renderControlsRemainOpaqueWhenCardsOff", "renderMissingFontFallback", "runtimeShelfMetricsClamp",
+            "renderGlowChangesPixels", "renderCardOffSuppressesGlow", "renderReducedSuppressesGlow", "renderFrostedOpacityChangesPixels"
         ]
         XCTAssertTrue(required.isSubset(of: Set(result.keys)), "Missing checks: \(required.subtracting(result.keys))")
         for key in required { XCTAssertEqual(result[key] as? Bool, true, "Production regression: \(key)") }
@@ -147,7 +148,11 @@ final class ThemeCustomizationTests: XCTestCase {
         XCTAssertEqual(app.buttons["theme.editor.tab.icon.profile"].value as? String, "默认")
         // Persist one custom SF Symbol icon for the saved theme.
         tap("theme.editor.tab.icon.shelf")
-        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected); backFromIconPicker()
+        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected)
+        capture("tab-icons-symbol-picker")
+        backFromIconPicker()
+        tap("theme.editor.tab.iconsAndText")
+        capture("tab-icons-preview")
         back()
         page("shelf")
         let stepper = app.steppers["theme.editor.shelf.columns"]
@@ -158,23 +163,26 @@ final class ThemeCustomizationTests: XCTestCase {
         let width = app.sliders["theme.editor.shelf.width"]
         visible(width); width.adjust(toNormalizedSliderPosition: 0)
         XCTAssertEqual(width.value as? String, "60 点"); back()
-        page("effect"); tap("theme.editor.effect.opaque")
-        XCTAssertTrue(app.buttons["theme.editor.effect.opaque"].isSelected)
+        page("effect"); tap("theme.editor.effect.frosted")
+        XCTAssertTrue(app.buttons["theme.editor.effect.frosted"].isSelected)
         let glow = app.sliders["theme.editor.effect.glow"]
         let opacity = app.sliders["theme.editor.effect.opacity"]
         visible(glow)
         XCTAssertEqual(glow.value as? String, "50%")
         glow.adjust(toNormalizedSliderPosition: 0.75)
-        // Slider step 0.01 may still round to 76% due to float precision; accept ±2%.
+        // XCUITest positions the thumb geometrically; allow gesture error only.
+        // Persisted values below must match the actual displayed percentage.
         let glowString = glow.value as? String ?? "0%"
         let glowValue = Int(glowString.filter { $0.isNumber }) ?? 0
         XCTAssertTrue(abs(glowValue - 75) <= 2, "Glow should be near 75%, got \(glowString)")
+        visible(opacity)
         opacity.adjust(toNormalizedSliderPosition: 0.6)
         let opacityString = opacity.value as? String ?? "0%"
         let opacityValue = Int(opacityString.filter { $0.isNumber }) ?? 0
         XCTAssertTrue(abs(opacityValue - 60) <= 2, "Opacity should be near 60%, got \(opacityString)")
         let savedGlow = Double(glowValue) / 100.0
-        let savedOpacity = Double(opacityValue) / 100.0
+        let savedOpacity = 1 - Double(opacityValue) / 100.0
+        capture("tab-icons-frosted-sliders")
         back()
         page("cards")
         let toggle = app.switches["theme.editor.cards.enabled"]
@@ -189,13 +197,13 @@ final class ThemeCustomizationTests: XCTestCase {
         XCTAssertTrue(app.buttons["theme.use"].waitForExistence(timeout: 6))
         let saved = try stored()
         let config = try XCTUnwrap(saved["customization"] as? [String: Any])
-        XCTAssertEqual(config["tabStyle"] as? String, "text")
+        XCTAssertEqual(config["tabStyle"] as? String, "iconsAndText")
         XCTAssertEqual(config["tabIcons"] as? [String: String], ["shelf": "star.fill"])
-        XCTAssertEqual(try XCTUnwrap(config["glowIntensity"] as? Double), savedGlow, accuracy: 0.02)
-        XCTAssertEqual(try XCTUnwrap(config["surfaceOpacity"] as? Double), savedOpacity, accuracy: 0.02)
+        XCTAssertEqual(try XCTUnwrap(config["glowIntensity"] as? Double), savedGlow, accuracy: 0.0051)
+        XCTAssertEqual(try XCTUnwrap(config["surfaceOpacity"] as? Double), savedOpacity, accuracy: 0.0051)
         XCTAssertEqual(config["shelfColumns"] as? Int, 2)
         XCTAssertEqual(config["coverWidth"] as? Double, 60)
-        XCTAssertEqual(config["effect"] as? String, "opaque")
+        XCTAssertEqual(config["effect"] as? String, "frosted")
         XCTAssertEqual(config["cardBackground"] as? Bool, false)
         XCTAssertEqual(config["fontPostScriptName"] as? String, "")
         XCTAssertEqual(try report("theme.store.probe")["selectedID"] as? String, "builtin.monochrome")
@@ -203,6 +211,8 @@ final class ThemeCustomizationTests: XCTestCase {
         try assertRuntime()
         tap("theme.customize"); page("tab"); tap("theme.editor.tab.icons"); back()
         page("shelf"); visible(width); width.adjust(toNormalizedSliderPosition: 1); back()
+        page("effect"); visible(glow); glow.adjust(toNormalizedSliderPosition: 0)
+        visible(opacity); opacity.adjust(toNormalizedSliderPosition: 0); back()
         tap("theme.editor.cancel"); tap("theme.editor.discard")
         XCTAssertTrue(NSDictionary(dictionary: try stored()).isEqual(to: saved))
         app.terminate(); launch(seed: false, dark: true)

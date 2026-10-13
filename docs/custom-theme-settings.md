@@ -72,20 +72,20 @@ xcodebuild -project ReaderInteraction.xcodeproj -scheme ReaderHarness \
 新增主要测试：
 
 1. `ThemeCustomizationTests/testProductionModelAssetsCleanupAndRenderedEffects`：强制要求模型/资源探针键全部存在；真实 ThemeSurface 的 transparent/opaque/card-off，以及生产 ThemeSurfaceRendering 的降低透明度分支中心像素断言（显式输入，不伪造修改系统只读开关），字体不可用 UIKit fallback，生产 ThemeShelfMetrics 窄屏限幅。
-2. `ThemeCustomizationTests/testSettingsSaveApplyRuntimeDockShelfCancelAndRelaunch`：用真实按钮、Stepper、Slider、Toggle 设置 text / 2 列 / 60 pt / opaque / 无卡片底 / 系统字体；保存后检查完整 JSON，先不应用；应用后测量真实 BookshelfScreen，点击真实 LibraryDock 和书籍触发回调；随后修改草稿取消、终止进程、无 seed 重开，验证设置与所选 ID 不变。
+2. `ThemeCustomizationTests/testSettingsSaveApplyRuntimeDockShelfCancelAndRelaunch`：用真实按钮、Stepper、Slider、Toggle 设置 iconsAndText + star.fill / 2 列 / 60 pt / frosted + 光晕和透明度 / 无卡片底 / 系统字体；保存后检查完整 JSON，先不应用；应用后测量真实 BookshelfScreen，点击真实 LibraryDock 和书籍触发回调；随后修改草稿取消、终止进程、无 seed 重开，验证设置与所选 ID 不变。
 
 控制 ID：`theme.editor.tab.text/icons/iconsAndText`、`theme.editor.tab.icon.shelf/statistics/profile`、`theme.editor.tab.icon.grid.<symbol>`、`theme.editor.tab.icon.import/reset`、`theme.editor.shelf.columns/width`、`theme.editor.effect.transparent/frosted/opaque/glow/opacity`、`theme.editor.cards.enabled`、`theme.editor.font.follow/system`；原有 hex、mode、cardRadius、cardBorder 均在对应详情中使用。
 
 ### Tab 栏图标（新增）
 
 - 每个 Tab（书架/统计/我的）可独立覆盖图标：内置 SF Symbol 网格单选（再点一次取消覆盖），或通过原生文件选择器导入图片（同 ThemeAssetStore 20 MB / 2000 px 限制，资产 ID 参与保存/取消/替换清理）。
-- 模型字段 `tabIcons`（键 `shelf/statistics/profile`，值为 SF Symbol 名或资产 ID）；无效键值、非空字符串、路径/URL 均拒绝；`assetIDs` 仅并入资产 ID 形式的图标。
+- 模型字段 `tabIcons`（键 `shelf/statistics/profile`，值为 SF Symbol 名或资产 ID）；无效键值、空字符串、路径/URL 均拒绝；`assetIDs` 仅并入资产 ID 形式的图标。
 - 运行时：资产图标 22 pt scaledToFit；Symbol 图标走 `Image(systemName:)`；无效/缺失回退默认符号。AX 标签、选中状态、`library.tab.0/1/2` ID 不变；旧主题 nil 分支渲染原字形。
 
 ### 界面效果：光晕与透明度（新增）
 
-- `glowIntensity` 0...1（步进 0.05，默认 0.5）：透明效果下 surface/画布的强调色径向光晕强度；reduce transparency 时不显示；不透明效果忽略。
-- `surfaceOpacity` 0...1（步进 0.05，默认 0.85）：毛玻璃效果的 tint 层不透明度乘数（可读性下限仍受 scrim 保护）；不透明效果忽略。
+- `glowIntensity` 0...1（步进 0.01，默认 0.5）：透明和毛玻璃效果下 surface 的强调色径向光晕强度（透明图片画布也有轻微光晕）；reduce transparency 时不显示；不透明效果忽略。
+- `surfaceOpacity` 0...1（步进 0.01，默认 0.85）：毛玻璃效果的底色不透明度，UI“透明度”显示并编辑 `1 - surfaceOpacity`，数值越大越透明；实际底色 alpha 使用 max(surfaceOpacity, 可读性下限)，不乘低保护值；不透明效果忽略。
 - 两个滑条实时预览并保存到草稿，取消不生效；旧主题 nil 分支不读取新字段。
 
 

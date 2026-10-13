@@ -170,7 +170,7 @@ struct ThemeEditorView: View {
     }
     private var effectSummary: String {
         let glow = Int((min(max(settings.glowIntensity, 0), 1) * 100).rounded())
-        let opacity = Int((min(max(settings.surfaceOpacity, 0), 1) * 100).rounded())
+        let opacity = Int(((1 - min(max(settings.surfaceOpacity, 0), 1)) * 100).rounded())
         return "\(settings.effect.title) · 光晕\(glow)% · 透明\(opacity)%"
     }
     /// Tab icons share the same import transaction: the entry is created only
@@ -452,13 +452,13 @@ struct ThemeCustomizationEditor: View {
             }.padding(.horizontal, 16).themeEditorSurface()
             note("透明保留背景层次，毛玻璃柔化背景，不透明使用卡片底色。系统的降低透明度设置及文字可读性要求可能优先使用不透明背景。")
             effectSliderSection
-            note("光晕仅在透明效果下围绕控件与卡片可见；透明度影响毛玻璃和卡片底色。两个数值仅在保存主题后生效，取消编辑不会应用。")
+            note("光晕用于透明和毛玻璃效果；透明度越高，毛玻璃底色越淡。为保持文字清晰，实际透明度可能受限。不透明效果不使用这两个数值；取消编辑不会应用。")
             ThemeEditorLivePreview(theme: draft, scheme: previewScheme)
         }
     }
     private var effectSliderSection: some View {
         let glow = Int((min(max(settings.glowIntensity, 0), 1) * 100).rounded())
-        let opacity = Int((min(max(settings.surfaceOpacity, 0), 1) * 100).rounded())
+        let opacity = Int(((1 - min(max(settings.surfaceOpacity, 0), 1)) * 100).rounded())
         return VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("光晕强度 · \(glow)%").appFont(.body)
@@ -472,7 +472,9 @@ struct ThemeCustomizationEditor: View {
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 Text("透明度 · \(opacity)%").appFont(.body)
-                Slider(value: $draft.themeSetting(\.surfaceOpacity), in: 0...1, step: 0.01)
+                Slider(value: Binding(get: { 1 - settings.surfaceOpacity }, set: {
+                    $draft.themeSetting(\.surfaceOpacity).wrappedValue = 1 - $0
+                }), in: 0...1, step: 0.01)
                     .accessibilityLabel("透明度")
                     .accessibilityValue("\(opacity)%")
                     .accessibilityIdentifier("theme.editor.effect.opacity")
@@ -599,7 +601,7 @@ struct ThemeEditorTabIcon: View {
     }
     private var symbolName: String? {
         guard let value, !ThemeAssetStore.isValidID(value),
-              ThemeAssetStore.isValidSymbolName(value) else { return nil }
+              ThemeAssetStore.shared.symbolImage(for: value) != nil else { return nil }
         return value
     }
 

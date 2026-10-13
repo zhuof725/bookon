@@ -52,6 +52,7 @@ enum ThemeCustomizationRenderProbe {
     static func run() -> [String: Bool] {
         var checks: [String: Bool] = [:]
         var theme = AppTheme.custom()
+        theme.customization?.glowIntensity = 0
         func pixels(_ effect: ThemeInterfaceEffect, card: Bool, enabled: Bool, reduced: Bool) -> [Int]? {
             theme.customization?.effect = effect; theme.customization?.cardBackground = enabled
             let palette = ResolvedAppPalette(theme: theme, scheme: .light)
@@ -59,6 +60,7 @@ enum ThemeCustomizationRenderProbe {
                 Color(.sRGB, red: 1, green: 0, blue: 0, opacity: 1)
                 ThemeSurfaceRendering(shape: RoundedRectangle(cornerRadius: 12), isCard: card,
                     palette: palette, reduceTransparency: reduced)
+                    .frame(width: 160, height: 100)
             }
             return center(bitmap(view))
         }
@@ -66,14 +68,23 @@ enum ThemeCustomizationRenderProbe {
         let opaque = pixels(.opaque, card: false, enabled: true, reduced: false)
         let disabled = pixels(.opaque, card: true, enabled: false, reduced: false)
         let reduced = pixels(.transparent, card: false, enabled: false, reduced: true)
-        // Transparent with default glow adds a subtle radial gradient; the exact
-        // center pixel may differ from pure red. Card-off must match pure red
-        // (no fill, no glow) — verify it equals the raw background, not transparent.
+        // No-glow transparency and card-off must reveal the exact backing pixel.
         let pureRed: [Int] = [255, 0, 0]
-        checks["renderTransparentSurface"] = transparent != nil
+        checks["renderTransparentSurface"] = transparent == pureRed
         checks["renderOpaqueSurface"] = opaque == [255, 255, 255]
         checks["renderCardBackgroundOff"] = disabled == pureRed
         checks["renderControlsRemainOpaqueWhenCardsOff"] = reduced == opaque
+        theme.customization?.glowIntensity = 1
+        let glowing = pixels(.transparent, card: false, enabled: true, reduced: false)
+        checks["renderGlowChangesPixels"] = glowing != nil && glowing != transparent
+        checks["renderCardOffSuppressesGlow"] = pixels(.transparent, card: true, enabled: false, reduced: false) == pureRed
+        checks["renderReducedSuppressesGlow"] = pixels(.transparent, card: false, enabled: true, reduced: true) == opaque
+        theme.customization?.glowIntensity = 0
+        theme.customization?.surfaceOpacity = 1
+        let frostedSolid = pixels(.frosted, card: false, enabled: true, reduced: false)
+        theme.customization?.surfaceOpacity = 0
+        let frostedClearer = pixels(.frosted, card: false, enabled: true, reduced: false)
+        checks["renderFrostedOpacityChangesPixels"] = frostedSolid == opaque && frostedClearer != nil && frostedClearer != frostedSolid
         // Native font metrics: a missing theme font must fall back safely and
         // changing the theme must not select a different reading font.
         let style = AppFontStyle.body

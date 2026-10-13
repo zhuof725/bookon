@@ -70,7 +70,7 @@ private struct TabIconView: View {
     }
     private var symbolName: String {
         guard let iconOverride, !ThemeAssetStore.isValidID(iconOverride),
-              ThemeAssetStore.isValidSymbolName(iconOverride) else { return tab.symbol }
+              ThemeAssetStore.shared.symbolImage(for: iconOverride) != nil else { return tab.symbol }
         return iconOverride
     }
 
