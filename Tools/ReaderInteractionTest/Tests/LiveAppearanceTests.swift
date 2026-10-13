@@ -42,7 +42,8 @@ final class LiveAppearanceTests: XCTestCase {
             let closed = app.staticTexts["fixture.closed"]
             let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "\(i)"), object: closed)
             XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 6), .completed)
-            XCTAssertTrue(app.buttons["fixture.splash"].isHittable)
+            let interactive = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["fixture.splash"])
+            XCTAssertEqual(XCTWaiter.wait(for: [interactive], timeout: 6), .completed)
         }
     }
     func testNativeListRowsRemainIndependentAndTappable() {
