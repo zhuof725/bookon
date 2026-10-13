@@ -36,8 +36,9 @@ struct LibraryStatisticsView: View {
                                     .foregroundStyle(palette.secondary).accessibilityHidden(true)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .padding(.horizontal, 16).padding(.vertical, 8)
-                            .contentShape(Rectangle())
+                            .padding(.horizontal, 20).padding(.vertical, 14)
+                            .modifier(SettingsGlassSurface())
+                            .contentShape(RoundedRectangle(cornerRadius: 24))
                         }
                         .buttonStyle(.plain)
                         if book.id != recent.last?.id { LibraryCardDivider() }
@@ -50,7 +51,7 @@ struct LibraryStatisticsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading).padding(16)
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 16)
+            .padding(.horizontal, 24).padding(.vertical, 16)
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -103,7 +104,7 @@ struct LibraryProfileView: View {
                 }
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 20).padding(.vertical, 16)
+            .padding(.horizontal, 24).padding(.vertical, 16)
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -130,12 +131,8 @@ private struct LibraryCard<Content: View>: View {
                 Text(title).appFont(.footnote).foregroundStyle(palette.secondary)
                     .padding(.horizontal, 16).accessibilityAddTraits(.isHeader)
             }
-            VStack(spacing: 0) { content }
+            VStack(spacing: 4) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    let shape = RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
-                    ThemeSurface(shape: shape, isCard: true)
-                }
         }
     }
 }
@@ -143,8 +140,7 @@ private struct LibraryCard<Content: View>: View {
 private struct LibraryCardDivider: View {
     @ThemePalette private var palette
     var body: some View {
-        Rectangle().fill(palette.border).frame(height: 0.5)
-            .padding(.leading, 16).accessibilityHidden(true)
+        Color.clear.frame(height: 0).accessibilityHidden(true)
     }
 }
 
@@ -153,18 +149,7 @@ private struct LibraryLinkLabel: View {
     let title: String
     let symbol: String
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol).foregroundStyle(palette.accent).frame(width: 24)
-                .accessibilityHidden(true)
-            Text(title).appFont(.body).foregroundStyle(palette.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                .foregroundStyle(palette.secondary).accessibilityHidden(true)
-        }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.horizontal, 16).padding(.vertical, 4)
-        .contentShape(Rectangle())
+        SettingsGlassLabel(title: title, symbol: symbol)
     }
 }
 
@@ -175,21 +160,6 @@ private struct LibraryValueRow: View {
     let title: String
     let value: String
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(title).foregroundStyle(palette.primary).fixedSize()
-                Spacer(minLength: 0)
-                Text(value).foregroundStyle(palette.secondary).fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).foregroundStyle(palette.primary)
-                Text(value).foregroundStyle(palette.secondary)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .appFont(.body)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.horizontal, 16).padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+        SettingsGlassValue(title: title, value: value)
     }
 }

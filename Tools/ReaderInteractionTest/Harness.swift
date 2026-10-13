@@ -41,7 +41,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--native-tabs-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--settings-glass-mode") {
+                    SettingsGlassHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--native-tabs-mode") {
                     NativeTabsGlassHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--native-glass-mode") {
                     NativeGlassHarness()

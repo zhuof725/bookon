@@ -151,13 +151,15 @@ struct ThemeEditorView: View {
         NavigationLink(value: destination) {
             HStack(spacing: 14) {
                 Image(systemName: destination.symbol)
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 25).accessibilityHidden(true)
+                    .font(.system(size: 23, weight: .regular))
+                    .foregroundStyle(Color(red: 0.83, green: 0.31, blue: 0.45))
+                    .frame(width: 28).accessibilityHidden(true)
                 ThemeEditorSummaryLabel(title: destination.title, value: value)
             }
         }
-        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
-        .listRowBackground(Color(uiColor: .systemBackground))
+        .listRowInsets(EdgeInsets(top: 14, leading: 20, bottom: 14, trailing: 20))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear.modifier(SettingsGlassSurface()).padding(.vertical, 3))
         .accessibilityIdentifier("theme.editor.row.\(destination.rawValue)")
     }
     private func imageSummary(_ id: String?, empty: String) -> String {
