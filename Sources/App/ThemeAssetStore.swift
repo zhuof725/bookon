@@ -57,7 +57,7 @@ final class ThemeAssetStore {
     }
 
     static func isValidID(_ id: String) -> Bool {
-        guard id.utf8.count == 40, id.hasSuffix(".jpg") else { return false }
+        guard id.utf8.count == 40, id.hasSuffix(".jpg") || id.hasSuffix(".png") else { return false }
         let stem = String(id.dropLast(4))
         guard let uuid = UUID(uuidString: stem) else { return false }
         return uuid.uuidString.lowercased() == stem.lowercased()
@@ -98,6 +98,28 @@ final class ThemeAssetStore {
         }
         try jpeg.write(to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         // Do not cache the source bitmap: reads should match the durable JPEG.
+        return id
+    }
+
+    func importIconFile(_ url: URL) throws -> String {
+        guard url.isFileURL else { throw AssetError.invalidFile }
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        return try importIconData(Self.readBounded(url))
+    }
+
+    func importIconData(_ data: Data) throws -> String {
+        guard data.count <= Self.maximumInputBytes else { throw AssetError.tooLarge }
+        guard let bitmap = Self.downsample(data), let icon = ThemeIconTransparency.image(bitmap),
+              let png = UIImage(cgImage: icon).pngData(), png.count <= Self.maximumInputBytes else {
+            throw AssetError.invalidImage
+        }
+        try prepareDirectory()
+        let id = UUID().uuidString.lowercased() + ".png"
+        guard let target = ownedURL(id), !FileManager.default.fileExists(atPath: target.path) else {
+            throw AssetError.unavailableDirectory
+        }
+        try png.write(to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         return id
     }
 

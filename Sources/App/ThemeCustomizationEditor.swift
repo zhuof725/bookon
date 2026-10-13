@@ -88,7 +88,7 @@ struct ThemeEditorView: View {
             }
             .environment(\.defaultMinListRowHeight, 48)
             .scrollContentBackground(.hidden)
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background { AppThemeCanvas().ignoresSafeArea() }
             .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle(isNew ? "新建主题" : "编辑主题")
@@ -152,7 +152,7 @@ struct ThemeEditorView: View {
             HStack(spacing: 14) {
                 Image(systemName: destination.symbol)
                     .font(.system(size: 23, weight: .regular))
-                    .foregroundStyle(Color(red: 0.83, green: 0.31, blue: 0.45))
+                    .foregroundStyle(.primary)
                     .frame(width: 28).accessibilityHidden(true)
                 ThemeEditorSummaryLabel(title: destination.title, value: value)
             }
@@ -198,7 +198,7 @@ struct ThemeEditorView: View {
         guard let pendingIcon else { return }
         self.pendingIcon = nil
         do {
-            let id = try ThemeAssetStore.shared.importFile(pendingIcon.url)
+            let id = try ThemeAssetStore.shared.importIconFile(pendingIcon.url)
             newlyImportedIDs.insert(id)
             tabIconBinding(for: pendingIcon.tab).wrappedValue = id
         } catch { errorMessage = error.localizedDescription }
@@ -330,7 +330,7 @@ struct ThemeCustomizationEditor: View {
             .padding(18).frame(maxWidth: 640).frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(destination.title)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("theme.editor.page.\(destination.rawValue)")
@@ -508,31 +508,16 @@ struct ThemeCustomizationEditor: View {
 /// Icon choice for one tab, pushed inside the editor's NavigationStack.
 /// The parent binding applies immediately so back reveals the updated row.
 struct ThemeEditorTabIconPicker: View {
-    static let symbols = [
-        "book.fill", "chart.bar.fill", "person.fill", "house.fill",
-        "magnifyingglass", "star.fill", "heart.fill", "bookmark.fill",
-        "folder.fill", "gearshape.fill", "books.vertical.fill", "clock.fill"
-    ]
-
     let tab: LibraryTab
     @Binding var icon: String?
     let importIcon: () -> Void
-    private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: 62, maximum: 88), spacing: 8)]
-    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                note("为“\(tab.title)”选择内置图标，或导入图片作为自定义图标。更改即时预览，仅随主题保存后生效。")
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("内置图标").appFont(.headline)
-                    LazyVGrid(columns: columns, spacing: 8) {
-                        ForEach(Self.symbols, id: \.self) { name in
-                            symbolButton(name)
-                        }
-                    }
-                }
+                note("为“\(tab.title)”导入自定义图片。更改即时预览，仅随主题保存后生效。")
+                ThemeEditorTabIcon(value: icon, fallback: tab.symbol)
+                    .frame(width: 56, height: 56).padding(20).themeEditorSurface()
                 VStack(alignment: .leading, spacing: 8) {
                     Button(action: importIcon) {
                         Label("从文件选择图片", systemImage: "folder")
@@ -540,7 +525,7 @@ struct ThemeEditorTabIconPicker: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("theme.editor.tab.icon.import")
-                    Text("图片导入后保存为主题素材，不超过 20 MB，最长边压缩至 2000 像素。")
+                    Text("自动保存为 PNG，保留原有透明区域，并尝试去除与边缘相连的纯色背景。复杂背景不强行抠除，请导入透明 PNG；不会修改原文件。上限 20 MB、最长边 2000 像素。")
                         .appFont(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -559,29 +544,10 @@ struct ThemeEditorTabIconPicker: View {
             }
             .padding(18).frame(maxWidth: 640).frame(maxWidth: .infinity)
         }
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("\(tab.title)图标")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("theme.editor.tab.icon.page")
-    }
-
-    private func symbolButton(_ name: String) -> some View {
-        let selected = icon == name
-        return Button { icon = selected ? nil : name } label: {
-            ThemeEditorTabIcon(value: name, fallback: tab.symbol)
-                .font(.system(size: 22, weight: .regular))
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(selected ? Color.primary.opacity(0.12) : Color.primary.opacity(0.035),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(selected ? Color.primary : Color.clear, lineWidth: 1.2)
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("图标 \(name)")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("theme.editor.tab.icon.grid.\(name)")
     }
 
     private func note(_ text: String) -> some View {

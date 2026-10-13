@@ -51,7 +51,9 @@ struct ResolvedAppPalette {
             let canvas = theme.backgroundStyle == .gradient
                 ? (0...12).map { AppThemeColor.mix(colors.background, colors.backgroundEnd, fraction: Double($0) / 12) }
                 : [colors.background]
-            pageScrimOpacity = ThemeReadability.scrimOpacity(backgrounds: canvas, labels: labels)
+            // Keep the selected wallpaper visible; a full opaque scrim defeats the setting.
+            // Glass rows provide local contrast; Reduce Transparency still uses base only.
+            pageScrimOpacity = min(0.35, ThemeReadability.scrimOpacity(backgrounds: canvas, labels: labels))
         } else {
             pageScrimOpacity = 1
         }

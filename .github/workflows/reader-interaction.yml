@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [settings-glass, native-tabs-glass, cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
+        options: [appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass') && 'macos-26' || 'macos-15' }}
+    runs-on: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes') && 'macos-26' || 'macos-15' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
           name: cache-management-regression-log
           path: cache-management-regression.log
       - name: Select iOS 26 SDK for native glass verification
-        if: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass') }}
+        if: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes') }}
         run: |
           X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
           test -n "$X"
@@ -79,7 +79,7 @@ jobs:
         run: cd Tools/ReaderInteractionTest && xcodegen generate
       - name: Pick available iPhone simulator
         env:
-          NATIVE_GLASS: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass') }}
+          NATIVE_GLASS: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes') }}
         run: |
           xcrun simctl list devices available -j > /tmp/devices.json
           python3 - <<'PY' >> "$GITHUB_ENV"
@@ -90,7 +90,7 @@ jobs:
           print('SIMULATOR_ID=' + phones[0]['udid'])
           PY
       - name: Compile native glass harness before simulator boot
-        if: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass') }}
+        if: ${{ (inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes') }}
         run: |
           set -o pipefail
           xcodebuild -project Tools/ReaderInteractionTest/ReaderInteraction.xcodeproj \
@@ -108,6 +108,7 @@ jobs:
           set -o pipefail
           ARGS=()
           case "$TEST_SUITE" in
+            appearance-fixes) ARGS=(-only-testing:ReaderInteractionTests/AppearanceFixTests -only-testing:ReaderInteractionTests/SettingsGlassTests -only-testing:ReaderInteractionTests/TocRulesTests/testBuiltInListCannotOpen -only-testing:ReaderInteractionTests/TocRulesTests/testDarkListScreenshot) ;;
             settings-glass) ARGS=(-only-testing:ReaderInteractionTests/SettingsGlassTests -only-testing:ReaderInteractionTests/NativeTabsGlassTests) ;;
             native-tabs-glass) ARGS=(-only-testing:ReaderInteractionTests/NativeTabsGlassTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
@@ -186,7 +187,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && ((inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass') || inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
+        if: ${{ always() && ((inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes') || inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
         with:
           name: custom-theme-screenshots
           path: |

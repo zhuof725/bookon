@@ -104,6 +104,7 @@ struct AppAppearanceSettingsView: View {
                 .padding(.top, 28)
                 .padding(.bottom, 32)
             }
+            .accessibilityIdentifier("theme.hub.scroll")
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: revealEditor) { _ in
@@ -121,7 +122,7 @@ struct AppAppearanceSettingsView: View {
         }
         .foregroundStyle(.primary)
         .tint(Color.primary)
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("外观主题")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

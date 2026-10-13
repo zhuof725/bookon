@@ -95,16 +95,17 @@ struct TxtTocRulesView: View {
     private func ruleContent(_ rule: TxtTocRule) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Text(rule.name).appFont(.system(size: 19)).foregroundStyle(palette.primary)
+                Text(rule.name).appFont(rule.isBuiltIn ? .subheadline : .system(size: 19)).foregroundStyle(palette.primary)
                 Text(rule.isBuiltIn ? "内置" : "自定义")
                     .appFont(.caption).foregroundStyle(palette.secondary)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(palette.selection, in: RoundedRectangle(cornerRadius: 5))
             }
-            Text(rule.pattern).appFont(.system(size: 14, design: .monospaced))
+            Text(rule.pattern).appFont(rule.isBuiltIn ? .system(.caption, design: .monospaced) : .system(size: 14, design: .monospaced))
                 .foregroundStyle(palette.secondary).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-        }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.horizontal, 18).padding(.vertical, rule.isBuiltIn ? 10 : 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
     }
 

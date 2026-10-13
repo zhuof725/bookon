@@ -1,0 +1,8 @@
+# Four appearance fixes
+
+1. SettingsGlassLabel returns to palette.accent; customization row icons return to primary instead of hardcoded rose. Glass shape/layout unchanged.
+2. Appearance home and customization pages use AppThemeCanvas, not opaque system backgrounds. Wallpaper scrim capped at 35% so image is never completely hidden; Reduce Transparency still suppresses image. Arbitrary wallpapers/custom ink cannot guarantee universal 4.5:1 contrast. No saved colors or wallpaper assets reset.
+3. Remove the built-in SF Symbol selection grid from Tab icon settings. File import remains, plus existing default fallback/reset for an unconfigured tab and backward compatibility for saved symbol overrides. Icons use separate importIconFile/importIconData writing UUID.png. Existing alpha stays intact; conservative boundary flood-fill removes nearly uniform opaque edge backgrounds, preserving enclosed white holes. Nonuniform backgrounds and blank solid artwork are not blindly erased. This is not AI segmentation of arbitrary photos. Source files unchanged; old UUID.jpg assets, reference tracking, cancellation cleanup remain supported.
+4. Built-in TOC titles use subheadline (15pt normal), patterns caption monospaced (12pt normal), vertical padding 10pt instead of 18pt. Custom rule layout stays unchanged. Built-ins remain static and non-editable; matching rules/regexes unchanged.
+
+Tests: native actual appearance-page screenshot color probe for wallpaper, transparent PNG preservation, white-matte edge removal with enclosed-white preservation, durable reload/source unchanged/delete/JPEG compatibility, import-only picker, settings rows narrow/dark, built-in TOC static/compact + dark list. Offline fixture, not real user files or full network app E2E.

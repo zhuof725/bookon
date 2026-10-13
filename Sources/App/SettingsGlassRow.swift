@@ -30,8 +30,7 @@ struct SettingsGlassLabel: View {
         HStack(spacing: 16) {
             Image(systemName: symbol)
                 .font(.system(size: min(iconSize, 32), weight: .regular))
-                .foregroundStyle(scheme == .dark ? Color(red: 1, green: 0.65, blue: 0.74)
-                                               : Color(red: 0.83, green: 0.31, blue: 0.45))
+                .foregroundStyle(palette.accent)
                 .frame(width: 28).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).appFont(.body).foregroundStyle(palette.primary)

@@ -72,6 +72,7 @@ final class TocRulesTests: XCTestCase {
 
     func testBuiltInListCannotOpen() {
         launch()
+        XCTAssertLessThan(builtin("chapter").frame.height, 100)
         capture("toc-rules-static-list")
         for suffix in builtIns {
             let row = builtin(suffix)

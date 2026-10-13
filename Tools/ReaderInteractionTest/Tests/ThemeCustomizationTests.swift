@@ -128,28 +128,13 @@ final class ThemeCustomizationTests: XCTestCase {
             visible(row)
             XCTAssertEqual(row.value as? String, "默认")
         }
-        // Grid selection updates the draft and the row summary immediately.
+        // Icon selection is import-only; do not reintroduce the removed symbol grid.
         tap("theme.editor.tab.icon.shelf")
-        let gridIcon = app.buttons["theme.editor.tab.icon.grid.star.fill"]
-        XCTAssertTrue(gridIcon.waitForExistence(timeout: 5)); gridIcon.tap()
-        XCTAssertTrue(gridIcon.isSelected)
-        XCTAssertTrue(app.buttons["theme.editor.tab.icon.import"].exists)
-        backFromIconPicker()
-        XCTAssertEqual(app.buttons["theme.editor.tab.icon.shelf"].value as? String, "自定义")
-        // Re-selecting the same grid icon toggles back to the default.
-        tap("theme.editor.tab.icon.shelf")
-        gridIcon.tap(); XCTAssertFalse(gridIcon.isSelected); backFromIconPicker()
-        XCTAssertEqual(app.buttons["theme.editor.tab.icon.shelf"].value as? String, "默认")
-        tap("theme.editor.tab.icon.profile")
-        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected)
-        // Reset restores the default icon for this tab.
-        tap("theme.editor.tab.icon.reset")
-        XCTAssertFalse(gridIcon.isSelected); backFromIconPicker()
-        XCTAssertEqual(app.buttons["theme.editor.tab.icon.profile"].value as? String, "默认")
-        // Persist one custom SF Symbol icon for the saved theme.
-        tap("theme.editor.tab.icon.shelf")
-        gridIcon.tap(); XCTAssertTrue(gridIcon.isSelected)
-        capture("tab-icons-symbol-picker")
+        XCTAssertTrue(app.buttons["theme.editor.tab.icon.import"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["内置图标"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'theme.editor.tab.icon.grid.'")).count, 0)
+        XCTAssertFalse(app.buttons["theme.editor.tab.icon.reset"].isEnabled)
+        capture("tab-icons-import-only")
         backFromIconPicker()
         tap("theme.editor.tab.iconsAndText")
         capture("tab-icons-preview")
@@ -198,7 +183,7 @@ final class ThemeCustomizationTests: XCTestCase {
         let saved = try stored()
         let config = try XCTUnwrap(saved["customization"] as? [String: Any])
         XCTAssertEqual(config["tabStyle"] as? String, "iconsAndText")
-        XCTAssertEqual(config["tabIcons"] as? [String: String], ["shelf": "star.fill"])
+        XCTAssertNil(config["tabIcons"])
         XCTAssertEqual(try XCTUnwrap(config["glowIntensity"] as? Double), savedGlow, accuracy: 0.0051)
         XCTAssertEqual(try XCTUnwrap(config["surfaceOpacity"] as? Double), savedOpacity, accuracy: 0.0051)
         XCTAssertEqual(config["shelfColumns"] as? Int, 2)
