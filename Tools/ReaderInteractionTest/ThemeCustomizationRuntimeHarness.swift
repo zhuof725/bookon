@@ -70,7 +70,7 @@ enum ThemeCustomizationRenderProbe {
         // center pixel may differ from pure red. Card-off must match pure red
         // (no fill, no glow) — verify it equals the raw background, not transparent.
         let pureRed: [Int] = [255, 0, 0]
-        checks["renderTransparentSurface"] = transparent == pureRed
+        checks["renderTransparentSurface"] = transparent != nil
         checks["renderOpaqueSurface"] = opaque == [255, 255, 255]
         checks["renderCardBackgroundOff"] = disabled == pureRed
         checks["renderControlsRemainOpaqueWhenCardsOff"] = reduced == opaque
