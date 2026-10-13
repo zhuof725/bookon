@@ -54,15 +54,12 @@ enum ThemeCustomizationRenderProbe {
         var theme = AppTheme.custom()
         func pixels(_ effect: ThemeInterfaceEffect, card: Bool, enabled: Bool, reduced: Bool) -> [Int]? {
             theme.customization?.effect = effect; theme.customization?.cardBackground = enabled
+            let palette = ResolvedAppPalette(theme: theme, scheme: .light)
             let view = ZStack {
                 Color(.sRGB, red: 1, green: 0, blue: 0, opacity: 1)
-                if reduced {
-                    ThemeSurfaceRendering(shape: RoundedRectangle(cornerRadius: 12), isCard: card,
-                        palette: ResolvedAppPalette(theme: theme, scheme: .light), reduceTransparency: true)
-                } else {
-                    ThemeSurface(shape: RoundedRectangle(cornerRadius: 12), isCard: card)
-                }
-            }.environment(\.appTheme, theme).environment(\.colorScheme, .light)
+                ThemeSurfaceRendering(shape: RoundedRectangle(cornerRadius: 12), isCard: card,
+                    palette: palette, reduceTransparency: reduced)
+            }
             return center(bitmap(view))
         }
         let transparent = pixels(.transparent, card: false, enabled: true, reduced: false)

@@ -472,7 +472,7 @@ struct ThemeCustomizationEditor: View {
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 Text("透明度 · \(opacity)%").appFont(.body)
-                Slider(value: $draft.themeSetting(\.surfaceOpacity), in: 0...1)
+                Slider(value: $draft.themeSetting(\.surfaceOpacity), in: 0...1, step: 0.01)
                     .accessibilityLabel("透明度")
                     .accessibilityValue("\(opacity)%")
                     .accessibilityIdentifier("theme.editor.effect.opacity")
