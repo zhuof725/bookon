@@ -1,26 +1,5 @@
 import SwiftUI
-
-/// Sections describe controls that are actually consumed by app-owned views.
-enum ThemeEditorSection: String, CaseIterable, Identifiable {
-    case colors, background, cards, components
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .colors: return "颜色"
-        case .background: return "背景"
-        case .cards: return "卡片"
-        case .components: return "控件"
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .colors: return "paintpalette"
-        case .background: return "rectangle.fill"
-        case .cards: return "rectangle.on.rectangle"
-        case .components: return "slider.horizontal.3"
-        }
-    }
-}
+import UIKit
 
 enum ThemeColorField: String, Identifiable {
     case accent, background, backgroundEnd, surface, primaryText, secondaryText, border, selection
@@ -205,5 +184,171 @@ struct ThemeAccentSwatches: View {
                 .accessibilityIdentifier("theme.editor.swatch.\(item.offset)")
             }
         }
+    }
+}
+
+struct ThemeEditorSchemePicker: View {
+    @Binding var selection: ColorScheme
+    @Environment(\.dynamicTypeSize) private var textSize
+    var body: some View {
+        let layout = textSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
+        layout {
+            mode(.light, title: "浅色主题", symbol: "sun.max", id: "light")
+            mode(.dark, title: "深色主题", symbol: "moon", id: "dark")
+        }
+        .padding(4)
+        .background(Color.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 14))
+    }
+    private func mode(_ scheme: ColorScheme, title: String, symbol: String, id: String) -> some View {
+        Button { selection = scheme } label: {
+            Label(title, systemImage: symbol).appFont(.subheadline.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(selection == scheme ? Color(uiColor: .secondarySystemGroupedBackground) : .clear,
+                            in: RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == scheme ? .isSelected : [])
+        .accessibilityIdentifier("theme.editor.mode.\(id)")
+    }
+}
+
+enum ThemeEditorFonts {
+    static func choices(_ manager: ReadingFontManager) -> [ReadingFontChoice] {
+        var seen = Set<String>()
+        return (manager.builtInFonts + manager.importedFonts.flatMap(\.faces))
+            .filter { !$0.id.isEmpty && seen.insert($0.id).inserted }
+    }
+    static func isAvailable(_ name: String, manager: ReadingFontManager) -> Bool {
+        name.isEmpty || (choices(manager).contains { $0.id == name } && UIFont(name: name, size: 17) != nil)
+    }
+    static func name(_ selection: String?, manager: ReadingFontManager) -> String {
+        guard let selection else { return "跟随全局字体" }
+        if selection.isEmpty { return "系统默认" }
+        guard let choice = choices(manager).first(where: { $0.id == selection }) else {
+            return "字体不可用 · 系统默认"
+        }
+        return isAvailable(selection, manager: manager) ? choice.name : "\(choice.name) · 不可用"
+    }
+    static func resolved(_ selection: String?, manager: ReadingFontManager) -> String {
+        let name = selection ?? manager.selectedPostScriptName
+        return isAvailable(name, manager: manager) ? name : ""
+    }
+}
+
+struct ThemeEditorFontChoices: View {
+    @Binding var selection: String?
+    @ObservedObject private var manager = ReadingFontManager.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("界面字体").appFont(.headline)
+            Text("仅影响应用界面，不改变阅读字体或分页。以下选择会随主题保存。")
+                .appFont(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 0) {
+                row("跟随全局字体", detail: "当前：\(manager.selectedDisplayName)", value: nil,
+                    id: "theme.editor.font.follow")
+                Divider()
+                row("系统默认", detail: nil, value: "", id: "theme.editor.font.system")
+                ForEach(ThemeEditorFonts.choices(manager)) { choice in
+                    Divider()
+                    row(choice.name, detail: ThemeEditorFonts.isAvailable(choice.id, manager: manager) ? nil : "字体不可用",
+                        value: choice.id, id: "theme.editor.font.\(choice.id)")
+                }
+            }.padding(.horizontal, 16).themeEditorSurface()
+            if let selection, !ThemeEditorFonts.isAvailable(selection, manager: manager) {
+                Label("已选字体不可用，暂以系统字体显示；可选择其他字体。", systemImage: "exclamationmark.circle")
+                    .appFont(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("theme.editor.font.unavailable")
+            }
+            Text("文字预览 · 阅读，让时间慢下来。")
+                .font(AppFontStyle.body.resolve(ThemeEditorFonts.resolved(selection, manager: manager)))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(16).themeEditorSurface()
+                .accessibilityIdentifier("theme.editor.font.preview")
+            Text("列表包含内置字体和已导入字体。新增字体请先退出编辑，在字体管理中导入。")
+                .appFont(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private func row(_ title: String, detail: String?, value: String?, id: String) -> some View {
+        Button { selection = value } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).appFont(.body)
+                    if let detail { Text(detail).appFont(.caption).foregroundStyle(.secondary) }
+                }.fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 6)
+                if selection == value { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }
+            .padding(.vertical, 8).frame(minHeight: 48).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(value.map { !ThemeEditorFonts.isAvailable($0, manager: manager) } ?? false)
+        .accessibilityAddTraits(selection == value ? .isSelected : [])
+        .accessibilityIdentifier(id)
+    }
+}
+
+/// Real app components resolve the draft via a local environment only.
+struct ThemeEditorLivePreview: View {
+    let theme: AppTheme
+    let scheme: ColorScheme
+    @State private var tab: LibraryTab = .shelf
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("当前主题预览").appFont(.caption).foregroundStyle(.secondary)
+            ThemePreviewCard(theme: theme, scheme: scheme, isSelected: false)
+            LibraryDock(selection: $tab)
+                .padding(.vertical, 14)
+                .background { AppThemeCanvas() }
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Tab栏预览")
+                .accessibilityValue(theme.customization?.tabStyle.title ?? "仅图标")
+                .accessibilityIdentifier("theme.editor.tab.preview")
+        }
+        .environment(\.appTheme, theme)
+        .environment(\.colorScheme, scheme)
+    }
+}
+
+/// Width guides are measurements, not invented books or library content.
+struct ThemeEditorShelfSizing: View {
+    let columns: Int
+    let requestedWidth: Double
+    @State private var availableWidth: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var metrics: ThemeShelfMetrics {
+        ThemeShelfMetrics(width: availableWidth + 48,
+            customization: ThemeCustomization(shelfColumns: columns, coverWidth: requestedWidth),
+            accessibility: textSize.isAccessibilitySize)
+    }
+    private var columnWidth: CGFloat {
+        max(0, (availableWidth - CGFloat(metrics.columns - 1) * 18) / CGFloat(metrics.columns))
+    }
+    private var actualWidth: CGFloat { metrics.coverWidth }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("列宽示意").appFont(.headline)
+            GeometryReader { proxy in
+                HStack(spacing: 18) {
+                    ForEach(0..<metrics.columns, id: \.self) { _ in
+                        ZStack {
+                            Capsule().fill(Color.primary.opacity(0.07))
+                            Capsule().fill(Color.primary.opacity(0.32)).frame(width: actualWidth)
+                        }.frame(maxWidth: .infinity)
+                    }
+                }
+                .onAppear { availableWidth = proxy.size.width }
+                .onChange(of: proxy.size.width) { availableWidth = $0 }
+            }.frame(height: 10).accessibilityHidden(true)
+            Text("此示意区每列可用 \(Int(columnWidth.rounded(.down))) pt，封面显示宽度为 \(Int(actualWidth.rounded(.down))) pt；当前空间容纳 \(metrics.columns) 列。实际书架按当时的窗口宽度计算。")
+                .appFont(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("theme.editor.shelf.clamp")
+        }.padding(16).themeEditorSurface()
     }
 }

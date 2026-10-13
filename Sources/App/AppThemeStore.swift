@@ -12,6 +12,7 @@ final class AppThemeStore: ObservableObject {
     @Published private(set) var selectedID: String = AppTheme.defaultID
     @Published private(set) var notice: String?
     private let defaults: UserDefaults
+    private let assets: ThemeAssetStore
 
     private struct Snapshot: Codable {
         var version = 1
@@ -30,8 +31,9 @@ final class AppThemeStore: ObservableObject {
         }
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, assets: ThemeAssetStore = .shared) {
         self.defaults = defaults
+        self.assets = assets
         reload()
     }
 
@@ -94,9 +96,14 @@ final class AppThemeStore: ObservableObject {
     private func persist(_ items: [AppTheme], selected: String) throws {
         let data = try JSONEncoder().encode(Snapshot(themes: items, selectedID: selected))
         guard data.count <= 256_000 else { throw StoreError.invalid("主题数据过大，无法保存。") }
+        // Delete only formerly referenced images after the new snapshot commits.
+        // Shared assets survive while any saved theme still references them.
+        let previousAssets = Set(customThemes.flatMap { $0.assetIDs })
+        let retainedAssets = Set(items.flatMap { $0.assetIDs })
         defaults.set(data, forKey: Self.storageKey)
         customThemes = items
         selectedID = selected
         notice = nil
+        for id in previousAssets.subtracting(retainedAssets) { assets.remove(id) }
     }
 }

@@ -7,6 +7,7 @@ import ImageIO
 @MainActor
 final class LocalCoverImageLoader: ObservableObject {
     @Published private(set) var image: UIImage?
+    @Published private(set) var didFail = false
     private(set) var sourceURL: URL?
     private var generation = UUID()
 
@@ -17,6 +18,7 @@ final class LocalCoverImageLoader: ObservableObject {
         if sourceURL != url {
             sourceURL = url
             image = nil
+            didFail = false
         }
         guard let url, url.isFileURL else { return }
         let decoded: UIImage? = await Task.detached(priority: .utility) {
@@ -29,7 +31,8 @@ final class LocalCoverImageLoader: ObservableObject {
             return UIImage(cgImage: thumbnail)
         }.value
         guard !Task.isCancelled, generation == token, sourceURL == url else { return }
-        if let decoded { image = decoded }
+        if let decoded { image = decoded; didFail = false }
+        else { didFail = image == nil }
     }
 }
 
@@ -51,13 +54,18 @@ struct BookCoverImage: View {
                 if let resolvedURL, resolvedURL.isFileURL {
                     if loader.sourceURL == resolvedURL, let image = loader.image {
                         Image(uiImage: image).resizable().scaledToFill()
+                    } else if loader.sourceURL == resolvedURL, loader.didFail {
+                        fallback
                     } else { placeholder }
                 } else if let resolvedURL, ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") {
                     AsyncImage(url: resolvedURL) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() }
-                        else { placeholder }
+                        switch phase {
+                        case .success(let image): image.resizable().scaledToFill()
+                        case .failure: fallback
+                        default: placeholder
+                        }
                     }
-                } else { placeholder }
+                } else { fallback }
             }
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
@@ -67,10 +75,29 @@ struct BookCoverImage: View {
         .accessibilityHidden(true)
     }
 
+    private var fallback: some View { ThemeDefaultCover(placeholder: placeholder) }
+
     private var placeholder: some View {
         ZStack {
             LinearGradient(colors: [palette.placeholderTop, palette.placeholderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
             Image(systemName: "book.closed").font(.system(size: 26, weight: .light)).foregroundStyle(palette.primary.opacity(0.55))
+        }
+    }
+}
+
+/// Only mounted for missing/failed covers, never while a valid cover is loading.
+private struct ThemeDefaultCover<Placeholder: View>: View {
+    @Environment(\.appTheme) private var theme
+    @StateObject private var loader = ThemeAssetImageLoader()
+    let placeholder: Placeholder
+    var body: some View {
+        Group {
+            if loader.assetID == theme.customization?.defaultCoverImage, let image = loader.image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else { placeholder }
+        }
+        .task(id: theme.customization?.defaultCoverImage) {
+            await loader.load(theme.customization?.defaultCoverImage)
         }
     }
 }

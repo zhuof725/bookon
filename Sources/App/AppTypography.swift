@@ -68,9 +68,21 @@ struct AppFontStyle {
 
 struct AppTypography: ViewModifier {
     @ObservedObject private var manager = ReadingFontManager.shared
+    @Environment(\.appTheme) private var theme
     let style: AppFontStyle
+    private var selectedName: String {
+        guard let override = theme.customization?.fontPostScriptName else { return manager.selectedPostScriptName }
+        guard !override.isEmpty else { return "" }
+        let available = manager.builtInFonts.contains { $0.id == override }
+            || manager.importedFonts.contains { $0.faces.contains { $0.id == override } }
+        // CoreText can retain a deleted font while a view still references it;
+        // UIFont alone is not proof that the user's font remains available.
+        return available && UIFont(name: override, size: style.size) != nil ? override : ""
+    }
     func body(content: Content) -> some View {
-        content.font(style.resolve(manager.selectedPostScriptName))
+        // nil follows the font manager; "" deliberately selects the original font.
+        // Never write the manager: app typography must not repaginate reader text.
+        content.font(style.resolve(selectedName))
     }
 }
 

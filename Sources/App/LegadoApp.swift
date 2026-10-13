@@ -17,6 +17,7 @@ struct LegadoApp: App {
             RootView()
                 .preferredColorScheme(appColorScheme)
                 .modifier(AppTypographyRoot())
+                .modifier(ThemeLaunchHost())
                 .modifier(MonochromeAppStyle())
                 .modifier(AppThemeRoot())
                 .onAppear { VerifyPresenter.install() }

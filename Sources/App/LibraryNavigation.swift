@@ -132,11 +132,15 @@ private struct LibraryCard<Content: View>: View {
             }
             VStack(spacing: 0) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(palette.surface, in: RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
-                .overlay {
-                    if palette.cardBorder {
-                        RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
-                            .strokeBorder(palette.border, lineWidth: 0.5)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
+                    if palette.interfaceEffect != nil {
+                        ThemeSurface(shape: shape, isCard: true)
+                    } else {
+                        shape.fill(palette.surface)
+                            .overlay {
+                                if palette.cardBorder { shape.strokeBorder(palette.border, lineWidth: 0.5) }
+                            }
                             .allowsHitTesting(false)
                     }
                 }

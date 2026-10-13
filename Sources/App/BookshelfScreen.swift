@@ -44,17 +44,21 @@ struct ShelfGlass<S: InsettableShape>: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content.background {
-            ZStack {
-                if reduceTransparency || palette.usesOpaqueSurfaces { shape.fill(palette.surface) }
-                else {
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(palette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
-                }
-                // The card switch never removes control or dock outlines.
-                if !isCard || palette.cardBorder {
-                    shape.strokeBorder(palette.border, lineWidth: 0.5)
-                }
-            }.allowsHitTesting(false)
+            if palette.interfaceEffect != nil {
+                ThemeSurface(shape: shape, isCard: isCard)
+            } else {
+                ZStack {
+                    if reduceTransparency || palette.usesOpaqueSurfaces { shape.fill(palette.surface) }
+                    else {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(palette.surface.opacity(scheme == .dark ? 0.15 : 0.65))
+                    }
+                    // The card switch never removes control or dock outlines.
+                    if !isCard || palette.cardBorder {
+                        shape.strokeBorder(palette.border, lineWidth: 0.5)
+                    }
+                }.allowsHitTesting(false)
+            }
         }
     }
 }
@@ -63,6 +67,7 @@ struct ShelfGlass<S: InsettableShape>: ViewModifier {
 /// exactly the same card/menu code. Only callbacks may mutate the user's library.
 struct BookshelfScreen: View {
     @ThemePalette private var palette
+    @Environment(\.appTheme) private var theme
     let books: [Book]
     let localOrigin: String
     let onOpen: (Book) -> Void
@@ -85,7 +90,10 @@ struct BookshelfScreen: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let columns = typeSize.isAccessibilitySize ? 2 : max(3, Int((geometry.size.width - 48) / 124))
+            let metrics = theme.customization.map {
+                ThemeShelfMetrics(width: geometry.size.width, customization: $0, accessibility: typeSize.isAccessibilitySize)
+            }
+            let columns = metrics?.columns ?? (typeSize.isAccessibilitySize ? 2 : max(3, Int((geometry.size.width - 48) / 124)))
             VStack(spacing: 14) {
                 header
                 if selecting { selectionBar }
@@ -99,8 +107,8 @@ struct BookshelfScreen: View {
                         }.padding(36).padding(.top, 70).frame(maxWidth: .infinity)
                         .accessibilityIdentifier("shelf.empty")
                     } else if layout == .grid {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18), count: columns), alignment: .leading, spacing: 22) {
-                            ForEach(visibleBooks) { book in bookButton(book, grid: true) }
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: metrics == nil ? 10 : 0), spacing: 18), count: columns), alignment: .leading, spacing: 22) {
+                            ForEach(visibleBooks) { book in bookButton(book, grid: true, coverWidth: metrics?.coverWidth) }
                         }.padding(.horizontal, 24).padding(.top, 2).padding(.bottom, 24)
                     } else {
                         LazyVStack(spacing: 14) {
@@ -162,13 +170,13 @@ struct BookshelfScreen: View {
         }.appFont(.subheadline).padding(.horizontal, 24)
     }
 
-    private func bookButton(_ book: Book, grid: Bool) -> some View {
+    private func bookButton(_ book: Book, grid: Bool, coverWidth: CGFloat? = nil) -> some View {
         Button {
             if selecting {
                 if selection.contains(book.id) { selection.remove(book.id) } else { selection.insert(book.id) }
             } else { onOpen(book) }
         } label: {
-            ShelfBookCard(book: book, grid: grid, selecting: selecting, selected: selection.contains(book.id))
+            ShelfBookCard(book: book, grid: grid, selecting: selecting, selected: selection.contains(book.id), coverWidth: coverWidth)
         }.buttonStyle(.plain)
         .accessibilityLabel(book.name + "，" + ShelfBooks.subtitle(book))
         .accessibilityValue(selecting ? (selection.contains(book.id) ? "已选择" : "未选择") : "打开阅读")
@@ -255,32 +263,47 @@ private struct ShelfMenuPointer: Shape {
 
 struct ShelfBookCard: View {
     @ThemePalette private var palette
+    @Environment(\.appTheme) private var theme
+    @Environment(\.dynamicTypeSize) private var typeSize
     let book: Book
     let grid: Bool
     let selecting: Bool
     let selected: Bool
+    var coverWidth: CGFloat? = nil
+    private var accessibleCustom: Bool { theme.customization != nil && typeSize.isAccessibilitySize }
     var body: some View {
         Group {
             if grid {
                 VStack(spacing: 8) {
-                    cover.aspectRatio(0.70, contentMode: .fit)
+                    gridCover
                     VStack(spacing: 3) {
-                        Text(book.name).appFont(.system(size: 13, weight: .semibold)).lineLimit(1)
-                        Text(ShelfBooks.subtitle(book)).appFont(.system(size: 11)).foregroundStyle(palette.secondary).lineLimit(1)
-                    }.frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
+                        Text(book.name)
+                            .appFont(accessibleCustom ? .headline : .system(size: 13, weight: .semibold))
+                            .lineLimit(accessibleCustom ? nil : (theme.customization == nil ? 1 : 2))
+                        Text(ShelfBooks.subtitle(book))
+                            .appFont(accessibleCustom ? .subheadline : .system(size: 11))
+                            .foregroundStyle(palette.secondary)
+                            .lineLimit(accessibleCustom ? nil : 1)
+                    }.fixedSize(horizontal: false, vertical: accessibleCustom)
+                        .frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
                         .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 13), style: .continuous), isCard: true))
                 }
             } else {
                 HStack(spacing: 14) {
+                    // The cover-width preference is grid-only: lists retain room for text.
                     cover.frame(width: 62, height: 88)
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(book.name).appFont(.headline).lineLimit(2)
-                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(2)
-                    }
+                        Text(book.name).appFont(.headline).lineLimit(accessibleCustom ? nil : 2)
+                        Text(ShelfBooks.subtitle(book)).appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(accessibleCustom ? nil : 2)
+                    }.fixedSize(horizontal: false, vertical: accessibleCustom)
                     Spacer(minLength: 0)
                 }.padding(10).modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 18)), isCard: true))
             }
         }.foregroundStyle(palette.primary)
+    }
+    @ViewBuilder private var gridCover: some View {
+        if let coverWidth { cover.frame(width: coverWidth, height: coverWidth / 0.70) }
+        else { cover.aspectRatio(0.70, contentMode: .fit) }
     }
     private var cover: some View {
         ShelfCoverImage(url: BookCoverLocation.url(for: book))

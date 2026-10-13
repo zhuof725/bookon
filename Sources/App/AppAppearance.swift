@@ -37,8 +37,8 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
     }
 }
 
-/// Palette grid first, then quiet setting rows. This is a presentation change:
-/// storage, templates, editing and explicit application remain unchanged.
+/// Preserve the saved palette grid. New themes start with independent settings;
+/// built-ins remain available to apply or copy through the edit action.
 struct AppAppearanceSettingsView: View {
     @ObservedObject private var store: AppThemeStore
     @AppStorage(AppAppearance.storageKey) private var rawAppearance = AppAppearance.system.rawValue
@@ -46,8 +46,6 @@ struct AppAppearanceSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @State private var browsedID: String?
-    @State private var showingTemplateGallery = false
-    @State private var pendingDraft: AppTheme?
     @State private var editorTheme: AppTheme?
     @State private var pendingDelete: AppTheme?
     @State private var notice: String?
@@ -146,18 +144,6 @@ struct AppAppearanceSettingsView: View {
         .environment(\.appTheme, store.selectedTheme)
         .onAppear { normalizeBrowsedTheme() }
         .onChange(of: store.customThemes) { _ in normalizeBrowsedTheme() }
-        .fullScreenCover(isPresented: $showingTemplateGallery, onDismiss: {
-            if let pendingDraft {
-                editorTheme = pendingDraft
-                self.pendingDraft = nil
-            }
-        }) {
-            ThemeGalleryView(onCancel: {
-                pendingDraft = nil; showingTemplateGallery = false
-            }, onSelect: { draft in
-                pendingDraft = draft; showingTemplateGallery = false
-            })
-        }
         .fullScreenCover(item: $editorTheme) { theme in
             ThemeEditorView(theme: theme, store: store, onCancel: { editorTheme = nil }, onSaved: {
                 editorTheme = nil
@@ -192,7 +178,7 @@ struct AppAppearanceSettingsView: View {
                 searchFocused = false
                 browsedID = theme.id
             }, onCreate: {
-                searchFocused = false; pendingDraft = nil; showingTemplateGallery = true
+                searchFocused = false; editorTheme = AppTheme.custom()
             })
             if filteredThemes.isEmpty {
                 Text(searchText.isEmpty ? "暂无此类主题，点按新建开始。" : "没有匹配的主题，请调整搜索或筛选。")
@@ -242,14 +228,14 @@ struct AppAppearanceSettingsView: View {
 
     private var interfaceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("界面").appFont(.title3.weight(.semibold))
+            Text("界面与外观").appFont(.title3.weight(.semibold))
                 .padding(.bottom, 10).accessibilityAddTraits(.isHeader)
             valueRow(title: "配色方案") {
                 Text(browsedTheme.name).appFont(.body)
                     .accessibilityIdentifier("theme.gallery.name")
             }
             Button { customizeBrowsedTheme() } label: {
-                settingLabel(title: "颜色与样式", symbol: "paintpalette",
+                settingLabel(title: "编辑主题", symbol: "slider.horizontal.3",
                              value: browsedTheme.isBuiltIn ? "创建副本" : "编辑", chevron: true)
             }
             .buttonStyle(.plain).accessibilityIdentifier("theme.customize")

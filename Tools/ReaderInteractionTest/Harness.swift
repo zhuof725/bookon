@@ -18,7 +18,8 @@ struct HarnessApp: App {
             // other app defaults while seeding a test.
             customThemeDefaults.removeObject(forKey: AppThemeStore.storageKey)
         }
-        _customThemeStore = StateObject(wrappedValue: AppThemeStore(defaults: customThemeDefaults))
+        _customThemeStore = StateObject(wrappedValue: AppThemeStore(defaults: customThemeDefaults,
+            assets: CustomThemeHarnessSupport.assets))
 
         if arguments.contains("--shelf-mode") {
             ShelfFixture.resetDefaults()

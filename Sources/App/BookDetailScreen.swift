@@ -379,12 +379,17 @@ private struct DetailCardSurface: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 let shape = RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous)
-                shape
-                    .fill(palette.surface)
-                    .shadow(color: .black.opacity(scheme == .dark ? 0.14 : 0.025), radius: 14, x: 0, y: 6)
-                    .overlay {
-                        if palette.cardBorder { shape.strokeBorder(palette.border, lineWidth: 0.5) }
-                    }
+                if palette.interfaceEffect != nil {
+                    ThemeSurface(shape: shape, isCard: true)
+                } else {
+                    // Preserve legacy detail cards, including their subtle shadow.
+                    shape
+                        .fill(palette.surface)
+                        .shadow(color: .black.opacity(scheme == .dark ? 0.14 : 0.025), radius: 14, x: 0, y: 6)
+                        .overlay {
+                            if palette.cardBorder { shape.strokeBorder(palette.border, lineWidth: 0.5) }
+                        }
+                }
             }
     }
 }

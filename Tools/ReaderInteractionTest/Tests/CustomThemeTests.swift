@@ -7,6 +7,7 @@ final class CustomThemeTests: XCTestCase {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         app = XCUIApplication()
+        app.launchEnvironment["CUSTOM_THEME_FIXTURE_ID"] = UUID().uuidString
     }
 
     override func tearDownWithError() throws {
@@ -38,7 +39,7 @@ final class CustomThemeTests: XCTestCase {
     }
 
     private func visible(_ element: XCUIElement) {
-        for _ in 0..<6 {
+        for _ in 0..<12 {
             if element.exists && element.isHittable { return }
             let down = element.exists && element.frame.minY < 100
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.38 : 0.78))
@@ -49,6 +50,7 @@ final class CustomThemeTests: XCTestCase {
     }
 
     private func tap(_ identifier: String, timeout: TimeInterval = 6) {
+        if identifier == "theme.editor.save" || identifier == "theme.editor.cancel" { summary() }
         let element = app.buttons[identifier]
         XCTAssertTrue(element.waitForExistence(timeout: timeout), identifier)
         visible(element)
@@ -68,8 +70,19 @@ final class CustomThemeTests: XCTestCase {
     }
 
     private func section(_ name: String) {
-        tap("theme.editor.section.\(name)")
-        XCTAssertTrue(app.buttons["theme.editor.section.\(name)"].isSelected)
+        summary()
+        tap("theme.editor.row.\(name)")
+        XCTAssertTrue(app.descendants(matching: .any)
+            .matching(identifier: "theme.editor.page.\(name)").firstMatch.waitForExistence(timeout: 6))
+    }
+
+    private func summary() {
+        if app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'theme.editor.page.'")).firstMatch.exists {
+            let back = app.navigationBars.buttons.element(boundBy: 0)
+            XCTAssertTrue(back.exists && back.isHittable, "Detail must provide a real navigation back button")
+            back.tap()
+        }
+        XCTAssertTrue(app.textFields["theme.editor.name"].waitForExistence(timeout: 6))
     }
 
     private func setHex(_ field: String, to input: String, expected: String) {
@@ -93,15 +106,15 @@ final class CustomThemeTests: XCTestCase {
         return field
     }
 
-    private func openTemplate(_ template: String = "builtin.mist") {
+    private func openTemplate(_ legacyTemplate: String = "builtin.monochrome") {
+        // The legacy parameter preserves existing call sites, not old behavior:
+        // every add must now open one neutral draft directly, without a gallery.
         tap("theme.add")
-        let templateButton = app.buttons["theme.template.\(template)"]
-        XCTAssertTrue(templateButton.waitForExistence(timeout: 8), templateButton.debugDescription)
-        capture("custom-theme-template-gallery")
-        visible(templateButton)
-        templateButton.tap()
         XCTAssertTrue(app.buttons["theme.editor.save"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.textFields["theme.editor.name"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'theme.template.'")).count, 0)
+        XCTAssertTrue(app.buttons["theme.editor.row.tab"].exists)
+        capture("custom-theme-direct-settings-summary")
     }
 
     private func createTheme(named name: String = "Forest Theme", apply: Bool = true) {
@@ -115,6 +128,7 @@ final class CustomThemeTests: XCTestCase {
         tap("theme.editor.mode.dark")
         tap("theme.editor.swatch.5")
         capture("custom-theme-editor-dark")
+        summary()
         XCTAssertTrue(app.buttons["theme.editor.save"].isEnabled)
         tap("theme.editor.save")
         let nameLabel = app.staticTexts["theme.gallery.name"]
@@ -230,33 +244,35 @@ final class CustomThemeTests: XCTestCase {
 
     func testEditorLightDarkPreviewIsDraftOnly() throws {
         launch()
-        openTemplate("builtin.sage")
-        let preview = app.descendants(matching: .any).matching(identifier: "theme.editor.preview").firstMatch
-        XCTAssertTrue(preview.waitForExistence(timeout: 4))
-        let modeY = app.buttons["theme.editor.mode.light"].frame.minY
-        for tab in ["background", "cards", "components", "colors"] {
-            section(tab)
-            XCTAssertTrue(editorField().isHittable, "Name must remain near the top of \(tab)")
-            XCTAssertTrue(preview.isHittable, "Preview must be visible on entering \(tab)")
-            XCTAssertGreaterThanOrEqual(preview.frame.height, 120)
-            XCTAssertLessThanOrEqual(preview.frame.height, 180)
-            XCTAssertEqual(app.buttons["theme.editor.mode.light"].frame.minY, modeY, accuracy: 2)
-            XCTAssertTrue(app.buttons["theme.editor.mode.dark"].isHittable)
-            if tab == "components" { capture("custom-theme-components-preview") }
+        let before = try storeReport()
+        openTemplate()
+        let rows = ["tab", "shelf", "cover", "launch", "colors", "background", "effect", "cards"]
+        for key in rows {
+            let row = app.buttons["theme.editor.row.\(key)"]
+            visible(row)
+            XCTAssertGreaterThanOrEqual(row.frame.height, 44, key)
+            XCTAssertGreaterThanOrEqual(row.frame.minX, 0)
+            XCTAssertLessThanOrEqual(row.frame.maxX, app.frame.maxX)
         }
+        capture("custom-theme-eight-settings-rows-bottom")
+        section("background")
+        tap("theme.editor.style.gradient")
+        section("colors")
         for field in ["accent", "background", "backgroundEnd", "surface", "primaryText", "secondaryText", "border", "selection"] {
-            XCTAssertTrue(app.buttons["theme.editor.hex.\(field)"].exists, field)
+            visible(app.buttons["theme.editor.hex.\(field)"])
         }
-        capture("custom-theme-editor-light")
         tap("theme.editor.mode.dark")
         XCTAssertTrue(app.buttons["theme.editor.mode.dark"].isSelected)
-        XCTAssertTrue((preview.value as? String)?.contains("深色") == true)
-        capture("custom-theme-editor-dark-preview")
+        capture("custom-theme-colors-detail-dark")
+        // The production fullScreenCover hides root AX diagnostics. Verify the
+        // persisted snapshot after cancel rather than reading through a modal.
         tap("theme.editor.cancel")
+        tap("theme.editor.discard")
         let selected = app.staticTexts["theme.gallery.selected"]
         visible(selected)
         XCTAssertEqual(selected.label, "经典黑白")
         XCTAssertEqual(app.staticTexts["theme.harness.custom.count"].label, "0")
+        XCTAssertTrue(NSDictionary(dictionary: try storeReport()).isEqual(to: before))
     }
 
     func testPaletteGridPlacementLightAndDark320() throws {
@@ -337,6 +353,7 @@ final class CustomThemeTests: XCTestCase {
         launch(clean: true)
         openTemplate("builtin.monochrome")
         replace(editorField(), with: "Exact Theme")
+        section("colors")
         tap("theme.editor.hex.accent")
         let input = app.textFields["theme.hex.input"]
         for invalid in ["GGGGGG", "80123456"] {

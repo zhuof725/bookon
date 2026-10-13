@@ -64,6 +64,18 @@ struct AppTheme: Codable, Equatable, Identifiable {
     var backgroundStyle: AppThemeBackgroundStyle
     var light: AppThemeSwatches
     var dark: AppThemeSwatches
+    /// Absent in legacy snapshots: retain the original layouts and font behavior.
+    var customization: ThemeCustomization? = nil
+
+    var assetIDs: Set<String> { customization?.assetIDs ?? [] }
+
+    /// Start a neutral, independent theme; never select or clone a template.
+    static func custom() -> AppTheme {
+        AppTheme(id: UUID().uuidString.lowercased(), name: "自定义主题", backgroundStyle: .solid,
+            light: .init(background: "F9F9F9", backgroundEnd: "F9F9F9", surface: "FFFFFF", accent: "1A1A1A"),
+            dark: .init(background: "111111", backgroundEnd: "111111", surface: "1F1F1F", accent: "EBEBEB"),
+            customization: ThemeCustomization())
+    }
 
     static let cardRadiusRange: ClosedRange<Double> = 8...30
     static let defaultCardRadius: Double = 20
@@ -83,6 +95,7 @@ struct AppTheme: Codable, Equatable, Identifiable {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return "请为主题填写名称。" }
         if trimmed.count > 40 { return "主题名称最多 40 个字。" }
+        if let message = customization?.validationMessage { return message }
         for (label, colors) in [("浅色", light), ("深色", dark)] {
             if let radius = colors.cardRadius,
                !radius.isFinite || !Self.cardRadiusRange.contains(radius) {

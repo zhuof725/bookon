@@ -6,8 +6,13 @@ import UIKit
 /// production store still receives a real UserDefaults instance, but this suite
 /// can never read or write the app's standard defaults.
 enum CustomThemeHarnessSupport {
-    static let suiteName = "io.legado.reader.interaction.custom-theme"
+    static let fixtureID = ProcessInfo.processInfo.environment["CUSTOM_THEME_FIXTURE_ID"]
+        .flatMap(UUID.init(uuidString:))?.uuidString ?? "legacy-harness"
+    static let suiteName = "io.legado.reader.interaction.custom-theme." + fixtureID
     static let defaults = UserDefaults(suiteName: suiteName)!
+    static let assetDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(suiteName, isDirectory: true).appendingPathComponent("assets", isDirectory: true)
+    static let assets = ThemeAssetStore(directory: assetDirectory)
 }
 
 /// Native-only route for custom theme interaction tests. The store is injected
@@ -140,11 +145,7 @@ struct CustomThemeHarnessView: View {
     private func preview(_ destination: PreviewDestination) -> some View {
         switch destination {
         case .shelf:
-            BookshelfScreen(
-                books: ShelfFixture.books,
-                localOrigin: ShelfFixture.localOrigin,
-                onOpen: { _ in }, onSearch: {}, onImport: {}, onRemove: { _ in }
-            )
+            ThemeCustomizationRuntimeView(store: store)
         case .detail:
             BookDetailScreen(
                 book: DetailFixture.book(missingMetadata: false),
@@ -213,6 +214,7 @@ enum CustomThemeModelProbe {
         }
     }
 
+    @MainActor
     static func run() -> String {
         var checks: [String: Bool] = [:]
         guard let base = suite("base"),
@@ -316,6 +318,8 @@ enum CustomThemeModelProbe {
 
         checks.merge(compatibilityChecks(defaults: v1Defaults)) { _, new in new }
         checks.merge(extendedChecks(defaults: extendedDefaults)) { _, new in new }
+        checks.merge(ThemeCustomizationProbe.run()) { _, new in new }
+        checks.merge(ThemeCustomizationRenderProbe.run()) { _, new in new }
         return encoded(checks)
     }
 

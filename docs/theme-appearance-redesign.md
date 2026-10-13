@@ -1,5 +1,7 @@
 # Theme appearance redesign — model and real component integration
 
+> Historical color-editor/grid redesign notes. The later direct-customization request supersedes the template-first flow and the "not added" image/settings scope below; see [custom-theme-settings.md](custom-theme-settings.md). The eight-row editor now owns all changes as one draft. The existing color validation and light/dark swatches remain compatible.
+
 ## Model/API contract
 
 All six additions belong to `AppThemeSwatches`, independently in `AppTheme.light` and `.dark`:

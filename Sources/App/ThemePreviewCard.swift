@@ -165,10 +165,13 @@ private struct ThemeComponentCanvas: View {
     // UIKit dynamic colors may resolve from the host instead of a nested
     // SwiftUI colorScheme. Resolve every preview through concrete RGB tokens.
     // This local copy never reaches the store or changes a persisted ID.
-    private var palette: ResolvedAppPalette {
+    private var previewTheme: AppTheme {
         var preview = theme
         if preview.id == AppTheme.defaultID { preview.id = "preview.monochrome" }
-        return ResolvedAppPalette(theme: preview, scheme: scheme)
+        return preview
+    }
+    private var palette: ResolvedAppPalette {
+        ResolvedAppPalette(theme: previewTheme, scheme: scheme)
     }
 
     private var componentRadius: CGFloat { min(12, max(0, palette.cardRadius * 0.4)) }
@@ -176,12 +179,7 @@ private struct ThemeComponentCanvas: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if palette.gradient {
-                    LinearGradient(colors: [palette.background, palette.backgroundEnd],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                } else {
-                    palette.background
-                }
+                AppThemeCanvas()
                 HStack(alignment: .top, spacing: 8) {
                     sidebar
                         .frame(width: max(38, geometry.size.width * 0.18))
@@ -200,6 +198,7 @@ private struct ThemeComponentCanvas: View {
                 }
                 .padding(10)
             }
+            .environment(\.appTheme, previewTheme)
         }
     }
 
@@ -215,13 +214,7 @@ private struct ThemeComponentCanvas: View {
             .frame(height: 7)
         }
         .padding(6)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: componentRadius))
-        .overlay {
-            if palette.cardBorder {
-                RoundedRectangle(cornerRadius: componentRadius)
-                    .strokeBorder(palette.border, lineWidth: 0.5)
-            }
-        }
+        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: componentRadius), isCard: true))
     }
 
     private var componentCard: some View {
@@ -238,13 +231,7 @@ private struct ThemeComponentCanvas: View {
         }
         .padding(9)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: componentRadius))
-        .overlay {
-            if palette.cardBorder {
-                RoundedRectangle(cornerRadius: componentRadius)
-                    .strokeBorder(palette.border, lineWidth: 0.5)
-            }
-        }
+        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: componentRadius), isCard: true))
     }
 
     private var detailRail: some View {

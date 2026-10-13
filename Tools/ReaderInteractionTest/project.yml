@@ -26,6 +26,12 @@ targets:
       - path: ../../Sources/App/LocalCoverImageLoader.swift
       - path: ThemeHarness.swift
       - path: CustomThemeHarness.swift
+      - path: ThemeCustomizationHarness.swift
+      - path: ThemeCustomizationRuntimeHarness.swift
+      - path: ../../Sources/App/ThemeCustomization.swift
+      - path: ../../Sources/App/ThemeAssetStore.swift
+      - path: ../../Sources/App/ThemeCustomizationEditor.swift
+      - path: ../../Sources/App/ThemeImagePicker.swift
       - path: AppearanceHarness.swift
       - path: ../../Sources/App/AppAppearance.swift
       - path: ../../Sources/App/AppTheme.swift

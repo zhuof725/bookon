@@ -4,11 +4,11 @@ The application appearance preference (`app.appearance.v1`: system/light/dark) r
 
 ## User flow
 
-我的 → 书库管理 → 外观主题 opens a wallpaper-inspired theme gallery: browse large rounded previews, then explicitly apply a theme. The + action opens a template gallery; a template becomes a user-owned draft in the full-screen editor. Built-in themes can be customized by creating a copy, not overwritten.
+我的 → 书库管理 → 外观主题 shows a compact four-column theme grid. Browsing and applying are separate. New opens a neutral, user-owned custom draft directly, without choosing a template. The editor groups eight real settings under Interface and Appearance: Tab bar, bookshelf, default cover, launch image, colors/font, page background, interface effect, and card background. Built-ins remain usable and can be copied, not overwritten. See [custom-theme-settings.md](custom-theme-settings.md) for the full settings and runtime boundaries.
 
 Custom themes have a name, solid/gradient background style, and separate light/dark background, gradient-end, card-surface and accent colors. Text and primary-button labels resolve automatically for contrast. Editing is local to the draft: switching preview light/dark or canceling does not change the application theme or system appearance preference. Saving creates/updates a theme; applying a new theme is a separate action. Saving edits to the active theme refreshes application-owned views in place.
 
-Themes can be edited again or deleted after confirmation. Removing the active custom theme falls back to Classic Monochrome. Native colors are edited with public SwiftUI ColorPicker; built-in templates and quick swatches give a simpler starting point. The interface takes inspiration from iOS wallpaper selection but does not modify iOS wallpapers or use Apple wallpaper assets. Photo wallpaper import is not included in this version.
+Themes can be edited again or deleted after confirmation. Removing the active custom theme falls back to Classic Monochrome. Native colors are edited with public SwiftUI ColorPicker and exact HEX inputs. Custom image files are copied into owned, bounded local image storage and referenced by stable filenames, not absolute sandbox paths or image data in preferences. Page backgrounds, missing-cover fallbacks and the optional app-open image are independent. The latter is an in-app dismissible overlay, not a replacement for the iOS system LaunchScreen.
 
 ## Storage and boundaries
 
