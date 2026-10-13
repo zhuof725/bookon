@@ -30,7 +30,6 @@ struct ThemeHomeGrid: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(theme.name)
                 .accessibilityValue(theme.id == selectedID ? "当前使用" : (theme.id == browsedID ? "正在浏览，尚未使用" : "未使用"))
                 .accessibilityHint("查看下方主题操作，不会立即应用")
@@ -54,7 +53,6 @@ struct ThemeHomeGrid: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel("新建主题")
             .accessibilityIdentifier("theme.add")
         }
