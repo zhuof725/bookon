@@ -24,7 +24,6 @@ struct ThemeCustomizationRuntimeView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) { LibraryDock(selection: $selection) }
         }
         .frame(width: 320)
-        .accessibilityIdentifier("theme.runtime.shelf")
     }
 }
 

@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-grid, full]
+        options: [cache-management, search-history, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -102,6 +102,7 @@ jobs:
             typography) ARGS=(-only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/InteractionTests) ;;
             native) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests) ;;
             theme) ARGS=(-only-testing:ReaderInteractionTests/ThemeTests) ;;
+            theme-customization-focused) ARGS=(-only-testing:ReaderInteractionTests/ThemeCustomizationTests -only-testing:ReaderInteractionTests/CustomThemeTests/testDark320ProductionShelfAndDetailScreens -only-testing:ReaderInteractionTests/CustomThemeTests/testHexValidationCancelCardsAndIndependentDarkPersistence -only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
             theme-customization) ARGS=(-only-testing:ReaderInteractionTests/ThemeCustomizationTests -only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests -only-testing:ReaderInteractionTests/ShelfTests) ;;
             theme-grid) ARGS=(-only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests) ;;
             custom-themes) ARGS=(-only-testing:ReaderInteractionTests/CustomThemeTests -only-testing:ReaderInteractionTests/AppearanceTests -only-testing:ReaderInteractionTests/ThemeTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests) ;;
@@ -166,7 +167,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization') }}
+        if: ${{ always() && (inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
         with:
           name: custom-theme-screenshots
           path: |
