@@ -170,11 +170,8 @@ struct AppAppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("主题画廊")
-                        .appFont(.title3.weight(.semibold))
-                    Text("像挑选墙纸一样预览你的阅读界面")
-                        .appFont(.footnote)
-                        .foregroundStyle(palette.secondary)
+                    Text("我的主题")
+                        .appFont(.title2.weight(.semibold))
                 }
                 Spacer(minLength: 12)
                 Button {
@@ -202,40 +199,19 @@ struct AppAppearanceSettingsView: View {
                             isSelected: theme.id == store.selectedID,
                             nameAccessibilityIdentifier: theme.id == browsedTheme?.id ? "theme.gallery.name" : nil
                         )
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 4)
                         .tag(theme.id)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 448)
+                .frame(height: 380)
                 .tabViewStyle(.page(indexDisplayMode: .never))
 
                 pageDots
                 browsedThemeActions
             }
 
-            HStack(spacing: 12) {
-                Button {
-                    customizeBrowsedTheme()
-                } label: {
-                    Label("自定", systemImage: "slider.horizontal.3")
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("theme.customize")
-                .disabled(browsedTheme == nil)
 
-                Button {
-                    showingTemplateGallery = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 48, height: 48)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("添加新主题")
-                .accessibilityIdentifier("theme.add.bottom")
-            }
         }
     }
 
@@ -277,48 +253,42 @@ struct AppAppearanceSettingsView: View {
     @ViewBuilder
     private var browsedThemeActions: some View {
         if let theme = browsedTheme {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(theme.name)
-                            .appFont(.headline)
-                        if theme.id == store.selectedID {
-                            Text("当前使用")
-                                .appFont(.caption)
-                                .foregroundStyle(palette.secondary)
-                        } else {
-                            Text("点击使用主题后应用")
-                                .appFont(.caption)
-                                .foregroundStyle(palette.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Button("使用主题") {
-                        apply(theme)
-                    }
-                    .appFont(.subheadline.weight(.semibold))
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("theme.use")
-                }
-
-                HStack(spacing: 14) {
-                    Text("已保存主题")
-                        .appFont(.caption)
-                        .foregroundStyle(palette.secondary)
-                    Text(store.selectedTheme.name)
-                        .appFont(.caption.weight(.medium))
-                        .lineLimit(1)
-                        .accessibilityIdentifier("theme.gallery.selected")
-                    Spacer(minLength: 0)
+            VStack(spacing: 16) {
+                HStack {
+                    Text(theme.name)
+                        .appFont(.title3.weight(.semibold))
+                    Spacer()
                     if !theme.isBuiltIn {
-                        Button("删除", role: .destructive) {
-                            pendingDelete = theme
+                        Button(role: .destructive) { pendingDelete = theme } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 44, height: 44)
                         }
-                        .appFont(.caption.weight(.semibold))
+                        .accessibilityLabel("删除主题")
                         .accessibilityIdentifier("theme.delete")
                     }
                 }
+                HStack(spacing: 12) {
+                    Button { customizeBrowsedTheme() } label: {
+                        Label("自定", systemImage: "slider.horizontal.3")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("theme.customize")
+                    Button { apply(theme) } label: {
+                        Text(theme.id == store.selectedID ? "正在使用" : "使用主题")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("theme.use")
+                }
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle")
+                    Text("当前：")
+                    Text(store.selectedTheme.name)
+                        .accessibilityIdentifier("theme.gallery.selected")
+                }
+                .appFont(.caption)
+                .foregroundStyle(palette.secondary)
             }
             .padding(.horizontal, 4)
         }

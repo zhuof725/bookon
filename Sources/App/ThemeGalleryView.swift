@@ -43,9 +43,10 @@ struct ThemeGalleryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    intro
-                    categoryPicker
-                    previewModePicker
+                    HStack(alignment: .center, spacing: 8) {
+                        categoryPicker
+                        previewModePicker
+                    }
                     templateGrid
                 }
                 .padding(.horizontal, 18)
@@ -54,7 +55,7 @@ struct ThemeGalleryView: View {
             }
             .scrollIndicators(.hidden)
             .background(galleryBackground.ignoresSafeArea())
-            .navigationTitle("添加新主题")
+            .navigationTitle("选择主题")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -83,17 +84,6 @@ struct ThemeGalleryView: View {
         })
     }
 
-    private var intro: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("从一套气质开始")
-                .appFont(.title2.weight(.bold))
-            Text("选一个喜欢的基础配色，下一步可以调整名称、明暗和颜色。")
-                .appFont(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var categoryPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
@@ -104,16 +94,12 @@ struct ThemeGalleryView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill(categoryColor(item))
-                                .frame(width: 8, height: 8)
                             Text(item.title)
                                 .appFont(.subheadline.weight(.semibold))
                         }
-                        .padding(.horizontal, 15)
+                        .padding(.horizontal, 12)
                         .frame(minHeight: 42)
-                        .background(category == item ? categoryColor(item).opacity(0.18) : Color.primary.opacity(0.06), in: Capsule())
-                        .overlay(Capsule().stroke(category == item ? categoryColor(item).opacity(0.72) : Color.primary.opacity(0.12), lineWidth: 1))
+                        .background(category == item ? Color.primary.opacity(0.10) : .clear, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(category == item ? .isSelected : [])
@@ -124,43 +110,36 @@ struct ThemeGalleryView: View {
     }
 
     private var previewModePicker: some View {
-        HStack(spacing: 10) {
-            Text("预览")
-                .appFont(.subheadline.weight(.semibold))
-            Spacer()
-            ForEach([ColorScheme.light, ColorScheme.dark], id: \.self) { scheme in
-                Button {
-                    selectedScheme = scheme
-                } label: {
-                    Image(systemName: scheme == .light ? "sun.max.fill" : "moon.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 42, height: 38)
-                        .background(selectedScheme == scheme ? Color.primary.opacity(0.13) : .clear, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(scheme == .light ? "浅色预览" : "深色预览")
-            }
+        Button {
+            selectedScheme = selectedScheme == .light ? .dark : .light
+        } label: {
+            Image(systemName: selectedScheme == .light ? "sun.max" : "moon")
+                .font(.system(size: 17, weight: .medium))
+                .frame(width: 44, height: 44)
+                .background(Color.primary.opacity(0.05), in: Circle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(selectedScheme == .light ? "切换深色预览" : "切换浅色预览")
     }
 
     private var templateGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 13), GridItem(.flexible(), spacing: 13)], spacing: 18) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
             ForEach(templates) { template in
                 Button {
                     onSelect(template.draft())
                 } label: {
                     VStack(alignment: .leading, spacing: 9) {
                         ThemePreviewCard(theme: template, scheme: selectedScheme, isSelected: false)
-                            .frame(height: 278)
+                            .frame(height: 260)
                         HStack(spacing: 6) {
                             Text(template.name)
                                 .appFont(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
-                            Image(systemName: template.backgroundStyle == .gradient ? "circle.lefthalf.filled" : "circle.fill")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(categoryColor(template.backgroundStyle))
+                            Circle().fill(AppThemeColor.color(template.swatches(for: selectedScheme).accent))
+                                .frame(width: 10, height: 10)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
@@ -169,18 +148,6 @@ struct ThemeGalleryView: View {
                 .accessibilityIdentifier("theme.template.\(template.id)")
             }
         }
-    }
-
-    private func categoryColor(_ item: GalleryCategory) -> Color {
-        switch item {
-        case .all: return .blue
-        case .solid: return .orange
-        case .gradient: return .purple
-        }
-    }
-
-    private func categoryColor(_ style: AppThemeBackgroundStyle) -> Color {
-        style == .solid ? .orange : .purple
     }
 
     private var reduceMotion: Bool {
