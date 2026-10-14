@@ -286,5 +286,19 @@ enum SourceLoginRegression {
         }
         check(SourceLoginForm.browserURL("https://example.invalid/" + String(repeating: "a", count: 2100)) == nil,
               "内置浏览器拒绝超长网址")
+        check(SourceLoginForm.browserOpenText("https://example.invalid/scan?code=1") == "已在内置浏览器打开 example.invalid",
+              "打开内置浏览器只回显主机名")
+        check(SourceLoginForm.browserOpenText("javascript:alert(1)") == "网址无法在内置浏览器打开",
+              "无法打开的网址给出失败回显")
+
+        // 点击回传：脚本返回值与异常都要有明确结果，空返回算已执行。
+        check(SourceLoginForm.resultText(action: "登录", outcome: .success("欢迎回来")).detail == "欢迎回来",
+              "脚本返回值原样回显")
+        check(SourceLoginForm.resultText(action: "登录", outcome: .success("   ")).detail == "已执行",
+              "脚本空返回回显为已执行")
+        let failed = SourceLoginForm.resultText(action: "登录",
+                                                outcome: .failure(LoginScriptError(message: "邮箱或密码错误")))
+        check(failed.success == false && failed.detail == "邮箱或密码错误", "脚本异常回显为失败原因")
+        check(SourceLoginForm.resultText(action: "登录", outcome: .success("ok")).success, "成功回显标记为成功")
     }
 }
