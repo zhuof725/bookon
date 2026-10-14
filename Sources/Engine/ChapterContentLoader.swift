@@ -15,8 +15,8 @@ enum ChapterContentLoader {
                                                 nextChapterUrl: nextChapterURL, book: book)
         }
         // Also normalize cache hits, so users do not have to clear old chapter caches
-        // after this source-specific display-layout fix.
-        return WebBook.normalizeShushanParagraphs(raw, source: source)
+        // after this paragraph-layout fix (it applies to every book source).
+        return WebBook.normalizeParagraphBoundaries(raw)
     }
 
     /// 旧版 c_MD5(url).txt 继续可读；命中后由共享缓存迁移到 source/book/chapter 隔离的新键。

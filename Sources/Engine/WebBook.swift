@@ -364,19 +364,32 @@ enum WebBook {
         if let rr = rule.replaceRegex, !rr.isEmpty {
             text = AnalyzeRule(content: text, baseUrl: chapter.url, jsLib: source.jsLib, context: RuleContext(source: source, book: book, chapter: chapter)).getString(rr.hasPrefix("##") ? rr : "##" + rr, from: text)
         }
-        // 书山聚合有时把段落分隔符只写成 U+3000，完全没有换行；
-        // 阅读器会把全章当一段。只对该源、且确无 CR/LF 时恢复段落边界。
-        text = normalizeShushanParagraphs(text, source: source)
+        // 段落边界不能因书源而异：有的源把段界只写成 U+3000，整章/整页没有换行，
+        // 阅读器会把整段当一段。这里对所有书源统一还原段界。
+        text = normalizeParagraphBoundaries(text)
         return text
     }
 
-    /// 书山聚合有一类无换行正文以「句末标点 + 全角空格」标记段落。
-    /// 仅该源且正文完全无 CR/LF 时，把这种段界还原为换行；其他源、已有分段、
-    /// 普通行内全角空格一律不动，避免影响此前的通用排版规则。
-    static func normalizeShushanParagraphs(_ text: String, source: BookSource) -> String {
-        guard source.bookSourceUrl == "书山聚合",
-              !text.contains("\n"), !text.contains("\r") else { return text }
-        let characters = Array(text)
+    /// 正文段落「排版」对所有书源一致：把「句末标点（可带闭引号/括号）+ 全角空格」
+    /// 这种只写在 U+3000 里的段界还原成换行。按行处理，避免误伤：
+    /// 含 CR 的行、没有 U+3000 的行、以及一行内命中不足两处的行一律原样返回；
+    /// 句中普通全角空格与已有换行都不动。
+    static func normalizeParagraphBoundaries(_ text: String) -> String {
+        guard text.contains("\u{3000}") else { return text }
+        var changed = false
+        let fixed = text.components(separatedBy: "\n").map { line -> String in
+            guard !line.contains("\r"), line.contains("\u{3000}") else { return line }
+            let recovered = recoverParagraphBoundaries(in: line)
+            if recovered != line { changed = true }
+            return recovered
+        }
+        return changed ? fixed.joined(separator: "\n") : text
+    }
+
+    /// 单行内还原段界；至少命中两处才认为这一行真的把段界写成了全角空格，
+    /// 否则原样返回（一句中间的单个全角空格不拆段）。
+    static func recoverParagraphBoundaries(in line: String) -> String {
+        let characters = Array(line)
         let paragraphMarks: Set<Character> = ["。", "！", "？", "!", "?", "…"]
         let closingMarks: Set<Character> = ["”", "’", "」", "』", "》", "〉", "】", "〕", "〗", "〙", "〛", "\"", "'", ")", "]", "}"]
         var output = ""
@@ -391,16 +404,21 @@ enum WebBook {
                 next += 1
             }
             if next < characters.count && characters[next] == "\u{3000}" {
-                output.append("\n")
-                boundaries += 1
-                next += 1
-                while next < characters.count && characters[next] == "\u{3000}" { next += 1 }
-                i = next
+                // 行尾的全角空格不是段界：不加空行，也不计入命中数。
+                var after = next + 1
+                while after < characters.count && characters[after] == "\u{3000}" { after += 1 }
+                if after < characters.count {
+                    output.append("\n")
+                    boundaries += 1
+                    i = after
+                } else {
+                    i = next
+                }
             } else {
                 i = next
             }
         }
-        return boundaries >= 2 ? output : text
+        return boundaries >= 2 ? output : line
     }
 
     static func displayIntro(_ text: String) -> String {

@@ -10,6 +10,10 @@
 - `BookPage.alignsBodyBottom` now records that a page actually fills its region through bounded row-gap distribution. It is never a view-alignment instruction. `PageContentView` always uses `.topLeading`, fixes each paragraph to its measured line-box height, and sums each gap once. Tests check first AND last baselines against independently computed targets on every page, including short pages with bottom alignment ON.
 - The paginator uses complete TextKit rows, carries comment attachments only on the final fragment, and does not add general widow/orphan control because the Android reference does not implement it in this path.
 
+## Paragraph boundaries are source-independent
+
+Some sources only write paragraph breaks as U+3000 (full-width space) after a sentence-ending mark, with no CR/LF at all, so the whole page/chapter would otherwise be laid out as a single paragraph. `WebBook.normalizeParagraphBoundaries` runs at the single shared content entry point (`WebBook.rawContent`, and again for cache hits in `ChapterContentLoader`) **for every book source** — there is no per-source-name branch. It works line by line: a line that contains CR, or no U+3000, or fewer than two 「sentence-end mark (+closing quote/bracket) + U+3000」 boundaries is returned unchanged; a U+3000 run at the end of a line is not a boundary (no empty paragraph). Ordinary in-paragraph full-width spaces and already-segmented text stay untouched, and the result is idempotent. Reader settings (font, size, line/paragraph spacing, indent, justify, margins) were already global, so paragraph segmentation was the only source-dependent part of the layout.
+
 ## Android source consulted
 
 The uploaded reference is `legado-E-main`. The layout rules come from:
