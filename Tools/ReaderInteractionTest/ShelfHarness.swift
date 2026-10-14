@@ -44,7 +44,7 @@ struct ShelfHarnessView: View {
             ShelfBooks.visible(books, filter: .all, sort: order, localOrigin: ShelfFixture.localOrigin)
                 .map(\.id).joined(separator: ",")
         }.joined(separator: "|")
-        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);refreshes=\(refreshes);tab=\(selection.rawValue)"
+        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);refreshes=\(refreshes);refresh=\(refreshMessage ?? "-");tab=\(selection.rawValue)"
     }
 
     var body: some View {

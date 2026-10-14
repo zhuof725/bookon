@@ -166,9 +166,9 @@ final class ShelfTests: XCTestCase {
         let finish = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 8))
         start.press(forDuration: 0.1, thenDragTo: finish)
         status("refreshes=1")
-        let banner = app.staticTexts["shelf.refreshStatus"]
-        XCTAssertTrue(banner.waitForExistence(timeout: 5), "刷新结果文案")
-        XCTAssertTrue(banner.label.contains("已更新"), banner.label)
+        status("refresh=已更新 2 本")
         capture("shelf-04-pull-refresh")
+        let banner = app.descendants(matching: .any).matching(identifier: "shelf.refreshStatus").firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 4), "刷新提示")
     }
 }
