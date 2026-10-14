@@ -138,6 +138,7 @@ enum RuleRegression {
         try LoginFormRegression.run(check)
         try QimoSourceRegression.run(check)
         try ShushanSourceRegression.run(check)
+        LoginToastRegression.run(check)
         ContentBlocksRegression.run(check)
         CommentCardRegression.run(check)
         ImgSrcRegression.run(check)

@@ -12,6 +12,8 @@ struct SourceLoginView: View {
     @State private var busy = false
     @State private var browser: BrowserTarget?
     @State private var loaded = false
+    /// 书源脚本 java.toast 的弹出回传卡片内容。
+    @State private var toastCard: String?
 
     private var script: String? { SourceLoginForm.loginScript(source.loginUrl) }
     private var pageURL: String? { SourceLoginForm.loginPageURL(source) }
@@ -76,6 +78,18 @@ struct SourceLoginView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
             .overlay { if busy { ProgressView() } }
+            .overlay(alignment: .bottom) {
+                if let toastCard {
+                    LoginToastCard(text: toastCard) { self.toastCard = nil }
+                        .padding(.horizontal, 16).padding(.bottom, 16)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: toastCard) {
+                            try? await Task.sleep(nanoseconds: 15_000_000_000)
+                            if !Task.isCancelled { self.toastCard = nil }
+                        }
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: toastCard)
             .sheet(item: $browser) { target in
                 InAppBrowserSheet(target: target, host: URL(string: target.url)?.host,
                                   cookieJar: source.cookieJarEnabled) {
@@ -87,7 +101,13 @@ struct SourceLoginView: View {
         }
         .task { if !loaded { loaded = true; await prepare() } }
         .onAppear {
-            ToastCenter.setHandler { m in DispatchQueue.main.async { message = m } }
+            ToastCenter.setHandler { m in
+                DispatchQueue.main.async {
+                    message = m
+                    // 同时弹出卡片：书源登录成功/失败都会用 java.toast 回传结果。
+                    toastCard = m
+                }
+            }
             // 登录脚本里的 java.startBrowser/showBrowser/startBrowserAwait 一律在应用内浏览器打开，
             // 不再跳出到系统浏览器，关闭时按书源开关回流 Cookie。
             ToastCenter.setBrowserHandler { u, t in
@@ -167,6 +187,42 @@ struct SourceLoginView: View {
                 if message.isEmpty { message = s.isEmpty ? "已执行" : s }
             }
         }
+    }
+}
+
+/// 登录页的弹出回传卡片：显示书源 java.toast 的完整内容，可点按关闭。
+struct LoginToastCard: View {
+    @ThemePalette private var palette
+    let text: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("登录结果").appFont(.subheadline.weight(.semibold))
+                    .foregroundStyle(palette.primary)
+                Spacer(minLength: 8)
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.secondary).frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain).accessibilityLabel("关闭登录结果")
+            }
+            ScrollView {
+                Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .appFont(.footnote).foregroundStyle(palette.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 260)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(SettingsGlassSurface())
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onTapGesture(perform: onDismiss)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("login.toastCard")
     }
 }
 
