@@ -1,13 +1,15 @@
 import SwiftUI
 import UIKit
 
+/// After rolling back the pinned appearance preview, the eight customization
+/// pages must keep working without any live-preview surface, and the retained
+/// splash/independent-row behaviour is still exercised here.
 struct LiveAppearanceHarness: View {
     @State private var draft = AppTheme.custom()
     @State private var scheme: ColorScheme = .light
     @State private var page: ThemeEditorDestination = .shelf
     @State private var splash = false
     @State private var closed = 0
-    @State private var selected = 0
     private let pages: [ThemeEditorDestination] = [.tab, .shelf, .cover, .launch, .colors, .background, .effect, .cards]
     var body: some View {
         NavigationStack {
@@ -15,19 +17,12 @@ struct LiveAppearanceHarness: View {
                                      importImage: { _ in }, importIcon: { _ in })
                 .environment(\.appTheme, draft)
                 .safeAreaInset(edge: .bottom) {
-                    HStack {
-                        Menu("预览页") {
+                    HStack(spacing: 10) {
+                        Menu("外观页") {
                             ForEach(pages, id: \.rawValue) { item in
                                 Button(item.title) { page = item }.accessibilityIdentifier("fixture.page." + item.rawValue)
                             }
                         }.accessibilityIdentifier("fixture.pages")
-                        Button("改草稿") {
-                            draft.customization?.coverWidth = 60
-                            draft.customization?.shelfColumns = 2
-                            draft.customization?.glowIntensity = 0.2
-                            draft.customization?.surfaceOpacity = 0.4
-                            draft.light.cardRadius = 30
-                        }.accessibilityIdentifier("fixture.change")
                         Button("启动图") { splash = true }.accessibilityIdentifier("fixture.splash")
                         Text("\(closed)").accessibilityIdentifier("fixture.closed")
                     }.appFont(.caption).padding(8).background(.regularMaterial)

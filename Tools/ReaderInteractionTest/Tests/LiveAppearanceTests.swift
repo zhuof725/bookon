@@ -11,26 +11,46 @@ final class LiveAppearanceTests: XCTestCase {
     private func shot(_ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
     }
-    func testEverySettingHasCorrespondingLivePreviewAndDraftUpdates() {
+    private func open(_ page: String) {
+        app.buttons["fixture.pages"].tap()
+        app.buttons["fixture.page." + page].tap()
+    }
+    /// Rolled back: no pinned per-setting preview surface remains on any page.
+    func testAppearanceSubpagesHaveNoLivePreviewSurface() {
         start("--live-appearance-mode")
-        let summary = app.staticTexts["theme.preview.summary"]
-        XCTAssertTrue(summary.waitForExistence(timeout: 10))
-        XCTAssertTrue(summary.label.contains("3列"))
-        app.buttons["fixture.change"].tap()
-        XCTAssertTrue(summary.label.contains("2列")); XCTAssertTrue(summary.label.contains("60pt"))
+        XCTAssertTrue(app.buttons["fixture.pages"].waitForExistence(timeout: 10))
         for page in ["tab", "shelf", "cover", "launch", "colors", "background", "effect", "cards"] {
-            app.buttons["fixture.pages"].tap()
-            app.buttons["fixture.page." + page].tap()
-            let preview = app.descendants(matching: .any).matching(identifier: "theme.preview.live." + page).firstMatch
-            XCTAssertTrue(preview.waitForExistence(timeout: 5), page)
-            XCTAssertGreaterThan(preview.frame.height, 100)
-            XCTAssertLessThan(preview.frame.maxY, app.frame.height - 60)
-            if page == "effect" {
-                XCTAssertTrue(summary.label.contains("20%")); XCTAssertTrue(summary.label.contains("60%"))
-                shot("live-effect-preview")
-            }
-            if page == "cards" { XCTAssertTrue(summary.label.contains("30pt")); shot("live-card-preview") }
+            open(page)
+            XCTAssertTrue(app.descendants(matching: .any)
+                .matching(identifier: "theme.editor.page." + page).firstMatch.waitForExistence(timeout: 6), page)
+            XCTAssertFalse(app.descendants(matching: .any)
+                .matching(NSPredicate(format: "identifier BEGINSWITH 'theme.preview.live.'")).firstMatch.exists,
+                "Live preview surface must be gone on \(page)")
+            XCTAssertFalse(app.staticTexts["theme.preview.summary"].exists)
         }
+        shot("appearance-subpage-without-pinned-preview")
+    }
+    /// Controls on the pages that lost the preview must still edit the draft.
+    func testAppearanceControlsStillEditWithoutPreview() {
+        start("--live-appearance-mode")
+        open("shelf")
+        let stepper = app.steppers["theme.editor.shelf.columns"]
+        XCTAssertTrue(stepper.waitForExistence(timeout: 8))
+        XCTAssertEqual(stepper.value as? String, "3")
+        stepper.buttons.element(boundBy: 1).tap()
+        XCTAssertEqual(stepper.value as? String, "4")
+        XCTAssertFalse(app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'theme.preview.live.'")).firstMatch.exists)
+        open("effect")
+        XCTAssertTrue(app.buttons["theme.editor.effect.transparent"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.sliders["theme.editor.effect.glow"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'theme.preview.live.'")).firstMatch.exists)
+        // The pre-existing bottom summary preview stays available on this page.
+        let legacy = app.descendants(matching: .any).matching(identifier: "theme.editor.tab.preview").firstMatch
+        open("tab")
+        XCTAssertTrue(legacy.waitForExistence(timeout: 6))
+        shot("appearance-tab-legacy-preview")
     }
     func testLaunchHasNoSkipAndAutomaticallyReturnsTwice() {
         start("--live-appearance-mode")
