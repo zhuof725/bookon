@@ -128,8 +128,9 @@ enum ShushanSourceRegression {
         let typeChecks = identifiers.map { "if (typeof \($0) !== 'function') missing.push('\($0)');" }.joined(separator: "\n")
         let missingActions = JSEngine.shared.evalString("var missing=[];\n" + typeChecks + "\nmissing.join(',')",
                                                         jsLib: library, context: context) ?? ""
-        check(missingActions == "sethost", "登录按钮动作函数齐全，缺失的仅 \(missingActions)")
-        if let unknownAction = uiActions.first(where: { $0.hasPrefix("sethost") }) {
+        check(missingActions.isEmpty, "登录按钮动作函数齐全（缺失：\(missingActions)）")
+        if let first = identifiers.first, missingActions.contains(first),
+           let unknownAction = uiActions.first(where: { $0.hasPrefix(first) }) {
             let call = JSEngine.shared.runLoginScript(source: source, library: library ?? "",
                                                       call: unknownAction, formValues: [:])
             if case .failure = call { check(true, "缺失动作给出失败回传") }
