@@ -6,12 +6,11 @@ struct SourceLoginView: View {
     @ThemePalette private var palette
     let source: BookSource
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var fields: [LoginField] = []
     @State private var values: [String: String] = [:]
     @State private var message = ""
     @State private var busy = false
-    @State private var showWeb = false
+    @State private var browser: BrowserTarget?
     @State private var loaded = false
 
     private var script: String? { SourceLoginForm.loginScript(source.loginUrl) }
@@ -56,7 +55,7 @@ struct SourceLoginView: View {
                     }
                     if let url = pageURL {
                         Section("网页登录") {
-                            Button("打开登录页面") { showWeb = true }
+                            Button("打开登录页面") { open(pageURL ?? source.bookSourceUrl, title: "网页登录") }
                             Text(url).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(2)
                         }
                     }
@@ -77,16 +76,22 @@ struct SourceLoginView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
             .overlay { if busy { ProgressView() } }
-            .sheet(isPresented: $showWeb) {
-                WebLoginSheet(url: pageURL ?? source.bookSourceUrl, host: URL(string: pageURL ?? "")?.host,
-                              cookieJar: source.cookieJarEnabled) { showWeb = false }
+            .sheet(item: $browser) { target in
+                InAppBrowserSheet(target: target, host: URL(string: target.url)?.host,
+                                  cookieJar: source.cookieJarEnabled) {
+                    browser = nil
+                    // 网页里登录完成后，提示用户回到表单再点一次登录以读取最新凭据。
+                    if hasLoginFunction, message.isEmpty { message = "已回流网页登录 Cookie；如需令牌，请再点「登录」。" }
+                }
             }
         }
         .task { if !loaded { loaded = true; await prepare() } }
         .onAppear {
             ToastCenter.setHandler { m in DispatchQueue.main.async { message = m } }
-            ToastCenter.setBrowserHandler { u, _ in
-                DispatchQueue.main.async { if let url = URL(string: u) { openURL(url) } }
+            // 登录脚本里的 java.startBrowser/showBrowser/startBrowserAwait 一律在应用内浏览器打开，
+            // 不再跳出到系统浏览器，关闭时按书源开关回流 Cookie。
+            ToastCenter.setBrowserHandler { u, t in
+                DispatchQueue.main.async { open(u, title: t) }
             }
         }
         .onDisappear { ToastCenter.setHandler(nil); ToastCenter.setBrowserHandler(nil) }
@@ -132,10 +137,19 @@ struct SourceLoginView: View {
         let action = f.action.trimmingCharacters(in: .whitespacesAndNewlines)
         if action.isEmpty { message = "按钮没有配置动作"; return }
         if SourceLoginForm.isURL(action) {
-            if let url = URL(string: action) { openURL(url) }
+            open(action, title: f.name)
             return
         }
         runScript(action)
+    }
+
+    /// 只有需要跳转的登录网址才用内置浏览器打开，不跳出到系统浏览器。
+    private func open(_ url: String, title: String) {
+        guard let target = SourceLoginForm.browserURL(url) else {
+            message = "这个网址无法在内置浏览器打开"
+            return
+        }
+        browser = BrowserTarget(url: target, title: title)
     }
 
     private func runScript(_ call: String) {
@@ -156,19 +170,40 @@ struct SourceLoginView: View {
     }
 }
 
-/// 网页登录：用 WKWebView 打开登录页；关闭时把当前主机的 Cookie 回流到共享存储。
-struct WebLoginSheet: View {
+/// 内置浏览器目标：登录页与登录脚本请求的跳转网址。
+struct BrowserTarget: Identifiable, Equatable {
+    let id = UUID()
     let url: String
+    let title: String
+}
+
+/// 内置浏览器：登录相关跳转都在应用内打开，关闭时按书源开关回流当前主机 Cookie。
+struct InAppBrowserSheet: View {
+    let target: BrowserTarget
     let host: String?
     let cookieJar: Bool
     let onClose: () -> Void
+    @StateObject private var model = BrowserNavigationModel()
 
     var body: some View {
         NavigationStack {
-            LoginWebView(url: url)
-                .navigationTitle("网页登录")
+            LoginWebView(url: target.url, model: model)
+                .overlay { if model.isLoading { ProgressView().padding(10).modifier(SettingsGlassSurface()) } }
+                .navigationTitle(target.title.isEmpty ? "登录" : target.title)
                 .navigationBarTitleDisplayMode(.inline)
+                .accessibilityIdentifier("login.browser.page")
                 .toolbar {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button { model.back() } label: { Image(systemName: "chevron.backward") }
+                            .disabled(!model.canGoBack)
+                            .accessibilityLabel("后退").accessibilityIdentifier("login.browser.back")
+                        Button { model.forward() } label: { Image(systemName: "chevron.forward") }
+                            .disabled(!model.canGoForward)
+                            .accessibilityLabel("前进").accessibilityIdentifier("login.browser.forward")
+                        Spacer()
+                        Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                            .accessibilityLabel("刷新").accessibilityIdentifier("login.browser.reload")
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("完成") {
                             Task {
@@ -176,19 +211,50 @@ struct WebLoginSheet: View {
                                 onClose()
                             }
                         }
+                        .accessibilityIdentifier("login.browser.done")
                     }
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { onClose() } }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { onClose() }.accessibilityIdentifier("login.browser.cancel")
+                    }
                 }
         }
     }
 }
 
+/// 内置浏览器的前进/后退/刷新状态；只持有 WebView 的弱引用。
+final class BrowserNavigationModel: ObservableObject {
+    @Published private(set) var canGoBack = false
+    @Published private(set) var canGoForward = false
+    @Published private(set) var isLoading = false
+    weak var webView: WKWebView?
+
+    func attach(_ web: WKWebView) {
+        guard webView !== web else { return }
+        webView = web
+        // 避免在 SwiftUI 视图更新期间发布状态变化。
+        DispatchQueue.main.async { [weak self] in self?.refresh() }
+    }
+    func refresh() {
+        canGoBack = webView?.canGoBack ?? false
+        canGoForward = webView?.canGoForward ?? false
+        isLoading = webView?.isLoading ?? false
+    }
+    func back() { webView?.goBack(); refresh() }
+    func forward() { webView?.goForward(); refresh() }
+    func reload() { webView?.reload(); refresh() }
+}
+
 struct LoginWebView: UIViewRepresentable {
     let url: String
+    var model: BrowserNavigationModel?
+
+    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero)
         web.customUserAgent = WebViewSupport.userAgent
+        web.navigationDelegate = context.coordinator
+        context.coordinator.model?.attach(web)
         if let u = URL(string: url) {
             Task {
                 await WebViewLoader.syncCookiesToWebView(for: u)
@@ -198,5 +264,16 @@ struct LoginWebView: UIViewRepresentable {
         return web
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        context.coordinator.model = model
+        model?.attach(uiView)
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        var model: BrowserNavigationModel?
+        init(model: BrowserNavigationModel?) { self.model = model }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model?.refresh() }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { model?.refresh() }
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model?.refresh() }
+    }
 }

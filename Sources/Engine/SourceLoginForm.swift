@@ -78,6 +78,18 @@ enum SourceLoginForm {
         return t.hasPrefix("http://") || t.hasPrefix("https://")
     }
 
+    /// 只有真正需要跳转的 http(s) 网址才交给内置浏览器。
+    /// 其他协议（javascript:/file:/mailto:）与缺少主机名、含空白或换行的输入一律拒绝。
+    static func browserURL(_ raw: String) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, t.count <= 2048,
+              !t.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7F }),
+              !t.contains(" "), isURL(t),
+              let url = URL(string: t), url.scheme != nil,
+              let host = url.host, !host.isEmpty else { return nil }
+        return t
+    }
+
     /// 取 loginUrl 里的 JS（Legado 里 loginUrl 可以是函数库，也可以是网址）。
     static func loginScript(_ loginUrl: String?) -> String? {
         guard let t = loginUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }

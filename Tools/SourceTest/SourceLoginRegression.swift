@@ -271,5 +271,20 @@ enum SourceLoginRegression {
             _ = store.putLoginInfo(shared, "{\"i\":\"final\"}")
             check(store.getLoginInfoMap(shared, loginUiJSON: nil) == ["i": "final"], "store usable after shared-key contention")
         }
+
+        // 登录跳转：只有真正需要跳转的 http(s) 网址进入内置浏览器。
+        check(SourceLoginForm.browserURL("https://example.invalid/scan?code=1") == "https://example.invalid/scan?code=1",
+              "http(s) 登录网址交给内置浏览器")
+        check(SourceLoginForm.browserURL("  http://example.invalid/login  ") == "http://example.invalid/login",
+              "内置浏览器目标去除首尾空白")
+        check(SourceLoginForm.browserURL("HTTPS://Example.invalid/x") == "HTTPS://Example.invalid/x",
+              "内置浏览器接受大写协议且不改写原网址")
+        for rejected in ["", "javascript:alert(1)", "file:///etc/passwd", "mailto:a@b.c",
+                         "https://", "https://example.invalid/a b", "https://example.invalid/a\nb",
+                         "/relative/path", "example.invalid/x"] {
+            check(SourceLoginForm.browserURL(rejected) == nil, "内置浏览器拒绝非跳转输入：\(rejected.isEmpty ? "<empty>" : rejected)")
+        }
+        check(SourceLoginForm.browserURL("https://example.invalid/" + String(repeating: "a", count: 2100)) == nil,
+              "内置浏览器拒绝超长网址")
     }
 }
