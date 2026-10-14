@@ -90,25 +90,6 @@ enum SourceLoginForm {
         return t
     }
 
-    /// 在内置浏览器打开后的回显文案（只写主机名，不回显完整网址）。
-    static func browserOpenText(_ raw: String) -> String {
-        guard let target = browserURL(raw), let host = URL(string: target)?.host else {
-            return "网址无法在内置浏览器打开"
-        }
-        return "已在内置浏览器打开 \(host)"
-    }
-
-    /// 登录按钮点击后的结果回显：脚本异常才算失败，空返回算已执行。
-    static func resultText(action: String, outcome: Result<String, LoginScriptError>) -> (success: Bool, detail: String) {
-        switch outcome {
-        case .failure(let error):
-            return (false, error.message)
-        case .success(let value):
-            let detail = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (true, detail.isEmpty ? "已执行" : detail)
-        }
-    }
-
     /// 取 loginUrl 里的 JS（Legado 里 loginUrl 可以是函数库，也可以是网址）。
     static func loginScript(_ loginUrl: String?) -> String? {
         guard let t = loginUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
