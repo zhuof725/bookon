@@ -1,8 +1,9 @@
 import Foundation
 
 /// 诊断 + 回归：正文在「书源替换规则 → 段界还原 → 分块」过程中不能丢段落结构。
-/// 用书山 fixture 的真实 replaceRegex 跑一遍，并打印每一步的换行数，
-/// 便于在 CI 日志里定位是哪一步把段落合并成一段（日志不含用户正文）。
+/// 用书山 fixture 的真实 replaceRegex 跑一遍三种形态（纯文本／带段评气泡／带段评标签），
+/// 打印每一步的换行数，便于在 CI 日志里定位是哪一步把段落并成一段。
+/// 打印的正文是本测试自己合成的，不含任何用户内容。
 enum ShushanPipelineShapeRegression {
     static func run(_ check: (Bool, String) -> Void) throws {
         let fixture = URL(fileURLWithPath: "Tools/SourceTest/Fixtures/shushan-aggregate-v5.63.json")
@@ -11,17 +12,18 @@ enum ShushanPipelineShapeRegression {
             check(false, "书山 fixture 与正文规则可读取")
             return
         }
-        check(true, "书山 fixture 与正文规则可读取")
 
-        // 与源内 Android 分支一致：段落用 "\n" 连接，段评气泡是 <img data:image/svg+xml…>。
+        // 与源内 Android 分支一致：段落用 "\n" 连接；段评是 <img data:image/svg+xml…>。
         let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>12</text></svg>"
         let bubble = "<img src=\"data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())\""
             + " onClick=\"java.startBrowser('https://example.invalid/c')\">"
+        let comment = "<comment count=\"7\" onClick=\"java.startBrowser('https://example.invalid/c')\"/>"
         let first = "第一段内容。"
-        let second = "第二段内容。" + bubble
+        let second = "第二段内容。"
         let third = "第三段内容。"
-        let raw = [first, second, third].joined(separator: "\n")
-        let plain = [first, "第二段内容。", third].joined(separator: "\n")
+        let plain = [first, second, third].joined(separator: "\n")
+        let withBubble = [first, second + bubble, third].joined(separator: "\n")
+        let withComment = [first, second + comment, third].joined(separator: "\n")
 
         func newlines(_ s: String) -> Int { s.components(separatedBy: "\n").count - 1 }
         func paragraphs(_ s: String) -> Int {
@@ -31,30 +33,35 @@ enum ShushanPipelineShapeRegression {
             }.count
         }
 
-        print("PIPELINE raw newlines=\(newlines(raw)) paragraphs=\(paragraphs(raw))")
-        if let rr = rule.replaceRegex, !rr.isEmpty {
-            let context = RuleContext(source: source)
-            let ruleText = rr.hasPrefix("##") ? rr : "##" + rr
-            let replaced = AnalyzeRule(content: raw, baseUrl: "https://example.invalid/chapter",
-                                       jsLib: source.jsLib, context: context).getString(ruleText, from: raw)
-            print("PIPELINE afterReplaceRegex newlines=\(newlines(replaced)) length=\(replaced.count)"
-                + " htmlWrapped=\(replaced.hasPrefix("<html")) paragraphs=\(paragraphs(replaced))")
-            // 这里打印的是本测试自己合成的正文，不含任何用户内容。
-            print("PIPELINE afterReplaceRegex text=\(replaced.replacingOccurrences(of: "\n", with: "⏎"))")
-            check(newlines(replaced) == newlines(raw),
-                  "带段评标签的正文替换后换行不变（\(newlines(raw)) -> \(newlines(replaced))）")
-
-            let plainReplaced = AnalyzeRule(content: plain, baseUrl: "https://example.invalid/chapter",
-                                            jsLib: source.jsLib, context: context).getString(ruleText, from: plain)
-            print("PIPELINE plainAfterReplaceRegex newlines=\(newlines(plainReplaced))"
-                + " htmlWrapped=\(plainReplaced.hasPrefix("<html"))")
-            print("PIPELINE plainAfterReplaceRegex text=\(plainReplaced.replacingOccurrences(of: "\n", with: "⏎"))")
-            check(newlines(plainReplaced) == newlines(plain),
-                  "纯文本正文替换后换行不变（\(newlines(plain)) -> \(newlines(plainReplaced))）")
+        let rr = rule.replaceRegex ?? ""
+        let ruleText = rr.hasPrefix("##") ? rr : "##" + rr
+        let context = RuleContext(source: source)
+        func apply(_ text: String) -> String {
+            AnalyzeRule(content: text, baseUrl: "https://example.invalid/chapter",
+                        jsLib: source.jsLib, context: context)
+                .getReplacementString(ruleText, from: text)
+        }
+        func report(_ label: String, _ input: String, _ output: String) {
+            print("PIPELINE \(label) inNewlines=\(newlines(input)) inParagraphs=\(paragraphs(input))"
+                + " outNewlines=\(newlines(output)) outParagraphs=\(paragraphs(output))"
+                + " htmlWrapped=\(output.hasPrefix("<html")) length=\(output.count)")
+            print("PIPELINE \(label) out=\(output.replacingOccurrences(of: "\n", with: "⏎"))")
         }
 
-        let normalized = WebBook.normalizeParagraphBoundaries(raw)
+        report("plain", plain, apply(plain))
+        report("bubble", withBubble, apply(withBubble))
+        report("comment", withComment, apply(withComment))
+
+        check(newlines(apply(plain)) == newlines(plain),
+              "纯文本正文替换后换行不变（\(newlines(plain)) -> \(newlines(apply(plain)))）")
+        check(paragraphs(apply(plain)) == 3, "纯文本正文替换后仍是三段（实际 \(paragraphs(apply(plain)))）")
+        check(newlines(apply(withBubble)) == newlines(withBubble),
+              "带段评气泡的正文替换后换行不变（\(newlines(withBubble)) -> \(newlines(apply(withBubble)))）")
+        check(paragraphs(apply(withBubble)) == 3, "带段评气泡的正文仍是三段（实际 \(paragraphs(apply(withBubble)))）")
+        check(paragraphs(apply(withComment)) == 3, "带段评标签的正文仍是三段（实际 \(paragraphs(apply(withComment)))）")
+
+        let normalized = WebBook.normalizeParagraphBoundaries(apply(withBubble))
         print("PIPELINE normalized newlines=\(newlines(normalized)) paragraphs=\(paragraphs(normalized))")
-        check(paragraphs(normalized) == 3, "书山形态正文解析为三段（实际 \(paragraphs(normalized))）")
+        check(paragraphs(normalized) == 3, "书山形态正文还原后仍是三段（实际 \(paragraphs(normalized))）")
     }
 }

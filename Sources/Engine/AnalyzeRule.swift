@@ -153,6 +153,23 @@ final class AnalyzeRule {
         return AnalyzeRule.asString(cur).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// replaceRegex 是「对正文做替换」的规则，Legado 直接把它作用在正文字符串上。
+    /// 不能用 getString(_:from:)：那会先把正文当 HTML 解析、再用默认 prettyPrint 序列化，
+    /// 段与段之间的换行会被并成空格（整章变一段）。这里对字符串求值，不做 HTML 解析。
+    /// 只有完全不像替换规则的写法（既没有 ## 也没有 JS）才退回旧路径。
+    func getReplacementString(_ rule: String?, from text: String) -> String {
+        guard let rule, !rule.isEmpty else { return text }
+        let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        let isJS = lower.hasPrefix("@js:") || lower.hasPrefix("<js>")
+        guard trimmed.hasPrefix("##") || isJS else { return getString(rule, from: text) }
+        var cur: Any = text
+        for (isJs, s) in splitJS(rule) {
+            if isJs { cur = runJS(s, cur) } else { cur = stringValue(cur, s) }
+        }
+        return AnalyzeRule.asString(cur).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func getElements(_ rule: String?, from obj: Any? = nil) -> [Any] {
         guard let rawRule = rule, !rawRule.isEmpty else { return [] }
         let rule = resolvePut(rawRule, from: obj)

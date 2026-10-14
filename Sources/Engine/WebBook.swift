@@ -362,7 +362,8 @@ enum WebBook {
         }
         var text = parts.joined(separator: "\n")
         if let rr = rule.replaceRegex, !rr.isEmpty {
-            text = AnalyzeRule(content: text, baseUrl: chapter.url, jsLib: source.jsLib, context: RuleContext(source: source, book: book, chapter: chapter)).getString(rr.hasPrefix("##") ? rr : "##" + rr, from: text)
+            // 替换规则直接作用在正文字符串上：走 HTML 解析再序列化会把段间换行并成空格。
+            text = AnalyzeRule(content: text, baseUrl: chapter.url, jsLib: source.jsLib, context: RuleContext(source: source, book: book, chapter: chapter)).getReplacementString(rr, from: text)
         }
         // 段落边界不能因书源而异：有的源把段界只写成 U+3000，整章/整页没有换行，
         // 阅读器会把整段当一段。这里对所有书源统一还原段界。
