@@ -5,6 +5,16 @@ enum SourceDiagnostics {
         DebugLog.add("应用 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试工具") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"))")
         DebugLog.add("书源：\(source.bookSourceName)")
         DebugLog.add("单独执行，不从书架缓存取目录，不改书源配置。")
+        // 登录状态只报有无，不输出任何凭据内容。
+        let savedLogin = JSEngine.loginStore.getLoginInfo(source.bookSourceUrl)
+        let savedHeader = JSEngine.loginStore.getLoginHeader(source.bookSourceUrl)
+        DebugLog.add("登录状态：登录信息\(savedLogin?.isEmpty == false ? "有" : "无")，登录头\(savedHeader?.isEmpty == false ? "有" : "无")")
+        if !(source.jsLib ?? "").isEmpty {
+            let key = JSEngine.shared.evalString(
+                "typeof getSecretKey === 'function' ? String(getSecretKey.call(this) || '') : ''",
+                jsLib: source.jsLib, context: RuleContext(source: source)) ?? ""
+            DebugLog.add("接口密钥：\(key.isEmpty ? "为空（未登录或已过期）" : "已获取（\(key.count) 字符）")")
+        }
         do {
             var book: Book
             if !bookURL.isEmpty {
