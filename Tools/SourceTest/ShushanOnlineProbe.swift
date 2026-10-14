@@ -27,7 +27,15 @@ enum ShushanOnlineProbe {
         } else {
             decodedHan = -1
         }
+        // 区分三种形态：替换字符（编码错误）、二进制（base64 解码残留）、可读文本。
+        let scalars = Array(body.unicodeScalars)
+        let replacement = scalars.filter { $0.value == 0xFFFD }.count
+        let ascii = scalars.filter { $0.value < 0x80 }.count
+        let latin = scalars.filter { (0x80...0xFF).contains($0.value) }.count
+        let cjkPunct = scalars.filter { (0x3000...0x303F).contains($0.value) }.count
+        let control = scalars.filter { $0.value < 0x20 && ![9, 10, 13].contains($0.value) }.count
         print("SHUSHAN content length=\(body.count) han=\(han) readableRatio=\(ratio) base64Shape=\(base64Shape) base64DecodedHan=\(decodedHan)")
+        print("SHUSHAN shape replacement=\(replacement) ascii=\(ascii) latin1=\(latin) cjkPunct=\(cjkPunct) control=\(control)")
         if han > 100, ratio > 0.25 {
             print("SHUSHAN ONLINE PIPELINE PASS (single first chapter, no account login)")
         } else {
