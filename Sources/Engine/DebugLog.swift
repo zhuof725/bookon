@@ -60,4 +60,5 @@ enum DebugLog {
         let base64 = trimmed.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil
         let innerPad = trimmed.dropLast(2).contains("=")
         return "汉字 \(han)/\(total)，替换字符 \(replacement)，ASCII \(ascii)，Latin1 \(latin)，base64 形态 \(base64 ? "是" : "否")，内部含 = \(innerPad ? "是" : "否")"
+    }
 }
