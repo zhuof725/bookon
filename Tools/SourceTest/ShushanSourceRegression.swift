@@ -42,8 +42,21 @@ enum ShushanSourceRegression {
         check(used.count > 40, "提取到书源使用的 JS 接口清单（\(used.count) 个）")
         let probe = used.map { "if (typeof \($0) === 'undefined') missing.push('\($0)');" }.joined(separator: "\n")
         let script = "var missing=[];\n" + probe + "\nmissing.join(',')"
-        let missing = JSEngine.shared.evalString(script, jsLib: source.jsLib, context: context) ?? ""
+        let missing = JSEngine.shared.evalString(script, jsLib: source.jsLib, context: context) ?? "EVALUATION_FAILED"
         check(missing.isEmpty, "书源使用的 JS 接口全部可用（缺失：\(missing)）")
+
+        check(JSEngine.shared.evalString("let source = 'local'; [source, globalSource()].join('|')",
+            jsLib: "function globalSource(){return source.bookSourceUrl;}", context: context) == "local|书山聚合",
+            "规则局部source不改变函数库的全局source绑定")
+        let items: [[String: Any]] = [
+            ["title": "合成甲", "author": "测试作者", "source": "测试站", "book_url": "book-a", "cover": "", "desc": "简介"],
+            ["title": "合成乙", "author": "测试作者", "source": "测试站", "book_url": "book-b", "cover": "", "desc": "简介"]
+        ]
+        let response = String(decoding: try JSONSerialization.data(withJSONObject: ["data": items]), as: UTF8.self)
+        let books = WebBook.parseBookList(source: source, body: response, baseUrl: "https://fixture.invalid/search", rule: source.ruleSearch!)
+        check(books.count == 2 && Set(books.map(\.bookUrl)).count == 2
+              && books.allSatisfy { $0.bookUrl.hasPrefix("data:detailsUrl;base64,") },
+              "真实搜索规则生成两个不同data详情地址，不能回退到搜索页")
 
         // 请求头规则必须解析成真实字段，而不是把脚本原文当字段名。
         let headers = AnalyzeUrl.headerFields(source.header, key: "斗罗大陆", page: 1,

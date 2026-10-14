@@ -9,6 +9,10 @@ if args.contains("--regression") {
     do { try await RuleRegression.run(); exit(0) }
     catch { print("REGRESSION ERROR: \(error)"); exit(1) }
 }
+if args.contains("--shushan-online") {
+    do { try await ShushanOnlineProbe.run(); exit(0) }
+    catch { print("SHUSHAN ONLINE NOT VERIFIED: \(error)"); exit(1) }
+}
 let path = args.count > 1 ? args[1] : "sources.json"
 let key = args.count > 2 ? args[2] : "斗罗大陆"
 let perSourceTimeout = Double(args.count > 3 ? args[3] : "60") ?? 60

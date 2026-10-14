@@ -788,7 +788,10 @@ final class JSEngine {
         ctx.setObject(result ?? "", forKeyedSubscript: "src" as NSString)
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }
         if let lib = jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
-        guard let v = ctx.evaluateScript(script), !v.isUndefined, !v.isNull else { return nil }
+        // A rule's let/const bindings must not collide with bridge globals or
+        // change the lexical scope captured by jsLib helpers. A block preserves
+        // JavaScript completion values (unlike an IIFE without an explicit return).
+        guard let v = ctx.evaluateScript("{\n" + script + "\n}"), !v.isUndefined, !v.isNull else { return nil }
         if v.isString || v.isNumber || v.isBoolean { return v.toString() }
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }

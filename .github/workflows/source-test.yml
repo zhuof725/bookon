@@ -67,8 +67,15 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.fixture }}
         run: cp Tools/SourceTest/Fixtures/shushan-aggregate-v5.63.json sources.json && ls -la sources.json
 
+      - name: Verify Shushan online pipeline
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline && inputs.fixture }}
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --shushan-online 2>&1 | tee source-test.log
+
       - name: Run test
-        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline && !inputs.fixture }}
         env:
           TEST_KEY: ${{ github.event.inputs.key }}
         run: |
