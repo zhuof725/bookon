@@ -70,12 +70,9 @@ struct AnalyzeUrl {
             }
         }
         url = AnalyzeUrl.absolute(s, base: baseUrl)
-        if let h = sourceHeader, let o = AnalyzeUrl.looseJSON(h) {
-            for (k, v) in o { headers[k] = "\(v)" }
-        } else if let h = sourceHeader?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  h.hasPrefix("Mozilla/"), !h.contains("\n"), !h.contains("\r") {
-            // 部分导入书源把 UA 直接放在 header，而不是 JSON 对象。
-            headers["User-Agent"] = h
+        for (k, v) in AnalyzeUrl.headerFields(sourceHeader, key: key, page: page,
+                                              baseUrl: baseUrl, context: context, jsLib: jsLib) {
+            headers[k] = v
         }
         if let o = options {
             if let m = o["method"] as? String { method = m.uppercased() }
@@ -89,6 +86,35 @@ struct AnalyzeUrl {
                 else { webView = !(w is NSNull) }
             }
         }
+    }
+
+    /// Legado 的书源 header 同样是规则：支持 `@js:`、`<js></js>` 与 `{{key}}/{{page}}`。
+    /// 返回 JSON 对象时逐项作为请求头；直接返回 UA 字符串时作为 User-Agent。
+    static func headerFields(_ raw: String?, key: String?, page: Int, baseUrl: String?,
+                             context: RuleContext?, jsLib: String?) -> [String: String] {
+        guard let raw else { return [:] }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [:] }
+        let lowered = trimmed.lowercased()
+        let evaluated: String
+        if lowered.hasPrefix("@js:") || lowered.contains("<js>") {
+            evaluated = evalUrlJS(trimmed, key: key, page: page, baseUrl: baseUrl,
+                                  context: context, jsLib: jsLib)
+        } else {
+            evaluated = substitute(trimmed, key: key, page: page, context: context, jsLib: jsLib)
+        }
+        let text = evaluated.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return [:] }
+        if let o = looseJSON(text) {
+            var fields: [String: String] = [:]
+            for (k, v) in o { fields[k] = AnalyzeRule.asString(v) }
+            return fields
+        }
+        // 部分导入书源把 UA 直接放在 header，而不是 JSON 对象。
+        if text.hasPrefix("Mozilla/"), !text.contains("\n"), !text.contains("\r") {
+            return ["User-Agent": text]
+        }
+        return [:]
     }
 
     /// 解析 Legado 常见的单引号 JSON，如 {'method':'POST','body':'k=v'}

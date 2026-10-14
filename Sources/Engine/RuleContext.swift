@@ -14,6 +14,8 @@ final class RuleContext {
     // 临时条目只使用实例字典，不向共享表登记临时 URL 或标识。
     private var pendingBookVariables: [String: String]?
     private var inheritedBookVariables: [String: String] = [:]
+    /// 无书籍标识时的 book.getVariable/putVariable 暂存，不与其他作用域共享。
+    private var localBookVariables: [String: String] = [:]
 
     /// 复制列表阶段可见变量；每个条目拥有独立写入作用域。
     /// book 属性可逐字段更新，但只有 bindBook 才会提交共享存储。
@@ -115,6 +117,31 @@ final class RuleContext {
     private static func value(_ key: String, in table: [String: [String: String]], id: String?) -> String? {
         guard let id else { return nil }
         return table[id]?[key]
+    }
+
+    /// 书源 JS 的 `book.getVariable/putVariable`：只读写书籍作用域，
+    /// 与规则变量 `java.get/put` 分离，避免互相覆盖。
+    func bookVariableGet(_ key: String) -> String {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        if let pending = pendingBookVariables, let value = pending[key] { return value }
+        if let id = bookID, let value = Self.bookVariables[id]?[key] { return value }
+        if let value = inheritedBookVariables[key] { return value }
+        return localBookVariables[key] ?? ""
+    }
+
+    func bookVariablePut(_ key: String, _ value: String) -> String {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        if pendingBookVariables != nil {
+            pendingBookVariables?[key] = value
+            return value
+        }
+        if let id = bookID {
+            Self.bookVariables[id, default: [:]][key] = value
+            return value
+        }
+        // 没有书籍标识时不写入来源级共享存储，只保留本次求值。
+        localBookVariables[key] = value
+        return value
     }
 
     func put(_ key: String, _ value: String) -> String {

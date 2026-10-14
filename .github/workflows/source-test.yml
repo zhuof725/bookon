@@ -12,6 +12,10 @@ on:
         description: Only run deterministic regressions without downloading public sources
         type: boolean
         default: false
+      fixture:
+        description: Use the bundled 书山聚合 fixture instead of downloading public sources
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -56,8 +60,12 @@ jobs:
           $RUNNER_TEMP/pkg/.build/release/SourceTest --regression 2>&1 | tee regression.log
 
       - name: Download sources
-        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline && !inputs.fixture }}
         run: curl -sSL --retry 3 https://cdn.jsdelivr.net/gh/XIU2/Yuedu@master/shuyuan -o sources.json && ls -la sources.json
+
+      - name: Use bundled 书山聚合 fixture
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.fixture }}
+        run: cp Tools/SourceTest/Fixtures/shushan-aggregate-v5.63.json sources.json && ls -la sources.json
 
       - name: Run test
         if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline }}

@@ -304,7 +304,7 @@ final class JSEngine {
         return m;
     }
     var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))}};
-    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},put:function(k,v){return java.storePut(k,String(v))},get:function(k){return java.storeGet(k)},
+    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},put:function(k,v){return java.storePut(k,String(v))},get:function(k){return java.storeGet(k)},
         getLoginInfoMap:function(){var s=String(__loginInfoMap());var m=__javaMap();try{var o=JSON.parse(s);Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){}return m;},
         getLoginInfo:function(){var v=__loginGet();return v==null||v===''?null:String(v);},
         putLoginInfo:function(v){return __loginPut(String(v));},
@@ -313,7 +313,10 @@ final class JSEngine {
         getLoginHeaderMap:function(){var v=__loginHeaderGet();if(v==null||v==='')return null;var m=Object.create(null);try{var o=JSON.parse(String(v));Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){return null;}return m;},
         putLoginHeader:function(v){__loginHeaderPut(String(v));},
         removeLoginHeader:function(){__loginHeaderRemove();}};
-    var book={name:'',author:'',bookUrl:'',tocUrl:'',getVariable:function(){return ''},setVariable:function(){}};
+    var book={name:'',author:'',bookUrl:'',tocUrl:'',type:0,
+        getVariable:function(k){return (typeof __bookVarGet==='function')?String(__bookVarGet(String(k))):'';},
+        putVariable:function(k,v){var s=(v==null?'':String(v));return (typeof __bookVarPut==='function')?String(__bookVarPut(String(k),s)):s;},
+        setVariable:function(k,v){return this.putVariable(k,v);}};
     var chapter={title:'',url:'',index:0};
     var Packages={org:{jsoup:{Jsoup:{parse:function(html){return __jsoupParse(String(html));}}}}};
     var org=Packages.org;
@@ -699,6 +702,7 @@ final class JSEngine {
             src.setObject(s.bookSourceUrl, forKeyedSubscript: "bookSourceUrl" as NSString)
             src.setObject(s.bookSourceName, forKeyedSubscript: "bookSourceName" as NSString)
             src.setObject(s.bookSourceComment ?? "", forKeyedSubscript: "bookSourceComment" as NSString)
+            src.setObject(s.loginUi ?? "", forKeyedSubscript: "loginUi" as NSString)
         }
         if let b = context?.book, let book = ctx.objectForKeyedSubscript("book") {
             book.setObject(b.bookUrl, forKeyedSubscript: "bookUrl" as NSString)
@@ -731,8 +735,12 @@ final class JSEngine {
         if let c = effectiveContext {
             let put: @convention(block) (String, String) -> String = { c.put($0, $1) }
             let get: @convention(block) (String) -> String = { c.get($0) }
+            let bookGet: @convention(block) (String) -> String = { c.bookVariableGet($0) }
+            let bookPut: @convention(block) (String, String) -> String = { c.bookVariablePut($0, $1) }
             ctx.setObject(put, forKeyedSubscript: "__contextPut" as NSString)
             ctx.setObject(get, forKeyedSubscript: "__contextGet" as NSString)
+            ctx.setObject(bookGet, forKeyedSubscript: "__bookVarGet" as NSString)
+            ctx.setObject(bookPut, forKeyedSubscript: "__bookVarPut" as NSString)
         }
         // Query state belongs to this eval only; never mutate the supplied analyzer.
         let r = rule ?? AnalyzeRule(content: JSNodeBridge.unwrap(result ?? ""),

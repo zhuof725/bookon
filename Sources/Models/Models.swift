@@ -36,6 +36,7 @@ struct TocRule: Codable, Hashable {
     var chapterUrl: String?
     var isVolume: String?
     var isVip: String?
+    var isPay: String?
     var updateTime: String?
     var nextTocUrl: String?
 }
@@ -48,6 +49,10 @@ struct ContentRule: Codable, Hashable {
     var sourceRegex: String?
     var replaceRegex: String?
     var imageStyle: String?
+    /// 部分书源（含聚合源）用于付费/子内容请求的附加规则。
+    var subContent: String?
+    var payAction: String?
+    var callBackJs: String?
 }
 
 struct BookSource: Codable, Hashable, Identifiable {
