@@ -107,9 +107,10 @@ enum ContentBlocks {
         return t.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{3000}")))
     }
 
-    /// img 的 src。书源常把选项 JSON 直接拼在 src 里且不转义引号：
-    /// `src="data:…base64,XXX,{"style":"text","click":"showCmt('1')"}"`。
-    /// 普通属性解析会在第一个引号处截断，这里识别 `,{` 结尾的情况，读到 `}"` 为止。
+    /// img 的 src。书源常把选项对象直接拼在 src 里且不转义引号：
+    /// `src="data:…base64,XXX,{"style":"text","click":"showCmt('1')"}"`，
+    /// 书山用的是 JS 字面量写法：`src="data:…base64,XXX,{'js':'showCmt("1","2","3","4")','style':'TEXT'}"`。
+    /// 普通属性解析会在第一个引号处截断，这里识别 `,{` 后的选项对象，读到它的 `}` 为止。
     static func imgSrc(in tag: String) -> String? {
         guard let r = tag.range(of: "\\bsrc\\s*=\\s*\"", options: [.regularExpression, .caseInsensitive]) else {
             return attribute("src", in: tag)
@@ -117,7 +118,7 @@ enum ContentBlocks {
         let rest = tag[r.upperBound...]
         guard let q = rest.firstIndex(of: "\"") else { return nil }
         let first = String(rest[..<q])
-        if first.hasSuffix(",{"), let end = rest.range(of: "}\"", range: q..<rest.endIndex) {
+        if let marker = first.range(of: ",{"), let end = rest.range(of: "}\"", range: marker.lowerBound..<rest.endIndex) {
             return String(rest[..<end.lowerBound]) + "}"
         }
         return first
@@ -133,14 +134,16 @@ enum ContentBlocks {
         return nil
     }
 
-    /// onClick="java.startBrowser('https://…')" -> https://…
+    /// onClick / onPress="java.startBrowser('https://…')" -> https://…
+    /// 书山的 iOS 分支用 onPress="java.showReadingBrowser('…','xx段评')"。
     static func clickURL(in tag: String) -> String? {
-        guard let click = attribute("onClick", in: tag) else { return nil }
+        guard let click = attribute("onClick", in: tag) ?? attribute("onPress", in: tag) else { return nil }
         return urlInCall(click)
     }
 
     static func urlInCall(_ call: String) -> String? {
-        guard let re = try? NSRegularExpression(pattern: "startBrowser(?:Await)?\\(\\s*['\"]([^'\"]+)['\"]"),
+        let pattern = "(?:startBrowser(?:Await)?|showBrowser|showReadingBrowser|startBrowserDp)\\(\\s*['\"]([^'\"]+)['\"]"
+        guard let re = try? NSRegularExpression(pattern: pattern),
               let m = re.firstMatch(in: call, range: NSRange(location: 0, length: (call as NSString).length)) else { return nil }
         return (call as NSString).substring(with: m.range(at: 1))
     }
@@ -152,26 +155,50 @@ enum ContentBlocks {
     }
 
     /// src 后面 `,{"style":"text","type":"qd","click":"showCmt('1','2','3','4')"}` 的键值（字符串值）。
+    /// 也支持书山的 JS 字面量写法 `,{'js':'showCmt("1","2","3","4")','style':'TEXT'}`。
     static func srcOptions(_ src: String) -> [String: String] {
         guard let r = src.range(of: ",{") else { return [:] }
         let json = String(src[src.index(after: r.lowerBound)...])
         if let d = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             return o.reduce(into: [:]) { $0[$1.key] = "\($1.value)" }
         }
-        // 书源常写成 {"style":"text","click":"showCmt('1')"} 里含未转义引号的写法：退回逐键提取。
         var out: [String: String] = [:]
-        for key in ["style", "type", "click"] {
+        // 书源常写成 {"style":"text","click":"showCmt('1')"} 里含未转义引号的写法：退回逐键提取。
+        for key in ["style", "type", "click", "js", "onClick"] {
             if let re = try? NSRegularExpression(pattern: "\"" + key + "\"\\s*:\\s*\"(.*?)\"(?:\\s*[,}])"),
                let m = re.firstMatch(in: json, range: NSRange(location: 0, length: (json as NSString).length)) {
                 out[key] = (json as NSString).substring(with: m.range(at: 1))
+            }
+        }
+        for (key, value) in jsLiteralOptions(json) where out[key] == nil { out[key] = value }
+        return out
+    }
+
+    /// JS 对象字面量选项：键与值用单引号，值里可能有另一种引号
+    /// （`{'js':'showCmt("1","2")','style':'TEXT'}`）。单引号不是合法 JSON，逐键提取。
+    static func jsLiteralOptions(_ json: String) -> [String: String] {
+        var body = json.trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.hasPrefix("{") { body.removeFirst() }
+        if body.hasSuffix("}") { body.removeLast() }
+        var out: [String: String] = [:]
+        for key in ["style", "type", "click", "js", "onClick"] {
+            let patterns = ["[\"']" + key + "[\"']\\s*:\\s*'([^']*)'",
+                            "[\"']" + key + "[\"']\\s*:\\s*\"([^\"]*)\""]
+            for pattern in patterns {
+                guard let re = try? NSRegularExpression(pattern: pattern),
+                      let m = re.firstMatch(in: body, range: NSRange(location: 0, length: (body as NSString).length)),
+                      m.range(at: 1).location != NSNotFound else { continue }
+                out[key] = (body as NSString).substring(with: m.range(at: 1))
+                break
             }
         }
         return out
     }
 
     /// click 是 JS 调用（如 showCmt('书','章','段','数')）时，不是网址；留给调用方按书源执行。
+    /// 书山把回调键写成 `js`（未改版客户端）或 `click`（改版客户端），两者都认。
     static func clickFromOptions(_ opts: [String: String]) -> String? {
-        guard let c = opts["click"], !c.isEmpty else { return nil }
+        guard let c = opts["click"] ?? opts["js"] ?? opts["onClick"], !c.isEmpty else { return nil }
         if let u = urlInCall(c) { return u }
         return "js:" + c
     }

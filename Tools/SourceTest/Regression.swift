@@ -141,6 +141,7 @@ enum RuleRegression {
         try LoginToastRegression.run(check)
         ContentLayoutRegression.run(check)
         try ShushanPipelineShapeRegression.run(check)
+        try ShushanBubbleRegression.run(check)
         ContentBlocksRegression.run(check)
         CommentCardRegression.run(check)
         ImgSrcRegression.run(check)
