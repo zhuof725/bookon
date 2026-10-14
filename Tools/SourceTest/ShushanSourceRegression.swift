@@ -100,6 +100,41 @@ enum ShushanSourceRegression {
                                          context: contextA) == "规则变量", "规则变量仍按作用域读写")
         check(JSEngine.shared.evalString("source.loginUi.length > 0", context: context) == "true",
               "脚本可读取书源登录界面定义")
+
+        // 登录按钮必须有可执行脚本：脚本库常以 // 注释开头，不能当成网址路径。
+        let library = SourceLoginForm.loginScript(source.loginUrl)
+        check(library != nil && library!.contains("function login"),
+              "注释开头的登录脚本库不会被判成网址")
+        check(SourceLoginForm.isWebPath("/login"), "单行路径仍按网页登录处理")
+        check(!SourceLoginForm.isWebPath(library ?? ""), "路径判定不吞掉多行脚本库")
+        check(SourceLoginForm.loginScript("/login") == nil, "单行路径不当作脚本")
+        check(SourceLoginForm.loginPageURL(source) == nil, "脚本库书源没有网页登录地址")
+
+        // loginUi 里每个按钮的动作函数都应该在脚本库里；缺失时至少要有失败回传。
+        var uiActions: [String] = []
+        if let uiData = source.loginUi?.data(using: .utf8),
+           let fields = try? JSONSerialization.jsonObject(with: uiData) as? [[String: Any]] {
+            uiActions = fields.compactMap { $0["action"] as? String }
+                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        }
+        check(uiActions.count >= 20, "提取到登录按钮动作清单（\(uiActions.count) 个）")
+        let identifierPattern = "^([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\("
+        let identifiers = uiActions.compactMap { action -> String? in
+            guard let re = try? NSRegularExpression(pattern: identifierPattern),
+                  let match = re.firstMatch(in: action, range: NSRange(action.startIndex..., in: action)),
+                  let range = Range(match.range(at: 1), in: action) else { return nil }
+            return String(action[range])
+        }
+        let typeChecks = identifiers.map { "if (typeof \($0) !== 'function') missing.push('\($0)');" }.joined(separator: "\n")
+        let missingActions = JSEngine.shared.evalString("var missing=[];\n" + typeChecks + "\nmissing.join(',')",
+                                                        jsLib: library, context: context) ?? ""
+        check(missingActions == "sethost", "登录按钮动作函数齐全，缺失的仅 \(missingActions)")
+        if let unknownAction = uiActions.first(where: { $0.hasPrefix("sethost") }) {
+            let call = JSEngine.shared.runLoginScript(source: source, library: library ?? "",
+                                                      call: unknownAction, formValues: [:])
+            if case .failure = call { check(true, "缺失动作给出失败回传") }
+            else { check(false, "缺失动作必须有失败回传") }
+        }
     }
 
     /// 提取书源文本里出现的 `命名空间.成员`，用于校验引擎接口覆盖度。

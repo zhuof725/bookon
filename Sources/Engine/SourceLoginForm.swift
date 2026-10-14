@@ -91,9 +91,10 @@ enum SourceLoginForm {
     }
 
     /// 取 loginUrl 里的 JS（Legado 里 loginUrl 可以是函数库，也可以是网址）。
+    /// 注意：很多书源的脚本库以 `//注释` 开头，不能把所有以 / 开头的输入都当网址。
     static func loginScript(_ loginUrl: String?) -> String? {
         guard let t = loginUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
-        if isURL(t) || t.hasPrefix("/") { return nil }
+        if isURL(t) || isWebPath(t) { return nil }
         if t.lowercased().hasPrefix("@js:") { return String(t.dropFirst(4)) }
         if t.lowercased().hasPrefix("<js>") {
             var b = String(t.dropFirst(4))
@@ -101,6 +102,15 @@ enum SourceLoginForm {
             return b
         }
         return t
+    }
+
+    /// 仅当以 / 开头且是单行、无空白、没有 JS 语法的短输入时，才视为网页登录路径。
+    /// `/login` 是路径；`//注释...` 或多行脚本一定是 JS。
+    static func isWebPath(_ t: String) -> Bool {
+        guard t.hasPrefix("/"), !t.contains("\n"), !t.contains(" "),
+              !t.contains("{"), !t.contains("}"), !t.contains(";"),
+              !t.lowercased().contains("function") else { return false }
+        return true
     }
 
     /// 是否显示登录入口：有 loginUi，或 loginUrl 是脚本/网址。
@@ -113,7 +123,7 @@ enum SourceLoginForm {
     static func loginPageURL(_ source: BookSource) -> String? {
         guard let t = source.loginUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
         if isURL(t) { return t }
-        if t.hasPrefix("/") { return AnalyzeUrl.absolute(t, base: source.bookSourceUrl) }
+        if isWebPath(t) { return AnalyzeUrl.absolute(t, base: source.bookSourceUrl) }
         return nil
     }
 }
