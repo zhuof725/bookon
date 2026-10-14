@@ -8,12 +8,15 @@ enum ChapterContentLoader {
         // 卷名在本地展示，不对空 URL 或卷链接运行正文规则。
         guard !chapter.isVolume else { return chapter.title }
         let key = ChapterContentKey(sourceURL: source.bookSourceUrl, bookURL: book.bookUrl, chapterURL: chapter.url)
-        return try await ChapterContentCache.shared.content(for: key, priority: priority) {
-            if let raw = legacyContent(chapterURL: chapter.url) { return raw }
+        let raw = try await ChapterContentCache.shared.content(for: key, priority: priority) {
+            if let legacy = legacyContent(chapterURL: chapter.url) { return legacy }
             // 缓存原始正文，段评标签留给阅读器排版；不在预读时执行 UIKit 分页。
             return try await WebBook.rawContent(source: source, chapter: chapter,
                                                 nextChapterUrl: nextChapterURL, book: book)
         }
+        // Also normalize cache hits, so users do not have to clear old chapter caches
+        // after this source-specific display-layout fix.
+        return WebBook.normalizeShushanParagraphs(raw, source: source)
     }
 
     /// 旧版 c_MD5(url).txt 继续可读；命中后由共享缓存迁移到 source/book/chapter 隔离的新键。

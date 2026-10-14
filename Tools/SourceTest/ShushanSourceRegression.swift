@@ -32,6 +32,21 @@ enum ShushanSourceRegression {
         check(source.loginUi?.isEmpty == false && source.loginUrl?.isEmpty == false,
               "登录表单与登录脚本已保留")
 
+        // 该书源会把部分正文段落边界编码为「句末标点 + U+3000」，且没有换行。
+        let noNewlines = "迷迷糊糊中，林七夜做了一个梦。　梦中他回到了半年前。　“嗷！”　林七夜醒了。"
+        let fixed = WebBook.normalizeShushanParagraphs(noNewlines, source: source)
+        check(fixed == "迷迷糊糊中，林七夜做了一个梦。\n梦中他回到了半年前。\n“嗷！”\n林七夜醒了。",
+              "书山无换行正文的句末标点/闭引号全角空格还原为段落")
+        let normalParagraphs = "普通行内空格　仍保留，逗号后　也不拆。"
+        check(WebBook.normalizeShushanParagraphs(normalParagraphs, source: source) == normalParagraphs,
+              "书山句中全角空格不误拆")
+        let existingNewlines = "第一段。　原样保留\n第二段。　也原样保留"
+        check(WebBook.normalizeShushanParagraphs(existingNewlines, source: source) == existingNewlines,
+              "已有换行的书山正文保持原样")
+        var otherSource = source; otherSource.bookSourceUrl = "other-source"
+        check(WebBook.normalizeShushanParagraphs(noNewlines, source: otherSource) == noNewlines,
+              "其他书源全角空格不受影响")
+
         let book = Book(bookUrl: "https://v1.vossc.com/book/1", name: "示例书籍", origin: source.bookSourceUrl)
         let chapter = BookChapter(url: "https://v1.vossc.com/chapter/1", title: "第一章", index: 0)
         let context = RuleContext(source: source, book: book, chapter: chapter)

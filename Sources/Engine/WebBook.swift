@@ -364,7 +364,43 @@ enum WebBook {
         if let rr = rule.replaceRegex, !rr.isEmpty {
             text = AnalyzeRule(content: text, baseUrl: chapter.url, jsLib: source.jsLib, context: RuleContext(source: source, book: book, chapter: chapter)).getString(rr.hasPrefix("##") ? rr : "##" + rr, from: text)
         }
+        // 书山聚合有时把段落分隔符只写成 U+3000，完全没有换行；
+        // 阅读器会把全章当一段。只对该源、且确无 CR/LF 时恢复段落边界。
+        text = normalizeShushanParagraphs(text, source: source)
         return text
+    }
+
+    /// 书山聚合有一类无换行正文以「句末标点 + 全角空格」标记段落。
+    /// 仅该源且正文完全无 CR/LF 时，把这种段界还原为换行；其他源、已有分段、
+    /// 普通行内全角空格一律不动，避免影响此前的通用排版规则。
+    static func normalizeShushanParagraphs(_ text: String, source: BookSource) -> String {
+        guard source.bookSourceUrl == "书山聚合",
+              !text.contains("\n"), !text.contains("\r") else { return text }
+        let characters = Array(text)
+        let paragraphMarks: Set<Character> = ["。", "！", "？", "!", "?", "…"]
+        let closingMarks: Set<Character> = ["”", "’", "」", "』", "》", "〉", "】", "〕", "〗", "〙", "〛", "\"", "'", ")", "]", "}"]
+        var output = ""
+        var boundaries = 0
+        var i = 0
+        while i < characters.count {
+            output.append(characters[i])
+            guard paragraphMarks.contains(characters[i]) else { i += 1; continue }
+            var next = i + 1
+            while next < characters.count && closingMarks.contains(characters[next]) {
+                output.append(characters[next])
+                next += 1
+            }
+            if next < characters.count && characters[next] == "\u{3000}" {
+                output.append("\n")
+                boundaries += 1
+                next += 1
+                while next < characters.count && characters[next] == "\u{3000}" { next += 1 }
+                i = next
+            } else {
+                i = next
+            }
+        }
+        return boundaries >= 2 ? output : text
     }
 
     static func displayIntro(_ text: String) -> String {
