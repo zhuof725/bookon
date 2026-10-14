@@ -11,7 +11,12 @@ enum ShushanSourceRegression {
             .appendingPathComponent("Tools/SourceTest/Fixtures")
         let data = try Data(contentsOf: fixtures.appendingPathComponent("shushan-aggregate-v5.63.json"))
         let text = String(decoding: data, as: UTF8.self)
-        let source = try JSONDecoder().decode(BookSource.self, from: data)
+        // 与 AppStore.importSources 一致：数组与单对象两种导出形式都要能解析。
+        let decoded = try JSONDecoder().decode([BookSource].self, from: data)
+        guard let source = decoded.first else {
+            check(false, "聚合源样例可解析")
+            return
+        }
 
         check(source.bookSourceName == "📚书山聚合" && source.bookSourceUrl == "书山聚合",
               "聚合源名称与非网址标识可导入")
