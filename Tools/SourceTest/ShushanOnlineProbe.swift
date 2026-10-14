@@ -36,6 +36,9 @@ enum ShushanOnlineProbe {
         let control = scalars.filter { $0.value < 0x20 && ![9, 10, 13].contains($0.value) }.count
         print("SHUSHAN content length=\(body.count) han=\(han) readableRatio=\(ratio) base64Shape=\(base64Shape) base64DecodedHan=\(decodedHan)")
         print("SHUSHAN shape replacement=\(replacement) ascii=\(ascii) latin1=\(latin) cjkPunct=\(cjkPunct) control=\(control)")
+        // 把原始载荷落盘（仍是 base64，不是正文），供离线确认解码方式。
+        try? FileManager.default.createDirectory(atPath: "dumps", withIntermediateDirectories: true)
+        try? body.write(toFile: "dumps/shushan-content.b64", atomically: true, encoding: .utf8)
         if han > 100, ratio > 0.25 {
             print("SHUSHAN ONLINE PIPELINE PASS (single first chapter, no account login)")
         } else {
