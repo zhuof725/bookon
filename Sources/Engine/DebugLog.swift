@@ -47,4 +47,17 @@ enum DebugLog {
         }
         return "不是JSON / 无HTML标题"
     }
+
+    /// 只统计形态，不记录正文内容：用于判断正文是解码失败、编码错误还是确实为空。
+    static func shape(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        let total = max(scalars.count, 1)
+        let han = scalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        let replacement = scalars.filter { $0.value == 0xFFFD }.count
+        let ascii = scalars.filter { $0.value < 0x80 }.count
+        let latin = scalars.filter { (0x80...0xFF).contains($0.value) }.count
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base64 = trimmed.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil
+        let innerPad = trimmed.dropLast(2).contains("=")
+        return "汉字 \(han)/\(total)，替换字符 \(replacement)，ASCII \(ascii)，Latin1 \(latin)，base64 形态 \(base64 ? "是" : "否")，内部含 = \(innerPad ? "是" : "否")"
 }

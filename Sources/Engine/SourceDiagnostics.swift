@@ -53,6 +53,7 @@ enum SourceDiagnostics {
             let next = chapters.first { $0.index > chapter.index && !$0.isVolume && !$0.url.isEmpty }?.url
             let text = try await WebBook.content(source: source, chapter: chapter, nextChapterUrl: next, book: info)
             DebugLog.add("正文：\(text.count) 字符（不记录正文内容）")
+            DebugLog.add("正文形态：\(DebugLog.shape(text))")
             DebugLog.add(text.isEmpty ? "正文仍然为空" : "单本首章链路通过；不代表所有书籍/所有分页均已验证。")
         } catch {
             let ns = error as NSError
