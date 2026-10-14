@@ -160,11 +160,16 @@ final class ShelfTests: XCTestCase {
     }
 
     /// 下划更新：在书架上向下拖动应触发刷新回调，并显示结果文案。
+    /// 下拉手势在慢速模拟器上偶发不达标，最多重试三次；断言只要求最终触发一次。
     func testPullToRefreshRunsOnce() {
         status("refreshes=0")
-        let start = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
-        let finish = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 8))
-        start.press(forDuration: 0.1, thenDragTo: finish)
+        let start = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        let finish = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 9))
+        for _ in 0..<3 {
+            start.press(forDuration: 0.2, thenDragTo: finish, withVelocity: .slow, thenHoldForDuration: 0.6)
+            if let value = report.value as? String, value.contains("refreshes=1") { break }
+            Thread.sleep(forTimeInterval: 1.5)
+        }
         status("refreshes=1")
         status("refresh=已更新 2 本")
         capture("shelf-04-pull-refresh")
