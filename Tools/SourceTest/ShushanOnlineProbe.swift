@@ -18,7 +18,16 @@ enum ShushanOnlineProbe {
         let body = try await WebBook.rawContent(source: source, chapter: chapter, nextChapterUrl: nil, book: info)
         let han = body.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
         let ratio = Double(han) / Double(max(body.count, 1))
-        print("SHUSHAN content length=\(body.count) han=\(han) readableRatio=\(ratio)")
+        // Diagnostics only: lengths and shape, never the text itself.
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base64Shape = trimmed.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil
+        let decodedHan: Int
+        if base64Shape, let raw = Data(base64Encoded: trimmed), let text = String(data: raw, encoding: .utf8) {
+            decodedHan = text.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        } else {
+            decodedHan = -1
+        }
+        print("SHUSHAN content length=\(body.count) han=\(han) readableRatio=\(ratio) base64Shape=\(base64Shape) base64DecodedHan=\(decodedHan)")
         guard han > 100, ratio > 0.25 else { throw ProbeError.invalid("content not verified as readable Chinese text") }
         print("SHUSHAN ONLINE PIPELINE PASS (single first chapter, no account login)")
     }
