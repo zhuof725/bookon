@@ -56,6 +56,8 @@ struct BookshelfScreen: View {
     let onImport: () -> Void
     let onRemove: ([Book]) -> Void
     var loadListChapters: (Book) -> [BookChapter]? = { _ in nil }
+    /// 下拉刷新：返回要显示的结果文案（nil 表示不提示）。刷新期间系统自带下拉指示器。
+    var onRefresh: () async -> String? = { nil }
     @AppStorage("shelf.layout.v1") private var layoutValue = ShelfLayout.grid.rawValue
     @AppStorage("shelf.sort.v1") private var sortValue = ShelfSort.recent.rawValue
     @State private var filter: ShelfFilter = .all
@@ -63,6 +65,9 @@ struct BookshelfScreen: View {
     @State private var selection: Set<String> = []
     @State private var menu: String?
     @State private var confirmRemoval = false
+    @State private var refreshStatus: String?
+    @State private var statusTask: Task<Void, Never>?
+    @State private var refreshing = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var layout: ShelfLayout { ShelfLayout(rawValue: layoutValue) ?? .grid }
@@ -79,6 +84,15 @@ struct BookshelfScreen: View {
             VStack(spacing: 14) {
                 header
                 if selecting { selectionBar }
+                if let refreshStatus {
+                    Text(refreshStatus)
+                        .appFont(.system(size: 14))
+                        .foregroundStyle(palette.secondary)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .modifier(ShelfGlass(shape: Capsule()))
+                        .accessibilityIdentifier("shelf.refreshStatus")
+                        .transition(.opacity)
+                }
                 ScrollView {
                     if visibleBooks.isEmpty {
                         VStack(spacing: 14) {
@@ -109,6 +123,7 @@ struct BookshelfScreen: View {
                         }.padding(.horizontal, 10).padding(.bottom, 24)
                     }
                 }
+                .refreshable { await performRefresh() }
             }
             .overlay(alignment: .topTrailing) {
                 if let menu {
@@ -134,8 +149,24 @@ struct BookshelfScreen: View {
         .onChange(of: books.map(\.id)) { ids in selection.formIntersection(Set(ids)) }
     }
 
-    private var header: some View {
-        HStack {
+    /// 下拉刷新：同一时间只跑一次，结果文案显示几秒后自动消失。
+    @MainActor
+    private func performRefresh() async {
+        if refreshing { return }
+        refreshing = true
+        defer { refreshing = false }
+        let message = await onRefresh()
+        guard !Task.isCancelled else { return }
+        refreshStatus = message
+        statusTask?.cancel()
+        statusTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if Task.isCancelled { return }
+            withAnimation(.easeOut(duration: 0.25)) { refreshStatus = nil }
+        }
+    }
+
+    private var header: some View {        HStack {
             Button(action: onSearch) { Image(systemName: "magnifyingglass").font(.system(size: 21, weight: .medium)).frame(width: 44, height: 44) }
                 .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("搜索书籍").accessibilityIdentifier("shelf.search")
             Spacer()

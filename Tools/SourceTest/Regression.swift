@@ -142,6 +142,7 @@ enum RuleRegression {
         ContentLayoutRegression.run(check)
         try ShushanPipelineShapeRegression.run(check)
         try ShushanBubbleRegression.run(check)
+        await ShelfRefreshRegression.run(check)
         ContentBlocksRegression.run(check)
         CommentCardRegression.run(check)
         ImgSrcRegression.run(check)

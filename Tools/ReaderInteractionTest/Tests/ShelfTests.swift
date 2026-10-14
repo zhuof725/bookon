@@ -158,4 +158,17 @@ final class ShelfTests: XCTestCase {
         XCTAssertTrue(app.buttons["library.tab.0"].exists)
         status("books=2")
     }
+
+    /// 下划更新：在书架上向下拖动应触发刷新回调，并显示结果文案。
+    func testPullToRefreshRunsOnce() {
+        status("refreshes=0")
+        let start = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+        let finish = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 8))
+        start.press(forDuration: 0.1, thenDragTo: finish)
+        status("refreshes=1")
+        let banner = app.staticTexts["shelf.refreshStatus"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 5), "刷新结果文案")
+        XCTAssertTrue(banner.label.contains("已更新"), banner.label)
+        capture("shelf-04-pull-refresh")
+    }
 }

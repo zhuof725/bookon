@@ -81,7 +81,8 @@ struct BookshelfView: View {
             onOpen: { book in selectedBook = book; showDetail = true },
             onSearch: { showSearch = true }, onImport: { showImport = true },
             onRemove: { books in books.forEach { store.removeFromShelf($0) } },
-            loadListChapters: { book in store.isLocal(book) ? store.localToc(book) : store.cachedToc(book) })
+            loadListChapters: { book in store.isLocal(book) ? store.localToc(book) : store.cachedToc(book) },
+            onRefresh: { await refreshShelf() })
         .navigationDestination(isPresented: $showDetail) {
             if let selectedBook { BookDetailView(book: selectedBook) }
         }
@@ -117,6 +118,43 @@ struct BookshelfView: View {
             catch { failed.append("\(u.lastPathComponent)：文件无法读取或已损坏") }
         }
         importMessage = "成功导入 \(ok) 本" + (failed.isEmpty ? "" : "\n\n失败：\n" + failed.joined(separator: "\n"))
+    }
+
+    /// 书架下拉刷新：逐本重新取书籍信息与目录，更新书名/封面/最新章节，保留阅读进度。
+    /// 本地书籍与找不到书源的书跳过；失败不影响其它书。
+    @MainActor
+    private func refreshShelf() async -> String? {
+        let all = store.books
+        let targets = ShelfRefresh.targets(all, localOrigin: AppStore.localOrigin) { store.source(for: $0.origin) != nil }
+        let skipped = all.count - targets.count
+        guard !targets.isEmpty else { return ShelfRefresh.summary(updated: 0, failed: 0, skipped: skipped) }
+        let result = await ShelfRefresh.run(targets) { book in
+            await refreshOne(book)
+        } onResult: { result in
+            guard let refreshed = result.book else { return }
+            store.applyShelfRefresh(refreshed, chapters: result.chapters)
+        }
+        store.flushProgress()
+        return ShelfRefresh.summary(updated: result.updated, failed: result.failed, skipped: skipped)
+    }
+
+    @MainActor
+    private func refreshOne(_ book: Book) async -> ShelfRefresh.Result {
+        guard let source = store.source(for: book.origin) else {
+            return ShelfRefresh.Result(bookUrl: book.bookUrl, book: nil)
+        }
+        do {
+            let latest = try await WebBook.bookInfo(source: source, book: book)
+            guard !Task.isCancelled else { return ShelfRefresh.Result(bookUrl: book.bookUrl, book: nil) }
+            var chapters: [BookChapter] = []
+            // 目录拿不到（部分源需要登录）时仍然更新书目信息，不整本算失败。
+            chapters = (try? await WebBook.chapters(source: source, book: latest)) ?? []
+            return ShelfRefresh.Result(bookUrl: book.bookUrl,
+                                       book: ShelfRefresh.merge(latest, into: book),
+                                       chapters: chapters)
+        } catch {
+            return ShelfRefresh.Result(bookUrl: book.bookUrl, book: nil)
+        }
     }
 }
 

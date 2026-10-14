@@ -155,6 +155,14 @@ final class AppStore: ObservableObject {
         saveBooks()
     }
 
+    /// 下拉刷新写回：更新书目信息并缓存新目录，保留阅读进度；写盘合并，避免逐本重写书架 JSON。
+    func applyShelfRefresh(_ book: Book, chapters: [BookChapter]) {
+        if !chapters.isEmpty { saveToc(book, chapters) }
+        guard let i = books.firstIndex(where: { $0.bookUrl == book.bookUrl }) else { return }
+        books[i] = book
+        saveBooksDebounced()
+    }
+
     func removeFromShelf(_ b: Book) {
         if isLocal(b) { deleteLocalFiles(b) }
         books.removeAll { $0.bookUrl == b.bookUrl }; saveBooks()

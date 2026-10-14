@@ -31,6 +31,8 @@ struct ShelfHarnessView: View {
     @State private var searches = 0
     @State private var imports = 0
     @State private var removals = 0
+    @State private var refreshes = 0
+    @State private var refreshMessage: String?
     @AppStorage("shelf.layout.v1") private var layout = ShelfLayout.grid.rawValue
     @AppStorage("shelf.sort.v1") private var sort = ShelfSort.recent.rawValue
 
@@ -42,7 +44,7 @@ struct ShelfHarnessView: View {
             ShelfBooks.visible(books, filter: .all, sort: order, localOrigin: ShelfFixture.localOrigin)
                 .map(\.id).joined(separator: ",")
         }.joined(separator: "|")
-        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);tab=\(selection.rawValue)"
+        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);refreshes=\(refreshes);tab=\(selection.rawValue)"
     }
 
     var body: some View {
@@ -63,6 +65,10 @@ struct ShelfHarnessView: View {
                             return (0..<169).map { BookChapter(url: "fixture-chapter-\($0)",
                                 title: "第\($0 + 1)章 测试章节", index: $0,
                                 updateTime: $0 == 168 ? "2026-10-13" : nil) }
+                        }, onRefresh: {
+                            refreshes += 1
+                            refreshMessage = "已更新 \(books.count) 本"
+                            return refreshMessage
                         })
                         .navigationDestination(isPresented: $showReader) {
                             VStack(spacing: 24) {
