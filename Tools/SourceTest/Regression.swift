@@ -140,6 +140,7 @@ enum RuleRegression {
         try ShushanSourceRegression.run(check)
         try LoginToastRegression.run(check)
         ContentLayoutRegression.run(check)
+        try ShushanPipelineShapeRegression.run(check)
         ContentBlocksRegression.run(check)
         CommentCardRegression.run(check)
         ImgSrcRegression.run(check)
