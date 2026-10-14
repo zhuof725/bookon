@@ -82,7 +82,9 @@ enum ShushanSourceRegression {
                                          context: RuleContext(source: source, book: bookB)) == "",
               "不同书籍不共享书籍变量")
         check(JSEngine.shared.evalString("java.put('custom','规则变量'); book.getVariable('custom')",
-                                         context: contextA) == "开启段评", "规则变量不覆盖书籍变量")
+                                         context: contextA) == "开启段评", "规则变量与书籍变量互不覆盖")
+        check(JSEngine.shared.evalString("java.put('custom','规则变量'); java.get('custom')",
+                                         context: contextA) == "规则变量", "规则变量仍按作用域读写")
         check(JSEngine.shared.evalString("source.loginUi.length > 0", context: context) == "true",
               "脚本可读取书源登录界面定义")
     }

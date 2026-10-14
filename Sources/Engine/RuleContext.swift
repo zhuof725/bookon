@@ -67,6 +67,8 @@ final class RuleContext {
     private static var sourceVariables: [String: [String: String]] = [:]
     private static var bookVariables: [String: [String: String]] = [:]
     private static var chapterVariables: [String: [String: String]] = [:]
+    /// book.getVariable/putVariable 的独立存储，与规则变量表互不影响。
+    private static var bookVariableStore: [String: [String: String]] = [:]
 
     init(source: BookSource? = nil, book: Book? = nil, chapter: BookChapter? = nil) {
         self.source = source
@@ -119,24 +121,18 @@ final class RuleContext {
         return table[id]?[key]
     }
 
-    /// 书源 JS 的 `book.getVariable/putVariable`：只读写书籍作用域，
-    /// 与规则变量 `java.get/put` 分离，避免互相覆盖。
+    /// 书源 JS 的 `book.getVariable/putVariable`：Legado 中这是书籍自带的
+    /// variableMap，与规则变量 `java.get/put` 是两套独立存储，这里也分开保存。
     func bookVariableGet(_ key: String) -> String {
         Self.lock.lock(); defer { Self.lock.unlock() }
-        if let pending = pendingBookVariables, let value = pending[key] { return value }
-        if let id = bookID, let value = Self.bookVariables[id]?[key] { return value }
-        if let value = inheritedBookVariables[key] { return value }
+        if let id = bookID, let value = Self.bookVariableStore[id]?[key] { return value }
         return localBookVariables[key] ?? ""
     }
 
     func bookVariablePut(_ key: String, _ value: String) -> String {
         Self.lock.lock(); defer { Self.lock.unlock() }
-        if pendingBookVariables != nil {
-            pendingBookVariables?[key] = value
-            return value
-        }
         if let id = bookID {
-            Self.bookVariables[id, default: [:]][key] = value
+            Self.bookVariableStore[id, default: [:]][key] = value
             return value
         }
         // 没有书籍标识时不写入来源级共享存储，只保留本次求值。
