@@ -39,6 +39,8 @@ enum ShushanPipelineShapeRegression {
                                        jsLib: source.jsLib, context: context).getString(ruleText, from: raw)
             print("PIPELINE afterReplaceRegex newlines=\(newlines(replaced)) length=\(replaced.count)"
                 + " htmlWrapped=\(replaced.hasPrefix("<html")) paragraphs=\(paragraphs(replaced))")
+            // 这里打印的是本测试自己合成的正文，不含任何用户内容。
+            print("PIPELINE afterReplaceRegex text=\(replaced.replacingOccurrences(of: "\n", with: "⏎"))")
             check(newlines(replaced) == newlines(raw),
                   "带段评标签的正文替换后换行不变（\(newlines(raw)) -> \(newlines(replaced))）")
 
@@ -46,6 +48,7 @@ enum ShushanPipelineShapeRegression {
                                             jsLib: source.jsLib, context: context).getString(ruleText, from: plain)
             print("PIPELINE plainAfterReplaceRegex newlines=\(newlines(plainReplaced))"
                 + " htmlWrapped=\(plainReplaced.hasPrefix("<html"))")
+            print("PIPELINE plainAfterReplaceRegex text=\(plainReplaced.replacingOccurrences(of: "\n", with: "⏎"))")
             check(newlines(plainReplaced) == newlines(plain),
                   "纯文本正文替换后换行不变（\(newlines(plain)) -> \(newlines(plainReplaced))）")
         }
