@@ -182,9 +182,17 @@ struct SourceLoginView: View {
             let result = await Task.detached { JSEngine.shared.runLoginScript(source: src, library: lib, call: call, formValues: vals) }.value
             busy = false
             switch result {
-            case .failure(let e): message = "执行出错：\(e.message)"
+            case .failure(let e):
+                // 脚本异常不会有 java.toast，必须由界面把原因回传出来。
+                let text = "执行出错：\(e.message)"
+                message = text
+                toastCard = text
             case .success(let s):
-                if message.isEmpty { message = s.isEmpty ? "已执行" : s }
+                if message.isEmpty {
+                    let text = s.isEmpty ? "已执行" : s
+                    message = text
+                    toastCard = text
+                }
             }
         }
     }

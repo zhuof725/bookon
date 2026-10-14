@@ -53,11 +53,16 @@ enum LoginToastRegression {
         check(text.components(separatedBy: "\n").count >= 8, "多行卡片不被截断")
         check(!text.contains("\\n"), "换行没有被转义成字面量")
 
-        // 脚本异常时也必须回传，而不是静默失败。
+        // 脚本异常时不会凭空产生 toast，但必须把失败原因返回给界面用于回传。
         received.removeAll()
         let broken = try source(loginURL: "function login(flag) { throw new Error('boom'); }")
-        _ = JSEngine.shared.runLoginScript(source: broken, library: broken.loginUrl, call: "login()")
-        check(!received.isEmpty, "脚本异常时仍有回传")
+        let outcome = JSEngine.shared.runLoginScript(source: broken, library: broken.loginUrl, call: "login()")
+        switch outcome {
+        case .failure(let error):
+            check(error.message.contains("boom"), "脚本异常原因可回传给界面")
+        case .success:
+            check(false, "抛错的登录脚本不应报告成功")
+        }
     }
 
     /// 把任意文本安全地嵌入 JS 字符串字面量。
