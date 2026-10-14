@@ -149,19 +149,26 @@ struct BookshelfScreen: View {
         .onChange(of: books.map(\.id)) { ids in selection.formIntersection(Set(ids)) }
     }
 
-    /// 下拉刷新：同一时间只跑一次，结果文案显示几秒后自动消失。
+    /// 下拉刷新：同一时间只跑一次；先显示「正在更新…」，完成后换成结果文案并自动消失。
+    /// 这里不检查 Task.isCancelled：下拉控件的任务可能在收起时被取消，而结果提示仍应显示。
     @MainActor
     private func performRefresh() async {
         if refreshing { return }
         refreshing = true
         defer { refreshing = false }
+        showRefreshStatus("正在更新…", autoHide: false)
         let message = await onRefresh()
-        guard !Task.isCancelled else { return }
-        refreshStatus = message
+        showRefreshStatus(message ?? "已更新", autoHide: true)
+    }
+
+    @MainActor
+    private func showRefreshStatus(_ text: String, autoHide: Bool) {
+        refreshStatus = text
         statusTask?.cancel()
+        statusTask = nil
+        guard autoHide else { return }
         statusTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4_000_000_000)
-            if Task.isCancelled { return }
             withAnimation(.easeOut(duration: 0.25)) { refreshStatus = nil }
         }
     }
