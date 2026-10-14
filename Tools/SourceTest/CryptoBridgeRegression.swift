@@ -65,8 +65,12 @@ enum CryptoBridgeRegression {
         check(!errorName("java.createSymmetricCrypto('AES','short')").contains("short"), "error text does not echo key material")
 
         // Device identifier: stable within a process and shaped like ANDROID_ID.
-        let a = js("java.androidId()"), b = js("java.deviceID()")
-        check(a.count == 16 && a == b && a == JSEngine.installIdentifier, "androidId/deviceID are one stable 16-char identifier")
+        // 只提供 androidId：Legado/阅读Sigma 没有 deviceID，书源靠它的缺失判断非 iOS 分支。
+        let a = js("java.androidId()")
+        check(a.count == 16 && a == JSEngine.installIdentifier, "androidId 是稳定的 16 位标识")
         check(a.allSatisfy { "0123456789abcdef".contains($0) }, "device identifier is lower-case hex")
+        check(js("typeof java.deviceID") == "undefined", "deviceID 与 Legado 一致地不存在")
+        check(js("(function(){try{java.deviceID();return 'ios'}catch(e){return 'android'}})()") == "android",
+              "书源的 deviceType 探测判定为 Android")
     }
 }

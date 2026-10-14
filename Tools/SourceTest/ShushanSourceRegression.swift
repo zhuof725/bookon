@@ -43,7 +43,19 @@ enum ShushanSourceRegression {
         let probe = used.map { "if (typeof \($0) === 'undefined') missing.push('\($0)');" }.joined(separator: "\n")
         let script = "var missing=[];\n" + probe + "\nmissing.join(',')"
         let missing = JSEngine.shared.evalString(script, jsLib: source.jsLib, context: context) ?? "EVALUATION_FAILED"
-        check(missing.isEmpty, "书源使用的 JS 接口全部可用（缺失：\(missing)）")
+        // java.deviceID 是刻意不提供的：Legado/阅读Sigma 也没有它，
+        // 书源用「它不存在」来判断自己运行在 Android 分支，否则正文会被逐行包成 rs-native。
+        let intentionallyAbsent: Set<String> = ["java.deviceID"]
+        let missingSet = Set(missing.split(separator: ",").map(String.init))
+        check(missingSet.subtracting(intentionallyAbsent).isEmpty,
+              "书源使用的 JS 接口全部可用（缺失：\(missingSet.subtracting(intentionallyAbsent))）")
+        check(missingSet.contains("java.deviceID"), "deviceID 属于刻意不提供的接口（书源用 try/catch 探测）")
+        check(JSEngine.shared.evalString("typeof java.deviceID", jsLib: source.jsLib, context: context) == "undefined",
+              "deviceID 未定义，书源判定为 Android 分支")
+        let wrapped = JSEngine.shared.evalString("wrapContentForIOS.call(this, '第一行\\n第二行')",
+                                                 jsLib: source.jsLib, context: context) ?? ""
+        check(wrapped == "第一行\n第二行" && !wrapped.contains("rs-native"),
+              "正文不再被逐行包成 rs-native div（\(wrapped.prefix(24))）")
 
         check(JSEngine.shared.evalString("let source = 'local'; [source, globalSource()].join('|')",
             jsLib: "function globalSource(){return source.bookSourceUrl;}", context: context) == "local|书山聚合",

@@ -444,8 +444,9 @@ final class JSEngine {
     java.getThemeMode=function(){return 6;};
     java.refreshContent=function(){return '';};
     java.refreshExplore=function(){return '';};
+    // 只提供 androidId：Legado/阅读Sigma 的 JS 环境里没有 deviceID，
+    // 书源用「deviceID 是否存在」区分 iOS 分支，多提供一个会让它们误判成 iOS。
     java.androidId=function(){return String(__deviceId());};
-    java.deviceID=function(){return String(__deviceId());};
     java.utf8ToGbk=function(s){return s};
     java.t2s=function(s){return s};java.s2t=function(s){return s};
     java.randomUUID=function(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c=='x'?r:(r&3|8)).toString(16)})};
