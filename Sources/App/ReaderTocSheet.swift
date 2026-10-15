@@ -3,30 +3,26 @@ import SwiftUI
 /// 目录页用到的缓存查询与预缓存动作。生产端由阅读器注入真实的正文缓存与加载器，
 /// 离线 UI 测试注入合成实现；本文件不直接依赖网络栈或 WebBook。
 struct ReaderTocServices {
-    /// 该章正文是否已在本地缓存（内存或磁盘）。
     var isCached: (BookChapter) async -> Bool
-    /// 预缓存一章正文；已缓存时应当立即成功返回。nextChapterURL 用于书源的续页规则。
     var load: (_ chapter: BookChapter, _ nextChapterURL: String?) async throws -> Void
-
     static let unavailable = ReaderTocServices(
         isCached: { _ in false },
         load: { _, _ in throw ReaderTocError.unavailable })
-
     enum ReaderTocError: LocalizedError {
         case unavailable
         var errorDescription: String? { "当前书籍不支持预缓存" }
     }
 }
 
-/// 目录的「已缓存」标识与预缓存进度。进度条覆盖当前章之后的固定窗口，
-/// 已缓存的章节直接计入完成数、不重复请求书源；失败即停并保留进度，可重试。
+/// 预缓存状态与进度。单例，在「我的」页面显示进度条，在目录页提供已缓存标识。
+/// 阅读器打开时注册当前书籍的目录与服务；预缓存走与阅读同一条链路（ChapterContentLoader）。
+/// 进度状态在「我的」页面可见，不放在目录页，避免目录页因频繁刷新进度而卡顿。
 @MainActor
-final class ReaderTocModel: ObservableObject {
+final class ChapterPrecacheManager: ObservableObject {
+    static let shared = ChapterPrecacheManager()
+
     enum PrecachePhase: Equatable {
-        case running
-        case finished
-        case stopped
-        case failed(String)
+        case running, finished, stopped, failed(String)
     }
     struct PrecacheProgress: Equatable {
         var done = 0
@@ -34,33 +30,65 @@ final class ReaderTocModel: ObservableObject {
         var phase: PrecachePhase = .running
     }
 
-    /// 一次预缓存的窗口大小：当前章之后要保证已缓存的章节数。
     static let window = 20
 
     @Published private(set) var cached: Set<String> = []
     @Published private(set) var progress: PrecacheProgress?
+    @Published private(set) var bookName: String?
+    @Published private(set) var canPrecache = false
+
     private var precacheTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
+    private var chapters: [BookChapter] = []
+    private var currentIndex = 0
+    private var services: ReaderTocServices?
+    private var hasRefreshed = false
 
     var isPrecaching: Bool { progress?.phase == .running }
 
-    /// 打开目录时刷新「已缓存」标识；只报告真实存在的缓存，不虚构。
-    /// 分批发布，避免上千章目录每章触发一次刷新。
-    func refreshCacheStatus(chapters: [BookChapter], services: ReaderTocServices) async {
-        let items = chapters.filter { !$0.isVolume && !$0.url.isEmpty }
-        var found: Set<String> = []
-        var processed = 0
-        for chapter in items {
-            if Task.isCancelled { return }
-            if await services.isCached(chapter) { found.insert(chapter.id) }
-            processed += 1
-            if processed % 32 == 0 { cached.formUnion(found) }
+    /// 阅读器加载完目录后注册：设置当前书籍、章节列表、索引与缓存服务。
+    /// 新书籍会取消旧的预缓存并重置标识。注册只发生一次（除非换书）。
+    func register(chapters: [BookChapter], currentIndex: Int, bookName: String,
+                  services: ReaderTocServices?, canPrecache: Bool) {
+        if self.bookName == bookName, !chapters.isEmpty, self.chapters.count == chapters.count {
+            self.currentIndex = currentIndex
+            return
         }
-        cached.formUnion(found)
+        cancelPrecache()
+        stopAndClear()
+        self.chapters = chapters
+        self.currentIndex = currentIndex
+        self.bookName = bookName
+        self.services = services
+        self.canPrecache = canPrecache
+        self.cached = []
+        self.hasRefreshed = false
     }
 
-    /// 预缓存当前章之后的窗口章节；卷标题不占窗口，越界自动截断。
-    func startPrecache(chapters: [BookChapter], currentIndex: Int, services: ReaderTocServices) {
-        guard !isPrecaching else { return }
+    /// 更新当前阅读位置（翻页时调用），供预缓存窗口锚定起点。
+    func updateCurrentIndex(_ index: Int) {
+        currentIndex = index
+    }
+
+    /// 目录页打开时刷新已缓存标识；只刷新一次，后台异步执行不阻塞 UI。
+    func refreshCacheStatusIfNeeded() {
+        guard !hasRefreshed, let services, !chapters.isEmpty else { return }
+        hasRefreshed = true
+        let items = chapters.filter { !$0.isVolume && !$0.url.isEmpty }
+        refreshTask?.cancel()
+        refreshTask = Task.detached { [weak self] in
+            var found: Set<String> = []
+            for chapter in items {
+                if Task.isCancelled { return }
+                if await services.isCached(chapter) { found.insert(chapter.id) }
+            }
+            await MainActor.run { self?.cached = found }
+        }
+    }
+
+    /// 预缓存当前章之后的窗口章节；卷标题不占窗口，越界截断。
+    func startPrecache() {
+        guard !isPrecaching, let services else { return }
         let queue = ChapterNavigation.prefetchIndices(after: currentIndex, chapters: chapters, limit: Self.window)
         guard !queue.isEmpty else { return }
         let snapshot = chapters
@@ -73,7 +101,6 @@ final class ReaderTocModel: ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 guard snapshot.indices.contains(index) else { continue }
                 let chapter = snapshot[index]
-                // 已经缓存的章节不重复请求书源，直接计入完成数。
                 if self.cached.contains(chapter.id) {
                     done += 1
                     self.progress = PrecacheProgress(done: done, total: total, phase: .running)
@@ -86,8 +113,7 @@ final class ReaderTocModel: ObservableObject {
                 } catch is CancellationError {
                     return
                 } catch {
-                    self.progress = PrecacheProgress(done: done, total: total,
-                                                     phase: .failed(error.localizedDescription))
+                    self.progress = PrecacheProgress(done: done, total: total, phase: .failed(error.localizedDescription))
                     self.precacheTask = nil
                     return
                 }
@@ -102,7 +128,6 @@ final class ReaderTocModel: ObservableObject {
         }
     }
 
-    /// 用户主动停止：保留已完成进度，状态改为已停止。
     func cancelPrecache() {
         guard isPrecaching else { return }
         precacheTask?.cancel()
@@ -112,64 +137,45 @@ final class ReaderTocModel: ObservableObject {
         }
     }
 
-    /// 关闭进度提示 / 离开阅读器：取消在途预缓存并清除进度条。
     func stopAndClear() {
         precacheTask?.cancel()
         precacheTask = nil
+        refreshTask?.cancel()
+        refreshTask = nil
         progress = nil
     }
 }
 
-/// 阅读器目录页：章节标题 + 书源更新时间 + 已缓存标识 + 预缓存进度条。
-/// 章节列表与 ReaderView 的 chapters 是同一份快照；点选只回调索引，不直接翻页。
+/// 阅读器目录页：章节标题 + 书源更新时间 + 已缓存标识。
+/// 预缓存进度条不在目录页显示（在「我的」页面），避免目录卡顿。
 struct ReaderTocSheet: View {
     @ThemePalette private var palette
     let chapters: [BookChapter]
     let currentIndex: Int
-    @ObservedObject var model: ReaderTocModel
-    let services: ReaderTocServices
-    var canPrecache: Bool = true
+    @ObservedObject var manager: ChapterPrecacheManager
     let onSelect: (Int) -> Void
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if let progress = model.progress {
-                    precacheHeader(progress)
+            ScrollViewReader { proxy in
+                List(chapters) { chapter in
+                    row(chapter)
+                        .independentGlassRow()
+                        .id(chapter.index)
                 }
-                ScrollViewReader { proxy in
-                    List(chapters) { chapter in
-                        row(chapter)
-                            .independentGlassRow()
-                            .id(chapter.index)
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background { AppThemeCanvas().ignoresSafeArea() }
-                    .onAppear { proxy.scrollTo(currentIndex, anchor: .center) }
-                }
+                .scrollContentBackground(.hidden)
+                .background { AppThemeCanvas().ignoresSafeArea() }
+                .onAppear { proxy.scrollTo(currentIndex, anchor: .center) }
             }
             .navigationTitle("目录（\(chapters.count)）")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if canPrecache {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            model.startPrecache(chapters: chapters, currentIndex: currentIndex, services: services)
-                        } label: {
-                            Label("预缓存", systemImage: "arrow.down.circle")
-                        }
-                        .disabled(model.isPrecaching)
-                        .accessibilityIdentifier("reader.toc.precache")
-                    }
-                }
-            }
         }
-        .task { await model.refreshCacheStatus(chapters: chapters, services: services) }
+        .task { manager.refreshCacheStatusIfNeeded() }
     }
 
     @ViewBuilder
     private func row(_ chapter: BookChapter) -> some View {
-        let isCached = model.cached.contains(chapter.id)
+        let isCached = manager.cached.contains(chapter.id)
         Button { onSelect(chapter.index) } label: {
             if chapter.isVolume {
                 Text(chapter.title).appFont(.headline)
@@ -196,43 +202,61 @@ struct ReaderTocSheet: View {
         .accessibilityIdentifier("reader.toc.row.\(chapter.index)")
         .accessibilityValue(chapter.isVolume ? "" : (isCached ? "已缓存" : "未缓存"))
     }
+}
 
-    private func precacheHeader(_ progress: ReaderTocModel.PrecacheProgress) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Text(statusText(progress))
-                    .appFont(.subheadline)
-                    .lineLimit(2)
-                    .accessibilityIdentifier("reader.toc.precache.status")
-                Spacer(minLength: 8)
-                if progress.phase == .running {
-                    Button("停止") { model.cancelPrecache() }
-                        .accessibilityIdentifier("reader.toc.precache.stop")
-                } else {
-                    Button { model.stopAndClear() } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 18))
-                            .foregroundStyle(palette.secondary)
+/// 「我的」页面预缓存卡片：显示当前阅读书籍的预缓存状态与进度条。
+/// 由阅读器注册书籍信息后激活；离开阅读器后进度仍可见，直到完成或清除。
+struct PrecacheCardView: View {
+    @ThemePalette private var palette
+    @ObservedObject var manager: ChapterPrecacheManager
+
+    var body: some View {
+        if manager.bookName != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle").foregroundStyle(palette.accent)
+                    Text(manager.bookName ?? "").appFont(.headline).lineLimit(1)
+                }
+                if let progress = manager.progress {
+                    HStack(spacing: 10) {
+                        Text(statusText(progress)).appFont(.subheadline).lineLimit(2)
+                            .accessibilityIdentifier("precache.status")
+                        Spacer(minLength: 8)
+                        if progress.phase == .running {
+                            Button("停止") { manager.cancelPrecache() }
+                                .accessibilityIdentifier("precache.stop")
+                        } else {
+                            Button { manager.stopAndClear() } label: {
+                                Image(systemName: "xmark.circle.fill").font(.system(size: 18))
+                                    .foregroundStyle(palette.secondary)
+                            }
+                            .accessibilityLabel("关闭预缓存状态")
+                            .accessibilityIdentifier("precache.dismiss")
+                        }
                     }
-                    .accessibilityLabel("关闭预缓存提示")
-                    .accessibilityIdentifier("reader.toc.precache.dismiss")
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                        .accessibilityIdentifier("precache.bar")
+                    if case .failed = progress.phase {
+                        Button("重试") { manager.startPrecache() }
+                            .accessibilityIdentifier("precache.retry")
+                    }
+                } else if manager.canPrecache {
+                    Button {
+                        manager.startPrecache()
+                    } label: {
+                        Label("预缓存后续 \(ChapterPrecacheManager.window) 章", systemImage: "arrow.down.circle")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .accessibilityIdentifier("precache.start")
                 }
             }
-            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
-                .accessibilityIdentifier("reader.toc.precache.bar")
-            if case .failed = progress.phase {
-                Button("重试") {
-                    model.startPrecache(chapters: chapters, currentIndex: currentIndex, services: services)
-                }
-                .accessibilityIdentifier("reader.toc.precache.retry")
-            }
+            .padding(.horizontal, 18).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(SettingsGlassSurface())
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(SettingsGlassSurface())
-        .padding(.horizontal, 16).padding(.top, 8)
     }
 
-    private func statusText(_ progress: ReaderTocModel.PrecacheProgress) -> String {
+    private func statusText(_ progress: ChapterPrecacheManager.PrecacheProgress) -> String {
         switch progress.phase {
         case .running: return "正在预缓存 \(progress.done)/\(progress.total)"
         case .finished: return "预缓存完成：共 \(progress.total) 章"

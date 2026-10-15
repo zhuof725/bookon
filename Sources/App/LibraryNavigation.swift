@@ -96,6 +96,8 @@ struct LibraryProfileView: View {
                     LibraryCardDivider()
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
                 }
+                PrecacheCardView(manager: .shared)
+                    .padding(.horizontal, 24)
                 LibraryCard {
                     Text("阅读进度、导入书源与本地书籍保存在本机。")
                         .foregroundStyle(palette.secondary).appFont(.footnote)

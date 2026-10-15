@@ -224,7 +224,6 @@ struct ReaderView: View {
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
     @StateObject private var speech = ReaderSpeechController()
-    @StateObject private var tocModel = ReaderTocModel()
 
     private func toggleBars() {
         if !showBars { persistContinuousProgress(); syncMenuProgress() }
@@ -307,9 +306,8 @@ struct ReaderView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showToc) {
-            ReaderTocSheet(chapters: chapters, currentIndex: index, model: tocModel,
-                           services: tocServices,
-                           canPrecache: !store.isLocal(book) && store.source(for: book.origin) != nil,
+            ReaderTocSheet(chapters: chapters, currentIndex: index,
+                           manager: .shared,
                            onSelect: { target in showToc = false; go(target) })
         }
         .sheet(isPresented: $showSettings) {
@@ -426,7 +424,6 @@ struct ReaderView: View {
             chapterTask = nil
             prefetchTask?.cancel()
             prefetchTask = nil
-            tocModel.stopAndClear()
             pendingEdge = nil
             pendingChapterDirection = 0
             loading = false
@@ -441,20 +438,29 @@ struct ReaderView: View {
         return store.source(for: book.origin)?.bookSourceName ?? (store.isLocal(book) ? "本地书籍" : "未知书源")
     }
 
-    /// 目录页的缓存标识与预缓存都通过共享正文缓存执行，与阅读/预读同一条链路。
-    private var tocServices: ReaderTocServices {
-        guard !store.isLocal(book), let source = store.source(for: book.origin) else { return .unavailable }
-        let sourceURL = source.bookSourceUrl
-        let bookURL = book.bookUrl
-        return ReaderTocServices(
-            isCached: { chapter in
-                await ChapterContentCache.shared.hasCached(for: ChapterContentKey(
-                    sourceURL: sourceURL, bookURL: bookURL, chapterURL: chapter.url))
-            },
-            load: { chapter, nextChapterURL in
-                _ = try await ChapterContentLoader.content(source: source, book: book, chapter: chapter,
-                                                           nextChapterURL: nextChapterURL, priority: .utility)
-            })
+    /// 注册预缓存管理器：注入当前书籍的目录、索引与缓存服务。
+    /// 预缓存进度条在「我的」页面显示，不在目录页，避免目录卡顿。
+    private func registerPrecache() {
+        let canPrecache = !store.isLocal(book) && store.source(for: book.origin) != nil
+        let services: ReaderTocServices?
+        if canPrecache, let source = store.source(for: book.origin) {
+            let sourceURL = source.bookSourceUrl
+            let bookURL = book.bookUrl
+            services = ReaderTocServices(
+                isCached: { chapter in
+                    await ChapterContentCache.shared.hasCached(for: ChapterContentKey(
+                        sourceURL: sourceURL, bookURL: bookURL, chapterURL: chapter.url))
+                },
+                load: { chapter, nextChapterURL in
+                    _ = try await ChapterContentLoader.content(source: source, book: book, chapter: chapter,
+                                                               nextChapterURL: nextChapterURL, priority: .utility)
+                })
+        } else {
+            services = nil
+        }
+        ChapterPrecacheManager.shared.register(chapters: chapters, currentIndex: index,
+                                               bookName: book.name, services: services,
+                                               canPrecache: canPrecache)
     }
 
     private var readerChapterTitle: String {
@@ -545,6 +551,7 @@ struct ReaderView: View {
             }
         }
         if chapters.isEmpty { error = "目录为空，书源可能不兼容"; loading = false; return }
+        registerPrecache()
         let initial = min(max(index, 0), chapters.count - 1)
         guard let first = readableIndex(from: initial, direction: 1)
                 ?? readableIndex(from: initial, direction: -1) else {
@@ -559,6 +566,7 @@ struct ReaderView: View {
         guard let toc = store.localToc(book), !toc.isEmpty else { error = "本地书文件已丢失，请重新导入"; loading = false; return }
         chapters = toc
         index = min(max(index, 0), toc.count - 1)
+        registerPrecache()
         await loadInitialChapter()
     }
 
@@ -1106,6 +1114,7 @@ struct ReaderView: View {
             guard contentRequestID == requestID else { return }
             // 网络失败时不改章号、不清旧文、不覆盖已保存的阅读位置。
             index = target
+            ChapterPrecacheManager.shared.updateCurrentIndex(target)
             retryTarget = nil
             error = nil
             show(raw: raw, landing: landing)
