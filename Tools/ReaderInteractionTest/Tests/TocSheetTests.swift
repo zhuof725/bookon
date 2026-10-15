@@ -42,7 +42,7 @@ final class TocSheetTests: XCTestCase {
         waitForValue(row(app, 5), "已缓存")
         XCTAssertTrue(row(app, 5).label.contains("3分钟前"), row(app, 5).label)
         XCTAssertEqual(row(app, 9).value as? String, "已缓存")
-        XCTAssertEqual(row(app, 12).value as? String, "已缓存", "VIP 章节同样显示缓存标识")
+        XCTAssertEqual(row(app, 5).value as? String, "已缓存", "VIP 章节同样显示缓存标识")
         XCTAssertEqual(row(app, 3).value as? String, "未缓存")
         XCTAssertFalse(row(app, 2).label.contains("2026"), "没有时间的章节不显示时间：\(row(app, 2).label)")
         capture(app, "reader-toc-rows")
@@ -61,7 +61,7 @@ final class TocSheetTests: XCTestCase {
         XCTAssertTrue(app.progressIndicators["precache.bar"].exists, "预缓存应显示进度条")
         capture(app, "precache-running")
         waitForLabel(status, contains: "预缓存完成")
-        XCTAssertEqual(row(app, 12).value as? String, "已缓存")
+        XCTAssertEqual(row(app, 9).value as? String, "已缓存")
         // 20 章窗口里有 3 章打开前已缓存：不应重复请求书源。
         XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=17")
         capture(app, "precache-finished")
