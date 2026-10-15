@@ -183,6 +183,7 @@ struct ReaderView: View {
         self.requestedChapter = requestedChapter
     }
 
+    @ObservedObject private var bubbleStyles = BubbleStyleStore.shared
     @ObservedObject private var readingFonts = ReadingFontManager.shared
     @State private var bodyReplacement = BodyReplaceEngine(rules: [])
     @State private var chapters: [BookChapter] = []
@@ -354,6 +355,8 @@ struct ReaderView: View {
                     .independentGlassRow()
                     ReaderTypographyControls(settings: settings)
                         .independentGlassRow()
+                    NavigationLink("段评气泡") { BubbleStyleSettingsView() }
+                        .independentGlassRow()
                     Section("背景") {
                         Picker("主题", selection: $settings.theme) {
                             ForEach(0..<ReadSettings.themes.count, id: \.self) { Text(ReadSettings.themes[$0].name).tag($0) }
@@ -406,6 +409,12 @@ struct ReaderView: View {
             // Existing Character offsets keep paged reading at the nearest page;
             // scroll layoutID below asks the native container to preserve its anchor.
             repaginate()
+        }
+        .onChange(of: bubbleStyles.revision) { _ in
+            cancelPreparation()
+            preparedChapters.removeAll()
+            repaginate()
+            if settings.pageMode == 0, !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
         }
         .onChange(of: settings.fontSize) { _ in repaginate() }
         .onChange(of: settings.lineSpacing) { _ in repaginate() }

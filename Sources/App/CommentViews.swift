@@ -104,12 +104,14 @@ enum CommentBubble {
     private static var cache: [String: UIImage] = [:]
 
     static func attachmentBounds(fontSize: CGFloat) -> CGRect {
+        if let style = BubbleStyleRuntime.snapshot() { return BubbleStyleRenderer.bounds(style: style, fontSize: fontSize) }
         let scale = max(fontSize, 1) / 23
         return CGRect(x: 0, y: -4 * scale, width: 109 / 3 * scale, height: 85 / 3 * scale)
     }
 
     /// The 3px inset is INSIDE the image; no extra quarter-em separator.
     static func image(count: Int, fontSize: CGFloat, color: UIColor) -> UIImage {
+        if let style = BubbleStyleRuntime.snapshot() { return BubbleStyleRenderer.image(style: style, count: count, fontSize: fontSize, color: color) }
         let label = String(min(max(count, 0), 99))
         let scale = max(fontSize, 1) / 23
         let format = UIGraphicsImageRendererFormat.default()
@@ -317,7 +319,7 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
                 color: UIColor, continuation: Bool = false,
                 fullJustify: Bool = false, zhLayout: Bool = false,
                 paragraphEnd: Bool = true) {
-        let key = "\(ReaderFontResolver.identity)|\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(fullJustify)|\(zhLayout)|\(paragraphEnd)|\(color)"
+        let key = "\(BubbleStyleRuntime.revision)|\(ReaderFontResolver.identity)|\(text)|\(count)|\(fontSize)|\(lineSpacing)|\(continuation)|\(fullJustify)|\(zhLayout)|\(paragraphEnd)|\(color)"
         guard key != lastRenderKey else { return }
         lastRenderKey = key
         paragraph = Paragraph(text: text, count: count, fontSize: fontSize,

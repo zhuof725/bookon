@@ -79,6 +79,9 @@ struct LibraryProfileView: View {
                         LibraryCardDivider()
                     }
                     Group {
+                        NavigationLink { BubbleStyleSettingsView() } label: { LibraryLinkLabel(title: "段评气泡", symbol: "bubble.right") }
+                            .accessibilityIdentifier("library.bubbleStyles")
+                        LibraryCardDivider()
                         NavigationLink { FontManagerView() } label: { LibraryLinkLabel(title: "字体管理", symbol: "textformat") }
                             .accessibilityIdentifier("library.fonts")
                         LibraryCardDivider()
