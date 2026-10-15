@@ -106,7 +106,7 @@ struct BookshelfScreen: View {
                             ForEach(visibleBooks) { book in bookButton(book, grid: true, coverWidth: metrics?.coverWidth) }
                         }.padding(.horizontal, 24).padding(.top, 2).padding(.bottom, 24)
                     } else {
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: 0) {
                             ForEach(visibleBooks) { book in
                                 ShelfListBookButton(book: book, localOrigin: localOrigin,
                                     selecting: selecting, selected: selection.contains(book.id),
@@ -119,7 +119,7 @@ struct BookshelfScreen: View {
                                         selecting = true; selection.insert(book.id)
                                     })
                             }
-                        }.padding(.horizontal, 10).padding(.bottom, 24)
+                        }.padding(.horizontal, 0).padding(.bottom, 24)
                     }
                 }
                 .refreshable { await performRefresh() }

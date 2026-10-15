@@ -28,7 +28,11 @@ struct ShelfListSummary: Equatable {
     }
     func authorLine(_ book: Book) -> String {
         let author = Self.nonempty(book.author) ?? "作者未知"
-        return chapterCount.map { "\(author) · 共\($0)章" } ?? author
+        let status: String
+        if !ShelfBooks.isStarted(book) { status = "未读过" }
+        else if let remainingCount { status = remainingCount > 0 ? "\(remainingCount)章未读" : "已读完" }
+        else { status = "阅读中" }
+        return "\(author) · \(status)"
     }
     static func progress(_ book: Book) -> String {
         guard ShelfBooks.isStarted(book) else { return "未读" }
@@ -39,8 +43,8 @@ struct ShelfListSummary: Equatable {
         "来源：" + (book.origin == localOrigin ? "本地书籍" : (nonempty(book.originName) ?? "书源未命名"))
     }
     var latestLine: String {
-        guard let latestTitle else { return "最新章节：暂无信息" }
-        return latestTime.map { "\($0)：\(latestTitle)" } ?? "最新：\(latestTitle)"
+        guard let latestTitle else { return "暂无章节信息" }
+        return latestTime.map { "\($0) · \(latestTitle)" } ?? latestTitle
     }
 }
 
@@ -55,10 +59,10 @@ struct ShelfListRow: View {
     private var large: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             BookCoverImage(url: BookCoverLocation.url(for: book))
-                .frame(width: large ? 58 : 70, height: large ? 84 : 102)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .frame(width: large ? 52 : 58, height: large ? 76 : 84)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .overlay(alignment: .topTrailing) {
                     if selecting {
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
@@ -67,33 +71,21 @@ struct ShelfListRow: View {
                     }
                 }
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(book.name).appFont(.headline).foregroundStyle(palette.primary)
-                        .lineLimit(large ? nil : 1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if !large, let remaining = summary.remainingCount, remaining > 0 {
-                        Text(remaining > 99 ? "99+" : "\(remaining)")
-                            .appFont(.caption2).foregroundStyle(palette.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(palette.selection, in: Capsule())
-                            .accessibilityLabel("当前章之后还有\(remaining)章未读，并非新增章节")
-                    }
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(book.name).appFont(.headline).foregroundStyle(palette.primary)
+                    .lineLimit(large ? nil : 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 line(summary.authorLine(book))
-                line(ShelfListSummary.progress(book))
-                line(ShelfListSummary.source(book, localOrigin: localOrigin))
                 line(summary.latestLine)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
-        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 18), style: .continuous), isCard: true))
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .contentShape(Rectangle())
     }
     private func line(_ value: String) -> some View {
-        Text(value).appFont(.caption).foregroundStyle(palette.secondary)
+        Text(value).appFont(.subheadline).foregroundStyle(palette.secondary)
             .lineLimit(large ? nil : 1).truncationMode(.tail)
             .fixedSize(horizontal: false, vertical: large)
     }

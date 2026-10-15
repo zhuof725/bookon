@@ -10,6 +10,26 @@ enum ShelfFixture {
         UserDefaults.standard.set(ShelfSort.recent.rawValue, forKey: "shelf.sort.v1")
     }
 
+    static var summaryChecks: Bool {
+        let chapters = [BookChapter(url: "volume", title: "第一卷", index: 0, isVolume: true),
+                        BookChapter(url: "one", title: "第一章", index: 1),
+                        BookChapter(url: "two", title: "第二章", index: 2, updateTime: "昨天")]
+        var book = books[0]
+        let unread = ShelfListSummary(book: book, chapters: chapters)
+        guard unread.authorLine(book).contains("未读过"), unread.chapterCount == 2 else { return false }
+        book.durChapterIndex = 1
+        let reading = ShelfListSummary(book: book, chapters: chapters)
+        guard reading.remainingCount == 1, reading.authorLine(book).contains("1章未读"),
+              reading.latestLine == "昨天 · 第二章" else { return false }
+        book.durChapterIndex = 2
+        guard ShelfListSummary(book: book, chapters: chapters).authorLine(book).contains("已读完") else { return false }
+        book.durChapterIndex = 999
+        guard ShelfListSummary(book: book, chapters: chapters).authorLine(book).contains("阅读中") else { return false }
+        book.lastChapter = "新章节"
+        let newer = ShelfListSummary(book: book, chapters: chapters)
+        return newer.latestTime == nil && newer.latestLine == "新章节"
+    }
+
     static var books: [Book] {
         var a = Book(bookUrl: "fixture-a", name: "A 林间札记", author: "离线示例", origin: localOrigin)
         a.addedAt = Date(timeIntervalSince1970: 200)
@@ -44,7 +64,7 @@ struct ShelfHarnessView: View {
             ShelfBooks.visible(books, filter: .all, sort: order, localOrigin: ShelfFixture.localOrigin)
                 .map(\.id).joined(separator: ",")
         }.joined(separator: "|")
-        return "books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);refreshes=\(refreshes);refresh=\(refreshMessage ?? "-");tab=\(selection.rawValue)"
+        return "summaryChecks=\(ShelfFixture.summaryChecks);books=\(books.count);counts=\(counts);orders=\(orders);layout=\(layout);sort=\(sort);search=\(searches);import=\(imports);removed=\(removals);refreshes=\(refreshes);refresh=\(refreshMessage ?? "-");tab=\(selection.rawValue)"
     }
 
     var body: some View {
