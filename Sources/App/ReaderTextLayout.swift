@@ -36,7 +36,7 @@ enum ReaderTextLayout {
     }
 
     // UIKit 排版入口均在主线程；分页二分测量不重复解析字体。
-    private struct FontKey: Hashable { let name: String; let size: CGFloat }
+    private struct FontKey: Hashable { let name: String; let size: CGFloat; let bubbleRevision: Int }
     private static var fontCache: [FontKey: Fonts] = [:]
     private static var cachedIdentity = ""
 
@@ -47,7 +47,7 @@ enum ReaderTextLayout {
             fontCache.removeAll()
             cachedIdentity = identity
         }
-        let key = FontKey(name: identity, size: size)
+        let key = FontKey(name: identity, size: size, bubbleRevision: BubbleStyleRuntime.revision)
         let fonts: Fonts
         if let cached = fontCache[key] {
             fonts = cached

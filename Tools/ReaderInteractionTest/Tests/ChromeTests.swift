@@ -239,4 +239,20 @@ final class ChromeTests: XCTestCase {
         XCTAssertEqual(counters(app)["select"], 0)
         XCTAssertEqual(app.staticTexts["reader.position"].label, "7 / 14")
     }
+
+    func testBubbleStyleEditorTemplatesValidationAndRuntimeGeometry() {
+        continueAfterFailure = false
+        let app = launch([])
+        centerTap(app)
+        app.buttons["chrome.bubbleStyles"].tap()
+        XCTAssertTrue(app.buttons["bubble.default"].waitForExistence(timeout: 5))
+        guard let value = app.staticTexts["reader-footer-page"].value as? String else { XCTFail("missing checks"); return }
+        XCTAssertTrue(value.contains("svgError=true"), value)
+        XCTAssertTrue(value.contains("square=true"), value)
+        app.buttons["bubble.new"].tap()
+        XCTAssertTrue(app.buttons["bubble.save"].waitForExistence(timeout: 5))
+        app.buttons["bubble.save"].tap()
+        XCTAssertTrue(app.buttons["bubble.default"].waitForExistence(timeout: 5))
+        snapshot(app, "reader-bubble-styles")
+    }
 }

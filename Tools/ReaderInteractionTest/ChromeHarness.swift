@@ -55,7 +55,7 @@ private enum ChromeFixture {
 }
 
 private enum ChromeDestination: String, Identifiable {
-    case details, toc, search, settings
+    case details, toc, search, settings, bubbleStyles
     var id: String { rawValue }
 }
 
@@ -102,7 +102,12 @@ struct ChromeHarnessView: View {
         let actions = ["back", "details", "previous", "next", "toc", "speech",
                        "search", "settings", "select"]
             .map { "\($0)=\(counts[$0, default: 0])" }
-        return (actions + ["began=\(began)", "ended=\(ended)", "updatesWhileEditing=\(updatesWhileEditing)",
+        var runtimeChecks: [String] = []
+        let square = BubbleStyle(name: "验收", mode: "template", template: "square", format: "N{n}", followText: false, colorHex: "#FF0000", scale: 1.2, aspect: 1.4)
+        let image = BubbleStyleRenderer.image(style: square, count: 120, fontSize: 23, color: .label)
+        runtimeChecks.append("square=\(image.size.width > image.size.height && image.size.width > 43)")
+        runtimeChecks.append("svgError=\(BubbleSVG.validate("<svg viewBox=\"0 0 1 1\"><script/></svg>") != nil)")
+        return (actions + runtimeChecks + ["began=\(began)", "ended=\(ended)", "updatesWhileEditing=\(updatesWhileEditing)",
                            "commits=\(commits)", "committedBeforeEnd=\(committedBeforeEnd)"]).joined(separator: ";")
     }
 
@@ -142,6 +147,12 @@ struct ChromeHarnessView: View {
                         .transition(.opacity)
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Button("段评气泡") { destination = .bubbleStyles }
+                    .accessibilityIdentifier("chrome.bubbleStyles")
+                    .frame(maxWidth: .infinity)
+                    .background(Color.clear)
+            }
         }
         .sheet(item: $destination) { sheet in
             switch sheet {
@@ -172,6 +183,9 @@ struct ChromeHarnessView: View {
                         Button("完成") { destination = nil }
                     } }
                 }
+            case .bubbleStyles:
+                NavigationStack { BubbleStyleSettingsView() }
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { destination = nil } } }
             }
         }
         .preferredColorScheme(dark ? .dark : .light)
