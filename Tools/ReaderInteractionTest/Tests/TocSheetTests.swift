@@ -85,7 +85,7 @@ final class TocSheetTests: XCTestCase {
 
     /// ③ 预缓存可停止并关闭进度提示。
     func testPrecacheCanBeStoppedAndDismissed() {
-        let app = launch()
+        let app = launch(["--reader-toc-slow"])
         app.buttons["precache.start"].tap()
         let status = app.staticTexts["precache.status"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
