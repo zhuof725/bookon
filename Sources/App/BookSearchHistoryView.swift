@@ -24,13 +24,13 @@ struct BookSearchHistorySection: View {
                 Text("搜索历史").appFont(.subheadline)
                 Spacer()
                 if !history.entries.isEmpty {
-                    // 确认框挂在实际触发它的按钮上：挂在 Section 上时，内容换成自定义
-                    // 换行布局后不再弹出（点击清空后无任何反应）。
+                    // 用 alert 而不是 confirmationDialog：清空是破坏性操作，需要系统级确认，
+                    // 而 confirmationDialog 在列表里（内容为自定义换行布局）不再弹出。
                     Button("清空") { confirmingClear = true }
                         .appFont(.subheadline).buttonStyle(.plain)
                         .foregroundStyle(palette.accent)
                         .accessibilityIdentifier("searchHistory.clear")
-                        .confirmationDialog("清空搜索历史？", isPresented: $confirmingClear, titleVisibility: .visible) {
+                        .alert("清空搜索历史？", isPresented: $confirmingClear) {
                             Button("清空全部记录", role: .destructive) { history.clear() }
                                 .accessibilityIdentifier("searchHistory.confirmClear")
                             Button("取消", role: .cancel) {}
