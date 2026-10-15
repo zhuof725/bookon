@@ -35,15 +35,31 @@ struct ReaderTocHarnessView: View {
         manager.register(chapters: Self.fixtureChapters, currentIndex: 2,
                          bookName: "测试书籍", services: services, canPrecache: true)
         _manager = StateObject(wrappedValue: manager)
+        if ProcessInfo.processInfo.arguments.contains("--reader-bubble") {
+            UserDefaults.standard.removeObject(forKey: "reader.bubble.styles.v1")
+            BubbleStyleRuntime.set(nil)
+        }
+    }
+
+    private static var bubbleChecks: (square: Bool, svgReject: Bool) {
+        let square = BubbleStyle(name: "验收", mode: "template", template: "square", format: "N{n}", followText: false, colorHex: "#FF0000", scale: 1.2, aspect: 1.4)
+        let image = BubbleStyleRenderer.image(style: square, count: 120, fontSize: 23, color: .label)
+        let svgReject = BubbleSVG.validate("<svg viewBox=\"0 0 1 1\"><script/></svg>") != nil
+            && BubbleSVG.validate("<svg viewBox=\"0 0 8 6\"><rect width=\"8\" height=\"6\" fill=\"#112233\"/></svg>") == nil
+        return (image.size.width > image.size.height && image.size.width > 43, svgReject)
     }
 
     @State private var quickShown = false
+    @State private var bubbleShown = false
     @State private var quickResult: String?
 
     var body: some View {
         VStack(spacing: 16) {
             if ProcessInfo.processInfo.arguments.contains("--reader-quick") {
                 Button("打开快捷菜单") { quickShown = true }.accessibilityIdentifier("reader.quick.open")
+            }
+            if ProcessInfo.processInfo.arguments.contains("--reader-bubble") {
+                Button("打开气泡设置") { bubbleShown = true }.accessibilityIdentifier("reader.bubble.open")
             }
             // 全局章数设置卡片较高，只在滑条用例中显示，避免把目录行挤出可见区。
             if ProcessInfo.processInfo.arguments.contains("--reader-toc-setting") {
@@ -73,11 +89,19 @@ struct ReaderTocHarnessView: View {
             }
             .presentationDetents([.height(440), .large])
         }
+        .sheet(isPresented: $bubbleShown) {
+            NavigationStack {
+                BubbleStyleSettingsView()
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { bubbleShown = false } } }
+            }
+        }
         .overlay(alignment: .bottom) {
             VStack(spacing: 2) {
                 Text("loads=\(probe.loads)").accessibilityIdentifier("reader.toc.harness.loads")
                 Text(probe.selection).accessibilityIdentifier("reader.toc.harness.selection")
                 Text("refreshes=\(probe.refreshes)").accessibilityIdentifier("reader.toc.harness.refreshes")
+                Text("square=\(Self.bubbleChecks.square)").accessibilityIdentifier("reader.bubble.square")
+                Text("svgReject=\(Self.bubbleChecks.svgReject)").accessibilityIdentifier("reader.bubble.svgReject")
             }
             .appFont(.caption).padding(6).background(.thinMaterial).allowsHitTesting(false)
         }

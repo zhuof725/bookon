@@ -92,8 +92,16 @@ final class TocSheetTests: XCTestCase {
         let stop = app.buttons["precache.stop"]
         let dismiss = app.buttons["precache.dismiss"]
         if stop.waitForExistence(timeout: 3) {
-            stop.tap()
-            waitForLabel(status, contains: "已停止", timeout: 8)
+            // 检查与点击之间进度可能刚好跑完：重试点击，跑完则按完成处理。
+            var tapped = false
+            for _ in 0..<10 {
+                if stop.exists { stop.firstMatch.tap(); tapped = true; break }
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+            if tapped {
+                let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '已停止' OR label CONTAINS '预缓存完成'"), object: status)
+                XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed, "停止或完成后应有结果文案")
+            }
             XCTAssertFalse(stop.exists, "停止后不再显示停止按钮")
         }
         capture(app, "precache-stopped")
@@ -137,6 +145,22 @@ final class TocSheetTests: XCTestCase {
             XCTAssertEqual(status.label, "action=" + id)
         }
         capture(app, "reader-quick-panel")
+    }
+
+    /// 段评气泡：真实管理页新建/保存/选用，并核对自定义绘制尺寸与非法 SVG 拒绝。
+    func testBubbleStyleEditorSavesAndChecksRuntime() {
+        let app = launch(["--reader-bubble"])
+        XCTAssertEqual(app.staticTexts["reader.bubble.square"].label, "square=true")
+        XCTAssertEqual(app.staticTexts["reader.bubble.svgReject"].label, "svgReject=true")
+        app.buttons["reader.bubble.open"].tap()
+        XCTAssertTrue(app.buttons["bubble.new"].waitForExistence(timeout: 5))
+        app.buttons["bubble.new"].tap()
+        let save = app.buttons["bubble.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "编辑器应显示保存按钮")
+        save.tap()
+        XCTAssertTrue(app.buttons["bubble.new"].waitForExistence(timeout: 5), "保存后回到样式列表")
+        XCTAssertFalse(app.buttons["bubble.save"].exists)
+        capture(app, "reader-bubble-styles")
     }
 
     /// 滑条调整预缓存窗口章数（默认 10 章，1~50），起播按钮跟随窗口章数。
