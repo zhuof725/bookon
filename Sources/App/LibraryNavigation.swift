@@ -96,6 +96,8 @@ struct LibraryProfileView: View {
                     LibraryCardDivider()
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
                 }
+                PrecacheWindowSettingView(manager: .shared)
+                    .padding(.horizontal, 24)
                 PrecacheCardView(manager: .shared)
                     .padding(.horizontal, 24)
                 LibraryCard {

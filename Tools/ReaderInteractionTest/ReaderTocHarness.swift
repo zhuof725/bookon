@@ -39,6 +39,11 @@ struct ReaderTocHarnessView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            // 全局章数设置卡片较高，只在滑条用例中显示，避免把目录行挤出可见区。
+            if ProcessInfo.processInfo.arguments.contains("--reader-toc-setting") {
+                PrecacheWindowSettingView(manager: manager)
+                    .padding(.horizontal, 16)
+            }
             PrecacheCardView(manager: manager)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)

@@ -223,6 +223,40 @@ struct ReaderTocSheet: View {
     }
 }
 
+/// 「我的」页面全局设置：所有书源书籍阅读时自动预加载的章数（本地书籍不预加载）。
+/// 始终显示，不依赖是否打开过书籍；手动预缓存也使用同一章数。
+struct PrecacheWindowSettingView: View {
+    @ThemePalette private var palette
+    @ObservedObject var manager: ChapterPrecacheManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("章节预缓存").appFont(.headline)
+                Spacer(minLength: 8)
+                Text("\(manager.window) 章").appFont(.title3).foregroundStyle(palette.secondary)
+                    .accessibilityIdentifier("precache.windowValue")
+            }
+            Slider(
+                value: Binding(
+                    get: { Double(manager.window) },
+                    set: { manager.setWindow(Int($0.rounded())) }
+                ),
+                in: Double(ChapterPrecacheManager.windowRange.lowerBound)...Double(ChapterPrecacheManager.windowRange.upperBound),
+                step: 1
+            )
+            .disabled(manager.isPrecaching)
+            .accessibilityIdentifier("precache.windowSlider")
+            Text("阅读书源书籍时自动预加载后续章节，对所有书源生效。")
+                .appFont(.footnote).foregroundStyle(palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(SettingsGlassSurface())
+    }
+}
+
 /// 「我的」页面预缓存卡片：显示当前阅读书籍的预缓存状态与进度条。
 /// 由阅读器注册书籍信息后激活；离开阅读器后进度仍可见，直到完成或清除。
 struct PrecacheCardView: View {
@@ -236,22 +270,6 @@ struct PrecacheCardView: View {
                     Image(systemName: "arrow.down.circle").foregroundStyle(palette.accent)
                     Text(manager.bookName ?? "").appFont(.headline).lineLimit(1)
                 }
-                HStack {
-                    Text("章节预缓存").appFont(.headline)
-                    Spacer(minLength: 8)
-                    Text("\(manager.window) 章").appFont(.title3).foregroundStyle(palette.secondary)
-                        .accessibilityIdentifier("precache.windowValue")
-                }
-                Slider(
-                    value: Binding(
-                        get: { Double(manager.window) },
-                        set: { manager.setWindow(Int($0.rounded())) }
-                    ),
-                    in: Double(ChapterPrecacheManager.windowRange.lowerBound)...Double(ChapterPrecacheManager.windowRange.upperBound),
-                    step: 1
-                )
-                .disabled(manager.isPrecaching)
-                .accessibilityIdentifier("precache.windowSlider")
                 if let progress = manager.progress {
                     HStack(spacing: 10) {
                         Text(statusText(progress)).appFont(.subheadline).lineLimit(2)

@@ -1186,10 +1186,12 @@ struct ReaderView: View {
         prefetchTask?.cancel()
         guard !store.isLocal(book) else { return }
         let snapshot = chapters
-        let queue = ChapterNavigation.prefetchIndices(after: index, chapters: snapshot, limit: 3)
+        // 预读章数由「我的 → 章节预缓存」全局设置控制，对所有书源生效。
+        let limit = ChapterPrecacheManager.shared.window
+        let queue = ChapterNavigation.prefetchIndices(after: index, chapters: snapshot, limit: limit)
         guard !queue.isEmpty else { prefetchTask = nil; return }
         let readingBook = book
-        // 阅读时在 MainActor 外依次预读后续 3 章，避免同时轰击书源或阻塞正文手势。
+        // 阅读时在 MainActor 外依次预读后续章节，避免同时轰击书源或阻塞正文手势。
         prefetchTask = Task.detached(priority: .utility) {
             for i in queue {
                 guard !Task.isCancelled else { return }

@@ -105,7 +105,7 @@ final class TocSheetTests: XCTestCase {
 
     /// 滑条调整预缓存窗口章数（默认 10 章，1~50），起播按钮跟随窗口章数。
     func testWindowSliderControlsPrecacheCount() {
-        let app = launch()
+        let app = launch(["--reader-toc-setting"])
         let slider = app.sliders["precache.windowSlider"]
         XCTAssertTrue(slider.waitForExistence(timeout: 5), "预缓存窗口滑条应显示")
         XCTAssertEqual(app.staticTexts["precache.windowValue"].label, "10 章")
