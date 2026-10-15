@@ -44,6 +44,7 @@ struct ReaderQuickPanel: View {
                                 Image(systemName: item.2).font(.system(size: 24, weight: .regular))
                                 Text(item.1).appFont(.caption).lineLimit(2).multilineTextAlignment(.center)
                             }.frame(maxWidth: .infinity, minHeight: 76)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .disabled(busy || !enabled.contains(item.0))

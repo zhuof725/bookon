@@ -92,6 +92,14 @@ enum ChapterContentCacheRegression {
         let diskFlag = await diskOnly.hasCached(for: flagKey)
         let memoryEntries = await diskOnly.memoryEntryCount
         check(diskFlag == true && memoryEntries == 0, "目录标识：新实例从磁盘识别且不占用内存")
+        // Targeted eviction must preserve unrelated chapter cache entries.
+        try await cache.removeChapter(for: flagKey)
+        let removed = await cache.cached(for: flagKey)
+        let removedDisk = await diskOnly.hasCached(for: flagKey)
+        let kept = await cache.cached(for: key)
+        check(removed == nil && !removedDisk && kept == raw, "章节清缓存：只删除目标章，保留其他章")
+        let fresh = try await cache.content(for: flagKey) { "重新下载正文" }
+        check(fresh == "重新下载正文", "章节清缓存：清除后重新执行下载")
         let missKey = ChapterContentKey(sourceURL: "s", bookURL: "b", chapterURL: "never")
         let missFlag = await diskOnly.hasCached(for: missKey)
         check(missFlag == false, "目录标识：不存在的章节不误报")
