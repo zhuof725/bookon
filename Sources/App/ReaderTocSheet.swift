@@ -45,7 +45,7 @@ final class ChapterPrecacheManager: ObservableObject {
     }
 
     func setWindow(_ value: Int) {
-        let clamped = min(max(value, windowRange.lowerBound), windowRange.upperBound)
+        let clamped = min(max(value, Self.windowRange.lowerBound), Self.windowRange.upperBound)
         guard clamped != window else { return }
         window = clamped
         UserDefaults.standard.set(clamped, forKey: Self.windowKey)
