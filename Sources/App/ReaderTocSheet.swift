@@ -30,7 +30,26 @@ final class ChapterPrecacheManager: ObservableObject {
         var phase: PrecachePhase = .running
     }
 
-    static let window = 20
+    static let windowRange = 1...50
+    static let windowKey = "precache.window.v1"
+
+    /// 预缓存窗口章数。默认 10；用户在「我的」预缓存卡片用滑条调整，持久化到 UserDefaults。
+    @Published var window: Int = {
+        let stored = UserDefaults.standard.integer(forKey: ChapterPrecacheManager.windowKey)
+        return ChapterPrecacheManager.windowRange.contains(stored) ? stored : 10
+    }()
+
+    /// 清除持久化的窗口设置（离线测试用，避免用例间互相污染）。
+    static func resetStoredWindow() {
+        UserDefaults.standard.removeObject(forKey: windowKey)
+    }
+
+    func setWindow(_ value: Int) {
+        let clamped = min(max(value, windowRange.lowerBound), windowRange.upperBound)
+        guard clamped != window else { return }
+        window = clamped
+        UserDefaults.standard.set(clamped, forKey: Self.windowKey)
+    }
 
     @Published private(set) var cached: Set<String> = []
     @Published private(set) var progress: PrecacheProgress?
@@ -89,7 +108,7 @@ final class ChapterPrecacheManager: ObservableObject {
     /// 预缓存当前章之后的窗口章节；卷标题不占窗口，越界截断。
     func startPrecache() {
         guard !isPrecaching, let services else { return }
-        let queue = ChapterNavigation.prefetchIndices(after: currentIndex, chapters: chapters, limit: Self.window)
+        let queue = ChapterNavigation.prefetchIndices(after: currentIndex, chapters: chapters, limit: window)
         guard !queue.isEmpty else { return }
         let snapshot = chapters
         let total = queue.count
@@ -217,6 +236,23 @@ struct PrecacheCardView: View {
                     Image(systemName: "arrow.down.circle").foregroundStyle(palette.accent)
                     Text(manager.bookName ?? "").appFont(.headline).lineLimit(1)
                 }
+                HStack {
+                    Text("章节预缓存").appFont(.headline)
+                    Spacer(minLength: 8)
+                    Text("\(manager.window) 章").appFont(.title3).foregroundStyle(palette.secondary)
+                        .accessibilityIdentifier("precache.windowValue")
+                }
+                Slider(
+                    value: Binding(
+                        get: { Double(manager.window) },
+                        set: { manager.setWindow(Int($0.rounded())) }
+                    ),
+                    in: Double(ChapterPrecacheManager.windowRange.lowerBound)
+                        ...Double(ChapterPrecacheManager.windowRange.upperBound),
+                    step: 1
+                )
+                .disabled(manager.isPrecaching)
+                .accessibilityIdentifier("precache.windowSlider")
                 if let progress = manager.progress {
                     HStack(spacing: 10) {
                         Text(statusText(progress)).appFont(.subheadline).lineLimit(2)
@@ -244,7 +280,7 @@ struct PrecacheCardView: View {
                     Button {
                         manager.startPrecache()
                     } label: {
-                        Label("预缓存后续 \(ChapterPrecacheManager.window) 章", systemImage: "arrow.down.circle")
+                        Label("预缓存后续 \(manager.window) 章", systemImage: "arrow.down.circle")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .accessibilityIdentifier("precache.start")

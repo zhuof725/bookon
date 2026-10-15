@@ -69,7 +69,7 @@ final class TocSheetTests: XCTestCase {
 
     /// ③ 预缓存失败即停并保留进度，重试从失败处续跑。
     func testPrecacheFailureStopsAndRetryResumes() {
-        let app = launch(["--reader-toc-fail=15"])
+        let app = launch(["--reader-toc-fail=8"])
         waitForValue(row(app, 5), "已缓存")
         app.buttons["precache.start"].tap()
         let status = app.staticTexts["precache.status"]
@@ -101,5 +101,21 @@ final class TocSheetTests: XCTestCase {
         dismiss.tap()
         XCTAssertFalse(status.waitForExistence(timeout: 2), "关闭后进度条应消失")
         XCTAssertTrue(app.buttons["precache.start"].exists, "停止后可再次预缓存")
+    }
+
+    /// 滑条调整预缓存窗口章数（默认 10 章，1~50），起播按钮跟随窗口章数。
+    func testWindowSliderControlsPrecacheCount() {
+        let app = launch()
+        let slider = app.sliders["precache.windowSlider"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 5), "预缓存窗口滑条应显示")
+        XCTAssertEqual(app.staticTexts["precache.windowValue"].label, "10 章")
+        slider.adjust(toNormalizedSliderPosition: 0.0)
+        XCTAssertEqual(app.staticTexts["precache.windowValue"].label, "1 章")
+        app.buttons["precache.start"].tap()
+        let status = app.staticTexts["precache.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        waitForLabel(status, contains: "预缓存完成")
+        XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=1")
+        capture(app, "precache-window-slider")
     }
 }

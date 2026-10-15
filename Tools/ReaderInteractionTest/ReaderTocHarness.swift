@@ -21,6 +21,8 @@ struct ReaderTocHarnessView: View {
     @StateObject private var probe: ReaderTocProbe
 
     init() {
+        // 滑条窗口设置持久化在 UserDefaults，测试间重置避免污染。
+        ChapterPrecacheManager.resetStoredWindow()
         let arguments = ProcessInfo.processInfo.arguments
         let failAt = arguments.first(where: { $0.hasPrefix("--reader-toc-fail=") })
             .flatMap { Int($0.dropFirst("--reader-toc-fail=".count)) }
