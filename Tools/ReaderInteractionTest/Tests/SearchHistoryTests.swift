@@ -78,7 +78,8 @@ final class SearchHistoryTests: XCTestCase {
         app.buttons["取消"].tap()
         expect("fixture.entries", "Foundation")
         app.buttons["searchHistory.clear"].tap()
-        app.buttons["清空全部记录"].tap()
+        // 系统 alert 里的按钮在无障碍树里会出现一层嵌套的重复元素，取第一个。
+        app.buttons["清空全部记录"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["searchHistory.empty"].waitForExistence(timeout: 3))
         app.terminate(); launch()
         XCTAssertTrue(app.staticTexts["searchHistory.empty"].exists)
