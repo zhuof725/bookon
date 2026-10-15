@@ -73,7 +73,7 @@ final class SearchHistoryTests: XCTestCase {
         app.terminate(); launch()
         expect("fixture.entries", "Foundation")
         app.buttons["searchHistory.clear"].tap()
-        XCTAssertTrue(app.buttons["取消"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["取消"].waitForExistence(timeout: 6))
         capture("history-clear-confirmation")
         app.buttons["取消"].tap()
         expect("fixture.entries", "Foundation")

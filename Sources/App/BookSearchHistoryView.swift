@@ -24,19 +24,21 @@ struct BookSearchHistorySection: View {
                 Text("搜索历史").appFont(.subheadline)
                 Spacer()
                 if !history.entries.isEmpty {
+                    // 确认框挂在实际触发它的按钮上：挂在 Section 上时，内容换成自定义
+                    // 换行布局后不再弹出（点击清空后无任何反应）。
                     Button("清空") { confirmingClear = true }
                         .appFont(.subheadline).buttonStyle(.plain)
                         .foregroundStyle(palette.accent)
                         .accessibilityIdentifier("searchHistory.clear")
+                        .confirmationDialog("清空搜索历史？", isPresented: $confirmingClear, titleVisibility: .visible) {
+                            Button("清空全部记录", role: .destructive) { history.clear() }
+                                .accessibilityIdentifier("searchHistory.confirmClear")
+                            Button("取消", role: .cancel) {}
+                        } message: { Text("仅删除本机搜索记录，不影响书架和阅读进度。") }
                 }
             }
         }
         .independentGlassRow()
-        .confirmationDialog("清空搜索历史？", isPresented: $confirmingClear, titleVisibility: .visible) {
-            Button("清空全部记录", role: .destructive) { history.clear() }
-                .accessibilityIdentifier("searchHistory.confirmClear")
-            Button("取消", role: .cancel) {}
-        } message: { Text("仅删除本机搜索记录，不影响书架和阅读进度。") }
     }
 
     private func chip(_ query: String) -> some View {
