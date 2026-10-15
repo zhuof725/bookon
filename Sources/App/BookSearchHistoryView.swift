@@ -18,7 +18,6 @@ struct BookSearchHistorySection: View {
                     ForEach(history.entries, id: \.self) { query in chip(query) }
                 }
                 .padding(.vertical, 2)
-                .accessibilityIdentifier("searchHistory.chips")
             }
         } header: {
             HStack {
