@@ -62,7 +62,7 @@ final class ReaderTocProbe: ObservableObject {
     init(failAt: Int?) { self.failAt = failAt }
 
     func load(_ index: Int) async throws {
-        try await Task.sleep(nanoseconds: 150_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
         if let failAt, index == failAt, !failedOnce {
             failedOnce = true
             throw ReaderTocProbeError.denied
