@@ -224,6 +224,7 @@ struct ReaderView: View {
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
     @StateObject private var speech = ReaderSpeechController()
+    @StateObject private var tocModel = ReaderTocModel()
 
     private func toggleBars() {
         if !showBars { persistContinuousProgress(); syncMenuProgress() }
@@ -306,37 +307,10 @@ struct ReaderView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showToc) {
-            NavigationStack {
-                ScrollViewReader { p in
-                    List(chapters) { c in
-                        Group {
-                            if c.isVolume {
-                                Button { showToc = false; go(c.index) } label: {
-                                    Text(c.title).appFont(.headline)
-                                        .foregroundStyle(c.index == index ? palette.accent : palette.secondary)
-                                }
-                                .independentGlassRow()
-                            } else {
-                                Button {
-                                    showToc = false; go(c.index)
-                                } label: {
-                                    HStack {
-                                        Text(c.title).foregroundStyle(c.index == index ? palette.accent : palette.primary)
-                                        if c.isVip { Image(systemName: "lock.fill").font(.caption).foregroundStyle(palette.secondary) }
-                                    }
-                                }
-                            }
-                        }
-                        .independentGlassRow()
-                        .id(c.index)
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background { AppThemeCanvas().ignoresSafeArea() }
-                    .onAppear { p.scrollTo(index, anchor: .center) }
-                }
-                .navigationTitle("目录（\(chapters.count)）")
-                .navigationBarTitleDisplayMode(.inline)
-            }
+            ReaderTocSheet(chapters: chapters, currentIndex: index, model: tocModel,
+                           services: tocServices,
+                           canPrecache: !store.isLocal(book) && store.source(for: book.origin) != nil,
+                           onSelect: { target in showToc = false; go(target) })
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -452,6 +426,7 @@ struct ReaderView: View {
             chapterTask = nil
             prefetchTask?.cancel()
             prefetchTask = nil
+            tocModel.stopAndClear()
             pendingEdge = nil
             pendingChapterDirection = 0
             loading = false
@@ -464,6 +439,22 @@ struct ReaderView: View {
     private var readerSourceName: String {
         if !book.originName.isEmpty { return book.originName }
         return store.source(for: book.origin)?.bookSourceName ?? (store.isLocal(book) ? "本地书籍" : "未知书源")
+    }
+
+    /// 目录页的缓存标识与预缓存都通过共享正文缓存执行，与阅读/预读同一条链路。
+    private var tocServices: ReaderTocServices {
+        guard !store.isLocal(book), let source = store.source(for: book.origin) else { return .unavailable }
+        let sourceURL = source.bookSourceUrl
+        let bookURL = book.bookUrl
+        return ReaderTocServices(
+            isCached: { chapter in
+                await ChapterContentCache.shared.hasCached(for: ChapterContentKey(
+                    sourceURL: sourceURL, bookURL: bookURL, chapterURL: chapter.url))
+            },
+            load: { chapter, nextChapterURL in
+                _ = try await ChapterContentLoader.content(source: source, book: book, chapter: chapter,
+                                                           nextChapterURL: nextChapterURL, priority: .utility)
+            })
     }
 
     private var readerChapterTitle: String {

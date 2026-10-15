@@ -66,6 +66,8 @@ targets:
       - path: ../../Sources/App/BookshelfScreen.swift
       - path: ../../Sources/App/LibraryDock.swift
       - path: ChromeHarness.swift
+      - path: ReaderTocHarness.swift
+      - path: ../../Sources/App/ReaderTocSheet.swift
       - path: ChapterHarness.swift
       - path: VolumeHarness.swift
       - path: TypographyHarness.swift

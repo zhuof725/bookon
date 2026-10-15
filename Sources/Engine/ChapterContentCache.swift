@@ -67,6 +67,13 @@ actor ChapterContentCache {
         return raw
     }
 
+    /// 目录里的「已缓存」标识：只检查存在性，不读取正文、不占用内存 LRU。
+    /// 目录可能有上千章，不能用 cached(for:) 逐章加载。
+    func hasCached(for key: ChapterContentKey) -> Bool {
+        if memory[key] != nil { return true }
+        return FileManager.default.fileExists(atPath: directory.appendingPathComponent(key.fileName).path)
+    }
+
     /// 预读尚未完成时，前台等待同一个 Task；不会再次调用 load。
     /// 一个等待者取消只停止其后续行为，不取消其他等待者共享的网络请求。
     func content(for key: ChapterContentKey, priority: TaskPriority = .userInitiated,

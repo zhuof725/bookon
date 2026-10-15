@@ -49,6 +49,8 @@ final class ShelfTests: XCTestCase {
         let expectedWidth = (app.frame.width - 48 - 36) / 3
         XCTAssertEqual(a.frame.width, expectedWidth, accuracy: 4, "Three columns; only two occupied")
         XCTAssertLessThan(app.buttons["shelf.filter"].frame.maxY, a.frame.minY)
+        XCTAssertEqual(app.buttons["shelf.filter"].frame.midX, app.frame.midX, accuracy: 2,
+                       "分类「全部」胶囊应在书架头部水平居中")
         XCTAssertLessThan(a.frame.maxY, app.buttons["library.tab.0"].frame.minY)
         capture("shelf-01-grid")
         tap("shelf.more")

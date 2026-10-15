@@ -80,5 +80,27 @@ enum ChapterContentCacheRegression {
         let emptyCached = await cache.cached(for: emptyKey)
         let filled = try await cache.content(for: emptyKey) { "有效正文" }
         check(emptyCached == nil && filled == "有效正文", "缓存：空正文后重新获取有效结果")
+
+        // 目录标识：hasCached 只查存在性，不读取正文、不占用内存 LRU。
+        let flagKey = ChapterContentKey(sourceURL: "s", bookURL: "b", chapterURL: "flag")
+        let before = await cache.hasCached(for: flagKey)
+        check(before == false, "目录标识：未缓存的章节不显示标识")
+        _ = try await cache.content(for: flagKey) { "标记正文" }
+        let after = await cache.hasCached(for: flagKey)
+        check(after == true, "目录标识：缓存后的章节可识别")
+        let diskOnly = ChapterContentCache(directory: folder, memoryLimit: 0)
+        let diskFlag = await diskOnly.hasCached(for: flagKey)
+        let memoryEntries = await diskOnly.memoryEntryCount
+        check(diskFlag == true && memoryEntries == 0, "目录标识：新实例从磁盘识别且不占用内存")
+        let missKey = ChapterContentKey(sourceURL: "s", bookURL: "b", chapterURL: "never")
+        let missFlag = await diskOnly.hasCached(for: missKey)
+        check(missFlag == false, "目录标识：不存在的章节不误报")
+        _ = try await diskOnly.content(for: missKey) { "会被清掉" }
+        _ = await diskOnly.invalidate {
+            _ = try? FileManager.default.removeItem(at: folder)
+            return true
+        }
+        let clearedFlag = await diskOnly.hasCached(for: missKey)
+        check(clearedFlag == false, "目录标识：清空缓存后不再显示标识")
     }
 }

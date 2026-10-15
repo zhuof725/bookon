@@ -172,15 +172,18 @@ struct BookshelfScreen: View {
         }
     }
 
+    /// 分类胶囊水平居中显示；更多按钮固定在右侧。
     private var header: some View {
-        HStack {
+        ZStack {
             Button { menu = menu == "filter" ? nil : "filter" } label: {
                 HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.secondary) }
                     .padding(.horizontal, 17).frame(height: 42)
             }.modifier(ShelfGlass(shape: Capsule())).accessibilityLabel("分类：" + filter.rawValue).accessibilityIdentifier("shelf.filter")
-            Spacer()
-            Button { menu = menu == "main" ? nil : "main" } label: { Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 44, height: 44) }
-                .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("更多").accessibilityIdentifier("shelf.more")
+            HStack {
+                Spacer()
+                Button { menu = menu == "main" ? nil : "main" } label: { Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 44, height: 44) }
+                    .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("更多").accessibilityIdentifier("shelf.more")
+            }
         }.buttonStyle(.plain).foregroundStyle(palette.primary).padding(.horizontal, 16).padding(.top, 6)
     }
 
