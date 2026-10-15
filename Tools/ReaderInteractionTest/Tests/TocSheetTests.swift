@@ -62,8 +62,8 @@ final class TocSheetTests: XCTestCase {
         capture(app, "precache-running")
         waitForLabel(status, contains: "预缓存完成")
         XCTAssertEqual(row(app, 9).value as? String, "已缓存")
-        // 20 章窗口里有 3 章打开前已缓存：不应重复请求书源。
-        XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=17")
+        // 默认 10 章窗口（第 3~12 章）里有 3 章打开前已缓存：不应重复请求书源。
+        XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=7")
         capture(app, "precache-finished")
     }
 
@@ -80,7 +80,7 @@ final class TocSheetTests: XCTestCase {
         capture(app, "precache-failed")
         app.buttons["precache.retry"].tap()
         waitForLabel(status, contains: "预缓存完成")
-        XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=17")
+        XCTAssertEqual(app.staticTexts["reader.toc.harness.loads"].label, "loads=7")
     }
 
     /// ③ 预缓存可停止并关闭进度提示。
