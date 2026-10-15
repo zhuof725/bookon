@@ -247,8 +247,7 @@ struct PrecacheCardView: View {
                         get: { Double(manager.window) },
                         set: { manager.setWindow(Int($0.rounded())) }
                     ),
-                    in: Double(ChapterPrecacheManager.windowRange.lowerBound)
-                        ...Double(ChapterPrecacheManager.windowRange.upperBound),
+                    in: Double(ChapterPrecacheManager.windowRange.lowerBound)...Double(ChapterPrecacheManager.windowRange.upperBound),
                     step: 1
                 )
                 .disabled(manager.isPrecaching)
