@@ -246,7 +246,7 @@ struct BookDetailChapterList: View {
 }
 
 /// Search actual enabled sources for the same book, never inject example matches.
-private struct BookDetailSourcePicker: View {
+struct BookDetailSourcePicker: View {
     @ThemePalette private var palette
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss

@@ -37,8 +37,14 @@ struct ReaderTocHarnessView: View {
         _manager = StateObject(wrappedValue: manager)
     }
 
+    @State private var quickShown = false
+    @State private var quickResult: String?
+
     var body: some View {
         VStack(spacing: 16) {
+            if ProcessInfo.processInfo.arguments.contains("--reader-quick") {
+                Button("打开快捷菜单") { quickShown = true }.accessibilityIdentifier("reader.quick.open")
+            }
             // 全局章数设置卡片较高，只在滑条用例中显示，避免把目录行挤出可见区。
             if ProcessInfo.processInfo.arguments.contains("--reader-toc-setting") {
                 PrecacheWindowSettingView(manager: manager)
@@ -55,6 +61,17 @@ struct ReaderTocHarnessView: View {
                                probe.recordRefresh()
                                return "目录已刷新：新增 2 章，共 32 章"
                            })
+        }
+        .sheet(isPresented: $quickShown) {
+            NavigationStack {
+                ReaderQuickPanel(book: Book(bookUrl: "fixture", name: "我正经学生，每天只吃九种魔药", author: "离线作者", origin: "fixture"),
+                    sourceName: "测试书源", position: "4/386", message: quickResult,
+                    enabled: ["refresh", "toc", "clear", "login", "source", "rules", "browser"],
+                    action: { quickResult = "action=" + $0 })
+                    .navigationTitle("书籍操作")
+                    .toolbar { Button("完成") { quickShown = false } }
+            }
+            .presentationDetents([.height(440), .large])
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 2) {

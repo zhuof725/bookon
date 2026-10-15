@@ -68,6 +68,7 @@ targets:
       - path: ChromeHarness.swift
       - path: ReaderTocHarness.swift
       - path: ../../Sources/App/ReaderTocSheet.swift
+      - path: ../../Sources/App/ReaderQuickPanel.swift
       - path: ChapterHarness.swift
       - path: VolumeHarness.swift
       - path: TypographyHarness.swift

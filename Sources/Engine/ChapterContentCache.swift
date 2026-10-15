@@ -48,6 +48,19 @@ actor ChapterContentCache {
         oldFlights.forEach { $0.task.cancel() }
         return removeFiles()
     }
+    /// Evict only the requested chapter, including legacy storage; other books remain intact.
+    func removeChapter(for key: ChapterContentKey) throws {
+        flights.removeValue(forKey: key)?.task.cancel()
+        memory[key] = nil
+        recent.removeAll { $0 == key }
+        let file = directory.appendingPathComponent(key.fileName)
+        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+        let digest = Insecure.MD5.hash(data: Data(key.chapterURL.utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        let legacy = directory.deletingLastPathComponent().appendingPathComponent("c_" + digest + ".txt")
+        if FileManager.default.fileExists(atPath: legacy.path) { try FileManager.default.removeItem(at: legacy) }
+    }
+
     /// 诊断计数，不含书名、地址或正文，可验证前台是否复用了预读请求。
     private(set) var coalescedRequestCount = 0
 

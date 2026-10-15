@@ -221,6 +221,14 @@ struct ReaderView: View {
     @State private var showBars = false
     @State private var showReaderSearch = false
     @State private var showBookInfo = false
+    @State private var quickBusy = false
+    @State private var quickMessage: String?
+    @State private var quickLogin = false
+    @State private var quickRules = false
+    @State private var quickSources = false
+    @State private var quickPreview: Book?
+    @State private var quickBrowser: BrowserTarget?
+    @State private var confirmChapterClear = false
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
     @StateObject private var speech = ReaderSpeechController()
@@ -286,23 +294,39 @@ struct ReaderView: View {
         }
         .sheet(isPresented: $showBookInfo) {
             NavigationStack {
-                List {
-                    Section { BookRow(book: book, subtitle: book.author) }
-                        .independentGlassRow()
-                    Section("书源") { Text(readerSourceName) }
-                        .independentGlassRow()
-                    if let intro = book.intro, !intro.isEmpty {
-                        Section("简介") { Text(intro) }.independentGlassRow()
-                    }
-                }
-                .foregroundStyle(palette.primary)
-                .scrollContentBackground(.hidden)
-                .background { AppThemeCanvas().ignoresSafeArea() }
-                .navigationTitle("书籍信息")
+                ReaderQuickPanel(book: book, sourceName: readerSourceName,
+                    position: "\(chapters.isEmpty ? 0 : index + 1)/\(chapters.count)",
+                    busy: quickBusy || loading, message: quickMessage,
+                    enabled: quickEnabled, action: quickAction)
+                .navigationTitle("书籍操作")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
+                .sheet(isPresented: $quickLogin) {
+                    if let source = store.source(for: book.origin) { SourceLoginView(source: source) }
+                }
+                .sheet(isPresented: $quickRules, onDismiss: {
+                    bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
+                    quickMessage = "规则已更新，点击刷新应用到当前章节"
+                }) { BodyReplaceRulesView() }
+                .sheet(isPresented: $quickSources) {
+                    BookDetailSourcePicker(book: book) { replacement in
+                        quickPreview = replacement
+                    }
+                    .sheet(item: $quickPreview) { replacement in
+                        NavigationStack { BookDetailView(book: replacement) }
+                    }
+                }
+                .sheet(item: $quickBrowser) { target in
+                    InAppBrowserSheet(target: target, host: book.origin,
+                        cookieJar: store.source(for: book.origin)?.enabledCookieJar != false,
+                        onClose: { quickBrowser = nil })
+                }
+                .alert("清除当前章节缓存并重新下载？", isPresented: $confirmChapterClear) {
+                    Button("取消", role: .cancel) {}
+                    Button("清缓存并刷新", role: .destructive) { Task { await quickReload(clear: true) } }
+                } message: { Text("仅清除当前章节的正文缓存，不删除书籍、目录或阅读进度。") }
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.height(440), .large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showToc) {
@@ -432,6 +456,72 @@ struct ReaderView: View {
             store.flushProgress()
         }
         .task { await start() }
+    }
+
+    private var quickEnabled: Set<String> {
+        var items: Set<String> = ["rules"]
+        if chapters.indices.contains(index) { items.insert("refresh") }
+        if !store.isLocal(book), let source = store.source(for: book.origin) {
+            items.formUnion(["toc", "source"])
+            if chapters.indices.contains(index), !chapters[index].isVolume { items.insert("clear") }
+            if !(source.loginUrl ?? "").isEmpty || !(source.loginUi ?? "").isEmpty { items.insert("login") }
+        }
+        if quickBrowserURL != nil { items.insert("browser") }
+        return items
+    }
+
+    private var quickBrowserURL: String? {
+        guard !store.isLocal(book) else { return nil }
+        return SourceLoginForm.browserURL(AnalyzeUrl.absolute(book.bookUrl, base: book.origin))
+    }
+
+    private func quickAction(_ action: String) {
+        switch action {
+        case "refresh": Task { await quickReload(clear: false) }
+        case "clear": confirmChapterClear = true
+        case "toc":
+            Task { @MainActor in
+                guard !quickBusy else { return }
+                quickBusy = true
+                quickMessage = "正在刷新目录…"
+                quickMessage = await refreshToc()
+                quickBusy = false
+            }
+        case "login": quickLogin = true
+        case "rules": quickRules = true
+        case "source": quickSources = true
+        case "browser":
+            if let url = quickBrowserURL { quickBrowser = BrowserTarget(url: url, title: book.name) }
+        default: break
+        }
+    }
+
+    @MainActor
+    private func quickReload(clear: Bool) async {
+        guard !quickBusy, !loading, chapters.indices.contains(index) else { return }
+        quickBusy = true
+        defer { quickBusy = false }
+        let target = index
+        let position = store.scrollPosition(book)
+        do {
+            cancelPreparation()
+            preparedChapters.removeAll()
+            prefetchTask?.cancel()
+            cancelScrollLoads()
+            if clear, let source = store.source(for: book.origin) {
+                ChapterPrecacheManager.shared.cancelPrecache()
+                try await ChapterContentCache.shared.removeChapter(for: ChapterContentKey(
+                    sourceURL: source.bookSourceUrl, bookURL: book.bookUrl, chapterURL: chapters[target].url))
+            }
+            bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
+            let request = UUID()
+            contentRequestID = request
+            loading = true
+            await loadContent(at: target, landing: .saved(position), requestID: request)
+            quickMessage = error ?? (clear ? "当前章节缓存已清除并刷新" : "当前章节已刷新")
+        } catch {
+            quickMessage = "刷新失败：\(error.localizedDescription)"
+        }
     }
 
     private var readerSourceName: String {

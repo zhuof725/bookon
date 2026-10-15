@@ -117,6 +117,28 @@ final class TocSheetTests: XCTestCase {
         capture(app, "reader-toc-refresh")
     }
 
+    func testQuickPanelMetadataAndActions() {
+        let app = launch(["--reader-quick"])
+        app.buttons["reader.quick.open"].tap()
+        XCTAssertTrue(app.staticTexts["reader.quick.position"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["reader.quick.position"].label.contains("4/386"))
+        let refresh = app.buttons["reader.quick.refresh"]
+        let source = app.buttons["reader.quick.source"]
+        XCTAssertTrue(source.waitForExistence(timeout: 5))
+        XCTAssertLessThan(refresh.frame.minY, source.frame.minY)
+        XCTAssertEqual(refresh.frame.minX, source.frame.minX, accuracy: 2)
+        XCTAssertFalse(app.buttons["reader.quick.bookmarks"].isEnabled)
+        for id in ["refresh", "toc", "clear", "login", "source", "rules", "browser"] {
+            let button = app.buttons["reader.quick." + id]
+            if !button.isHittable { app.swipeUp() }
+            button.tap()
+            let status = app.staticTexts["reader.quick.status"]
+            XCTAssertTrue(status.waitForExistence(timeout: 4))
+            XCTAssertEqual(status.label, "action=" + id)
+        }
+        capture(app, "reader-quick-panel")
+    }
+
     /// 滑条调整预缓存窗口章数（默认 10 章，1~50），起播按钮跟随窗口章数。
     func testWindowSliderControlsPrecacheCount() {
         let app = launch(["--reader-toc-setting"])
