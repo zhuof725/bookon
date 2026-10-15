@@ -12,6 +12,8 @@ struct SourceLoginView: View {
     @State private var busy = false
     @State private var browser: BrowserTarget?
     @State private var loaded = false
+    /// 保存凭据后重启仍可复用，这里显示当前登录状态（只读本机凭据，不联网探测）。
+    @State private var loginState: SourceLoginStatus.State = .none
     /// 书源脚本 java.toast 的弹出回传卡片内容。
     @State private var toastCard: String?
 
@@ -23,6 +25,21 @@ struct SourceLoginView: View {
         NavigationStack {
             Form {
                 Group {
+                    Section("登录状态") {
+                        HStack {
+                            Text("当前状态").foregroundStyle(palette.secondary).appFont(.callout)
+                            Spacer()
+                            Text(SourceLoginStatus.label(loginState))
+                                .foregroundStyle(loginState == .none ? palette.secondary : palette.accent)
+                                .accessibilityIdentifier("login.status")
+                        }
+                        if loginState != .none {
+                            Text(SourceLoginStatus.detail(loginState))
+                                .appFont(.footnote).foregroundStyle(palette.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .independentGlassRow()
                     if !fields.isEmpty {
                         Section("登录信息") {
                             ForEach(fields.filter { $0.kind != .button }) { f in
@@ -136,10 +153,12 @@ struct SourceLoginView: View {
         let saved = JSEngine.loginStore.getLoginInfo(sourceKey)
             .flatMap { SourceLoginJSON.parseStringMap($0, nested: .compactJSON) } ?? [:]
         values = SourceLoginForm.initialValues(fields: parsed, saved: saved)
+        loginState = SourceLoginStatus.state(key: sourceKey, login: JSEngine.loginStore, defaults: .standard)
     }
 
     private func save(runLogin: Bool) {
         JSEngine.loginStore.putLoginInfo(sourceKey, SourceLoginForm.encode(values))
+        loginState = SourceLoginStatus.state(key: sourceKey, login: JSEngine.loginStore, defaults: .standard)
         message = "已保存"
         if runLogin { runScript("login()") }
     }
@@ -147,6 +166,8 @@ struct SourceLoginView: View {
     private func clear() {
         JSEngine.loginStore.removeLoginInfo(sourceKey)
         try? JSEngine.loginStore.removeLoginHeader(sourceKey)
+        SourceLoginStatus.clearVerified(sourceKey, defaults: .standard)
+        loginState = SourceLoginStatus.state(key: sourceKey, login: JSEngine.loginStore, defaults: .standard)
         for f in fields where f.kind != .button { values[f.name] = f.defaultValue }
         message = "已清除本书源保存的登录信息"
     }
@@ -188,6 +209,10 @@ struct SourceLoginView: View {
                 message = text
                 toastCard = text
             case .success(let s):
+                if call.lowercased().hasPrefix("login") {
+                    SourceLoginStatus.markVerified(sourceKey, defaults: .standard)
+                    loginState = SourceLoginStatus.state(key: sourceKey, login: JSEngine.loginStore, defaults: .standard)
+                }
                 if message.isEmpty {
                     let text = s.isEmpty ? "已执行" : s
                     message = text
