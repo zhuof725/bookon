@@ -18,7 +18,7 @@ final class NativeTabsGlassTests: XCTestCase {
         start("--native-tabs-mode")
         let bar = app.tabBars.firstMatch
         XCTAssertTrue(bar.waitForExistence(timeout: 10), "Must be a real system TabBar")
-        for (title, page) in [("统计", "statistics"), ("我的", "profile"), ("书架", "shelf")] {
+        for (title, page) in [("统计", "statistics"), ("我的", "profile"), ("搜索", "search"), ("书架", "shelf")] {
             let button = bar.buttons[title]
             XCTAssertTrue(button.exists); button.tap()
             XCTAssertTrue(app.staticTexts["native.page.\(page)"].waitForExistence(timeout: 5))

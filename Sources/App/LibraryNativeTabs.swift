@@ -3,18 +3,21 @@ import UIKit
 
 /// NavigationStack stays outside this root so pushed screens replace the bar.
 /// On iOS 26 the system owns the Liquid Glass appearance, sizing and labels.
-struct LibraryTabContainer<Shelf: View, Statistics: View, Profile: View>: View {
+struct LibraryTabContainer<Shelf: View, Statistics: View, Profile: View, SearchTab: View>: View {
     @Binding var selection: LibraryTab
     @Environment(\.appTheme) private var theme
     @State private var icons: [String: UIImage] = [:]
     let shelf: Shelf
     let statistics: Statistics
     let profile: Profile
+    let search: SearchTab
 
     init(selection: Binding<LibraryTab>, @ViewBuilder shelf: () -> Shelf,
-         @ViewBuilder statistics: () -> Statistics, @ViewBuilder profile: () -> Profile) {
+         @ViewBuilder statistics: () -> Statistics, @ViewBuilder profile: () -> Profile,
+         @ViewBuilder search: () -> SearchTab) {
         _selection = selection
-        self.shelf = shelf(); self.statistics = statistics(); self.profile = profile()
+        self.shelf = shelf(); self.statistics = statistics()
+        self.profile = profile(); self.search = search()
     }
 
     var body: some View {
@@ -24,6 +27,7 @@ struct LibraryTabContainer<Shelf: View, Statistics: View, Profile: View>: View {
                     shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
                     statistics.tabItem { item(.statistics) }.tag(LibraryTab.statistics)
                     profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
+                    search.tabItem { item(.search) }.tag(LibraryTab.search)
                 }
                 // No custom material/background/UITabBarAppearance: retain native glass.
             } else {
@@ -32,6 +36,7 @@ struct LibraryTabContainer<Shelf: View, Statistics: View, Profile: View>: View {
                     case .shelf: shelf
                     case .statistics: statistics
                     case .profile: profile
+                    case .search: search
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { LibraryDock(selection: $selection) }

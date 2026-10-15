@@ -18,6 +18,8 @@ struct NativeTabsGlassHarness: View {
                 Text("统计测试页").accessibilityIdentifier("native.page.statistics")
             } profile: {
                 Text("我的测试页").accessibilityIdentifier("native.page.profile")
+            } search: {
+                Text("搜索测试页").accessibilityIdentifier("native.page.search")
             }
         }
         .environment(\.appTheme, theme)

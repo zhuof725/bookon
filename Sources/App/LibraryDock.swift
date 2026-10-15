@@ -1,11 +1,27 @@
 import SwiftUI
 
 enum LibraryTab: Int, CaseIterable {
-    case shelf, statistics, profile
-    var title: String { switch self { case .shelf: return "书架"; case .statistics: return "统计"; case .profile: return "我的" } }
-    var symbol: String { switch self { case .shelf: return "book.fill"; case .statistics: return "chart.bar.fill"; case .profile: return "person.fill" } }
+    // 搜索固定在底栏最右边；rawValue 顺序即显示顺序，前三个保持不变以免影响已存设置与测试标识。
+    case shelf, statistics, profile, search
+    var title: String {
+        switch self {
+        case .shelf: return "书架"; case .statistics: return "统计"
+        case .profile: return "我的"; case .search: return "搜索"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .shelf: return "book.fill"; case .statistics: return "chart.bar.fill"
+        case .profile: return "person.fill"; case .search: return "magnifyingglass"
+        }
+    }
     /// Customization key for ThemeCustomization.tabIcons.
-    var key: String { switch self { case .shelf: return "shelf"; case .statistics: return "statistics"; case .profile: return "profile" } }
+    var key: String {
+        switch self {
+        case .shelf: return "shelf"; case .statistics: return "statistics"
+        case .profile: return "profile"; case .search: return "search"
+        }
+    }
 }
 
 struct LibraryDock: View {

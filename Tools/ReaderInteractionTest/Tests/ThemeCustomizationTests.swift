@@ -233,7 +233,7 @@ final class ThemeCustomizationTests: XCTestCase {
         XCTAssertEqual(books[0].frame.minY, books[1].frame.minY, accuracy: 2)
         XCTAssertGreaterThan(books[2].frame.minY, books[0].frame.maxY)
         XCTAssertGreaterThan(books[1].frame.minX, books[0].frame.maxX)
-        for index in [1, 2, 0] {
+        for index in [1, 2, 3, 0] {
             let id = "library.tab.\(index)"
             tap(id)
             XCTAssertTrue(app.buttons[id].isSelected)

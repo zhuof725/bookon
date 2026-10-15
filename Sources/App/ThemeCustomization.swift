@@ -135,7 +135,7 @@ struct ThemeCustomization: Codable, Equatable {
     static let coverWidthRange: ClosedRange<Double> = 60...180
     static let glowIntensityRange: ClosedRange<Double> = 0...1
     static let surfaceOpacityRange: ClosedRange<Double> = 0...1
-    static let tabIconKeys: Set<String> = ["shelf", "statistics", "profile"]
+    static let tabIconKeys: Set<String> = ["shelf", "statistics", "profile", "search"]
 
     init(tabStyle: ThemeTabStyle = .iconsAndText, shelfColumns: Int = 3,
          coverWidth: Double = 112, defaultCoverImage: String? = nil,

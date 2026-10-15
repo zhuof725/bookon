@@ -52,7 +52,6 @@ struct BookshelfScreen: View {
     let books: [Book]
     let localOrigin: String
     let onOpen: (Book) -> Void
-    let onSearch: () -> Void
     let onImport: () -> Void
     let onRemove: ([Book]) -> Void
     var loadListChapters: (Book) -> [BookChapter]? = { _ in nil }
@@ -173,10 +172,8 @@ struct BookshelfScreen: View {
         }
     }
 
-    private var header: some View {        HStack {
-            Button(action: onSearch) { Image(systemName: "magnifyingglass").font(.system(size: 21, weight: .medium)).frame(width: 44, height: 44) }
-                .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("搜索书籍").accessibilityIdentifier("shelf.search")
-            Spacer()
+    private var header: some View {
+        HStack {
             Button { menu = menu == "filter" ? nil : "filter" } label: {
                 HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.secondary) }
                     .padding(.horizontal, 17).frame(height: 42)

@@ -20,7 +20,7 @@ struct ThemeCustomizationRuntimeView: View {
             Text("tab=\(selection.rawValue);opened=\(opened)")
                 .font(.system(size: 8)).accessibilityIdentifier("theme.runtime.callbacks")
             BookshelfScreen(books: books, localOrigin: "fixture", onOpen: { opened = $0.id },
-                onSearch: {}, onImport: {}, onRemove: { _ in })
+                onImport: {}, onRemove: { _ in })
                 .safeAreaInset(edge: .bottom, spacing: 0) { LibraryDock(selection: $selection) }
         }
         .frame(width: 320)

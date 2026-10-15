@@ -55,7 +55,7 @@ struct ShelfHarnessView: View {
                 case .shelf:
                     BookshelfScreen(books: books, localOrigin: ShelfFixture.localOrigin,
                         onOpen: { selectedBook = $0; showReader = true },
-                        onSearch: { searches += 1 }, onImport: { imports += 1 },
+                        onImport: { imports += 1 },
                         onRemove: { selected in
                             removals += selected.count
                             let ids = Set(selected.map(\.id))
@@ -85,6 +85,9 @@ struct ShelfHarnessView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .profile:
                     Text("我的占位页").accessibilityIdentifier("shelf.profile")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .search:
+                    Text("搜索占位页").accessibilityIdentifier("shelf.searchPage")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }

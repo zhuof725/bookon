@@ -60,6 +60,8 @@ struct RootView: View {
                 LibraryStatisticsView()
             } profile: {
                 LibraryProfileView()
+            } search: {
+                SearchView()
             }
             .background { AppThemeCanvas().ignoresSafeArea() }
         }
@@ -74,19 +76,17 @@ struct BookshelfView: View {
     @State private var importMessage: String?
     @State private var selectedBook: Book?
     @State private var showDetail = false
-    @State private var showSearch = false
 
     var body: some View {
         BookshelfScreen(books: store.books, localOrigin: AppStore.localOrigin,
             onOpen: { book in selectedBook = book; showDetail = true },
-            onSearch: { showSearch = true }, onImport: { showImport = true },
+            onImport: { showImport = true },
             onRemove: { books in books.forEach { store.removeFromShelf($0) } },
             loadListChapters: { book in store.isLocal(book) ? store.localToc(book) : store.cachedToc(book) },
             onRefresh: { await refreshShelf() })
         .navigationDestination(isPresented: $showDetail) {
             if let selectedBook { BookDetailView(book: selectedBook) }
         }
-        .navigationDestination(isPresented: $showSearch) { SearchView() }
         .sheet(isPresented: $showImport) {
             DocumentPicker(contentTypes: BookshelfView.localTypes, allowsMultiple: true, onPick: { urls in
                 showImport = false

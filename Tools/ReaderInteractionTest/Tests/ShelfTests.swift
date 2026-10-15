@@ -48,7 +48,7 @@ final class ShelfTests: XCTestCase {
         XCTAssertLessThan(b.frame.minX, a.frame.minX)
         let expectedWidth = (app.frame.width - 48 - 36) / 3
         XCTAssertEqual(a.frame.width, expectedWidth, accuracy: 4, "Three columns; only two occupied")
-        XCTAssertLessThan(app.buttons["shelf.search"].frame.maxY, a.frame.minY)
+        XCTAssertLessThan(app.buttons["shelf.filter"].frame.maxY, a.frame.minY)
         XCTAssertLessThan(a.frame.maxY, app.buttons["library.tab.0"].frame.minY)
         capture("shelf-01-grid")
         tap("shelf.more")
@@ -126,8 +126,16 @@ final class ShelfTests: XCTestCase {
     }
 
     func testImportAndSearchCallbacks() {
-        tap("shelf.search")
-        status("search=1")
+        // 搜索入口已移到最右边的底栏页签，书架上不再有搜索按钮。
+        XCTAssertFalse(app.buttons["shelf.search"].exists, "书架头部不再有搜索按钮")
+        tap("library.tab.3")
+        XCTAssertTrue(app.staticTexts["shelf.searchPage"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["library.tab.3"].isSelected)
+        XCTAssertGreaterThan(app.buttons["library.tab.3"].frame.minX, app.buttons["library.tab.2"].frame.minX,
+                             "搜索在底栏最右边")
+        status("tab=3")
+        tap("library.tab.0")
+        XCTAssertTrue(a.waitForExistence(timeout: 3))
         tap("shelf.more"); tap("shelf.import")
         status("import=1")
         XCTAssertFalse(app.buttons["shelf.import"].exists)
@@ -148,7 +156,7 @@ final class ShelfTests: XCTestCase {
         a.tap()
         XCTAssertTrue(app.staticTexts["shelf.reader"].waitForExistence(timeout: 4))
         XCTAssertEqual(app.staticTexts["shelf.reader.title"].label, "A 林间札记")
-        for id in ["library.tab.0", "library.tab.1", "library.tab.2", "shelf.more"] {
+        for id in ["library.tab.0", "library.tab.1", "library.tab.2", "library.tab.3", "shelf.more"] {
             XCTAssertFalse(app.buttons[id].exists, "Root chrome must not follow the pushed reader")
         }
         XCTAssertEqual(app.navigationBars.count, 0)
