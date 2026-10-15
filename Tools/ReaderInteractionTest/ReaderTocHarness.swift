@@ -78,7 +78,9 @@ final class ReaderTocProbe: ObservableObject {
     init(failAt: Int?) { self.failAt = failAt }
 
     func load(_ index: Int) async throws {
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // 停止用例传 --reader-toc-slow，放慢加载以便在运行中点中「停止」。
+        let slow = ProcessInfo.processInfo.arguments.contains("--reader-toc-slow")
+        try await Task.sleep(nanoseconds: slow ? 1_500_000_000 : 300_000_000)
         if let failAt, index == failAt, !failedOnce {
             failedOnce = true
             throw ReaderTocProbeError.denied
