@@ -308,7 +308,8 @@ struct ReaderView: View {
         .sheet(isPresented: $showToc) {
             ReaderTocSheet(chapters: chapters, currentIndex: index,
                            manager: .shared,
-                           onSelect: { target in showToc = false; go(target) })
+                           onSelect: { target in showToc = false; go(target) },
+                           onRefresh: tocRefreshAction)
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -461,6 +462,40 @@ struct ReaderView: View {
         ChapterPrecacheManager.shared.register(chapters: chapters, currentIndex: index,
                                                bookName: book.name, services: services,
                                                canPrecache: canPrecache)
+    }
+
+    /// 本地书籍没有书源，不提供刷新目录按钮。
+    private var tocRefreshAction: (@MainActor () async -> String?)? {
+        guard !store.isLocal(book) else { return nil }
+        return { await refreshToc() }
+    }
+
+    /// 目录页「刷新目录」：重新从书源拉取目录并写回缓存；当前章按章节地址重新定位，
+    /// 失败或返回空目录时保留现有目录不变。
+    @MainActor
+    private func refreshToc() async -> String? {
+        guard let source = store.source(for: book.origin) else { return "找不到书源" }
+        do {
+            var b = book
+            if b.tocUrl == nil { b = try await WebBook.bookInfo(source: source, book: b) }
+            let latest = try await WebBook.chapters(source: source, book: b)
+            guard !latest.isEmpty else { return "书源返回空目录，已保留原目录" }
+            let oldCount = chapters.count
+            let currentURL = chapters.indices.contains(index) ? chapters[index].url : nil
+            chapters = latest
+            store.saveToc(book, latest)
+            if let currentURL, let found = latest.firstIndex(where: { $0.url == currentURL }) {
+                if found != index { index = found }
+            } else if index >= latest.count {
+                index = latest.count - 1
+            }
+            registerPrecache()
+            ChapterPrecacheManager.shared.refreshCacheStatusIfNeeded()
+            let added = latest.count - oldCount
+            return added > 0 ? "目录已刷新：新增 \(added) 章，共 \(latest.count) 章" : "目录已刷新：共 \(latest.count) 章"
+        } catch {
+            return "刷新失败：\(error.localizedDescription)"
+        }
     }
 
     private var readerChapterTitle: String {

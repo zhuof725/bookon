@@ -103,6 +103,20 @@ final class TocSheetTests: XCTestCase {
         XCTAssertTrue(app.buttons["precache.start"].exists, "停止后可再次预缓存")
     }
 
+    /// 目录页右上「刷新目录」按钮：调用一次刷新并显示结果文案。
+    func testTocRefreshButtonRunsAndShowsResult() {
+        let app = launch()
+        let refresh = app.buttons["reader.toc.refresh"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5), "目录页应有刷新目录按钮")
+        refresh.tap()
+        let status = app.staticTexts["reader.toc.refreshStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5), "刷新时应显示状态")
+        waitForLabel(status, contains: "目录已刷新", timeout: 8)
+        XCTAssertTrue(status.label.contains("新增 2 章"), status.label)
+        XCTAssertEqual(app.staticTexts["reader.toc.harness.refreshes"].label, "refreshes=1")
+        capture(app, "reader-toc-refresh")
+    }
+
     /// 滑条调整预缓存窗口章数（默认 10 章，1~50），起播按钮跟随窗口章数。
     func testWindowSliderControlsPrecacheCount() {
         let app = launch(["--reader-toc-setting"])

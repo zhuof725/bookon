@@ -49,12 +49,18 @@ struct ReaderTocHarnessView: View {
                 .padding(.top, 8)
             ReaderTocSheet(chapters: Self.fixtureChapters, currentIndex: 2,
                            manager: manager,
-                           onSelect: { probe.recordSelection($0) })
+                           onSelect: { probe.recordSelection($0) },
+                           onRefresh: {
+                               try? await Task.sleep(nanoseconds: 300_000_000)
+                               probe.recordRefresh()
+                               return "目录已刷新：新增 2 章，共 32 章"
+                           })
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 2) {
                 Text("loads=\(probe.loads)").accessibilityIdentifier("reader.toc.harness.loads")
                 Text(probe.selection).accessibilityIdentifier("reader.toc.harness.selection")
+                Text("refreshes=\(probe.refreshes)").accessibilityIdentifier("reader.toc.harness.refreshes")
             }
             .appFont(.caption).padding(6).background(.thinMaterial).allowsHitTesting(false)
         }
@@ -81,6 +87,9 @@ final class ReaderTocProbe: ObservableObject {
     }
 
     func recordSelection(_ index: Int) { selection = "selected=\(index)" }
+
+    @Published private(set) var refreshes = 0
+    func recordRefresh() { refreshes += 1 }
 
     enum ReaderTocProbeError: LocalizedError {
         case denied

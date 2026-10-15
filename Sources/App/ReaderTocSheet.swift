@@ -173,6 +173,10 @@ struct ReaderTocSheet: View {
     let currentIndex: Int
     @ObservedObject var manager: ChapterPrecacheManager
     let onSelect: (Int) -> Void
+    /// 从书源重新拉取目录；返回结果文案。nil 表示不支持刷新（本地书籍）。
+    var onRefresh: (@MainActor () async -> String?)? = nil
+    @State private var refreshing = false
+    @State private var refreshStatus: String?
 
     var body: some View {
         NavigationStack {
@@ -186,10 +190,41 @@ struct ReaderTocSheet: View {
                 .background { AppThemeCanvas().ignoresSafeArea() }
                 .onAppear { proxy.scrollTo(currentIndex, anchor: .center) }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let refreshStatus {
+                    Text(refreshStatus).appFont(.footnote).foregroundStyle(palette.secondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .accessibilityIdentifier("reader.toc.refreshStatus")
+                }
+            }
             .navigationTitle("目录（\(chapters.count)）")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if let onRefresh {
+                        Button {
+                            Task { await runRefresh(onRefresh) }
+                        } label: {
+                            if refreshing { ProgressView() } else { Image(systemName: "arrow.clockwise") }
+                        }
+                        .disabled(refreshing)
+                        .accessibilityLabel("刷新目录")
+                        .accessibilityIdentifier("reader.toc.refresh")
+                    }
+                }
+            }
         }
         .task { manager.refreshCacheStatusIfNeeded() }
+    }
+
+    @MainActor
+    private func runRefresh(_ action: @MainActor () async -> String?) async {
+        guard !refreshing else { return }
+        refreshing = true
+        refreshStatus = "正在刷新目录…"
+        let message = await action()
+        refreshStatus = message ?? "目录已刷新"
+        refreshing = false
     }
 
     @ViewBuilder
