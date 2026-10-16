@@ -139,7 +139,25 @@ final class AppStore: ObservableObject {
         return try importSources(json: body)
     }
 
-    func deleteSources(at offsets: IndexSet) { sources.remove(atOffsets: offsets); saveSources() }
+    func deleteSource(_ s: BookSource) {
+        sources.removeAll { $0.bookSourceUrl == s.bookSourceUrl }
+        saveSources()
+    }
+
+    /// 移动到分组：用新分组替换原分组（空白则清空分组）。
+    func moveSource(_ s: BookSource, toGroup group: String) {
+        guard let i = sources.firstIndex(where: { $0.bookSourceUrl == s.bookSourceUrl }) else { return }
+        let t = group.trimmingCharacters(in: .whitespacesAndNewlines)
+        sources[i].bookSourceGroup = t.isEmpty ? nil : t
+        saveSources()
+    }
+
+    /// 单个书源的配置 JSON（与导入格式一致，可直接再导入）。
+    func sourceJSON(_ s: BookSource) -> String? {
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        guard let d = try? enc.encode(s) else { return nil }
+        return String(data: d, encoding: .utf8)
+    }
 
     func toggleSource(_ s: BookSource) {
         guard let i = sources.firstIndex(of: s) else { return }

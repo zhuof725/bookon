@@ -196,6 +196,10 @@ struct SourcesView: View {
     @State private var loginSource: BookSource?
     @State private var checkList: [BookSource] = []
     @State private var showCheck = false
+    @State private var groupSource: BookSource?
+    @State private var groupText = ""
+    @State private var deleteSource: BookSource?
+    @State private var exportItem: SourceExportItem?
 
     var body: some View {
         List {
@@ -228,9 +232,12 @@ struct SourcesView: View {
                     }
                     Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
                     Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
+                    Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
+                    Button { exportSource(s) } label: { Label("导出配置文件", systemImage: "square.and.arrow.up") }
+                    Button { copySource(s) } label: { Label("复制配置", systemImage: "doc.on.doc") }
+                    Button(role: .destructive) { deleteSource = s } label: { Label("删除配置", systemImage: "trash") }
                 }
             }
-            .onDelete { store.deleteSources(at: $0) }
             .independentGlassRow()
         }
         .scrollContentBackground(.hidden)
@@ -238,6 +245,16 @@ struct SourcesView: View {
         .navigationTitle("书源")
         .sheet(item: $debugSource) { source in SourceDebugView(source: source) }
         .sheet(item: $loginSource) { source in SourceLoginView(source: source) }
+        .sheet(item: $exportItem) { item in ActivityShareSheet(items: [item.url]).ignoresSafeArea() }
+        .alert("移动到分组", isPresented: Binding(get: { groupSource != nil }, set: { if !$0 { groupSource = nil } })) {
+            TextField("分组名（多个用逗号分隔）", text: $groupText)
+            Button("取消", role: .cancel) { groupSource = nil }
+            Button("确定") { if let s = groupSource { store.moveSource(s, toGroup: groupText) }; groupSource = nil }
+        } message: { Text(groupSource?.bookSourceName ?? "") }
+        .alert("删除书源「\(deleteSource?.bookSourceName ?? "")」？", isPresented: Binding(get: { deleteSource != nil }, set: { if !$0 { deleteSource = nil } })) {
+            Button("取消", role: .cancel) { deleteSource = nil }
+            Button("删除", role: .destructive) { if let s = deleteSource { store.deleteSource(s) }; deleteSource = nil }
+        }
         .sheet(isPresented: $showCheck) { SourceCheckView(sources: checkList, store: store) }
         .overlay { if busy { ProgressView() } }
         .toolbar {
@@ -283,6 +300,23 @@ struct SourcesView: View {
         }
     }
 
+    /// 导出配置文件：写成临时 JSON 文件后弹系统分享面板（可存到文件、发送给其它 App）。
+    private func exportSource(_ s: BookSource) {
+        guard let json = store.sourceJSON(s) else { message = "导出失败"; return }
+        let safe = s.bookSourceName.components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|\n")).joined()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safe.isEmpty ? "bookSource" : safe).json")
+        do {
+            try ("[" + json + "]").write(to: url, atomically: true, encoding: .utf8)
+            exportItem = SourceExportItem(url: url)
+        } catch { message = "导出失败：\(error.localizedDescription)" }
+    }
+
+    private func copySource(_ s: BookSource) {
+        guard let json = store.sourceJSON(s) else { message = "复制失败"; return }
+        UIPasteboard.general.string = json
+        message = "已复制书源配置"
+    }
+
     /// 批量校验入口：把选中的书源交给校验页（原版「校验书源 / 校验所选」）。
     private func startCheck(_ list: [BookSource]) {
         guard !list.isEmpty else { message = "还没有书源"; return }
@@ -324,4 +358,18 @@ struct SourcesView: View {
             }
         }
     }
+}
+
+struct SourceExportItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// 系统分享面板（导出书源配置文件）。
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
