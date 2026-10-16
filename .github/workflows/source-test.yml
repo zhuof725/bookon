@@ -16,6 +16,10 @@ on:
         description: Use the bundled 书山聚合 fixture instead of downloading public sources
         type: boolean
         default: false
+      batch:
+        description: 批量校验（校验书源）下载的公开书源前 12 个
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -84,6 +88,13 @@ jobs:
           [ -z "$KEY" ] && KEY=斗罗大陆
           $RUNNER_TEMP/pkg/.build/release/SourceTest sources.json "$KEY" 60 2>&1 | tee source-test.log
 
+      - name: Batch check sources (校验书源)
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline && !inputs.fixture && inputs.batch }}
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch sources.json 我的 60 2 12 2>&1 | tee batch-check.log
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,6 +102,7 @@ jobs:
           name: source-test-log
           path: |
             source-test.log
+            batch-check.log
             regression.log
             test-build.log
             dumps/

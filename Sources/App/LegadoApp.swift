@@ -194,6 +194,8 @@ struct SourcesView: View {
     @State private var busy = false
     @State private var debugSource: BookSource?
     @State private var loginSource: BookSource?
+    @State private var checkList: [BookSource] = []
+    @State private var showCheck = false
 
     var body: some View {
         List {
@@ -206,7 +208,14 @@ struct SourcesView: View {
                 HStack {
                     VStack(alignment: .leading) {
                         Text(s.bookSourceName).foregroundStyle(palette.primary).lineLimit(1)
-                        Text(s.bookSourceGroup ?? s.bookSourceUrl).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(s.bookSourceGroup ?? s.bookSourceUrl)
+                                .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+                            if let rt = s.respondTime, rt > 0 {
+                                Text("响应 \(rt)ms")
+                                    .appFont(.caption2).foregroundStyle(palette.secondary.opacity(0.8))
+                            }
+                        }
                     }
                     Spacer()
                     Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
@@ -218,6 +227,7 @@ struct SourcesView: View {
                         Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
                     }
                     Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
+                    Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
                 }
             }
             .onDelete { store.deleteSources(at: $0) }
@@ -228,9 +238,14 @@ struct SourcesView: View {
         .navigationTitle("书源")
         .sheet(item: $debugSource) { source in SourceDebugView(source: source) }
         .sheet(item: $loginSource) { source in SourceLoginView(source: source) }
+        .sheet(isPresented: $showCheck) { SourceCheckView(sources: checkList, store: store) }
         .overlay { if busy { ProgressView() } }
         .toolbar {
             Menu {
+                Section("校验书源") {
+                    Button("校验全部书源") { startCheck(store.sources) }
+                    Button("校验启用中的书源") { startCheck(store.sources.filter { $0.isEnabled }) }
+                }
                 Section("导入配置文件") {
                     Button("文本导入") { input = ""; importTitle = "输入书源 JSON"; showImport = true }
                     Button("本地文件导入") { showFile = true }
@@ -268,8 +283,14 @@ struct SourcesView: View {
         }
     }
 
-    private func importFiles(_ urls: [URL]) {
-        guard !urls.isEmpty else { return }
+    /// 批量校验入口：把选中的书源交给校验页（原版「校验书源 / 校验所选」）。
+    private func startCheck(_ list: [BookSource]) {
+        guard !list.isEmpty else { message = "还没有书源"; return }
+        checkList = list
+        showCheck = true
+    }
+
+    private func importFiles(_ urls: [URL]) {        guard !urls.isEmpty else { return }
         var total = 0
         var failed: [String] = []
         for url in urls {

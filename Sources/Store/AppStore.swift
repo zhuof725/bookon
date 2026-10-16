@@ -147,6 +147,13 @@ final class AppStore: ObservableObject {
         saveSources()
     }
 
+    /// 校验书源写回：累计失效分组、错误注释与响应耗时（对齐原版 CheckSourceService 的逐源 update）。
+    func applySourceCheck(_ updated: BookSource) {
+        guard let i = sources.firstIndex(where: { $0.bookSourceUrl == updated.bookSourceUrl }) else { return }
+        sources[i] = updated
+        saveSources()
+    }
+
     // MARK: Bookshelf
     func isOnShelf(_ b: Book) -> Bool { books.contains { $0.bookUrl == b.bookUrl } }
 

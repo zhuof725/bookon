@@ -13,6 +13,17 @@ if args.contains("--shushan-online") {
     do { try await ShushanOnlineProbe.run(); exit(0) }
     catch { print("SHUSHAN ONLINE NOT VERIFIED: \(error)"); exit(1) }
 }
+// 批量校验（对齐原版「校验书源」）：SourceTest --check-batch <sources.json> [关键词] [超时秒] [并发] [数量上限]
+if let i = args.firstIndex(of: "--check-batch") {
+    let file = args.count > i + 1 ? args[i + 1] : "sources.json"
+    let batchKey = args.count > i + 2 ? args[i + 2] : "我的"
+    let batchTimeout = Double(args.count > i + 3 ? args[i + 3] : "60") ?? 60
+    let batchConcurrency = Int(args.count > i + 4 ? args[i + 4] : "2") ?? 2
+    let batchLimit = Int(args.count > i + 5 ? args[i + 5] : "0") ?? 0
+    await BatchCheckCLI.run(file: file, keyword: batchKey, timeout: batchTimeout,
+                            concurrency: batchConcurrency, limit: batchLimit)
+    exit(0)
+}
 let path = args.count > 1 ? args[1] : "sources.json"
 let key = args.count > 2 ? args[2] : "斗罗大陆"
 let perSourceTimeout = Double(args.count > 3 ? args[3] : "60") ?? 60

@@ -79,6 +79,8 @@ struct BookSource: Codable, Hashable, Identifiable {
     var ruleContent: ContentRule?
     var customOrder: Int?
     var lastUpdateTime: Int64?
+    /// 校验书源（批量测试）测得的耗时毫秒，与原版 BookSource.respondTime 一致。
+    var respondTime: Int?
 
     var isEnabled: Bool { enabled ?? true }
     var cookieJarEnabled: Bool { enabledCookieJar ?? true }
@@ -87,6 +89,7 @@ struct BookSource: Codable, Hashable, Identifiable {
         case bookSourceUrl, bookSourceName, bookSourceGroup, bookSourceType, bookSourceComment
         case enabled, header, jsLib, loginUrl, loginUi, searchUrl, exploreUrl, bookUrlPattern, enabledCookieJar
         case ruleSearch, ruleExplore, ruleBookInfo, ruleToc, ruleContent, customOrder, lastUpdateTime
+        case respondTime
     }
 
     init(from decoder: Decoder) throws {
@@ -112,6 +115,7 @@ struct BookSource: Codable, Hashable, Identifiable {
         ruleContent = BookSource.lenient(c, .ruleContent)
         customOrder = try? c.decodeIfPresent(Int.self, forKey: .customOrder)
         lastUpdateTime = try? c.decodeIfPresent(Int64.self, forKey: .lastUpdateTime)
+        respondTime = try? c.decodeIfPresent(Int.self, forKey: .respondTime)
     }
 
     /// Some old sources store rule objects as JSON strings.

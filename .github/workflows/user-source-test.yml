@@ -11,6 +11,10 @@ on:
         description: 书源文件（仓库内路径）
         required: false
         default: user-sources.json
+      check:
+        description: 批量校验（校验书源：搜索→详情→目录→正文，失败写回失效分组）
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -54,6 +58,14 @@ jobs:
           set -o pipefail
           KEY="$TEST_KEY"
           $RUNNER_TEMP/pkg/.build/release/SourceTest "${SOURCES_FILE:-user-sources.json}" "$KEY" 90 2>&1 | tee user-source-test.log
+      - name: Batch check sources (校验书源)
+        if: ${{ inputs.check }}
+        env:
+          SOURCES_FILE: ${{ github.event.inputs.file }}
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch "${SOURCES_FILE:-user-sources.json}" 我的 90 2 0 2>&1 | tee batch-check.log
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,6 +73,7 @@ jobs:
           name: uploaded-source-test
           path: |
             user-source-test.log
+            batch-check.log
             regression.log
             test-build.log
             dumps/
