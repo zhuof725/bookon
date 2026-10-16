@@ -36,7 +36,12 @@ enum SourceLoginStatus {
     /// 是否已保存登录凭据：登录信息里的任一非空值，或非空登录头。
     /// 返回 true 才说明重启后仍可复用，因此「记住登录」以凭据存在为准。
     static func hasCredentials(_ key: String, login: SourceLoginStore) -> Bool {
-        if let header = login.getLoginHeader(key), !SourceLoginJSON.isBlank(header) { return true }
+        if let header = login.getLoginHeader(key), !SourceLoginJSON.isBlank(header) {
+            // 对象形式的登录头要有至少一个非空值；不是对象时按原文非空处理。
+            if let map = SourceLoginJSON.parseStringMap(header, nested: .compactJSON) {
+                if map.values.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { return true }
+            } else { return true }
+        }
         guard let info = login.getLoginInfo(key), !SourceLoginJSON.isBlank(info),
               let map = SourceLoginJSON.parseStringMap(info, nested: .compactJSON) else { return false }
         return map.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
