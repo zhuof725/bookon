@@ -10,6 +10,8 @@ struct LoginField: Equatable, Identifiable {
     var defaultValue: String
     /// 按钮的 action：JS 函数调用，例如 `checkSite()`；也可能是网址。
     var action: String
+    /// 书源 style.layout_flexBasisPercent：0.45 表示与下一个同类按钮并排，1 表示整行。
+    var basisPercent: Double = 1
 }
 
 enum SourceLoginForm {
@@ -52,10 +54,55 @@ enum SourceLoginForm {
             case "password": kind = .password
             default: kind = .text
             }
+            // style.layout_flexBasisPercent：0.45 左右表示与相邻项并排；缺省或 1 为整行。
+            var basis = 1.0
+            for m in members.reversed() where m.key == "style" {
+                if case .object(let styleMembers) = m.value {
+                    for s in styleMembers.reversed() where s.key == "layout_flexBasisPercent" {
+                        switch s.value {
+                        case .number(let n): if let v = Double(n), v > 0, v < 1 { basis = v }
+                        case .string(let t): if let v = Double(t), v > 0, v < 1 { basis = v }
+                        default: break
+                        }
+                    }
+                }
+                break
+            }
             out.append(LoginField(id: out.count, name: name, kind: kind,
-                                  defaultValue: text("default"), action: text("action")))
+                                  defaultValue: text("default"), action: text("action"),
+                                  basisPercent: basis))
         }
         return out
+    }
+
+    /// 把有序的登录项排成行：并排（basis < 1）项两两成行；整行项独占一行。
+    /// 只做布局，不改变顺序，不合并不同种类（输入框与按钮可以同排，与原版一致）。
+    static func layoutRows(_ fields: [LoginField]) -> [[LoginField]] {
+        var rows: [[LoginField]] = []
+        var pending: LoginField?
+        for field in fields {
+            if field.basisPercent < 1, pending == nil {
+                pending = field
+                continue
+            }
+            if let first = pending {
+                // 相邻两个并排项成一行；若第二个是整行项，先落单行再另起。
+                if field.basisPercent < 1 {
+                    rows.append([first, field])
+                    pending = nil
+                    continue
+                }
+                rows.append([first])
+                pending = nil
+            }
+            if field.basisPercent < 1 {
+                pending = field
+            } else {
+                rows.append([field])
+            }
+        }
+        if let last = pending { rows.append([last]) }
+        return rows
     }
 
     /// 已保存的值优先，其次是 default。按钮不参与取值。

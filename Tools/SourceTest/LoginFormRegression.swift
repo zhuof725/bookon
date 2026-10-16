@@ -14,6 +14,31 @@ enum LoginFormRegression {
         check(f.map(\.name) == ["账号", "密码", "登录", "官网"], "登录表单：字段保持原顺序（宽松 JSON）")
         check(f.map(\.kind) == [.text, .password, .button, .button], "登录表单：type 映射")
         check(f[0].defaultValue == "u0" && f[2].action == "go()", "登录表单：default 与 action")
+
+        // 并排布局：style.layout_flexBasisPercent 0.45 与其他项同排，1 或缺失独占整行。
+        let grid = SourceLoginForm.parseFields("""
+        [{name:'邮箱',type:'text'},{name:'密码',type:'password'},\
+        {name:'登录',type:'button',action:'a()',style:{layout_flexGrow:1,layout_flexBasisPercent:0.45}},\
+        {name:'注册',type:'button',action:'b()',style:{layout_flexBasisPercent:0.45}},\
+        {name:'单独',type:'button',action:'c()',style:{layout_flexBasisPercent:1}},\
+        {name:'宽',type:'button',action:'d()'},\
+        {name:'左',type:'button',action:'e()',style:{layout_flexBasisPercent:0.45}},\
+        {name:'右',type:'button',action:'f()',style:{layout_flexBasisPercent:0.45}}]
+        """)
+        check(grid.count == 8 && grid[2].basisPercent < 1 && grid[2].basisPercent > 0,
+              "登录表单：并排比例被解析")
+        let rows = SourceLoginForm.layoutRows(grid)
+        check(rows.map { $0.map(\.name) } == [["邮箱"], ["密码"], ["登录", "注册"], ["单独"], ["宽"], ["左", "右"]],
+              "登录表单：按并排比例分行且保持顺序")
+        check(SourceLoginForm.layoutRows([]).isEmpty, "登录表单：空表单没有行")
+        let odd = SourceLoginForm.parseFields("[{name:'a',type:'button',style:{layout_flexBasisPercent:0.45}}]")
+        check(SourceLoginForm.layoutRows(odd).map { $0.map(\.name) } == [["a"]],
+              "登录表单：落单的并排项自占一行（整行拉伸）")
+        check(SourceLoginForm.layoutRows([
+            LoginField(id: 0, name: "t", kind: .text, defaultValue: "", action: ""),
+            LoginField(id: 1, name: "b", kind: .button, defaultValue: "", action: "", basisPercent: 0.45)
+        ]).map { $0.map(\.name) } == [["t"], ["b"]],
+              "登录表单：输入框与按钮互不并排")
         check(SourceLoginForm.parseFields("").isEmpty && SourceLoginForm.parseFields("not json").isEmpty
               && SourceLoginForm.parseFields("{\"a\":1}").isEmpty && SourceLoginForm.parseFields(nil).isEmpty, "登录表单：非法或空输入得到空表单")
         check(SourceLoginForm.parseFields("[{type:'text'},{name:'x'}]").map(\.name) == ["x"], "登录表单：缺 name 的项被忽略")

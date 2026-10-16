@@ -23,75 +23,53 @@ struct SourceLoginView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Group {
-                    Section("登录状态") {
-                        HStack {
-                            Text("当前状态").foregroundStyle(palette.secondary).appFont(.callout)
-                            Spacer()
-                            Text(SourceLoginStatus.label(loginState))
-                                .foregroundStyle(loginState == .none ? palette.secondary : palette.accent)
-                                .accessibilityIdentifier("login.status")
-                        }
-                        if loginState != .none {
-                            Text(SourceLoginStatus.detail(loginState))
-                                .appFont(.footnote).foregroundStyle(palette.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Text("登录状态").appFont(.footnote).foregroundStyle(palette.secondary)
+                        Text(SourceLoginStatus.label(loginState))
+                            .appFont(.footnote)
+                            .foregroundStyle(loginState == .none ? palette.secondary : palette.accent)
+                            .accessibilityIdentifier("login.status")
+                        Spacer()
                     }
-                    .independentGlassRow()
+                    if loginState != .none {
+                        Text(SourceLoginStatus.detail(loginState))
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("login.statusDetail")
+                    }
                     if !fields.isEmpty {
-                        Section("登录信息") {
-                            ForEach(fields.filter { $0.kind != .button }) { f in
-                                if f.kind == .password {
-                                    SecureField(f.name, text: binding(f.name)).foregroundStyle(palette.primary)
-                                } else {
-                                    HStack {
-                                        Text(f.name).foregroundStyle(palette.secondary).appFont(.callout)
-                                        TextField(f.name, text: binding(f.name))
-                                            .foregroundStyle(palette.primary)
-                                            .textInputAutocapitalization(.never)
-                                            .autocorrectionDisabled()
-                                    }
-                                }
+                        ForEach(Array(SourceLoginForm.layoutRows(fields).enumerated()), id: \.offset) { _, row in
+                            HStack(spacing: 12) {
+                                ForEach(row) { f in loginCell(f) }
                             }
-                        }
-                        let buttons = fields.filter { $0.kind == .button }
-                        if !buttons.isEmpty {
-                            Section("操作") {
-                                ForEach(buttons) { f in
-                                    Button(f.name) { press(f) }.disabled(busy)
-                                }
-                            }
-                        }
-                        Section {
-                            Button("保存") { save(runLogin: false) }.disabled(busy)
-                            if hasLoginFunction {
-                                Button("登录") { save(runLogin: true) }.disabled(busy)
-                            }
-                            Button("清除登录信息", role: .destructive) { clear() }.foregroundStyle(.red).disabled(busy)
-                        }
-                    }
-                    if let url = pageURL {
-                        Section("网页登录") {
-                            Button("打开登录页面") { open(pageURL ?? source.bookSourceUrl, title: "网页登录") }
-                            Text(url).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(2)
                         }
                     }
                     if fields.isEmpty && pageURL == nil {
                         Text("这个书源没有可用的登录配置（没有 loginUi，loginUrl 也不是网址）。")
                             .appFont(.footnote).foregroundStyle(palette.secondary)
                     }
+                    if let url = pageURL {
+                        loginAction("打开登录页面", id: "login.openPage") { open(url, title: "网页登录") }
+                        Text(url).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(2)
+                    }
+                    loginAction("保存", id: "login.save") { save(runLogin: false) }
+                    if hasLoginFunction {
+                        loginAction("登录", id: "login.run") { save(runLogin: true) }
+                    }
+                    loginAction("清除登录信息", id: "login.clear", destructive: true) { clear() }
                     if !message.isEmpty {
-                        Section("结果") { Text(message).appFont(.footnote).textSelection(.enabled) }
+                        Text(message).appFont(.footnote).foregroundStyle(palette.secondary)
+                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("login.outcome")
                     }
                 }
-                .independentGlassRow()
+                .padding(16)
             }
             .foregroundStyle(palette.primary)
-            .scrollContentBackground(.hidden)
             .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle(source.bookSourceName)
+            .navigationTitle("登录 - " + source.bookSourceName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
             .overlay { if busy { ProgressView() } }
@@ -136,6 +114,59 @@ struct SourceLoginView: View {
 
     private func binding(_ name: String) -> Binding<String> {
         Binding(get: { values[name] ?? "" }, set: { values[name] = $0 })
+    }
+
+    /// 单个登录项：输入框是圆角浅底输入框，按钮是圆角玻璃底色 + 主题色文字。
+    /// 布局比例交给 SourceLoginForm.layoutRows，这里只负责外观与回调。
+    @ViewBuilder
+    private func loginCell(_ f: LoginField) -> some View {
+        if f.kind == .button {
+            Button { press(f) } label: {
+                Text(f.name)
+                    .appFont(.subheadline)
+                    .foregroundStyle(palette.accent)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            .accessibilityIdentifier("login.item.\(f.name)")
+        } else {
+            Group {
+                if f.kind == .password {
+                    SecureField("", text: binding(f.name),
+                                prompt: Text(f.name).foregroundColor(palette.secondary))
+                } else {
+                    TextField("", text: binding(f.name),
+                              prompt: Text(f.name).foregroundColor(palette.secondary))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            }
+            .appFont(.subheadline)
+            .foregroundStyle(palette.primary)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            .accessibilityIdentifier("login.item.\(f.name)")
+        }
+    }
+
+    /// 整行操作（保存 / 登录 / 清除 / 打开登录页面）。
+    private func loginAction(_ title: String, id: String, destructive: Bool = false,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .appFont(.subheadline)
+                .foregroundStyle(destructive ? Color.red : palette.accent)
+                .frame(maxWidth: .infinity, minHeight: 46)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+        .accessibilityIdentifier(id)
     }
 
     private var sourceKey: String { source.bookSourceUrl }
