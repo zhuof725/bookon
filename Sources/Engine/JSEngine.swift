@@ -727,10 +727,22 @@ final class JSEngine {
     }
 
     /// Evaluate a JS snippet with `result`, `baseUrl`, `book`, `chapter`, `key`, `page` in scope.
+    /// 每次求值都会新建 JSContext 并产生大量自动释放对象；在并发任务线程上长时间批量运行时
+    /// 这些对象不会及时释放，内存持续上涨。这里用 autoreleasepool 包住整次同步求值。
     func eval(_ script: String, result: Any? = nil, baseUrl: String? = nil,
               vars: [String: Any] = [:], jsLib: String? = nil,
               rule: AnalyzeRule? = nil, ruleInput: Any? = nil,
               context: RuleContext? = nil) -> Any? {
+        autoreleasepool {
+            evalBody(script, result: result, baseUrl: baseUrl, vars: vars, jsLib: jsLib,
+                     rule: rule, ruleInput: ruleInput, context: context)
+        }
+    }
+
+    private func evalBody(_ script: String, result: Any?, baseUrl: String?,
+                          vars: [String: Any], jsLib: String?,
+                          rule: AnalyzeRule?, ruleInput: Any?,
+                          context: RuleContext?) -> Any? {
         let effectiveContext = context ?? rule?.context
         let ctx = makeContext(effectiveContext)
         if let c = effectiveContext {

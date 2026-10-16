@@ -96,7 +96,7 @@ jobs:
           if [ ! -f sources.json ]; then
             curl -sSL --retry 3 https://cdn.jsdelivr.net/gh/XIU2/Yuedu@master/shuyuan -o sources.json
           fi
-          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch sources.json 我的 60 2 12 2>&1 | tee batch-check.log
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch sources.json 我的 60 9 30 2>&1 | tee batch-check.log
 
       - name: Upload logs
         if: always()

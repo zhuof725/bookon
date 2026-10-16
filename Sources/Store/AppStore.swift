@@ -148,10 +148,32 @@ final class AppStore: ObservableObject {
     }
 
     /// 校验书源写回：累计失效分组、错误注释与响应耗时（对齐原版 CheckSourceService 的逐源 update）。
-    func applySourceCheck(_ updated: BookSource) {
-        guard let i = sources.firstIndex(where: { $0.bookSourceUrl == updated.bookSourceUrl }) else { return }
-        sources[i] = updated
-        saveSources()
+    func applySourceCheck(_ updated: BookSource) { applySourceChecks([updated]) }
+
+    /// 批量写回：一次修改书源数组（只触发一次界面刷新），在后台串行队列编码写盘，不阻塞主线程。
+    /// 逐源同步写整份书源 JSON 在书源多、校验快时会长时间占住主线程并反复分配大块内存。
+    func applySourceChecks(_ updated: [BookSource]) {
+        guard !updated.isEmpty else { return }
+        var list = sources
+        var index: [String: Int] = [:]
+        for (i, s) in list.enumerated() where index[s.bookSourceUrl] == nil { index[s.bookSourceUrl] = i }
+        var changed = false
+        for u in updated {
+            if let i = index[u.bookSourceUrl] { list[i] = u; changed = true }
+        }
+        guard changed else { return }
+        sources = list
+        saveSourcesInBackground()
+    }
+
+    private let sourcesSaveQueue = DispatchQueue(label: "AppStore.sourcesSave", qos: .utility)
+    private func saveSourcesInBackground() {
+        let snapshot = sources
+        let file = sourcesFile
+        sourcesSaveQueue.async {
+            let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+            if let d = try? enc.encode(snapshot) { try? d.write(to: file, options: .atomic) }
+        }
     }
 
     // MARK: Bookshelf

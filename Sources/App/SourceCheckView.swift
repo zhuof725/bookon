@@ -60,6 +60,9 @@ struct SourceCheckView: View {
             }
         }
         .onAppear { loadSettings() }
+        // 运行中不允许下拉关闭；真的离开页面时停止并把已有结果写回。
+        .interactiveDismissDisabled(runner.running)
+        .onDisappear { runner.stop(); runner.flushNow() }
     }
 
     // MARK: 设置
@@ -284,6 +287,10 @@ final class SourceCheckRunner: ObservableObject {
     @Published var notice: String?
 
     private var task: Task<Void, Never>?
+    /// 校验结果先攒起来，每 2 秒合并写回一次；结束/停止/关闭时立即写回。
+    private var pending: [BookSource] = []
+    private var flushTask: Task<Void, Never>?
+    private weak var store: AppStore?
 
     func start(sources: [BookSource], options: SourceCheck.Options, store: AppStore) {
         guard !running, !sources.isEmpty else { return }
@@ -292,6 +299,8 @@ final class SourceCheckRunner: ObservableObject {
         completed = 0
         currentName = nil
         notice = nil
+        self.store = store
+        pending.removeAll()
         let started = Date()
         task = Task.detached { [weak self] in
             _ = await SourceCheck.runAll(sources, options: options, onStart: { s in
@@ -320,13 +329,35 @@ final class SourceCheckRunner: ObservableObject {
             rows[i].respondTime = r.respondTime
         }
         completed = rows.filter { $0.state == .success || $0.state == .failure || $0.state == .cancelled }.count
-        if !r.cancelled { store.applySourceCheck(r.updatedSource) }
+        if !r.cancelled {
+            pending.append(r.updatedSource)
+            if running { scheduleFlush() } else { flushNow() }
+        }
+    }
+
+    private func scheduleFlush() {
+        guard flushTask == nil else { return }
+        flushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            self?.flushTask = nil
+            self?.flushNow()
+        }
+    }
+
+    func flushNow() {
+        flushTask?.cancel()
+        flushTask = nil
+        guard !pending.isEmpty else { return }
+        let list = pending
+        pending.removeAll()
+        store?.applySourceChecks(list)
     }
 
     private func finish(started: Date) {
         running = false
         currentName = nil
         task = nil
+        flushNow()
         let ok = rows.filter { $0.state == .success }.count
         let bad = rows.filter { $0.state == .failure }.count
         let left = rows.count - ok - bad
