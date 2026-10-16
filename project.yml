@@ -45,6 +45,7 @@ targets:
           - CFBundleURLName: legado
             CFBundleURLSchemes:
               - legado
+              - yuedu
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.zhuof725.legadoios

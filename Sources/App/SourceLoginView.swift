@@ -277,6 +277,11 @@ struct InAppBrowserSheet: View {
                 .navigationTitle(target.title.isEmpty ? "登录" : target.title)
                 .navigationBarTitleDisplayMode(.inline)
                 .accessibilityIdentifier("login.browser.page")
+                .alert(model.importMessage ?? "", isPresented: Binding(
+                    get: { model.importMessage != nil && model.importMessage != "正在导入书源…" },
+                    set: { if !$0 { model.importMessage = nil } })) {
+                    Button("好", role: .cancel) {}
+                }
                 .toolbar {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Button { model.back() } label: { Image(systemName: "chevron.backward") }
@@ -311,7 +316,23 @@ final class BrowserNavigationModel: ObservableObject {
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     @Published private(set) var isLoading = false
+    /// 网页里点「导入更新」等书源导入链接后的结果提示。
+    @Published var importMessage: String?
     weak var webView: WKWebView?
+
+    /// 拦截 yuedu:// / legado:// 书源导入链接，直接在应用内导入，不跳出浏览器。
+    @MainActor
+    func importSource(from src: String) {
+        importMessage = "正在导入书源…"
+        Task { @MainActor in
+            do {
+                let n = try await AppStore.shared.importSources(from: src)
+                importMessage = "成功导入 \(n) 个书源"
+            } catch {
+                importMessage = "导入失败：\(error.localizedDescription)"
+            }
+        }
+    }
 
     func attach(_ web: WKWebView) {
         guard webView !== web else { return }
@@ -357,6 +378,16 @@ struct LoginWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var model: BrowserNavigationModel?
         init(model: BrowserNavigationModel?) { self.model = model }
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let url = navigationAction.request.url, let src = SourceImportLink.sourceURL(url) {
+                decisionHandler(.cancel)
+                let model = self.model
+                Task { @MainActor in model?.importSource(from: src) }
+                return
+            }
+            decisionHandler(.allow)
+        }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model?.refresh() }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { model?.refresh() }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model?.refresh() }

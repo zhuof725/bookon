@@ -35,7 +35,7 @@ struct LegadoApp: App {
         }
     }
 
-    /// legado://import/bookSource?src=URL  or a shared .json file
+    /// legado://import/bookSource?src=URL、yuedu://booksource/importonline?src=URL，或分享来的 .json 文件
     private func handle(_ url: URL) {
         if url.isFileURL {
             let ok = url.startAccessingSecurityScopedResource()
@@ -46,8 +46,7 @@ struct LegadoApp: App {
             }
             return
         }
-        guard url.scheme == "legado",
-              let src = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "src" })?.value else { return }
+        guard let src = SourceImportLink.sourceURL(url) else { return }
         Task {
             do { let n = try await store.importSources(from: src); importMessage = "导入了 \(n) 个书源" }
             catch { importMessage = "导入失败：\(error.localizedDescription)" }
