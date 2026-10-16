@@ -298,7 +298,7 @@ struct ReaderView: View {
                 ReaderQuickPanel(book: book, sourceName: readerSourceName,
                     position: "\(chapters.isEmpty ? 0 : index + 1)/\(chapters.count)",
                     busy: quickBusy || loading, message: quickMessage,
-                    enabled: quickEnabled, action: quickAction)
+                    enabled: quickEnabled, loggedIn: quickLoggedIn, action: quickAction)
                 .navigationTitle("书籍操作")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
@@ -477,6 +477,13 @@ struct ReaderView: View {
         }
         if quickBrowserURL != nil { items.insert("browser") }
         return items
+    }
+
+    /// 书源已保存登录凭据（登录成功后脚本或表单写入）即视为已登录，只读本机，不联网探测。
+    private var quickLoggedIn: Bool {
+        guard !store.isLocal(book), let source = store.source(for: book.origin) else { return false }
+        return SourceLoginStatus.state(key: source.bookSourceUrl, login: JSEngine.loginStore,
+                                       defaults: .standard) != .none
     }
 
     private var quickBrowserURL: String? {

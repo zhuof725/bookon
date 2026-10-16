@@ -190,6 +190,7 @@ struct SourcesView: View {
     @State private var showImport = false
     @State private var showFile = false
     @State private var input = ""
+    @State private var importTitle = "输入书源 JSON"
     @State private var message: String?
     @State private var busy = false
     @State private var debugSource: BookSource?
@@ -231,9 +232,14 @@ struct SourcesView: View {
         .overlay { if busy { ProgressView() } }
         .toolbar {
             Menu {
-                Button("网络导入 / 粘贴 JSON") { input = UIPasteboard.general.string ?? ""; showImport = true }
-                Button("从文件导入") { showFile = true }
+                Section("导入配置文件") {
+                    Button("文本导入") { input = ""; importTitle = "输入书源 JSON"; showImport = true }
+                    Button("本地文件导入") { showFile = true }
+                    Button("URL 导入") { input = ""; importTitle = "输入书源链接"; showImport = true }
+                    Button("剪贴板导入") { importClipboard() }
+                }
             } label: { Image(systemName: "plus") }
+            .accessibilityIdentifier("sources.import")
         }
         .sheet(isPresented: $showImport) {
             NavigationStack {
@@ -243,7 +249,7 @@ struct SourcesView: View {
                     .scrollContentBackground(.hidden)
                     .padding()
                     .background { AppThemeCanvas().ignoresSafeArea() }
-                    .navigationTitle("输入书源链接或 JSON")
+                    .navigationTitle(importTitle)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("取消") { showImport = false } }
@@ -275,6 +281,13 @@ struct SourcesView: View {
         var msg = "成功导入 \(total) 个书源"
         if !failed.isEmpty { msg += "\n失败文件：" + failed.joined(separator: "、") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { message = msg }
+    }
+
+    /// 剪贴板导入：剪贴板里是书源链接或 JSON 都直接导入，空剪贴板给出提示。
+    private func importClipboard() {
+        let text = (UIPasteboard.general.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { message = "剪贴板里没有内容"; return }
+        doImport(text)
     }
 
     private func doImport(_ text: String) {

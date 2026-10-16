@@ -10,6 +10,8 @@ struct ReaderQuickPanel: View {
     var busy = false
     var message: String?
     var enabled: Set<String> = []
+    /// 书源已保存登录凭据时，「书源登录」按钮显示为「已登录」。
+    var loggedIn = false
     let action: (String) -> Void
     private let items: [(String, String, String)] = [
         ("refresh", "刷新", "arrow.clockwise"),
@@ -39,10 +41,13 @@ struct ReaderQuickPanel: View {
                 }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 24) {
                     ForEach(items, id: \.0) { item in
+                        let done = item.0 == "login" && loggedIn
                         Button { action(item.0) } label: {
                             VStack(spacing: 12) {
-                                Image(systemName: item.2).font(.system(size: 24, weight: .regular))
-                                Text(item.1).appFont(.caption).lineLimit(2).multilineTextAlignment(.center)
+                                Image(systemName: done ? "person.crop.circle.badge.checkmark" : item.2)
+                                    .font(.system(size: 24, weight: .regular))
+                                    .foregroundStyle(done ? palette.accent : palette.primary)
+                                Text(done ? "已登录" : item.1).appFont(.caption).lineLimit(2).multilineTextAlignment(.center)
                             }.frame(maxWidth: .infinity, minHeight: 76)
                                 .contentShape(Rectangle())
                         }
