@@ -71,7 +71,13 @@ struct SourceLoginView: View {
             .background { AppThemeCanvas().ignoresSafeArea() }
             .navigationTitle("登录 - " + source.bookSourceName)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确认") { save(runLogin: false); dismiss() }
+                        .accessibilityIdentifier("login.confirm")
+                }
+            }
             .overlay { if busy { ProgressView() } }
             .overlay(alignment: .bottom) {
                 if let toastCard {
