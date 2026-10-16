@@ -14,6 +14,7 @@ struct SourceCheckView: View {
 
     @State private var keyword = "我的"
     @State private var timeoutText = "180"
+    @State private var concurrency = 3
     @State private var checkDomain = false
     @State private var checkSearch = true
     @State private var checkDiscovery = true
@@ -105,6 +106,20 @@ struct SourceCheckView: View {
                     .accessibilityIdentifier("check.timeout")
             }
             .appFont(.subheadline)
+
+            Divider().opacity(0.4)
+
+            // 同时校验的书源数；上限 9 与原版 AppConst.MAX_THREAD 一致。
+            Stepper(value: $concurrency, in: 1...9) {
+                HStack {
+                    Text("并发数").foregroundStyle(palette.primary)
+                    Spacer(minLength: 8)
+                    Text("\(concurrency)").foregroundStyle(palette.secondary)
+                }
+            }
+            .appFont(.subheadline)
+            .disabled(runner.running)
+            .accessibilityIdentifier("check.concurrency")
 
             Divider().opacity(0.4)
             Toggle("校验源地址可达", isOn: $checkDomain).disabled(runner.running).accessibilityIdentifier("check.domain")
@@ -205,7 +220,7 @@ struct SourceCheckView: View {
         let word = keyword.trimmingCharacters(in: .whitespaces)
         options.keyword = word.isEmpty ? "我的" : word
         options.timeout = seconds
-        options.concurrency = max(1, min(3, sources.count))
+        options.concurrency = max(1, min(concurrency, 9, sources.count))
         options.checkDomain = checkDomain
         options.checkSearch = checkSearch
         options.checkDiscovery = checkDiscovery
@@ -222,6 +237,8 @@ struct SourceCheckView: View {
         if let k = d.string(forKey: "reader.source.check.keyword") { keyword = k }
         let t = d.integer(forKey: "reader.source.check.timeout")
         if t > 0 { timeoutText = String(t) }
+        let c = d.integer(forKey: "reader.source.check.concurrency")
+        if c > 0 { concurrency = min(c, 9) }
         checkDomain = d.object(forKey: "reader.source.check.domain") as? Bool ?? false
         checkSearch = d.object(forKey: "reader.source.check.search") as? Bool ?? true
         checkDiscovery = d.object(forKey: "reader.source.check.discovery") as? Bool ?? true
@@ -235,6 +252,7 @@ struct SourceCheckView: View {
         let d = UserDefaults.standard
         d.set(keyword, forKey: "reader.source.check.keyword")
         d.set(Int(Double(timeoutText) ?? 180), forKey: "reader.source.check.timeout")
+        d.set(concurrency, forKey: "reader.source.check.concurrency")
         d.set(checkDomain, forKey: "reader.source.check.domain")
         d.set(checkSearch, forKey: "reader.source.check.search")
         d.set(checkDiscovery, forKey: "reader.source.check.discovery")
