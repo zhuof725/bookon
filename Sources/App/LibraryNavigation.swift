@@ -101,8 +101,6 @@ struct LibraryProfileView: View {
                 }
                 PrecacheWindowSettingView(manager: .shared)
                     .padding(.horizontal, 24)
-                PrecacheCardView(manager: .shared)
-                    .padding(.horizontal, 24)
                 LibraryCard {
                     Text("阅读进度、导入书源与本地书籍保存在本机。")
                         .foregroundStyle(palette.secondary).appFont(.footnote)

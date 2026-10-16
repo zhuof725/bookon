@@ -209,15 +209,6 @@ struct SourcesView: View {
                         Text(s.bookSourceGroup ?? s.bookSourceUrl).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
                     }
                     Spacer()
-                    // 已保存的登录凭据重启后仍在，这里据此显示状态，不联网探测。
-                    let loginState = SourceLoginStatus.state(key: s.bookSourceUrl, login: JSEngine.loginStore,
-                                                            defaults: .standard)
-                    if loginState != .none || SourceLoginForm.hasLogin(s) {
-                        Text(SourceLoginStatus.label(loginState))
-                            .appFont(.caption)
-                            .foregroundStyle(loginState == .none ? palette.secondary : palette.accent)
-                            .accessibilityIdentifier("source.login.\(s.bookSourceUrl)")
-                    }
                     Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
                 }
                 .contentShape(Rectangle())
