@@ -101,6 +101,7 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
             }
         }
         DebugLog.add("WebView 返回：\(html.utf8.count) 字节；\(DebugLog.summary(html))")
+        DebugLog.recordSource(html)
         return (html, finalUrl)
     }
 

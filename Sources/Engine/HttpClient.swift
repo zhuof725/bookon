@@ -295,6 +295,7 @@ struct AnalyzeUrl {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         DebugLog.add("\(method) \(DebugLog.url(finalUrl))")
         DebugLog.add("HTTP \(status)，\(data.count) 字节；\(DebugLog.summary(text ?? ""))")
+        DebugLog.recordSource(text ?? "")
         #if canImport(UIKit) && canImport(WebKit)
         let blocked = [403, 429, 503].contains(status) && (text ?? "").count < 200
         let deferredAuthorization = deferAuthorizationChallenge && [401, 403].contains(status)
@@ -313,6 +314,7 @@ struct AnalyzeUrl {
                     let retryText = String(data: retry.0, encoding: enc) ?? String(data: retry.0, encoding: .utf8) ?? ""
                     DebugLog.add("验证后重试：HTTP \(retryStatus)，\(retry.0.count) 字节；\(DebugLog.summary(retryText))")
                     if (200...299).contains(retryStatus), !retryText.isEmpty, !WebViewSupport.isChallenge(retryText) {
+                        DebugLog.recordSource(retryText)
                         return HTTPResponseData(body: retryText, response: retry.1, fallbackURL: finalUrl)
                     }
                 }
