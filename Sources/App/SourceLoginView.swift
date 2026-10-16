@@ -79,14 +79,15 @@ struct SourceLoginView: View {
                 }
             }
             .overlay { if busy { ProgressView() } }
-            .overlay(alignment: .center) {
+            .overlay(alignment: .bottom) {
                 if let toastCard {
                     LoginToastCard(text: toastCard) { self.toastCard = nil }
                         .padding(.horizontal, 24)
-                        .frame(maxWidth: 460)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .frame(maxWidth: 360)
+                        .padding(.bottom, 120)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .task(id: toastCard) {
-                            try? await Task.sleep(nanoseconds: 15_000_000_000)
+                            try? await Task.sleep(nanoseconds: 1_000_000_000)
                             if !Task.isCancelled { self.toastCard = nil }
                         }
                 }
@@ -269,17 +270,18 @@ struct LoginToastCard: View {
 
     var body: some View {
         Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
-            .appFont(.callout)
+            .appFont(.footnote)
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 22).padding(.vertical, 16)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: 320)
             .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.black.opacity(0.78))
-                    .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 5)
+                    .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 3)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .onTapGesture(perform: onDismiss)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("login.toastCard")

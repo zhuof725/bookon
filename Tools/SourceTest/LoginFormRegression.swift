@@ -83,5 +83,17 @@ enum LoginFormRegression {
         defer { ToastCenter.setBrowserHandler(nil) }
         _ = JSEngine.shared.runLoginScript(source: s, library: "function o(){java.startBrowser('https://b.invalid/','t');}", call: "o()")
         check(opened == ["https://b.invalid/"], "登录脚本：java.startBrowser 通过出口打开网址")
+        // 用户后台等按钮用 startBrowserAwait 打开页面：http(s) 必须真的跳转，
+        // 不能退化成一次静默请求（那样的页面用户根本看不到）。
+        opened.removeAll()
+        _ = JSEngine.shared.runLoginScript(source: s,
+            library: "function uc(){java.startBrowserAwait('https://c.invalid/user_center','用户中心');}",
+            call: "uc()")
+        check(opened == ["https://c.invalid/user_center"], "登录脚本：startBrowserAwait 的 http 地址跳转内置浏览器")
+        opened.removeAll()
+        _ = JSEngine.shared.runLoginScript(source: s,
+            library: "function uc2(){java.startBrowserAwait('data:text/html;base64,PGgxPjQ8L2gxPg==','本地页',false);}",
+            call: "uc2()")
+        check(opened.isEmpty, "登录脚本：startBrowserAwait 的 data 页仍走请求通道，不当作网页跳转")
     }
 }
