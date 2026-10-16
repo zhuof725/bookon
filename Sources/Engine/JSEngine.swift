@@ -74,8 +74,9 @@ private final class HTTPBridgeWaiter: @unchecked Sendable {
 }
 
 @objc final class JavaBridge: NSObject, JavaBridgeExports {
-    static var store: [String: String] = [:]
-    static let lock = NSLock()
+    /// 书源脚本变量（source.getVariable/setVariable、java.put/get、java.cache）：磁盘持久化，
+    /// 重启后仍可读回；同一进程内与旧行为一致（返回当前值）。
+    static let store = PersistentVariableStore(fileURL: PersistentVariableStore.defaultFileURL())
     let context: RuleContext?
     private let session: URLSession
     private let responseTimeout: TimeInterval
@@ -136,11 +137,10 @@ private final class HTTPBridgeWaiter: @unchecked Sendable {
     }
     func log(_ s: String) -> String { print("[JS] \(s)"); return s }
     func storePut(_ key: String, _ value: String) -> String {
-        JavaBridge.lock.lock(); JavaBridge.store[key] = value; JavaBridge.lock.unlock(); return value
+        JavaBridge.store.set(key, value); return value
     }
     func storeGet(_ key: String) -> String {
-        JavaBridge.lock.lock(); defer { JavaBridge.lock.unlock() }
-        return JavaBridge.store[key] ?? ""
+        return JavaBridge.store.get(key) ?? ""
     }
 
     func httpGetNative(_ url: String, _ headersJSON: String) -> StrResponse? {

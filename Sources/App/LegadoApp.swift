@@ -7,6 +7,7 @@ struct LegadoApp: App {
     @StateObject private var settings = ReadSettings()
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @State private var importMessage: String?
+    @Environment(\.scenePhase) private var scenePhase
 
     private var appColorScheme: ColorScheme? {
         (AppAppearance(rawValue: appearanceRawValue) ?? .system).colorScheme
@@ -24,6 +25,10 @@ struct LegadoApp: App {
                 .environmentObject(store)
                 .environmentObject(settings)
                 .onOpenURL { handle($0) }
+                .onChange(of: scenePhase) { phase in
+                    // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
+                    if phase != .active { JavaBridge.store.flush() }
+                }
                 .alert(importMessage ?? "", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
                     Button("好", role: .cancel) {}
                 }
