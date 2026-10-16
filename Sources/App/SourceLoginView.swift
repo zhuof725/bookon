@@ -79,11 +79,12 @@ struct SourceLoginView: View {
                 }
             }
             .overlay { if busy { ProgressView() } }
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: .center) {
                 if let toastCard {
                     LoginToastCard(text: toastCard) { self.toastCard = nil }
-                        .padding(.horizontal, 16).padding(.bottom, 16)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.horizontal, 24)
+                        .frame(maxWidth: 460)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
                         .task(id: toastCard) {
                             try? await Task.sleep(nanoseconds: 15_000_000_000)
                             if !Task.isCancelled { self.toastCard = nil }
@@ -260,39 +261,28 @@ struct SourceLoginView: View {
     }
 }
 
-/// 登录页的弹出回传卡片：显示书源 java.toast 的完整内容，可点按关闭。
+/// 登录页的弹出提示：书源 java.toast 的内容以深色胶囊卡片弹出，
+/// 与书源在 Android 客户端里的提示一致，无标题、无关闭按钮，点按或超时后消失。
 struct LoginToastCard: View {
-    @ThemePalette private var palette
     let text: String
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("登录结果").appFont(.subheadline.weight(.semibold))
-                    .foregroundStyle(palette.primary)
-                Spacer(minLength: 8)
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.secondary).frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain).accessibilityLabel("关闭登录结果")
+        Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .appFont(.callout)
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 22).padding(.vertical, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black.opacity(0.78))
+                    .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 5)
             }
-            ScrollView {
-                Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .appFont(.footnote).foregroundStyle(palette.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 260)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(SettingsGlassSurface())
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .onTapGesture(perform: onDismiss)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("login.toastCard")
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .onTapGesture(perform: onDismiss)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("login.toastCard")
     }
 }
 
