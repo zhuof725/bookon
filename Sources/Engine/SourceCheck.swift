@@ -370,6 +370,20 @@ extension BookSource {
         }
     }
 
+    /// 书源列表分组显示：按第一个分组名归类，组按出现顺序排列；没有分组的归入「默认分组」并放在最后。
+    static let defaultGroupName = "默认分组"
+    static func groupedSections(_ list: [BookSource]) -> [(name: String, sources: [BookSource])] {
+        var order: [String] = []
+        var map: [String: [BookSource]] = [:]
+        for s in list {
+            let name = s.sourceGroupNames.first ?? defaultGroupName
+            if map[name] == nil { order.append(name) }
+            map[name, default: []].append(s)
+        }
+        if let i = order.firstIndex(of: defaultGroupName) { order.append(order.remove(at: i)) }
+        return order.map { ($0, map[$0] ?? []) }
+    }
+
     /// 与原版 getCheckKeyword 一致：仅当 checkKeyWord 是普通关键字时才使用。
     func checkKeyword(fallback: String) -> String {
         if let k = ruleSearch?.checkKeyWord?.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -36,6 +36,16 @@ enum SourceCheckRegression {
         comment.removeErrorComment()
         check(comment.bookSourceComment == "原作者备注", "清除错误注释保留普通注释")
 
+        // MARK: 书源列表分组
+        let gA = makeSource(#"{"bookSourceUrl":"https://s.invalid/a","bookSourceName":"A","bookSourceGroup":"常规,精品"}"#)
+        let gB = makeSource(#"{"bookSourceUrl":"https://s.invalid/b","bookSourceName":"B"}"#)
+        let gC = makeSource(#"{"bookSourceUrl":"https://s.invalid/c","bookSourceName":"C","bookSourceGroup":"常规"}"#)
+        let gD = makeSource(#"{"bookSourceUrl":"https://s.invalid/d","bookSourceName":"D","bookSourceGroup":"漫画"}"#)
+        let sections = BookSource.groupedSections([gA, gB, gC, gD])
+        check(sections.map(\.name) == ["常规", "漫画", "默认分组"], "分组按出现顺序，默认分组在最后（实际 \(sections.map(\.name))）")
+        check(sections.first?.sources.map(\.bookSourceName) == ["A", "C"], "按第一个分组名归类且保持原顺序")
+        check(sections.last?.sources.map(\.bookSourceName) == ["B"], "无分组归入默认分组")
+
         // MARK: 关键词
 
         let kwCustom = makeSource(#"{"bookSourceUrl":"https://k.invalid/1","bookSourceName":"关键词","searchUrl":"https://k.invalid/s","ruleSearch":{"checkKeyWord":"自定义词"}}"#)

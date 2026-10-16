@@ -201,6 +201,7 @@ struct SourcesView: View {
     @State private var deleteSource: BookSource?
     @State private var exportItem: SourceExportItem?
     @State private var editTarget: SourceEditTarget?
+    @State private var collapsedGroups: Set<String> = []
 
     var body: some View {
         List {
@@ -209,38 +210,14 @@ struct SourcesView: View {
                     .appFont(.footnote).foregroundStyle(palette.secondary)
             }
             .independentGlassRow()
-            ForEach(store.sources) { s in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(s.bookSourceName).foregroundStyle(palette.primary).lineLimit(1)
-                        HStack(spacing: 6) {
-                            Text(s.bookSourceGroup ?? s.bookSourceUrl)
-                                .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
-                            if let rt = s.respondTime, rt > 0 {
-                                Text("响应 \(rt)ms")
-                                    .appFont(.caption2).foregroundStyle(palette.secondary.opacity(0.8))
-                            }
-                        }
+            ForEach(BookSource.groupedSections(store.sources), id: \.name) { section in
+                Section {
+                    if !collapsedGroups.contains(section.name) {
+                        ForEach(section.sources) { s in sourceRow(s) }
+                            .independentGlassRow()
                     }
-                    Spacer()
-                    Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
-                }
-                .contentShape(Rectangle())
-                .contextMenu {
-                    // 只有配置了登录（loginUi 或可用的 loginUrl）的书源才显示「登录」。
-                    if SourceLoginForm.hasLogin(s) {
-                        Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
-                    }
-                    Button { editTarget = SourceEditTarget(source: s) } label: { Label("编辑书源", systemImage: "square.and.pencil") }
-                    Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
-                    Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
-                    Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
-                    Button { exportSource(s) } label: { Label("导出配置文件", systemImage: "square.and.arrow.up") }
-                    Button { copySource(s) } label: { Label("复制配置", systemImage: "doc.on.doc") }
-                    Button(role: .destructive) { deleteSource = s } label: { Label("删除配置", systemImage: "trash") }
-                }
+                } header: { groupHeader(section.name, count: section.sources.count) }
             }
-            .independentGlassRow()
         }
         .scrollContentBackground(.hidden)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -303,6 +280,64 @@ struct SourcesView: View {
         }
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("好", role: .cancel) {}
+        }
+    }
+
+    /// 分组标题：组名 + 书源数，点按折叠/展开。
+    private func groupHeader(_ name: String, count: Int) -> some View {
+        let collapsed = collapsedGroups.contains(name)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if collapsed { collapsedGroups.remove(name) } else { collapsedGroups.insert(name) }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(name).appFont(.headline).foregroundStyle(palette.primary)
+                Text("\(count)").appFont(.caption).foregroundStyle(palette.secondary)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.secondary)
+                    .rotationEffect(.degrees(collapsed ? -90 : 0))
+            }
+            .textCase(nil)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(collapsed ? "已折叠" : "已展开")
+        .accessibilityIdentifier("sources.group.\(name)")
+    }
+
+    @ViewBuilder
+    private func sourceRow(_ s: BookSource) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(s.bookSourceName).foregroundStyle(palette.primary).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(s.bookSourceUrl)
+                        .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+                    if let rt = s.respondTime, rt > 0 {
+                        Text("响应 \(rt)ms")
+                            .appFont(.caption2).foregroundStyle(palette.secondary.opacity(0.8))
+                    }
+                }
+            }
+            Spacer()
+            Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            // 只有配置了登录（loginUi 或可用的 loginUrl）的书源才显示「登录」。
+            if SourceLoginForm.hasLogin(s) {
+                Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
+            }
+            Button { editTarget = SourceEditTarget(source: s) } label: { Label("编辑书源", systemImage: "square.and.pencil") }
+            Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
+            Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
+            Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
+            Button { exportSource(s) } label: { Label("导出配置文件", systemImage: "square.and.arrow.up") }
+            Button { copySource(s) } label: { Label("复制配置", systemImage: "doc.on.doc") }
+            Button(role: .destructive) { deleteSource = s } label: { Label("删除配置", systemImage: "trash") }
         }
     }
 
