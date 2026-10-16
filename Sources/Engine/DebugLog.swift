@@ -22,10 +22,10 @@ enum DebugLog {
 
     /// 保存当前阶段最后一次请求的响应源码，供调试页「搜索源码/详情源码/目录源码/正文源码」查看。
     /// 只留在内存，不写盘、不上传；超大响应截断到 200k 字符。
-    static func recordSource(_ body: String) {
+    static func recordSource(_ body: String, stage value: Int) {
         lock.lock(); defer { lock.unlock() }
-        guard active, stage != 0 else { return }
-        sources[stage] = body.count > 200_000 ? String(body.prefix(200_000)) + "\n…（已截断）" : body
+        guard active else { return }
+        sources[value] = body.count > 200_000 ? String(body.prefix(200_000)) + "\n…（已截断）" : body
     }
 
     static func source(stage value: Int) -> String? {

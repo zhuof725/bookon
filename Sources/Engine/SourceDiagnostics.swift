@@ -86,6 +86,7 @@ enum SourceDiagnostics {
         let au = AnalyzeUrl(rawUrl: url, page: 1, baseUrl: source.bookSourceUrl, sourceHeader: source.header,
                             context: context, jsLib: source.jsLib)
         let (body, finalURL) = try await au.fetch()
+        DebugLog.recordSource(body, stage: 10)
         return WebBook.parseBookList(source: source, body: body, baseUrl: finalURL, rule: rule,
                                      context: context, isSearch: false)
     }

@@ -7,6 +7,7 @@ enum WebBook {
         let context = RuleContext(source: source)
         let au = AnalyzeUrl(rawUrl: su, key: key, page: page, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
         let (body, url) = try await au.fetch()
+        DebugLog.recordSource(body, stage: 10)
         return parseBookList(source: source, body: body, baseUrl: url, rule: rule, context: context)
     }
 
@@ -99,6 +100,7 @@ enum WebBook {
         guard response.code == 0 || (200..<300).contains(response.code) else {
             throw BookInfoRequestRefresh.httpError(response.code)
         }
+        DebugLog.recordSource(response.body, stage: 20)
         return parseBookInfo(source: source, book: book, body: response.body, url: response.url, context: context)
     }
 
@@ -231,6 +233,7 @@ enum WebBook {
             let context = RuleContext(source: source, book: book)
             let au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
             let (body, url) = try await au.fetch()
+            DebugLog.recordSource(body, stage: 30)
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
             DebugLog.add("┌获取目录列表")
             let nodes = ar.getElements(listRule)
@@ -337,6 +340,7 @@ enum WebBook {
             var au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
             if let wj = rule.webJs, !wj.isEmpty { au.webJs = wj }
             let (body, url) = try await au.fetch()
+            DebugLog.recordSource(body, stage: 40)
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
             let text = ar.getString(rule.content)
             let urls = splitNextUrls(ar.getString(rule.nextContentUrl), base: url)

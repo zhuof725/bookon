@@ -100,7 +100,6 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
                 html = plain
             }
         }
-        DebugLog.recordSource(html)
         return (html, finalUrl)
     }
 
