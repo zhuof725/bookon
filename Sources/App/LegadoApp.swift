@@ -200,6 +200,7 @@ struct SourcesView: View {
     @State private var groupText = ""
     @State private var deleteSource: BookSource?
     @State private var exportItem: SourceExportItem?
+    @State private var editTarget: SourceEditTarget?
 
     var body: some View {
         List {
@@ -230,6 +231,7 @@ struct SourcesView: View {
                     if SourceLoginForm.hasLogin(s) {
                         Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
                     }
+                    Button { editTarget = SourceEditTarget(source: s) } label: { Label("编辑书源", systemImage: "square.and.pencil") }
                     Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
                     Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
                     Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
@@ -245,6 +247,7 @@ struct SourcesView: View {
         .navigationTitle("书源")
         .sheet(item: $debugSource) { source in SourceDebugView(source: source) }
         .sheet(item: $loginSource) { source in SourceLoginView(source: source) }
+        .sheet(item: $editTarget) { t in SourceEditView(original: t.source, store: store) }
         .sheet(item: $exportItem) { item in ActivityShareSheet(items: [item.url]).ignoresSafeArea() }
         .alert("移动到分组", isPresented: Binding(get: { groupSource != nil }, set: { if !$0 { groupSource = nil } })) {
             TextField("分组名（多个用逗号分隔）", text: $groupText)
@@ -258,6 +261,9 @@ struct SourcesView: View {
         .sheet(isPresented: $showCheck) { SourceCheckView(sources: checkList, store: store) }
         .overlay { if busy { ProgressView() } }
         .toolbar {
+            Button { editTarget = SourceEditTarget(source: nil) } label: { Image(systemName: "square.and.pencil") }
+                .accessibilityLabel("新建书源")
+                .accessibilityIdentifier("sources.new")
             Menu {
                 Section("校验书源") {
                     Button("校验全部书源") { startCheck(store.sources) }
@@ -372,4 +378,10 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// 书源编辑页的打开目标：source 为 nil 表示新建。
+struct SourceEditTarget: Identifiable {
+    let id = UUID()
+    let source: BookSource?
 }

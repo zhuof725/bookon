@@ -27,6 +27,8 @@ struct BookInfoRule: Codable, Hashable {
     var coverUrl: String?
     var tocUrl: String?
     var wordCount: String?
+    var canReName: String?
+    var downloadUrls: String?
 }
 
 struct TocRule: Codable, Hashable {
@@ -34,6 +36,7 @@ struct TocRule: Codable, Hashable {
     var chapterList: String?
     var chapterName: String?
     var chapterUrl: String?
+    var formatJs: String?
     var isVolume: String?
     var isVip: String?
     var isPay: String?
@@ -49,6 +52,7 @@ struct ContentRule: Codable, Hashable {
     var sourceRegex: String?
     var replaceRegex: String?
     var imageStyle: String?
+    var imageDecode: String?
     /// 部分书源（含聚合源）用于付费/子内容请求的附加规则。
     var subContent: String?
     var payAction: String?
@@ -81,6 +85,15 @@ struct BookSource: Codable, Hashable, Identifiable {
     var lastUpdateTime: Int64?
     /// 校验书源（批量测试）测得的耗时毫秒，与原版 BookSource.respondTime 一致。
     var respondTime: Int?
+    // 以下字段本应用暂未使用，但必须保留，编辑/导出时才不会丢失原书源内容（与原版字段同名）。
+    var loginCheckJs: String?
+    var coverDecodeJs: String?
+    var variableComment: String?
+    var concurrentRate: String?
+    var exploreScreen: String?
+    var enabledExplore: Bool?
+    var eventListener: Bool?
+    var customButton: Bool?
 
     var isEnabled: Bool { enabled ?? true }
     var cookieJarEnabled: Bool { enabledCookieJar ?? true }
@@ -90,6 +103,14 @@ struct BookSource: Codable, Hashable, Identifiable {
         case enabled, header, jsLib, loginUrl, loginUi, searchUrl, exploreUrl, bookUrlPattern, enabledCookieJar
         case ruleSearch, ruleExplore, ruleBookInfo, ruleToc, ruleContent, customOrder, lastUpdateTime
         case respondTime
+        case loginCheckJs, coverDecodeJs, variableComment, concurrentRate, exploreScreen
+        case enabledExplore, eventListener, customButton
+    }
+
+    /// 新建书源用：其余字段为空，由书源编辑页填写。
+    init(bookSourceUrl: String, bookSourceName: String) {
+        self.bookSourceUrl = bookSourceUrl
+        self.bookSourceName = bookSourceName
     }
 
     init(from decoder: Decoder) throws {
@@ -116,6 +137,14 @@ struct BookSource: Codable, Hashable, Identifiable {
         customOrder = try? c.decodeIfPresent(Int.self, forKey: .customOrder)
         lastUpdateTime = try? c.decodeIfPresent(Int64.self, forKey: .lastUpdateTime)
         respondTime = try? c.decodeIfPresent(Int.self, forKey: .respondTime)
+        loginCheckJs = try? c.decodeIfPresent(String.self, forKey: .loginCheckJs)
+        coverDecodeJs = try? c.decodeIfPresent(String.self, forKey: .coverDecodeJs)
+        variableComment = try? c.decodeIfPresent(String.self, forKey: .variableComment)
+        concurrentRate = try? c.decodeIfPresent(String.self, forKey: .concurrentRate)
+        exploreScreen = try? c.decodeIfPresent(String.self, forKey: .exploreScreen)
+        enabledExplore = try? c.decodeIfPresent(Bool.self, forKey: .enabledExplore)
+        eventListener = try? c.decodeIfPresent(Bool.self, forKey: .eventListener)
+        customButton = try? c.decodeIfPresent(Bool.self, forKey: .customButton)
     }
 
     /// Some old sources store rule objects as JSON strings.

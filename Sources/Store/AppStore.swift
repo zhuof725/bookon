@@ -139,6 +139,18 @@ final class AppStore: ObservableObject {
         return try importSources(json: body)
     }
 
+    /// 书源编辑保存：编辑时按原源 URL 替换（URL 改了也原位替换），新建则追加到末尾。
+    func saveEditedSource(_ s: BookSource, replacing oldURL: String?) {
+        if let old = oldURL, let i = sources.firstIndex(where: { $0.bookSourceUrl == old }) {
+            sources[i] = s
+        } else if let i = sources.firstIndex(where: { $0.bookSourceUrl == s.bookSourceUrl }) {
+            sources[i] = s
+        } else {
+            sources.append(s)
+        }
+        saveSources()
+    }
+
     func deleteSource(_ s: BookSource) {
         sources.removeAll { $0.bookSourceUrl == s.bookSourceUrl }
         saveSources()
