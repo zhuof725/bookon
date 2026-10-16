@@ -89,10 +89,13 @@ jobs:
           $RUNNER_TEMP/pkg/.build/release/SourceTest sources.json "$KEY" 60 2>&1 | tee source-test.log
 
       - name: Batch check sources (校验书源)
-        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.offline && !inputs.fixture && inputs.batch }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.batch && !inputs.fixture }}
         timeout-minutes: 25
         run: |
           set -o pipefail
+          if [ ! -f sources.json ]; then
+            curl -sSL --retry 3 https://cdn.jsdelivr.net/gh/XIU2/Yuedu@master/shuyuan -o sources.json
+          fi
           $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch sources.json 我的 60 2 12 2>&1 | tee batch-check.log
 
       - name: Upload logs
