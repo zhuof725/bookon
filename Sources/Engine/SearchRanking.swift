@@ -34,20 +34,37 @@ enum SearchRanking {
     static func mergeKey(_ b: Book) -> String { normalize(b.name) + "\u{1}" + normalize(b.author) }
 
     /// 把一批新结果并入已有列表，返回新的有序列表。
-    static func merge(existing: [SearchHit], new: [Book], key: String) -> [SearchHit] {
+    /// 精确搜索判定：书名/作者/分类含关键词（与原版 precisionSearch 过滤一致，忽略空白标点大小写）。
+    static func isRelated(_ b: Book, key: String) -> Bool {
+        if rank(name: b.name, author: b.author, key: key) < 4 { return true }
+        let k = normalize(key)
+        return !k.isEmpty && normalize(b.kind ?? "").contains(k)
+    }
+
+    /// 搜索范围：指定单源时只搜它；否则按分组过滤（空分组 = 全部）。
+    static func scope(_ sources: [BookSource], group: String, single: String) -> [BookSource] {
+        if !single.isEmpty { return sources.filter { $0.bookSourceUrl == single } }
+        let g = group.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !g.isEmpty else { return sources }
+        return sources.filter { $0.sourceGroupNames.contains(g) }
+    }
+
+    /// 把一批新结果并入已有列表；aggregate=false（不聚合）时每个书源的结果各占一行。
+    static func merge(existing: [SearchHit], new: [Book], key: String, aggregate: Bool = true) -> [SearchHit] {
+        func k(_ b: Book) -> String { aggregate ? mergeKey(b) : b.origin + "\u{1}" + b.bookUrl }
         var hits = existing
         var index: [String: Int] = [:]
-        for (i, h) in hits.enumerated() { index[mergeKey(h.book)] = i }
+        for (i, h) in hits.enumerated() { index[k(h.book)] = i }
         var arrival = (hits.map(\.arrival).max() ?? -1) + 1
         for b in new where !b.name.isEmpty {
-            let k = mergeKey(b)
-            if let i = index[k] {
+            let key0 = k(b)
+            if let i = index[key0] {
                 hits[i].sourceCount += 1
                 // 保留信息更全的那条（有封面/简介优先）。
                 if hits[i].book.coverUrl == nil, b.coverUrl != nil { hits[i].book.coverUrl = b.coverUrl }
                 if hits[i].book.intro == nil, b.intro != nil { hits[i].book.intro = b.intro }
             } else {
-                index[k] = hits.count
+                index[key0] = hits.count
                 hits.append(SearchHit(book: b, sourceCount: 1,
                                       rank: rank(name: b.name, author: b.author, key: key), arrival: arrival))
                 arrival += 1

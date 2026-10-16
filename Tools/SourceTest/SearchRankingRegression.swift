@@ -35,5 +35,20 @@ enum SearchRankingRegression {
         check(order.map(\.book.name) == ["星门B", "星门A"], "合并：同级时来源多的靠前")
         check(SearchRanking.merge(existing: [], new: [book("")], key: "x").isEmpty, "合并：空书名被丢弃")
         check(SearchRanking.merge(existing: [], new: [book("甲", "乙")], key: "").first?.rank == 4, "排序：关键词为空不崩溃")
+
+        let same = [book("星门", "甲", origin: "a"), book("星门", "甲", origin: "b")]
+        check(SearchRanking.merge(existing: [], new: same, key: "星门").count == 1, "聚合：同书合成一行")
+        let split = SearchRanking.merge(existing: [], new: same, key: "星门", aggregate: false)
+        check(split.count == 2 && split.allSatisfy { $0.sourceCount == 1 }, "不聚合：每个书源各一行")
+        var kindBook = book("无关书名", "他"); kindBook.kind = "星门 玄幻"
+        check(SearchRanking.isRelated(kindBook, key: "星门"), "精确：分类含关键词算相关")
+        check(!SearchRanking.isRelated(book("无关", "他"), key: "星门"), "精确：不相关被过滤")
+        var s1 = BookSource(bookSourceUrl: "https://a.invalid", bookSourceName: "A"); s1.bookSourceGroup = "常规,精品"
+        var s2 = BookSource(bookSourceUrl: "https://b.invalid", bookSourceName: "B"); s2.bookSourceGroup = "漫画"
+        let s3 = BookSource(bookSourceUrl: "https://c.invalid", bookSourceName: "C")
+        let all = [s1, s2, s3]
+        check(SearchRanking.scope(all, group: "", single: "").count == 3, "范围：全部分组搜全部")
+        check(SearchRanking.scope(all, group: "精品", single: "").map(\.bookSourceName) == ["A"], "范围：按分组（含非首个分组）过滤")
+        check(SearchRanking.scope(all, group: "精品", single: "https://b.invalid").map(\.bookSourceName) == ["B"], "范围：单源优先于分组")
     }
 }
