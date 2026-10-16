@@ -10,6 +10,7 @@ struct SourceDebugView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var report = ""
+    @State private var lines: [String] = []
     @State private var running = false
     @State private var showHelp = true
     @State private var runTask: Task<Void, Never>?
@@ -32,9 +33,11 @@ struct SourceDebugView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(palette.secondary)
+            VStack(spacing: 0) {
+                // 顶部与原版一致：返回、输入框、清空、菜单在同一行。
+                HStack(spacing: 10) {
+                    Button { stop(); dismiss() } label: { Image(systemName: "chevron.left").font(.title3) }
+                        .accessibilityLabel("返回").accessibilityIdentifier("debug.back")
                     TextField("搜索书名、作者", text: $query)
                         .textFieldStyle(.plain)
                         .textInputAutocapitalization(.never)
@@ -44,45 +47,45 @@ struct SourceDebugView: View {
                         .onSubmit { start(query.isEmpty ? myKey : query) }
                         .accessibilityIdentifier("debug.query")
                     if running { ProgressView() }
-                    Button { start(query.isEmpty ? myKey : query) } label: { Image(systemName: "arrow.right.circle.fill") }
-                        .disabled(running)
-                        .accessibilityIdentifier("debug.run")
+                    if !query.isEmpty {
+                        Button { query = ""; focused = true } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("清空").accessibilityIdentifier("debug.clear")
+                    }
+                    menu
                 }
-                .padding(12).modifier(SettingsGlassSurface())
-
+                .foregroundStyle(palette.primary)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                Divider()
                 if showHelp {
-                    helpPanel
+                    helpPanel.padding(16)
                 } else {
                     ScrollView {
-                        Text(report.isEmpty ? "等待日志…" : report)
-                            .appFont(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(palette.primary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10)
-                            .accessibilityIdentifier("debug.log")
+                        LazyVStack(alignment: .leading, spacing: 6) {
+                            if lines.isEmpty && !report.isEmpty {
+                                Text(report).appFont(.subheadline).foregroundStyle(palette.primary)
+                            }
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                Text(Self.linked(line))
+                                    .appFont(.subheadline)
+                                    .foregroundStyle(palette.primary)
+                                    .tint(palette.accent)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .accessibilityIdentifier("debug.log")
                     }
-                    .modifier(SettingsGlassSurface())
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
             .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle(source.bookSourceName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { stop(); dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) { menu }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .onChange(of: focused) { f in if f { showHelp = true } }
             .task {
                 loadExplore()
                 focused = true
                 while !Task.isCancelled {
-                    if running { report = DebugLog.snapshot() }
+                    if running { lines = DebugLog.lines() }
                     do { try await Task.sleep(nanoseconds: 300_000_000) } catch { break }
                 }
             }
@@ -118,10 +121,10 @@ struct SourceDebugView: View {
             Button("详情源码") { showSource(20, "详情源码") }
             Button("目录源码") { showSource(30, "目录源码") }
             Button("正文源码") { showSource(40, "正文源码") }
-            Button("刷新发现") { report = ""; showHelp = true; loadExplore() }
-            Button("复制日志") { UIPasteboard.general.string = report }
+            Button("刷新发现") { report = ""; lines = []; showHelp = true; loadExplore() }
+            Button("复制日志") { UIPasteboard.general.string = lines.isEmpty ? report : lines.joined(separator: "\n") }
             Button("帮助") { showHelpDoc = true }
-        } label: { Image(systemName: "ellipsis.circle") }
+        } label: { Image(systemName: "ellipsis").font(.title3).frame(width: 28, height: 28) }
             .accessibilityIdentifier("debug.menu")
     }
 
@@ -211,6 +214,21 @@ struct SourceDebugView: View {
         }
     }
 
+    /// 与原版 TextView autoLink="web" 一致：日志里的网址可点击。
+    static func linked(_ text: String) -> AttributedString {
+        var out = AttributedString(text)
+        guard text.contains("http"),
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return out }
+        let ns = text as NSString
+        for m in detector.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            guard let url = m.url, let r = Range(m.range, in: text),
+                  let lo = AttributedString.Index(r.lowerBound, within: out),
+                  let hi = AttributedString.Index(r.upperBound, within: out) else { continue }
+            out[lo..<hi].link = url
+        }
+        return out
+    }
+
     private func stop() { runTask?.cancel(); runTask = nil; DebugLog.end() }
 
     private func start(_ key: String) {
@@ -222,9 +240,10 @@ struct SourceDebugView: View {
         running = true
         DebugLog.begin()
         report = ""
+        lines = []
         runTask = Task {
             await SourceDiagnostics.run(source: source, key: k)
-            report = DebugLog.snapshot()
+            lines = DebugLog.lines()
             running = false
             DebugLog.end()
         }

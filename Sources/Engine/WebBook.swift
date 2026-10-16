@@ -32,16 +32,18 @@ enum WebBook {
         let hasPattern = !(source.bookUrlPattern ?? "").isEmpty
         if isSearch, hasPattern, let pattern = source.bookUrlPattern, matchesWholly(baseUrl, pattern: pattern) {
             guard onUnboundResult == nil else { return [] }
-            DebugLog.add("链接为详情页（bookUrlPattern 命中）")
+            DebugLog.add("≡链接为详情页")
             return bookFromInfoPage(source: source, body: body, url: baseUrl, listContext: listContext)
         }
         let ar = AnalyzeRule(content: body, baseUrl: baseUrl, jsLib: source.jsLib, context: listContext)
+        DebugLog.add("┌获取书籍列表")
         let items = ar.getElements(rule.bookList)
         if items.isEmpty, !hasPattern {
             guard onUnboundResult == nil else { return [] }
-            DebugLog.add("列表为空，按详情页解析")
+            DebugLog.add("└列表为空,按详情页解析")
             return bookFromInfoPage(source: source, body: body, url: baseUrl, listContext: listContext)
         }
+        DebugLog.add("└列表大小:\(items.count)")
         // 冻结列表阶段变量；每个条目再独立派生，避免循环中的写入串书。
         let snapshot = listContext.forkForBook(Book(bookUrl: "", name: "", origin: source.bookSourceUrl))
         var out: [Book] = []
@@ -190,12 +192,8 @@ enum WebBook {
                 root = parsedArray
             }
         }
-        if let root = root {
-            if let dict = root as? [String: Any] {
-                DebugLog.add("详情 init 字段：" + dict.keys.sorted().joined(separator: ", "))
-            } else { DebugLog.add("详情 init 类型：\(type(of: root))") }
-        } else if rule.`init`?.isEmpty == false {
-            DebugLog.add("详情 init 未匹配，后续字段仍使用原响应")
+        if rule.`init`?.isEmpty == false {
+            DebugLog.add(root == nil ? "≡详情页初始化规则未匹配，使用原响应" : "≡执行详情页初始化规则")
         }
         func s(_ r: String?) -> String { ar.getString(r, from: root) }
         let n = s(rule.name); if !n.isEmpty { b.name = n }
@@ -234,9 +232,12 @@ enum WebBook {
             let au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
             let (body, url) = try await au.fetch()
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
+            DebugLog.add("┌获取目录列表")
             let nodes = ar.getElements(listRule)
-            DebugLog.add("目录列表匹配：\(nodes.count) 项（第\(visited.count)页）")
+            DebugLog.add("└列表大小:\(nodes.count)")
+            DebugLog.add("┌解析目录列表")
             list.append(contentsOf: parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url))
+            DebugLog.add("└目录列表解析完成")
             let urls = splitNextUrls(ar.getString(rule.nextTocUrl), base: url)
             for n in urls where !visited.contains(n) && !queue.contains(n) { queue.append(n) }
         }

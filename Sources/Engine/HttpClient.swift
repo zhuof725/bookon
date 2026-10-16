@@ -254,6 +254,7 @@ struct AnalyzeUrl {
             payload = payload.trimmingCharacters(in: .whitespacesAndNewlines)
             while payload.count % 4 != 0 { payload += "=" }
             let bytes = Data(base64Encoded: payload) ?? Data()
+            DebugLog.add("≡获取成功:\(DebugLog.url(url))")
             return HTTPResponseData(body: bytes.map { String(format: "%02x", $0) }.joined(), url: url)
         }
         #if canImport(UIKit) && canImport(WebKit)
@@ -261,6 +262,7 @@ struct AnalyzeUrl {
             let result = try await WebViewLoader.load(url: url, method: method, body: body.map { percentEncodedBody($0) },
                                                       headers: headers, js: webJs, cookieJar: cookieJarEnabled)
             try Task.checkCancellation()
+            DebugLog.add("≡获取成功:\(DebugLog.url(result.1))")
             return HTTPResponseData(body: result.0, url: result.1)
         }
         #endif
@@ -282,7 +284,6 @@ struct AnalyzeUrl {
                 req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             }
         }
-        DebugLog.add("准备请求：\(method) \(DebugLog.url(finalUrl))；请求体 \(req.httpBody?.count ?? 0) 字节（内容隐藏）")
         let (data, resp) = try await session.data(for: req)
         try Task.checkCancellation()
         var enc = AnalyzeUrl.encoding(charset)
@@ -293,8 +294,8 @@ struct AnalyzeUrl {
             text = String(data: data, encoding: AnalyzeUrl.encoding("gbk")) ?? t
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        DebugLog.add("\(method) \(DebugLog.url(finalUrl))")
-        DebugLog.add("HTTP \(status)，\(data.count) 字节；\(DebugLog.summary(text ?? ""))")
+        DebugLog.add("≡获取成功:\(DebugLog.url(finalUrl))")
+        if !(200..<300).contains(status) { DebugLog.add("◇HTTP 状态:\(status)") }
         DebugLog.recordSource(text ?? "")
         #if canImport(UIKit) && canImport(WebKit)
         let blocked = [403, 429, 503].contains(status) && (text ?? "").count < 200

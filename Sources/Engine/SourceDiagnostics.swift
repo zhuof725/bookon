@@ -92,12 +92,6 @@ enum SourceDiagnostics {
 
     static func run(source: BookSource, key: String) async {
         let log = DebugLog.add
-        let app = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试工具"
-        log("应用 \(app)；书源：\(source.bookSourceName)")
-        // 登录状态只报有无，不输出任何凭据内容。
-        let savedLogin = JSEngine.loginStore.getLoginInfo(source.bookSourceUrl)
-        let savedHeader = JSEngine.loginStore.getLoginHeader(source.bookSourceUrl)
-        log("◇登录信息\(savedLogin?.isEmpty == false ? "有" : "无")，登录头\(savedHeader?.isEmpty == false ? "有" : "无")")
         do {
             switch mode(for: key) {
             case .info(let url):
@@ -151,7 +145,6 @@ enum SourceDiagnostics {
 
     private static func logBookList(_ books: [Book]) {
         let log = DebugLog.add
-        log("◇书籍总数:\(books.count)")
         let b = books[0]
         log("┌获取书名"); log("└\(b.name)")
         log("┌获取作者"); log("└\(b.author)")
@@ -161,6 +154,7 @@ enum SourceDiagnostics {
         log("┌获取简介"); log("└\(b.intro ?? "")")
         log("┌获取封面链接"); log("└\(b.coverUrl ?? "")")
         log("┌获取详情页链接"); log("└\(DebugLog.url(b.bookUrl))")
+        log("◇书籍总数:\(books.count)")
     }
 
     private static func infoDebug(source: BookSource, book: Book) async throws {
@@ -220,9 +214,7 @@ enum SourceDiagnostics {
         log("└\(chapter.title)")
         log("┌获取正文内容")
         // 正文只显示在本机调试页（与原版一致），不上传、不落盘。
-        let shown = text.count > 4000 ? String(text.prefix(4000)) + "\n…（共 \(text.count) 字，仅显示前 4000 字）" : text
-        log("└\n\(shown)")
-        log("◇正文形态:\(DebugLog.shape(text))")
+        log("└\n\(text)")
         log("︽正文页解析完成")
     }
 }

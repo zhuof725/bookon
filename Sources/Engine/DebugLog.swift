@@ -39,6 +39,11 @@ enum DebugLog {
         entries.append("\(formatTime(Date().timeIntervalSince(startedAt))) \(message)")
         if entries.count > 1200 { entries.removeFirst(entries.count - 1200) }
     }
+    /// 按条返回日志，调试页逐条显示（一条可含多行，如正文）。
+    static func lines() -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return entries
+    }
     static func snapshot() -> String {
         lock.lock(); defer { lock.unlock() }
         return entries.joined(separator: "\n")
@@ -54,8 +59,11 @@ enum DebugLog {
     }
 
     static func url(_ raw: String) -> String {
-        if raw.hasPrefix("data:") { return "data:（本地数据URL，内容省略）" }
-        let plain = raw.components(separatedBy: ",{").first ?? raw
+        // 与原版一样完整显示 data: 网址与请求选项 ,{...}；只隐藏查询参数里的敏感值。
+        if raw.hasPrefix("data:") { return String(raw.prefix(4000)) }
+        let parts = raw.components(separatedBy: ",{")
+        let plain = parts.first ?? raw
+        let options = parts.count > 1 ? ",{" + parts.dropFirst().joined(separator: ",{") : ""
         guard var components = URLComponents(string: plain) else { return "（无法解析URL）" }
         components.user = nil; components.password = nil
         components.queryItems = components.queryItems?.map { item in
@@ -65,7 +73,7 @@ enum DebugLog {
             }
             return item
         }
-        return String((components.string ?? "（无URL）").prefix(600))
+        return String(((components.string ?? plain) + options).prefix(2000))
     }
 
     /// 响应行：与 Legado 一样在日志里单占一行，但只记录形态（字符数/JSON 字段/HTML 标题），不记录正文。
