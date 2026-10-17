@@ -9,7 +9,9 @@
 - 阅读页底部菜单 **听书** → 打开全屏播放器；打开时若未在朗读，立即从
   当前页位置开始读，章末自动进入下一章。
 - 播放器顶部「封面/正文」分段（记忆上次选择）；封面模式是大封面 +
-  当前句；正文模式整章文本跟随，当前段主题色高亮并自动滚动到屏幕中部。
+  当前句；正文模式整章文本跟随，正在朗读的段落带主题色高亮底和左侧
+  竖条标识，并自动滚动到屏幕中部。
+- 阅读页底栏的听书按钮在朗读中显示为主题色实心圆（反色图标）。
 - 播放控制：封面模式为 列表（朗读队列，点段跳转）/ ⏮15=上一章 /
   播放暂停 / ⏭15=下一章 / 倍速菜单；正文模式另有 ‖◄=上一句 / ►‖=下一句。
   停止朗读在底栏「设置」里（「返回」只收起播放器，朗读后台继续）。
@@ -42,6 +44,10 @@
   → 按 `md5(章名)_md5(引擎URL|语速|文本)` 缓存到 Caches/httpTTS（上限 128MB
   循环淘汰，同键不重下，改语速/引擎换新键）。
 - 在后台任务里预下载后面 10 段；有并发率的引擎按平均请求间隔限速。
+- 倍速：URL 里带 `{{speakSpeed}}` 的引擎由服务端按语速合成；不带的引擎
+  （如「起点·在线听书」类分享配置）由 App 用 AVAudioEngine +
+  AVAudioUnitTimePitch 在本机变速播放，音调不变、改语速即时生效，
+  也不用重新下载（缓存按固定基准语速存取）。
 - 连续 5 次下载失败自动暂停并提示；单次失败跳过本段继续下一段。
 
 ## 与原版的行为差异
@@ -66,6 +72,7 @@
 | Sources/Engine/AloudAudio.swift | 音频抓取 + 错误分类 + 128MB 缓存 |
 | Sources/App/ReaderAloud.swift | ReaderAloudController：全播放状态机 |
 | Sources/App/AloudPlayerView.swift | 全屏听书播放器（封面/正文两种模式） |
+| Sources/App/AloudAudioPlayer.swift | 本机变速播放（AVAudioEngine + TimePitch，保持音调） |
 | Sources/App/SpeakEngineList.swift | 预加载设置卡 + 引擎管理 + 导入导出 |
 | Sources/App/HttpTTSEditView.swift | 引擎编辑表单 |
 | Tools/SourceTest/HttpTTSRegression.swift | 离线回归（含回环服务器） |

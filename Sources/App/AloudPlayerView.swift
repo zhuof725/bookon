@@ -187,19 +187,12 @@ struct AloudPlayerView: View {
                                 .padding(.top, 60)
                         } else {
                             ForEach(aloud.unitList.indices, id: \.self) { i in
-                                Text(aloud.unitList[i].text)
-                                    .appFont(.title3)
-                                    .lineSpacing(8)
-                                    .foregroundStyle(i == aloud.unitIndex
-                                        ? palette.accent : palette.primary.opacity(0.88))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .id(i)
-                                    .accessibilityIdentifier("reader.aloud.para.\(i)")
+                                paragraphView(i)
                             }
                             Color.clear.frame(height: 2).id(-1)
                         }
                     }
-                    .padding(.horizontal, 22)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                 }
                 .onChange(of: aloud.unitIndex) { i in scrollToCurrent(proxy, i) }
@@ -210,6 +203,34 @@ struct AloudPlayerView: View {
                 .padding(.horizontal, 24)
             playerCard
         }
+    }
+
+    /// 正文段落：正在朗读的段落带主题色高亮底 + 左侧竖条标识，
+    /// 文字同时用强调色（主题强调色与正文同色时，高亮底和竖条仍然可见）。
+    private func paragraphView(_ index: Int) -> some View {
+        let current = index == aloud.unitIndex
+        return Text(aloud.unitList[index].text)
+            .appFont(.title3)
+            .lineSpacing(8)
+            .foregroundStyle(current ? palette.accent : palette.primary.opacity(0.88))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background {
+                if current {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(palette.highlight)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if current {
+                    Capsule().fill(palette.accent)
+                        .frame(width: 3)
+                        .padding(.vertical, 10)
+                }
+            }
+            .id(index)
+            .accessibilityIdentifier("reader.aloud.para.\(index)")
     }
 
     private func scrollToCurrent(_ proxy: ScrollViewProxy, _ index: Int) {

@@ -33,7 +33,7 @@ final class AloudEngineAudition: NSObject, ObservableObject {
         let request = UUID()
         requestID = request
         engineID = engine.id
-        let speed = AloudTTSConfig.httpSpeakSpeed
+        let speed = engine.usesServerSpeed ? AloudTTSConfig.httpSpeakSpeed : 10
         downloadTask = Task { @MainActor [weak self] in
             do {
                 try Task.checkCancellation()

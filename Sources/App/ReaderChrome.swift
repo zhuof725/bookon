@@ -173,16 +173,7 @@ struct ReaderBottomChrome: View {
 
             HStack(spacing: 0) {
                 toolButton("目录", id: "reader.toc", symbol: "list.bullet", action: onTOC)
-                toolButton(isSpeaking ? "朗读中" : "听书", id: "reader.speech",
-                           symbol: "speaker.wave.2", action: onSpeech)
-                    .accessibilityValue(isSpeaking ? "正在朗读" : "未朗读")
-                    .background {
-                        if isSpeaking {
-                            Circle().fill(foreground.opacity(0.10))
-                                .frame(width: 40, height: 40)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                speechButton
                 toolButton("搜索正文", id: "reader.search", symbol: "magnifyingglass", action: onSearch)
                 toolButton("阅读设置，字体大小", id: "reader.settings", symbol: nil, action: onSettings)
             }
@@ -225,6 +216,28 @@ struct ReaderBottomChrome: View {
         .disabled(!enabled)
         .accessibilityLabel(label)
         .accessibilityIdentifier(id)
+    }
+
+    /// 朗读中：实心主题色圆底 + 反色图标，和裸图标按钮明确区分
+    /// （原来的半透明灰圆看起来像一块阴影）。未朗读时与其它按钮一致。
+    private var speechButton: some View {
+        Button(action: onSpeech) {
+            Image(systemName: isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")
+                .font(.system(size: min(iconSize, 30), weight: .regular))
+                .foregroundStyle(isSpeaking ? palette.onAccent : foreground)
+                .frame(minWidth: 44, maxWidth: .infinity, minHeight: 44)
+                .background {
+                    if isSpeaking {
+                        Circle().fill(palette.accent)
+                            .frame(width: 40, height: 40)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(isSpeaking ? "朗读中" : "听书")
+        .accessibilityValue(isSpeaking ? "正在朗读" : "未朗读")
+        .accessibilityIdentifier("reader.speech")
     }
 
     private func toolButton(_ label: String, id: String, symbol: String?,

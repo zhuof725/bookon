@@ -1,14 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// 「字典」菜单项：调用系统词典 UI 查询选中的词。
+/// 「字典」菜单项：调用系统词典（系统自带，不自绘界面）查询选中的词。
 enum ReaderDictionaryLookup {
     static func present(_ word: String) {
         let term = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return }
         // 系统词典通过 referenceLibrary 控制器提供；用公开的 lookup 通道打开。
+        // 半屏卡片弹出（与参考图一致），可上拉展开；内容全部由系统渲染。
         let responder = UIReferenceLibraryViewController(term: term)
         responder.modalPresentationStyle = .pageSheet
+        if let sheet = responder.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
         guard let presenter = topViewController() else { return }
         presenter.present(responder, animated: true)
     }
