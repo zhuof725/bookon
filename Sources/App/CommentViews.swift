@@ -515,7 +515,7 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
     private func applyHighlightAttribute() {
         let full = NSRange(location: 0, length: textStorage.length)
         if full.length > 0 {
-            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: full)
+            layoutManager.setTemporaryAttributes([:], forCharacterRange: full)
         }
         highlightedRange = NSRange(location: 0, length: 0)
         guard let paragraph, requestedHighlightLength > 0, full.length > 0 else { return }
@@ -524,8 +524,8 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
         let length = min(displayed.prefix(requestedHighlightLength).utf16.count, full.length)
         guard length > 0 else { return }
         highlightedRange = NSRange(location: 0, length: length)
-        layoutManager.addTemporaryAttribute(.backgroundColor, value: highlightColor,
-                                            forCharacterRange: highlightedRange)
+        layoutManager.setTemporaryAttributes([.backgroundColor: highlightColor],
+                                             forCharacterRange: highlightedRange)
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {

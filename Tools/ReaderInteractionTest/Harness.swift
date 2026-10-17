@@ -41,7 +41,9 @@ struct HarnessApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.arguments.contains("--live-appearance-mode") {
+                if ProcessInfo.processInfo.arguments.contains("--aloud-highlight") {
+                    AloudHighlightHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--live-appearance-mode") {
                     LiveAppearanceHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--independent-rows-mode") {
                     IndependentRowsHarness()
