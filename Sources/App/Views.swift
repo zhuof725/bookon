@@ -321,6 +321,9 @@ struct ReaderView: View {
     @State private var scrollErrors: [Int: String] = [:]
     @State private var scrollProgress = ReaderScrollProgress()
     @Environment(\.scenePhase) private var scenePhase
+    /// 本次阅读会话的起点与章节足迹（只统计，不用于恢复进度）。
+    @State private var statsStart: Date?
+    @State private var statsChapters: Set<Int> = []
     @State private var loading = true
     @State private var error: String?
     @State private var showToc = false
@@ -506,7 +509,8 @@ struct ReaderView: View {
         }
         .sheet(item: $commentURL) { link in CommentSheet(url: link) }
         .onChange(of: scenePhase) { phase in
-            if phase != .active { persistContinuousProgress(); store.flushProgress() }
+            if phase != .active { persistContinuousProgress(); store.flushProgress(); closeReadingSession() }
+            else if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
         }
         .onChange(of: readingFonts.selectedPostScriptName) { _ in
             speech.stop()
@@ -556,6 +560,7 @@ struct ReaderView: View {
         .onDisappear {
             speech.stop()
             persistContinuousProgress()
+            closeReadingSession()
             cancelScrollLoads()
             cancelPreparation()
             preparedChapters.removeAll()
@@ -1000,12 +1005,27 @@ struct ReaderView: View {
             text = content.text
             blocks = content.blocks
             store.updateProgress(book, index: chapter, title: chapters[chapter].title)
+            noteReadingChapter(chapter)
             trimScrollChapters()
             loadScrollNeighbor(1)
             loadScrollNeighbor(-1)
             if let source = store.source(for: book.origin) { prefetch(source) }
         }
         store.updateScrollPosition(book, permille: scrollProgress.position)
+    }
+
+    /// 一次阅读会话从首次成功加载本章开始，到离开页面/退到后台结束。
+    private func noteReadingChapter(_ chapter: Int) {
+        if statsStart == nil { statsStart = Date() }
+        statsChapters.insert(chapter)
+    }
+
+    private func closeReadingSession() {
+        guard let start = statsStart else { return }
+        statsStart = nil
+        let chapters = statsChapters
+        statsChapters = []
+        ReadingStatsStore.shared.record(book: book, start: start, end: Date(), chapters: chapters.sorted())
     }
 
     // MARK: 翻页模式
@@ -1146,6 +1166,7 @@ struct ReaderView: View {
         pendingEdge = nil
         pendingChapterDirection = 0
         store.updateProgress(book, index: index, title: chapters[index].title)
+        noteReadingChapter(index)
         recordPage(page)
         // 只有 UIKit 确认提交才写入章号；取消手势不会来到这里。
         // 若手势中版式改变，必须先让容器收到原快照 ID 的接纳，再由完成回调重排；
@@ -1366,6 +1387,7 @@ struct ReaderView: View {
             error = nil
             show(raw: raw, landing: landing)
             store.updateProgress(book, index: target, title: chapter.title)
+            noteReadingChapter(target)
             if settings.pageMode == 1, pages.indices.contains(pageIndex) {
                 let total = max((pages.last?.startOffset ?? 0) + 1, 1)
                 store.updateScrollPosition(book, permille: Int(Double(pages[pageIndex].startOffset) / Double(total) * 1000))

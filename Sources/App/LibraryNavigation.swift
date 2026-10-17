@@ -1,55 +1,25 @@
 import SwiftUI
 
+// MARK: - 统计
+
 struct LibraryStatisticsView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
-    private var started: Int { store.books.filter(ShelfBooks.isStarted).count }
+    @Environment(\.calendar) private var calendar
+    @ObservedObject private var stats = ReadingStatsModel.shared
+    @AppStorage("stats.period.v1") private var periodRaw = ReadingStatsPeriod.week.rawValue
+    private var period: ReadingStatsPeriod { ReadingStatsPeriod(rawValue: periodRaw) ?? .week }
+    private var recentBooks: [Book] {
+        store.books.filter(ShelfBooks.isStarted).sorted { $0.lastReadAt > $1.lastReadAt }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                LibraryCard("书库概览") {
-                    LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
-                    LibraryCardDivider()
-                    LibraryValueRow(title: "已开始阅读", value: "\(started) 本")
-                    LibraryCardDivider()
-                    LibraryValueRow(title: "未读", value: "\(store.books.count - started) 本")
-                    LibraryCardDivider()
-                    LibraryValueRow(title: "本地书籍", value: "\(store.books.filter { store.isLocal($0) }.count) 本")
-                }
-                LibraryCard("最近阅读") {
-                    let recent = Array(store.books.filter(ShelfBooks.isStarted).sorted { $0.lastReadAt > $1.lastReadAt }.prefix(10))
-                    if recent.isEmpty {
-                        Text("暂无阅读记录").foregroundStyle(palette.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                    }
-                    ForEach(recent) { book in
-                        NavigationLink { ReaderView(book: book) } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(book.name).foregroundStyle(palette.primary)
-                                    Text(book.durChapterTitle ?? "阅读中").appFont(.caption).foregroundStyle(palette.secondary)
-                                    Text(book.lastReadAt, style: .date).appFont(.caption).foregroundStyle(palette.secondary)
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                                    .foregroundStyle(palette.secondary).accessibilityHidden(true)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .padding(.horizontal, 20).padding(.vertical, 14)
-                            .modifier(SettingsGlassSurface())
-                            .contentShape(RoundedRectangle(cornerRadius: 24))
-                        }
-                        .buttonStyle(.plain)
-                        if book.id != recent.last?.id { LibraryCardDivider() }
-                    }
-                }
-                LibraryCard {
-                    Text("统计来自书架与已保存的阅读进度；尚未记录阅读时长。")
-                        .appFont(.footnote).foregroundStyle(palette.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                }
+            VStack(spacing: 14) {
+                headerCard
+                trendCard
+                highlightCards
+                booksCard
             }
             .padding(.horizontal, 24).padding(.vertical, 16)
         }
@@ -57,8 +27,203 @@ struct LibraryStatisticsView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("统计")
         .toolbar(.visible, for: .navigationBar)
+        .accessibilityIdentifier("stats.page")
+        .onAppear { stats.refresh() }
+    }
+
+    // MARK: 今日
+
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(Self.todayLine(calendar: calendar))
+                .appFont(.caption).foregroundStyle(palette.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(stats.todayMinutes)").appFont(.system(size: 44, weight: .bold))
+                Text("分钟").appFont(.headline).foregroundStyle(palette.secondary)
+            }
+            HStack(spacing: 8) {
+                Text("日均 \(stats.todayAverage)").appFont(.caption).foregroundStyle(palette.secondary)
+                if let compare = stats.todayCompare {
+                    Text(compare).appFont(.caption).foregroundStyle(palette.accent)
+                }
+            }
+            if stats.todayMinutes == 0 {
+                Text("今天还没翻开书").appFont(.caption).foregroundStyle(palette.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .modifier(StatsGlass())
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("stats.today")
+    }
+
+    static func todayLine(calendar: Calendar) -> String {
+        let date = Date()
+        let month = calendar.component(.month, from: date)
+        let day = calendar.component(.day, from: date)
+        return "今天·\(Self.weekday(calendar: calendar)) \(month)月\(day)日"
+    }
+
+    static func weekday(calendar: Calendar) -> String {
+        let symbols = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        return symbols[min(max(calendar.component(.weekday, from: Date()) - 1, 0), 6)]
+    }
+
+    // MARK: 趋势
+
+    private var trendCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("趋势").appFont(.headline)
+                Spacer(minLength: 8)
+                Picker("", selection: $periodRaw) {
+                    ForEach(ReadingStatsPeriod.allCases, id: \.rawValue) { item in
+                        Text(Self.periodTitle(item)).tag(item.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 168)
+                .accessibilityIdentifier("stats.period")
+            }
+            Text(stats.rangeLine(period: period, calendar: calendar))
+                .appFont(.caption).foregroundStyle(palette.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(Self.periodTitle(period))共读").appFont(.subheadline).foregroundStyle(palette.secondary)
+                Text(stats.periodTotalMinutes(period: period)).appFont(.title2.weight(.bold))
+                if let trend = stats.periodTrend(period: period) {
+                    Text(trend).appFont(.caption).foregroundStyle(palette.accent)
+                }
+            }
+            StatsBarChart(values: stats.series(period: period))
+                .frame(height: 84)
+                .accessibilityIdentifier("stats.chart")
+        }
+        .padding(16)
+        .modifier(StatsGlass())
+        .accessibilityIdentifier("stats.trend")
+    }
+
+    static func periodTitle(_ period: ReadingStatsPeriod) -> String {
+        switch period {
+        case .week: return "本周"
+        case .month: return "本月"
+        case .year: return "今年"
+        }
+    }
+
+    // MARK: 高光
+
+    private var highlightCards: some View {
+        let items = stats.highlights(period: period, calendar: calendar)
+        return VStack(spacing: 14) {
+            ForEach(Array(items.enumerated()), id: \.offset) { pair in
+                let item = pair.element
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: item.symbol)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(width: 30, height: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).appFont(.subheadline.weight(.semibold))
+                        Text(item.detail).appFont(.caption).foregroundStyle(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Text(item.value).appFont(.headline).foregroundStyle(palette.accent)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(14)
+                .modifier(StatsGlass())
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("stats.highlight.\(pair.offset)")
+            }
+        }
+    }
+
+    // MARK: 在读
+
+    private var booksCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("正在读").appFont(.headline)
+            if recentBooks.isEmpty {
+                Text("暂无阅读记录").appFont(.subheadline).foregroundStyle(palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
+            } else {
+                ForEach(Array(recentBooks.prefix(8))) { book in
+                    NavigationLink { ReaderView(book: book) } label: {
+                        StatsBookRow(book: book)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("stats.book.\(book.id)")
+                    if book.id != recentBooks.prefix(8).last?.id {
+                        Divider().opacity(0.28)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .modifier(StatsGlass())
+        .accessibilityIdentifier("stats.books")
     }
 }
+
+private struct StatsBookRow: View {
+    @ThemePalette private var palette
+    let book: Book
+    var body: some View {
+        HStack(spacing: 12) {
+            BookCoverImage(url: BookCoverLocation.url(for: book))
+                .frame(width: 34, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.name).appFont(.subheadline).foregroundStyle(palette.primary).lineLimit(1)
+                Text(Self.progress(book)).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                .foregroundStyle(palette.secondary).accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    static func progress(_ book: Book) -> String {
+        let chapter = max(book.durChapterIndex + 1, 1)
+        if let title = ShelfListSummary.nonempty(book.durChapterTitle) {
+            return "已读 \(title)"
+        }
+        return "已读 第\(chapter)章"
+    }
+}
+
+// MARK: - 图表（自绘柱状图，不依赖 Charts 框架）
+
+struct StatsBarChart: View {
+    @ThemePalette private var palette
+    let values: [Double]
+
+    var body: some View {
+        let maximum = max(values.max() ?? 0, 1)
+        HStack(alignment: .bottom, spacing: values.count > 12 ? 2 : 6) {
+            ForEach(Array(values.enumerated()), id: \.offset) { item in
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(item.element > 0 ? palette.accent : palette.secondary.opacity(0.2))
+                    .frame(height: item.element > 0 ? max(4, 84 * CGFloat(item.element / maximum)) : 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .bottom)
+    }
+}
+
+struct StatsGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        content.modifier(SettingsGlassSurface())
+    }
+}
+
+// MARK: - 我的
 
 struct LibraryProfileView: View {
     @ThemePalette private var palette

@@ -295,19 +295,20 @@ struct ShelfBookCard: View {
     var body: some View {
         Group {
             if grid {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     gridCover
-                    VStack(spacing: 3) {
+                    VStack(spacing: 2) {
                         Text(book.name)
                             .appFont(accessibleCustom ? .headline : .system(size: 13, weight: .semibold))
-                            .lineLimit(accessibleCustom ? nil : (theme.customization == nil ? 1 : 2))
-                        Text(ShelfBooks.subtitle(book))
+                            .lineLimit(accessibleCustom ? nil : 2)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(ShelfListSummary.authorName(book))
                             .appFont(accessibleCustom ? .subheadline : .system(size: 11))
                             .foregroundStyle(palette.secondary)
                             .lineLimit(accessibleCustom ? nil : 1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }.fixedSize(horizontal: false, vertical: accessibleCustom)
-                        .frame(maxWidth: .infinity).padding(.horizontal, 7).padding(.vertical, 6)
-                        .modifier(ShelfGlass(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 13), style: .continuous), isCard: true))
                 }
             } else {
                 ShelfListRow(book: book, localOrigin: "local", summary: ShelfListSummary(book: book),

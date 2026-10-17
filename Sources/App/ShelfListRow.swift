@@ -34,17 +34,31 @@ struct ShelfListSummary: Equatable {
         else { status = "阅读中" }
         return "\(author) · \(status)"
     }
-    static func progress(_ book: Book) -> String {
-        guard ShelfBooks.isStarted(book) else { return "未读" }
-        if let title = nonempty(book.durChapterTitle) { return "已读：\(title)" }
-        return "已读：第\(max(0, book.durChapterIndex) + 1)章"
+    /// 网格封面下的小字：只显示作者（没有则显示来源名）。
+    static func authorName(_ book: Book) -> String {
+        nonempty(book.author) ?? nonempty(book.originName) ?? "作者未知"
     }
     static func source(_ book: Book, localOrigin: String) -> String {
         "来源：" + (book.origin == localOrigin ? "本地书籍" : (nonempty(book.originName) ?? "书源未命名"))
     }
+    /// 当前章的展示行：已读章节标题。
+    static func currentLine(_ book: Book) -> String? {
+        guard ShelfBooks.isStarted(book) else { return nil }
+        if let title = nonempty(book.durChapterTitle) { return title }
+        return "第\(max(book.durChapterIndex, 0) + 1)章"
+    }
+    /// 最新一章（带时间，若有）。
     var latestLine: String {
         guard let latestTitle else { return "暂无章节信息" }
         return latestTime.map { "\($0) · \(latestTitle)" } ?? latestTitle
+    }
+    /// 网格/列表右上角的百分比：当前章位置 ÷ 目录章数。无目录不显示。
+    static func progressPercent(_ book: Book, chapterCount: Int?) -> Int? {
+        guard ShelfBooks.isStarted(book) else { return nil }
+        if let chapterCount, chapterCount > 0 {
+            return min(100, max(0, Int((Double(book.durChapterIndex) / Double(chapterCount) * 100).rounded())))
+        }
+        return nil
     }
 }
 
@@ -72,13 +86,26 @@ struct ShelfListRow: View {
                 }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
-                Text(book.name).appFont(.headline).foregroundStyle(palette.primary)
-                    .lineLimit(large ? nil : 1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                line(summary.authorLine(book))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(book.name).appFont(.headline).foregroundStyle(palette.primary)
+                        .lineLimit(large ? nil : 1)
+                    if let author = ShelfListSummary.nonempty(summary.authorLine(book)) {
+                        line(author)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let current = ShelfListSummary.currentLine(book) {
+                    line("读至 " + current)
+                }
                 line(summary.latestLine)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if let percent = ShelfListSummary.progressPercent(book, chapterCount: summary.chapterCount) {
+                Text("\(percent)%")
+                    .appFont(.caption).foregroundStyle(palette.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
@@ -108,8 +135,8 @@ struct ShelfListBookButton: View {
             ShelfListRow(book: book, localOrigin: localOrigin, summary: value, selecting: selecting, selected: selected)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([book.name, value.authorLine(book), ShelfListSummary.progress(book),
-                             ShelfListSummary.source(book, localOrigin: localOrigin), value.latestLine].joined(separator: "，"))
+        .accessibilityLabel([book.name, value.authorLine(book), ShelfListSummary.currentLine(book),
+                             ShelfListSummary.source(book, localOrigin: localOrigin), value.latestLine].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(selecting ? (selected ? "已选择" : "未选择") : "打开阅读")
         .accessibilityIdentifier("shelf.book." + book.id)
         .contextMenu {

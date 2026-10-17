@@ -27,7 +27,7 @@ struct LegadoApp: App {
                 .onOpenURL { handle($0) }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
-                    if phase != .active { JavaBridge.store.flush() }
+                    if phase != .active { JavaBridge.store.flush(); ReadingStatsStore.shared.flush() }
                 }
                 .alert(importMessage ?? "", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
                     Button("好", role: .cancel) {}
