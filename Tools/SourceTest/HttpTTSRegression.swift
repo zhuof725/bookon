@@ -268,7 +268,8 @@ final class TTSHarnessServer: @unchecked Sendable {
                     let body = Data(rest.prefix(min(contentLength, rest.count)))
                     // headers 保存原始与规范两个键，测试里只用规范键。
                     let report = RequestReport(method: method, path: path, headers: headers, body: body)
-                    queue.sync { lastRequest = report }
+                    // 这里正在 server.queue 上执行：直接赋值，不能 queue.sync（dispatch 断言崩溃了上一轮）。
+                    lastRequest = report
                     respond(connection, status: self.pending.first?.0 ?? 500,
                             headers: self.pending.first?.1 ?? [:], body: self.pending.first?.2 ?? Data())
                     if !self.pending.isEmpty { self.pending.removeFirst() }
