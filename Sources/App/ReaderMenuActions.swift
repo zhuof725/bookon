@@ -1,5 +1,4 @@
 import SwiftUI
-import AVFoundation
 import UIKit
 
 /// 「字典」菜单项：调用系统词典 UI 查询选中的词。
@@ -20,48 +19,6 @@ enum ReaderDictionaryLookup {
         var top = window?.rootViewController
         while let presented = top?.presentedViewController { top = presented }
         return top
-    }
-}
-
-/// Retained for the reader lifetime; never speaks comment metadata or HTML.
-final class ReaderSpeechController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    @Published private(set) var isSpeaking = false
-    private let synthesizer = AVSpeechSynthesizer()
-    private var current: AVSpeechUtterance?
-
-    override init() {
-        super.init()
-        synthesizer.delegate = self
-    }
-
-    func speak(_ text: String) {
-        stop()
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        current = utterance
-        isSpeaking = true
-        synthesizer.speak(utterance)
-    }
-
-    func stop() {
-        current = nil
-        synthesizer.stopSpeaking(at: .immediate)
-        isSpeaking = false
-    }
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        finished(utterance)
-    }
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        finished(utterance)
-    }
-    private func finished(_ utterance: AVSpeechUtterance) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.current === utterance else { return }
-            self.current = nil
-            self.isSpeaking = false
-        }
     }
 }
 

@@ -38,6 +38,8 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         NSPhotoLibraryAddUsageDescription: 保存正文里的图片到相机胶卷。
+        UIBackgroundModes:
+          - audio
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         UISupportedInterfaceOrientations:

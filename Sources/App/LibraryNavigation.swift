@@ -242,6 +242,9 @@ struct LibraryProfileView: View {
                         NavigationLink { BodyReplaceRulesView() } label: { LibraryLinkLabel(title: "替换规则", symbol: "text.badge.checkmark") }
                             .accessibilityIdentifier("library.replaceRules")
                         LibraryCardDivider()
+                        NavigationLink { SpeakEngineList(aloud: ReaderAloudController()) } label: { LibraryLinkLabel(title: "朗读引擎管理", symbol: "waveform.badge.mic") }
+                            .accessibilityIdentifier("library.speakEngines")
+                        LibraryCardDivider()
                     }
                     Group {
                         NavigationLink { BubbleStyleSettingsView() } label: { LibraryLinkLabel(title: "段评气泡", symbol: "bubble.right") }

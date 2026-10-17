@@ -45,14 +45,15 @@ struct AnalyzeUrl {
     var cookieJarEnabled: Bool = true
 
     init(rawUrl: String, key: String? = nil, page: Int = 1, baseUrl: String? = nil,
-         sourceHeader: String? = nil, context: RuleContext? = nil, jsLib: String? = nil) {
+         sourceHeader: String? = nil, context: RuleContext? = nil, jsLib: String? = nil,
+         extraVars: [String: Any] = [:]) {
         self.context = context
         self.jsLib = jsLib
         self.cookieJarEnabled = context?.source?.cookieJarEnabled ?? true
         var s = rawUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         // @js: / <js></js> 先执行，再做模板替换（与 Legado 一致）
-        s = AnalyzeUrl.evalUrlJS(s, key: key, page: page, baseUrl: baseUrl, context: context, jsLib: jsLib)
-        s = AnalyzeUrl.substitute(s, key: key, page: page, context: context, jsLib: jsLib)
+        s = AnalyzeUrl.evalUrlJS(s, key: key, page: page, baseUrl: baseUrl, context: context, jsLib: jsLib, extraVars: extraVars)
+        s = AnalyzeUrl.substitute(s, key: key, page: page, context: context, jsLib: jsLib, extraVars: extraVars)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // <1,2,3> page selection
         if let r = s.range(of: "<[^>]+>", options: .regularExpression) {
@@ -71,7 +72,8 @@ struct AnalyzeUrl {
         }
         url = AnalyzeUrl.absolute(s, base: baseUrl)
         for (k, v) in AnalyzeUrl.headerFields(sourceHeader, key: key, page: page,
-                                              baseUrl: baseUrl, context: context, jsLib: jsLib) {
+                                              baseUrl: baseUrl, context: context, jsLib: jsLib,
+                                              extraVars: extraVars) {
             headers[k] = v
         }
         if let o = options {
@@ -91,7 +93,7 @@ struct AnalyzeUrl {
     /// Legado 的书源 header 同样是规则：支持 `@js:`、`<js></js>` 与 `{{key}}/{{page}}`。
     /// 返回 JSON 对象时逐项作为请求头；直接返回 UA 字符串时作为 User-Agent。
     static func headerFields(_ raw: String?, key: String?, page: Int, baseUrl: String?,
-                             context: RuleContext?, jsLib: String?) -> [String: String] {
+                             context: RuleContext?, jsLib: String?, extraVars: [String: Any] = [:]) -> [String: String] {
         guard let raw else { return [:] }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [:] }
@@ -99,9 +101,9 @@ struct AnalyzeUrl {
         let evaluated: String
         if lowered.hasPrefix("@js:") || lowered.contains("<js>") {
             evaluated = evalUrlJS(trimmed, key: key, page: page, baseUrl: baseUrl,
-                                  context: context, jsLib: jsLib)
+                                  context: context, jsLib: jsLib, extraVars: extraVars)
         } else {
-            evaluated = substitute(trimmed, key: key, page: page, context: context, jsLib: jsLib)
+            evaluated = substitute(trimmed, key: key, page: page, context: context, jsLib: jsLib, extraVars: extraVars)
         }
         let text = evaluated.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [:] }
@@ -128,7 +130,7 @@ struct AnalyzeUrl {
     }
 
     /// 执行 URL 规则里的 @js: 和 <js></js>，返回最终的 URL 字符串
-    static func evalUrlJS(_ raw: String, key: String?, page: Int, baseUrl: String?, context: RuleContext? = nil, jsLib: String? = nil) -> String {
+    static func evalUrlJS(_ raw: String, key: String?, page: Int, baseUrl: String?, context: RuleContext? = nil, jsLib: String? = nil, extraVars: [String: Any] = [:]) -> String {
         // 与 Kotlin AppPattern.JS_PATTERN 一致：按出现顺序处理，大小写不敏感。
         guard let re = try? NSRegularExpression(
             pattern: "<js>([\\s\\S]*?)</js>|@js:([\\s\\S]*)",
@@ -139,7 +141,8 @@ struct AnalyzeUrl {
         guard !matches.isEmpty else { return raw }
         var result = raw
         var start = 0
-        let vars: [String: Any] = ["key": key ?? "", "page": page, "searchKey": key ?? "", "searchPage": page]
+        var vars: [String: Any] = ["key": key ?? "", "page": page, "searchKey": key ?? "", "searchPage": page]
+        for (k, v) in extraVars { vars[k] = v }
         func applyLiteral(_ literal: String) {
             let value = literal.trimmingCharacters(in: .whitespacesAndNewlines)
             if !value.isEmpty {
@@ -160,11 +163,13 @@ struct AnalyzeUrl {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func substitute(_ s: String, key: String?, page: Int, context: RuleContext? = nil, jsLib: String? = nil) -> String {
+    static func substitute(_ s: String, key: String?, page: Int, context: RuleContext? = nil, jsLib: String? = nil, extraVars: [String: Any] = [:]) -> String {
         let k = key ?? ""
         guard let re = try? NSRegularExpression(pattern: "\\{\\{([\\s\\S]*?)\\}\\}") else { return s }
         var result = s
         let original = s as NSString
+        var jsVars: [String: Any] = ["key": k, "page": page, "searchKey": k, "searchPage": page]
+        for (name, value) in extraVars { jsVars[name] = value }
         // Legado 先计算每个 {{js}}，再处理 page 标记，避免先替换 key 破坏 JS。
         for match in re.matches(in: s, range: NSRange(location: 0, length: original.length)).reversed() {
             let expr = original.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -177,7 +182,14 @@ struct AnalyzeUrl {
                 value = AnalyzeUrl.cleanSourceUrl(context?.source?.bookSourceUrl ?? "")
             }
             else if js.hasPrefix("@get:") { value = context?.get(String(js.dropFirst(5))) ?? "" }
-            else { value = JSEngine.shared.evalString(js, vars: ["key": k, "page": page, "searchKey": k, "searchPage": page], jsLib: jsLib, context: context) ?? "" }
+            else {
+                // 朗读 URL 的 {{speakText}}/{{speakSpeed}} 与 JS 表达式同通过这里求值。
+                if let direct = extraVars[js] {
+                    value = direct is String ? direct as! String : "\(direct)"
+                } else {
+                    value = JSEngine.shared.evalString(js, vars: jsVars, jsLib: jsLib, context: context) ?? ""
+                }
+            }
             result = (result as NSString).replacingCharacters(in: match.range, with: value)
         }
         return result.replacingOccurrences(of: "{key}", with: k)
@@ -232,6 +244,41 @@ struct AnalyzeUrl {
     func fetch() async throws -> (String, String) {
         let response = try await fetchResponse()
         return (response.body, response.url)
+    }
+
+    /// 朗读音频用的二进制请求：不做字符集转换，也不走 WebView 兜底。
+    /// TTS 服务可能几十秒才返回（会话级合成），超时放宽；返回原始字节、响应与最终网址。
+    func fetchData(session baseSession: URLSession = .shared,
+                   readTimeout: TimeInterval = 120) async throws -> (data: Data, response: URLResponse, finalURL: String) {
+        try Task.checkCancellation()
+        let session: URLSession
+        if cookieJarEnabled { session = baseSession } else {
+            let cfg = baseSession.configuration.copy() as! URLSessionConfiguration
+            cfg.httpCookieStorage = nil
+            cfg.httpShouldSetCookies = false
+            cfg.httpCookieAcceptPolicy = .never
+            session = URLSession(configuration: cfg)
+        }
+        let finalUrl = url.contains("%") ? url : percentEncoded(url)
+        guard let u = URL(string: finalUrl) else { throw URLError(.badURL) }
+        var req = URLRequest(url: u, timeoutInterval: readTimeout)
+        req.httpMethod = method
+        if !cookieJarEnabled { req.httpShouldHandleCookies = false }
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        if req.value(forHTTPHeaderField: "Referer") == nil, let host = URL(string: finalUrl)?.host {
+            req.setValue("\(u.scheme ?? "https")://\(host)/", forHTTPHeaderField: "Referer")
+        }
+        if let b = body {
+            req.httpBody = percentEncodedBody(b).data(using: AnalyzeUrl.encoding(charset))
+            if req.value(forHTTPHeaderField: "Content-Type") == nil {
+                let isJson = b.trimmingCharacters(in: .whitespaces).hasPrefix("{")
+                req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            }
+        }
+        let (data, resp) = try await session.data(for: req)
+        try Task.checkCancellation()
+        return (data, resp, finalUrl)
     }
 
     /// HTTP 4xx/5xx remain responses; transport errors and cancellation throw.

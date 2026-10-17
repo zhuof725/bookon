@@ -345,7 +345,12 @@ struct ReaderView: View {
     @State private var confirmChapterClear = false
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
-    @StateObject private var speech = ReaderSpeechController()
+    @StateObject private var aloud = ReaderAloudController()
+    @State private var showAloudPanel = false
+    /// 朗读驱动的翻章不停止朗读；用户手动翻章到 loadChapter 处停止。
+    @State private var aloudDrivenNav = false
+    /// 朗读跟随的最近一次滚动位置（千分比节流用）。
+    @State private var aloudScrollPermille = -1000
 
     private func toggleBars() {
         if !showBars { persistContinuousProgress(); syncMenuProgress() }
@@ -394,9 +399,9 @@ struct ReaderView: View {
                     progress: $menuProgress, canScrub: canScrubReader,
                     canPrevious: !loading && readableIndex(from: index - 1, direction: -1) != nil,
                     canNext: !loading && readableIndex(from: index + 1, direction: 1) != nil,
-                    isSpeaking: speech.isSpeaking, background: theme.bg, foreground: theme.fg,
+                    isSpeaking: aloud.isRunning, background: theme.bg, foreground: theme.fg,
                     onScrub: scrubReader, onPrevious: { go(index - 1) }, onNext: { go(index + 1) },
-                    onTOC: { showToc = true }, onSpeech: toggleSpeech,
+                    onTOC: { showToc = true }, onSpeech: { showAloudPanel = true },
                     onSearch: { showReaderSearch = true }, onSettings: { showSettings = true })
                     .transition(.opacity)
             }
@@ -419,6 +424,19 @@ struct ReaderView: View {
         }
         .sheet(isPresented: $showReplaceFromSelection) {
             BodyReplaceRulesView(seed: selectedText)
+        }
+        .sheet(isPresented: $showAloudPanel) {
+            ReaderAloudPanel(aloud: aloud)
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = aloud.notice, !showAloudPanel {
+                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(theme.fg.opacity(0.82)))
+                    .padding(.bottom, 90)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("reader.aloud.notice")
+            }
         }
         .sheet(isPresented: $showReaderSearch) {
             ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
@@ -487,6 +505,10 @@ struct ReaderView: View {
                     .independentGlassRow()
                     ReaderTypographyControls(settings: settings)
                         .independentGlassRow()
+                    Section("朗读") {
+                        NavigationLink("朗读引擎管理") { SpeakEngineList(aloud: aloud) }
+                    }
+                    .independentGlassRow()
                     NavigationLink("段评气泡") { BubbleStyleSettingsView() }
                         .independentGlassRow()
                     Section("背景") {
@@ -536,7 +558,7 @@ struct ReaderView: View {
             else if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
         }
         .onChange(of: readingFonts.selectedPostScriptName) { _ in
-            speech.stop()
+            aloud.stop()
             cancelPreparation()
             preparedChapters.removeAll()
             // Existing Character offsets keep paged reading at the nearest page;
@@ -559,7 +581,7 @@ struct ReaderView: View {
         .onChange(of: settings.topMargin) { _ in repaginate() }
         .onChange(of: settings.bottomMargin) { _ in repaginate() }
         .onChange(of: settings.pageMode) { mode in
-            speech.stop()
+            aloud.stop()
             pendingEdge = nil
             pendingChapterDirection = 0
             if mode == 1 {
@@ -577,11 +599,11 @@ struct ReaderView: View {
         .onChange(of: pageIndex) { _ in syncMenuProgress() }
         .onChange(of: pages.count) { _ in syncMenuProgress() }
         .onChange(of: loading) { value in if !value { syncMenuProgress() } }
-        .onChange(of: index) { _ in speech.stop(); syncMenuProgress() }
+        .onChange(of: index) { _ in syncMenuProgress() }
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
-            speech.stop()
+            aloud.detach()
             persistContinuousProgress()
             closeReadingSession()
             cancelScrollLoads()
@@ -598,7 +620,7 @@ struct ReaderView: View {
             pendingLanding = nil
             store.flushProgress()
         }
-        .task { await start() }
+        .task { attachAloudHost(); await start() }
     }
 
     private var quickEnabled: Set<String> {
@@ -773,7 +795,6 @@ struct ReaderView: View {
     private func scrubReader(_ editing: Bool) {
         scrubbing = editing
         guard !editing, canScrubReader else { return }
-        speech.stop()
         let progress = min(max(menuProgress, 0), 1)
         if settings.pageMode == 1 {
             pageIndex = Int((progress * Double(pages.count - 1)).rounded())
@@ -786,22 +807,9 @@ struct ReaderView: View {
         }
     }
 
-    private func toggleSpeech() {
-        if speech.isSpeaking { speech.stop(); return }
-        guard !loading else { return }
-        let paragraphs = ReaderMenuText.paragraphs(readerBlocks)
-        let start = settings.pageMode == 1 && pages.indices.contains(pageIndex) ? pages[pageIndex].startOffset : 0
-        let remaining = paragraphs.compactMap { paragraph -> String? in
-            let skip = max(start - paragraph.offset, 0)
-            guard skip < paragraph.text.count else { return nil }
-            return String(paragraph.text.dropFirst(skip))
-        }.joined(separator: "\n")
-        speech.speak(remaining)
-    }
-
     private func selectSearchResult(_ offset: Int) {
         guard settings.pageMode == 1, !pages.isEmpty else { return }
-        speech.stop()
+        aloud.stop()
         pageIndex = Paginator.pageIndex(containing: offset, in: pages)
         showReaderSearch = false
         showBars = false
@@ -1449,9 +1457,105 @@ struct ReaderView: View {
         }
     }
 
+    // MARK: 听书朗读
+
+    /// 注入朗读控制器需要的阅读器能力；闭包捕获 this 只读取当前 @State 值。
+    /// onDisappear 会 detach 清理，闭包不会在离开阅读页后继续存活。
+    private func attachAloudHost() {
+        var host = ReaderAloudHost()
+        host.currentChapter = { index }
+        host.chapterCount = { chapters.count }
+        host.chapterTitle = { i in chapters.indices.contains(i) ? chapters[i].title : "" }
+        host.bookLabel = { book.name }
+        host.currentOffset = { currentReadOffset() }
+        host.units = { i in i == index ? aloudUnits(from: readerBlocks) : nil }
+        host.readableChapter = { i, direction in readableIndex(from: i, direction: direction) }
+        host.openChapter = { i in await openChapterForAloud(i) }
+        host.follow = { chapter, offset in followAloud(chapter: chapter, offset: offset) }
+        aloud.attach(host)
+    }
+
+    /// 朗读单元 = 已解析正文块里的文字段落；分卷页返回空列表。
+    private func aloudUnits(from blocks: [ContentBlock]) -> [AloudUnit] {
+        ReaderMenuText.paragraphs(blocks).map { AloudUnit(offset: $0.offset, text: $0.text) }
+    }
+
+    /// 朗读偏移统一基于段落文字总长（不含块间换行），富文本书源 text 为空时也能换算。
+    private var aloudParagraphLength: Int {
+        max(readerBlocks.reduce(0) { partial, block in
+            if case .paragraph(let text, _, _) = block { return partial + text.count }
+            return partial
+        }, 1)
+    }
+
+    /// 当前阅读位置的章节内偏移：翻页模式用页首 offset，滚动模式按千分比折算。
+    private func currentReadOffset() -> Int {
+        if settings.pageMode == 1, pages.indices.contains(pageIndex) {
+            return pages[pageIndex].startOffset
+        }
+        let permille = min(max(scrollProgress.position, 0), 1000)
+        return aloudParagraphLength * permille / 1000
+    }
+
+    /// 朗读跨章入口：先把阅读器切到目标章，等加载完成再把控制权还给朗读。
+    @MainActor
+    private func openChapterForAloud(_ target: Int) async -> Bool {
+        guard chapters.indices.contains(target) else { return false }
+        if target == index, !loading { return true }
+        // 刚打开书时还在加载：等当前加载结束，避免 loadChapter 的 !loading 守卫把请求丢空。
+        var waited = 0
+        while loading && waited < 300 {
+            if Task.isCancelled { return false }
+            try? await Task.sleep(nanoseconds: 200_000_000); waited += 1
+        }
+        if target == index && !loading { return true }
+        guard !loading, chapters.indices.contains(target) else { return false }
+        aloudDrivenNav = true
+        loadChapter(target, landing: .start)
+        aloudDrivenNav = false
+        for _ in 0..<300 {
+            if Task.isCancelled { return false }
+            if index == target && !loading { return true }
+            if !loading, retryTarget == target { return false }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return index == target && !loading
+    }
+
+    /// 朗读进度播报：翻页模式直接跳到含本段的页；滚动模式滚动到本段（节流），
+    /// 并保存阅读进度，退出后可以从朗读接着读。
+    private func followAloud(chapter: Int, offset: Int) {
+        guard aloud.isRunning, chapter == index, !loading else { return }
+        if settings.pageMode == 1 {
+            guard !pages.isEmpty, pages.indices.contains(0) else { return }
+            let target = Paginator.pageIndex(containing: offset, in: pages)
+            guard target != pageIndex else { return }
+            pageIndex = target
+            if pages.indices.contains(target) {
+                let total = max((pages.last?.startOffset ?? 0) + 1, 1)
+                store.updateScrollPosition(book, permille: (pages[target].startOffset * 1000) / total)
+            }
+        } else {
+            let textCount = aloudParagraphLength
+            let permille = min(max((offset * 1000) / textCount, 0), 1000)
+            scrollProgress.chapter = chapter
+            scrollProgress.position = permille
+            store.updateScrollPosition(book, permille: permille)
+            // 每段的字符偏移只移动一点，逐段滚动会打断顺滑阅读；
+            // 当阅读位置偏出朗读位置一屏左右或段落在当前位置之上时才跳。
+            guard !showBars else { return }
+            let drifted = abs(permille - aloudScrollPermille) >= 40 || permille < aloudScrollPermille - 5
+            guard drifted else { return }
+            aloudScrollPermille = permille
+            scrollRequest = ReaderScrollRequest(id: UUID(), chapter: chapter, permille: permille)
+        }
+    }
+
     private func loadChapter(_ target: Int, landing: ChapterLanding) {
         guard !loading, chapters.indices.contains(target) else { return }
-        speech.stop()
+        // 朗读控制器自己请求 openChapter 时 aloudDrivenNav 为真，朗读继续；
+        // 其他途径（手动翻章/书签/边缘到达）都会在这里停止朗读。
+        if !aloudDrivenNav { aloud.stop() }
         cancelScrollLoads()
         cancelPreparation()
         chapterTask?.cancel()

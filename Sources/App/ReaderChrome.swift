@@ -173,7 +173,7 @@ struct ReaderBottomChrome: View {
 
             HStack(spacing: 0) {
                 toolButton("目录", id: "reader.toc", symbol: "list.bullet", action: onTOC)
-                toolButton(isSpeaking ? "停止朗读" : "开始朗读", id: "reader.speech",
+                toolButton(isSpeaking ? "朗读中" : "听书", id: "reader.speech",
                            symbol: "speaker.wave.2", action: onSpeech)
                     .accessibilityValue(isSpeaking ? "正在朗读" : "未朗读")
                     .background {
