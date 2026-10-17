@@ -113,7 +113,7 @@ enum HTTPTTSRegression {
         check(got == wav, "回环：二进制字节原样返回")
         let first = server.report()
         check(first?.method == "POST", "回环：POST 请求方法")
-        check(String(data: first?.body ?? Data(), encoding: .utf8) == "tex=朗读一句&s=15", "回环：模板替换请求体")
+        check(String(data: first?.body ?? Data(), encoding: .utf8) == "tex=%E6%9C%97%E8%AF%BB%E4%B8%80%E5%8F%A5&s=15", "回环：模板替换请求体（UTF-8 表单编码）")
         check(first?.headers["X-Test"] == "15", "回环：options.headers 走模板")
         check(first?.path == "/audio", "回环：请求路径正确")
 
