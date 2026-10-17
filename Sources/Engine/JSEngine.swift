@@ -87,7 +87,7 @@ final class TTSResponseBuilder: NSObject, TTSResponseBuilderExports {
     @objc func code(_ c: Int) -> TTSResponseBuilderExports { _code = c; return self }
     @objc func message(_ m: String) -> TTSResponseBuilderExports { _message = m; return self }
     @objc func header(_ k: String, _ v: String) -> TTSResponseBuilderExports { _headers.append((k, v)); return self }
-    @objc func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports {
+    @objc override func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports {
         if let t = b as? TTSResponseBody { _body = t }
         else if let arr = (b as? NSObject)?.value(forKey: "__bytes") as? [Int] {
             _body = TTSResponseBody(data: Data(arr.map { UInt8(truncatingIfNeeded: $0) }),
@@ -111,7 +111,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
     init(data: Data, url: String, code: Int, headers: [String: String]) {
         self.data = data; self.url = url; self.code = code; self.headers = headers
     }
-    @objc func body() -> TTSResponseBodyExports {
+    @objc override func body() -> TTSResponseBodyExports {
         TTSResponseBody(data: data, mediaType: headers.first { $0.key.caseInsensitiveCompare("Content-Type") == .orderedSame }?.value ?? "application/octet-stream")
     }
     @objc func newBuilder() -> TTSResponseBuilderExports { TTSResponseBuilder() }

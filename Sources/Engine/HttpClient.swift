@@ -294,6 +294,11 @@ struct AnalyzeUrl {
     /// 与原版一致：请求头/正文就绪后才生成 URLRequest。
     private func resolvedRequestBody() -> Data? {
         guard let raw = body, !raw.isEmpty else { return nil }
+        if raw.hasPrefix("base64,"), let data = Data(base64Encoded: String(raw.dropFirst(7))) {
+            raw = data.base64EncodedString()  // 如果是 "base64,...”，先取 base64 部分再以原样回去
+            let enc = raw
+            return Data(base64Encoded: enc)
+        }
         if let enc = AnalyzeUrl.base64Prefixed(raw) {
             return Data(base64Encoded: String(enc))
         }
