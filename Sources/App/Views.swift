@@ -1380,9 +1380,15 @@ struct ReaderView: View {
     /// 打开书签：跳到原章节，并尽量回到记录的位置。
     private func openBookmark(_ item: ReaderBookmark) {
         guard chapters.indices.contains(item.chapterIndex) else { return }
-        let landing: ChapterLanding = settings.pageMode == 1 ? .start : .saved(item.position)
-        if item.chapterIndex == index { return }
-        loadChapter(item.chapterIndex, landing: landing)
+        if item.chapterIndex == index {
+            // 就在当前章：滚动模式直接把位置拖回书签处，分页模式停在当前页。
+            if settings.pageMode == 0, !loading {
+                scrollProgress.position = item.position
+                scrollRequest = ReaderScrollRequest(id: UUID(), chapter: index, permille: item.position)
+            }
+            return
+        }
+        loadChapter(item.chapterIndex, landing: settings.pageMode == 1 ? .start : .saved(item.position))
     }
 
     /// 长按选词的菜单动作：拷贝走系统剪贴板，替换用选中文字新建净化规则，书签记录选段。
