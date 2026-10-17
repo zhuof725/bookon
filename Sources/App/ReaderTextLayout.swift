@@ -272,14 +272,17 @@ enum ReaderTextLayout {
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
     static func makeTextView() -> CommentTextView {
         let storage = NSTextStorage()
-        let manager = NSLayoutManager()
+        let manager = ReaderTextLayoutManager()
+        manager.highlightView = nil
         manager.usesFontLeading = false
         manager.delegate = ReaderLineMetrics.shared
         storage.addLayoutManager(manager)
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
         manager.addTextContainer(container)
-        return CommentTextView(frame: .zero, textContainer: container)
+        let view = CommentTextView(frame: .zero, textContainer: container)
+        manager.highlightView = view
+        return view
     }
 
     static func configure(_ view: UITextView) {

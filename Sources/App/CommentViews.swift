@@ -332,6 +332,31 @@ struct ReaderTextSelectionActions {
     var onBookmark: (String) -> Void = { _ in }
 }
 
+final class ReaderTextLayoutManager: NSLayoutManager {
+    weak var highlightView: CommentTextView?
+
+    override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
+        if let view = highlightView, view.highlightedRange.length > 0 {
+            let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: view.highlightedRange,
+                                                                      actualCharacterRange: nil))
+            if range.length > 0 {
+                enumerateLineFragments(forGlyphRange: range) { _, _, _, lineGlyphs, _ in
+                    let overlap = NSIntersectionRange(range, lineGlyphs)
+                    guard overlap.length > 0 else { return }
+                    var rect = self.boundingRect(forGlyphRange: overlap, in: view.textContainer)
+                    guard !rect.isNull, !rect.isEmpty else { return }
+                    rect.origin.x += origin.x
+                    rect.origin.y += origin.y
+                    rect = rect.insetBy(dx: -2, dy: -1)
+                    view.highlightColor.setFill()
+                    UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
+                }
+            }
+        }
+        super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+    }
+}
+
 final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextViewDelegate {
     var onBubbleTap: (() -> Void)?
     var onTextTap: (() -> Void)?
@@ -514,6 +539,9 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
 
     private func applyHighlightAttribute() {
         highlightedRange = NSRange(location: 0, length: 0)
+        if textStorage.length > 0 {
+            layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textStorage.length))
+        }
         guard let paragraph, requestedHighlightLength > 0, textStorage.length > 0 else {
             setNeedsDisplay()
             return
@@ -526,30 +554,11 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
             return
         }
         highlightedRange = NSRange(location: 0, length: length)
+        layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textStorage.length))
         setNeedsDisplay()
     }
 
-    /// 在 TextKit 已排好的每一行文字后面绘制进度底色；不写入 attributedText。
-    private func drawAloudHighlight() {
-        guard highlightedRange.length > 0, textStorage.length > 0 else { return }
-        layoutManager.ensureLayout(for: textContainer)
-        let glyphRange = layoutManager.glyphRange(forCharacterRange: highlightedRange,
-                                                    actualCharacterRange: nil)
-        guard glyphRange.length > 0 else { return }
-        layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { _, _, _, lineGlyphs, _ in
-            let overlap = NSIntersectionRange(glyphRange, lineGlyphs)
-            guard overlap.length > 0 else { return }
-            var rect = self.layoutManager.boundingRect(forGlyphRange: overlap,
-                                                       in: self.textContainer)
-            guard !rect.isNull, !rect.isEmpty else { return }
-            rect = rect.insetBy(dx: -2, dy: -1)
-            self.highlightColor.setFill()
-            UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
-        }
-    }
-
     override func draw(_ rect: CGRect) {
-        drawAloudHighlight()
         super.draw(rect)
     }
 
