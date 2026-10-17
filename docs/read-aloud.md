@@ -43,6 +43,10 @@
   → 按 `md5(章名)_md5(引擎URL|语速|文本)` 缓存到 Caches/httpTTS（上限 128MB
   循环淘汰，同键不重下，改语速/引擎换新键）。
 - 在后台任务里预下载后面 10 段；有并发率的引擎按平均请求间隔限速。
+- 倍速：URL 含 `{{speakSpeed}}` 的引擎由服务端按语速合成，改语速时重下当前段；
+  不含的引擎（如「起点·在线听书」类分享配置）由 App 本机变速播放——
+  整场复用一个 AVAudioEngine 音频图（段间只换源文件，避免锁屏/后台的音频
+  会话断点），AVAudioUnitTimePitch 变速保持音调、实时生效、缓存不重下。
 - 连续 5 次下载失败自动暂停并提示；单次失败跳过本段继续下一段。
 
 ## 与原版的行为差异
@@ -67,6 +71,7 @@
 | Sources/Engine/AloudAudio.swift | 音频抓取 + 错误分类 + 128MB 缓存 |
 | Sources/App/ReaderAloud.swift | ReaderAloudController：全播放状态机 |
 | Sources/App/AloudPlayerView.swift | 全屏听书播放器（封面/正文两种模式） |
+| Sources/App/AloudAudioPlayer.swift | 会话级复用音频图 + 本机变速（保持音调） |
 | Sources/App/SpeakEngineList.swift | 预加载设置卡 + 引擎管理 + 导入导出 |
 | Sources/App/HttpTTSEditView.swift | 引擎编辑表单 |
 | Tools/SourceTest/HttpTTSRegression.swift | 离线回归（含回环服务器） |

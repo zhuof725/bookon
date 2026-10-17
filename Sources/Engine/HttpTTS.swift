@@ -55,6 +55,10 @@ struct HTTPTTS: Codable, Hashable, Identifiable {
     /// 原版 BaseSource.getKey()：登录信息/登录头按这个键存取。
     var key: String { "httpTts:\(id)" }
 
+    /// URL 是否把语速交给服务端（含 `{{speakSpeed}}`）。不含的引擎
+    /// 由本机播放器变速（AVAudioUnitTimePitch，保持音调）。
+    var usesServerSpeed: Bool { url.contains("speakSpeed") }
+
     var displayName: String { name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名引擎" : name }
 
     var hasLogin: Bool {
