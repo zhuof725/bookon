@@ -408,7 +408,9 @@ struct ReaderView: View {
                     canNext: !loading && readableIndex(from: index + 1, direction: 1) != nil,
                     isSpeaking: bookAudio.chapterURL != nil ? bookAudio.isPlaying : aloud.isRunning,
                     background: theme.bg, foreground: theme.fg,
-                    onScrub: scrubReader, onPrevious: { go(index - 1) }, onNext: { go(index + 1) },
+                    onScrub: scrubReader,
+                    onPrevious: { if bookAudio.chapterURL != nil { audioPreviousChapter() } else { go(index - 1) } },
+                    onNext: { if bookAudio.chapterURL != nil { audioNextChapter() } else { go(index + 1) } },
                     onTOC: { showToc = true },
                     onSpeech: {
                         if bookAudio.chapterURL != nil { bookAudio.toggle() } else { showAloudPanel = true }
@@ -1484,13 +1486,38 @@ struct ReaderView: View {
 
     // MARK: 音频书章节（喜马拉雅等音频源）
 
-    /// 开始播放音频章节；播完自动进下一章，锁屏上下曲同样跳章。
+    /// 开始播放音频章节；播放器会在当前章播放期间预载下一章，
+    /// 章末连播、点「下一章」都由播放队列直接接管，不再重新起播。
     private func beginAudioChapter(_ target: Int) {
         let chapter = chapters[target]
         bookAudio.onFinish = { audioNextChapter() }
         bookAudio.onRemoteNext = { audioNextChapter() }
         bookAudio.onRemotePrevious = { audioPreviousChapter() }
-        bookAudio.play(url: chapter.url, title: chapter.title, album: book.name)
+        bookAudio.onChapterChanged = { adopted in adoptAudioChapter(adopted) }
+        bookAudio.nextChapterProvider = { current in audioChapterAfter(current) }
+        bookAudio.play(chapterIndex: target, url: chapter.url, title: chapter.title, album: book.name)
+    }
+
+    /// 预载候选：当前章之后最近的可读音频章；没有则返回 nil（末章等）。
+    private func audioChapterAfter(_ current: Int) -> BookAudioPlayer.NextChapter? {
+        guard let source = store.source(for: book.origin),
+              let next = readableIndex(from: current + 1, direction: 1) else { return nil }
+        let chapter = chapters[next]
+        guard AudioChapter.isAudio(source: source, chapter: chapter) else { return nil }
+        return BookAudioPlayer.NextChapter(index: next, url: chapter.url, title: chapter.title)
+    }
+
+    /// 播放队列自动接管预载章后，把阅读器状态对齐到新章（与 loadContent 音频分支一致）。
+    private func adoptAudioChapter(_ newIndex: Int) {
+        guard chapters.indices.contains(newIndex) else { return }
+        let chapter = chapters[newIndex]
+        index = newIndex
+        ChapterPrecacheManager.shared.updateCurrentIndex(newIndex)
+        retryTarget = nil
+        error = nil
+        store.updateProgress(book, index: newIndex, title: chapter.title)
+        noteReadingChapter(newIndex)
+        store.updateScrollPosition(book, permille: 0)
     }
 
     private func audioNextChapter() {
@@ -1499,6 +1526,8 @@ struct ReaderView: View {
             bookAudio.stop()
             return
         }
+        // 已预载：由播放队列立即接管，不重新加载。
+        if bookAudio.advanceToQueued(chapterIndex: next) { return }
         loadChapter(next, landing: .start)
     }
 

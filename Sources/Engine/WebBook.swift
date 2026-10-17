@@ -257,14 +257,18 @@ enum WebBook {
         var nextURLs: [String]
     }
 
-    /// 并发抓取一批目录页（每批最多 4 个连接）；结果按入参顺序返回。
+    /// 一批目录页的并发数：喜马拉雅这类源一次返回 8 页地址、每页数百 KB，
+    /// 并发太小要多等好几轮；成批并行、结果仍按页序返回。
+    private static let tocPageConcurrency = 8
+
+    /// 并发抓取一批目录页（每批最多 tocPageConcurrency 个连接）；结果按入参顺序返回。
     private static func fetchTocBatch(_ urls: [String], source: BookSource, book: Book,
                                       rule: TocRule, listRule: String) async throws -> [TocPageResult] {
         var results: [TocPageResult] = []
         results.reserveCapacity(urls.count)
         var start = 0
         while start < urls.count {
-            let slice = Array(urls[start..<min(start + 4, urls.count)])
+            let slice = Array(urls[start..<min(start + tocPageConcurrency, urls.count)])
             let batch = try await withThrowingTaskGroup(of: (Int, TocPageResult).self) { group in
                 for (offset, u) in slice.enumerated() {
                     group.addTask {
@@ -277,7 +281,7 @@ enum WebBook {
                 return collected.sorted { $0.0 < $1.0 }
             }
             results.append(contentsOf: batch.map { $0.1 })
-            start += 4
+            start += tocPageConcurrency
         }
         return results
     }
