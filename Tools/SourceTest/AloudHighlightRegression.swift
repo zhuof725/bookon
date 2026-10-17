@@ -14,8 +14,8 @@ enum AloudHighlightRegression {
             .chapterComments(title: "本章说", count: "123", items: [], clickURL: nil)]
         let blocks = ignored + [paragraph("甲乙"), paragraph("")] + [image, paragraph("丙丁")]
         let chapter = 7
-        for (offset, block, start, length) in [(0, 5, 0, 1), (1, 5, 0, 2),
-                                              (2, 8, 2, 1), (3, 8, 2, 2)] {
+        for (offset, block, start, length) in [(0, 5, 0, 2), (1, 5, 0, 2),
+                                              (2, 8, 2, 2), (3, 8, 2, 2)] {
             check(AloudHighlightLocator.locate(offset: offset, chapter: chapter, blocks: blocks)
                 == AloudHighlight(chapter: chapter, page: 0, block: block, start: start, length: length),
                 "朗读高亮：空段、图片、气泡和评论不计偏移 \(offset)")
@@ -30,8 +30,8 @@ enum AloudHighlightRegression {
         }
 
         let repeated = [paragraph("相同段落"), image, paragraph(""), paragraph("相同段落")]
-        for (offset, block, start, length) in [(0, 0, 0, 1), (3, 0, 0, 4),
-                                              (4, 3, 4, 1), (7, 3, 4, 4)] {
+        for (offset, block, start, length) in [(0, 0, 0, 4), (3, 0, 0, 4),
+                                              (4, 3, 4, 4), (7, 3, 4, 4)] {
             check(AloudHighlightLocator.locate(offset: offset, chapter: chapter, blocks: repeated)
                 == AloudHighlight(chapter: chapter, page: 0, block: block, start: start, length: length),
                 "朗读高亮：重复段落按字符偏移定位 \(offset)")
@@ -43,8 +43,8 @@ enum AloudHighlightRegression {
         let unicodeBlocks = [paragraph(unicode), paragraph("尾")]
         for offset in 0..<6 {
             check(AloudHighlightLocator.locate(offset: offset, chapter: chapter, blocks: unicodeBlocks)
-                == AloudHighlight(chapter: chapter, page: 0, block: 0, start: 0, length: offset + 1),
-                "朗读高亮：emoji 与组合字符按 Character 计数 \(offset)")
+                == AloudHighlight(chapter: chapter, page: 0, block: 0, start: 0, length: 6),
+                "朗读高亮：emoji 与组合字符同样整段高亮 \(offset)")
         }
         check(AloudHighlightLocator.locate(offset: 6, chapter: chapter, blocks: unicodeBlocks)
             == AloudHighlight(chapter: chapter, page: 0, block: 1, start: 6, length: 1),
@@ -60,8 +60,8 @@ enum AloudHighlightRegression {
             BookPage(blocks: [image, paragraph(""), paragraph("乙丙丁"), paragraph("丙丁")],
                      startOffset: 3, continuationIndices: [2])]
         for (offset, page, block, start, length) in [
-            (0, 1, 2, 0, 1), (1, 1, 2, 0, 2), (2, 1, 2, 0, 3),
-            (3, 3, 2, 3, 1), (5, 3, 2, 3, 3), (6, 3, 3, 6, 1), (7, 3, 3, 6, 2)
+            (0, 1, 2, 0, 3), (1, 1, 2, 0, 3), (2, 1, 2, 0, 3),
+            (3, 3, 2, 3, 3), (5, 3, 2, 3, 3), (6, 3, 3, 6, 2), (7, 3, 3, 6, 2)
         ] {
             check(AloudHighlightLocator.locateInPages(offset: offset, chapter: chapter,
                 pages: pages, blocks: pagedSource)

@@ -199,7 +199,7 @@ struct InlineCommentParagraph: UIViewRepresentable {
     let onTap: () -> Void
     /// 长按选词后的菜单动作；nil 时不启用选择，正文点击仍交给翻页容器。
     var selection: ReaderTextSelectionActions?
-    /// 朗读高亮前缀长度（本段已读字符数）；0 = 不高亮。
+    /// 高亮覆盖的字符数；整段高亮时等于段落总字符数。
     var highlightLength: Int = 0
     /// 高亮的背景色（跟随主题）。
     var highlightColor: UIColor = ReaderAloudHighlightStyle.color
@@ -546,7 +546,7 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
             setNeedsDisplay()
             return
         }
-        // 范围限定到原文，不把分隔空格和段评附件涂色；Emoji/组合字符不拆开。
+        // 范围限定到原文，不把分隔空格和段评附件涂色。
         let displayed = ReaderTextLayout.displayText(for: paragraph.text)
         let length = min(displayed.prefix(requestedHighlightLength).utf16.count, textStorage.length)
         guard length > 0 else {

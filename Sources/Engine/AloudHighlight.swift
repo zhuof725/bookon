@@ -11,7 +11,7 @@ struct AloudHighlight: Equatable {
     var block: Int = 0
     /// 段落（或页内续段块）的章节字符偏移。
     var start: Int = 0
-    /// 段内已朗读的字符数（高亮前缀长度，0 = 不画）。
+    /// 高亮覆盖的字符数；番茄小说式整段高亮，阅读中不逐字前移。
     var length: Int = 0
 }
 
@@ -35,13 +35,13 @@ enum AloudHighlightLocator {
         return list
     }
 
-    /// 滚动模式：字符偏移 → 所在段落与已读前缀。
+    /// 滚动模式：字符偏移 → 所在段落；整段高亮，不随每个字前移。
     static func locate(offset: Int, chapter: Int, blocks: [ContentBlock]) -> AloudHighlight? {
         guard offset >= 0 else { return nil }
         for item in paragraphBounds(blocks) where item.length > 0 {
             if offset >= item.start, offset < item.start + item.length {
                 return AloudHighlight(chapter: chapter, page: 0, block: item.block,
-                                      start: item.start, length: offset - item.start + 1)
+                                      start: item.start, length: item.length)
             }
         }
         return nil
@@ -62,7 +62,7 @@ enum AloudHighlightLocator {
                 guard length > 0 else { continue }
                 if offset >= start, offset < start + length {
                     return AloudHighlight(chapter: chapter, page: pageIndex, block: blockIndex,
-                                          start: start, length: offset - start + 1)
+                                          start: start, length: length)
                 }
                 start += length
             }
