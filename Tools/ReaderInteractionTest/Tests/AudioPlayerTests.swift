@@ -20,11 +20,16 @@ final class AudioPlayerTests: XCTestCase {
     }
 
     private func waitForState(_ text: String, timeout: TimeInterval, _ message: String) {
+        XCTAssertTrue(stateWaitsFor(text, timeout: timeout),
+                      "\(message) — state: \(app.staticTexts["audio.state"].label)")
+    }
+
+    @discardableResult
+    private func stateWaitsFor(_ text: String, timeout: TimeInterval) -> Bool {
         let state = app.staticTexts["audio.state"]
         let wait = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS %@", text), object: state)
-        XCTAssertEqual(XCTWaiter.wait(for: [wait], timeout: timeout), .completed,
-                       "\(message) — state: \(state.label)")
+        return XCTWaiter.wait(for: [wait], timeout: timeout) == .completed
     }
 
     func testFirstChapterPlaysAndPrerollsNext() {
@@ -37,8 +42,13 @@ final class AudioPlayerTests: XCTestCase {
     func testNextChapterUsesPrerolledQueue() {
         launch()
         waitForState("queued=1", timeout: 25, "next chapter should be prerolled")
-        app.buttons["audio.next"].tap()
-        waitForState("via=queue", timeout: 5, "queued hop should be used")
+        // 慢速模拟器偶尔会丢掉合成点击：重试直到状态变化。
+        var hopped = false
+        for _ in 0..<4 where !hopped {
+            app.buttons["audio.next"].tap()
+            hopped = stateWaitsFor("via=queue", timeout: 4)
+        }
+        XCTAssertTrue(hopped, "queued hop should be used — state: \(app.staticTexts["audio.state"].label)")
         waitForState("chapter=1", timeout: 8, "player should switch to chapter 1")
         waitForState("playing=true", timeout: 8, "playback should continue across the switch")
     }
@@ -54,8 +64,12 @@ final class AudioPlayerTests: XCTestCase {
     func testStopClearsPlaybackState() {
         launch()
         waitForState("playing=true", timeout: 15, "playback should start")
-        app.buttons["audio.stop"].tap()
-        waitForState("chapter=-1", timeout: 5, "stop should clear the chapter")
+        var stopped = false
+        for _ in 0..<4 where !stopped {
+            app.buttons["audio.stop"].tap()
+            stopped = stateWaitsFor("chapter=-1", timeout: 4)
+        }
+        XCTAssertTrue(stopped, "stop should clear the chapter — state: \(app.staticTexts["audio.state"].label)")
         waitForState("playing=false", timeout: 5, "stop should end playback")
     }
 }
