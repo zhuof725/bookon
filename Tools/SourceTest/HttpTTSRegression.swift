@@ -145,7 +145,7 @@ enum HTTPTTSRegression {
         // 11. loginCheckJs：result.body().bytes() 读取字节 + newBuilder() 重组
         var checkJsEngine = HTTPTTS(); checkJsEngine.id = 90002; checkJsEngine.name = "重组"
         checkJsEngine.contentType = "audio/mpeg"
-        checkJsEngine.url = server.origin + "/multi,{"method":"POST","body":"t={{speakText}}"}"
+        checkJsEngine.url = server.origin + "/multi,{\"method\":\"POST\",\"body\":\"t={{speakText}}\"}"
         checkJsEngine.loginCheckJs = """
         (function(){
             var bytes = result.body().bytes(); // StrResponse.bodyAsBytes 桥
@@ -160,7 +160,7 @@ enum HTTPTTSRegression {
 
         // 12. loginCheckJs 返回字符串（文本错误）→ serverRejected
         var badEngine = HTTPTTS(); badEngine.id = 90003; badEngine.name = "文本错误"
-        badEngine.url = server.origin + "/bad,{"method":"POST"}"
+        badEngine.url = server.origin + "/bad,{\"method\":\"POST\"}"
         badEngine.loginCheckJs = "(function(){ return "{error:'bad'}"; })()"
         server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00, 0x01]))
         do { _ = try await AloudAudioFetcher.fetchAudio(engine: badEngine, text: "y", speed: 15); check(false, "loginCheckJs 字符串返回应走 serverRejected") }
@@ -173,7 +173,7 @@ enum HTTPTTSRegression {
 
         // 13. loginCheckJs 异常 → scriptFailure（脚本本身失败）
         var throwEngine = HTTPTTS(); throwEngine.id = 90004; throwEngine.name = "脚本异常"
-        throwEngine.url = server.origin + "/x,{"method":"POST"}"
+        throwEngine.url = server.origin + "/x,{\"method\":\"POST\"}"
         throwEngine.loginCheckJs = "(function(){ throw new Error('Packages 未定义'); })()"
         server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00]))
         do { _ = try await AloudAudioFetcher.fetchAudio(engine: throwEngine, text: "y", speed: 15); check(false, "loginCheckJs 异常应走 scriptFailure") }
