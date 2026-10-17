@@ -254,9 +254,8 @@ struct AnalyzeUrl {
         print("TTSDBG fetchData cookie=\(cookieJarEnabled) url=\(url)")
         let session: URLSession
         if cookieJarEnabled { session = baseSession } else {
-            print("TTSDBG before copy")
-            let cfg = baseSession.configuration.copy() as! URLSessionConfiguration
-            print("TTSDBG after copy")
+            // ephemeral：不持久化 Cookie 缓存；显式关闭接受/存储 Cookie（Legado 原生也是不存不发）。
+            let cfg = URLSessionConfiguration.ephemeral
             cfg.httpCookieStorage = nil
             cfg.httpShouldSetCookies = false
             cfg.httpCookieAcceptPolicy = .never
