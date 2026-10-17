@@ -31,6 +31,35 @@ enum HTTPTTSRegression {
         r.concurrentRate = "10/15000"
         check(r.requestIntervalMilliseconds == 1500, "N/M 按平均间隔限速")
 
+        // 预加载配置：默认值、上下界、写入与读取修复；离开此作用域即恢复用户设置。
+        do {
+            let preferences = UserDefaults.standard
+            let key = AloudTTSConfig.preloadKey
+            let original = preferences.object(forKey: key)
+            defer {
+                if let original { preferences.set(original, forKey: key) }
+                else { preferences.removeObject(forKey: key) }
+            }
+            preferences.removeObject(forKey: key)
+            check(AloudTTSConfig.preloadCount == 10, "预加载未设置时默认 10 段")
+            for (input, expected) in [(Int.min, 1), (-1, 1), (0, 1), (1, 1),
+                                      (10, 10), (20, 20), (21, 20), (Int.max, 20)] {
+                AloudTTSConfig.preloadCount = input
+                check(AloudTTSConfig.preloadCount == expected,
+                      "预加载写入 \(input) 后读取为 \(expected)")
+                check(preferences.integer(forKey: key) == expected,
+                      "预加载写入 \(input) 后持久化为 \(expected)")
+            }
+            // 其他入口/旧版本绕过 setter 写入时，读取会校正并回写同一配置键。
+            for (input, expected) in [(0, 1), (7, 7), (21, 20)] {
+                preferences.set(input, forKey: key)
+                check(AloudTTSConfig.preloadCount == expected,
+                      "预加载外部写入 \(input) 后读取为 \(expected)")
+                check(preferences.integer(forKey: key) == expected,
+                      "预加载外部写入 \(input) 后持久化为 \(expected)")
+            }
+        }
+
         // 4. 存储 CRUD 与一致性
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("httptts-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

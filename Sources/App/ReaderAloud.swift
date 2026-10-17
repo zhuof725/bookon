@@ -34,6 +34,8 @@ struct ReaderAloudHost {
 final class ReaderAloudController: NSObject, ObservableObject {
     enum PlaybackEngine { case system, http }
 
+    let highlight = AloudHighlightModel()
+    private var currentUtterance: AVSpeechUtterance?
     @Published private(set) var isRunning = false
     @Published private(set) var isPlaying = false
     @Published private(set) var isBuffering = false
@@ -70,7 +72,6 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private let rateLock = NSLock()
     private var lastRequestAt = Date.distantPast
     private var noticeObservers: [NSObjectProtocol] = []
-    private let prefetchCount = 10
 
     override init() {
         super.init()
@@ -196,6 +197,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     func stop() {
+        highlight.clear()
         guard isRunning else { return }
         isRunning = false
         isPlaying = false
@@ -337,6 +339,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
         utterance.rate = ReaderAloudController.utteranceRate(speed)
         utterance.preUtteranceDelay = 0.08
+        currentUtterance = utterance
         expectingFinish = true
         synthesizer.speak(utterance)
     }
@@ -421,14 +424,14 @@ final class ReaderAloudController: NSObject, ObservableObject {
         }
     }
 
-    /// 提前下载后续段落音频；有并发率时按间隔限速。
+    /// 提前下载后续段落音频；有并发率时按间隔限速。段落数取设置（1–20）。
     private func prefetch(from index: Int) {
         guard isRunning, playbackEngine == .http, let engine else { return }
         prefetchTask?.cancel()
         let snapshot = units
         let title = chapterTitle
         let speed = AloudTTSConfig.httpSpeakSpeed
-        let limit = min(index + prefetchCount - 1, snapshot.count - 1)
+        let limit = min(index + AloudTTSConfig.preloadCount - 1, snapshot.count - 1)
         guard index <= limit else { return }
         prefetchTask = Task.detached(priority: .utility) { [weak self] in
             var i = index
@@ -669,6 +672,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     private func expectStop() {
         expectingFinish = false
+        currentUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
     }
 
@@ -684,7 +688,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
 extension ReaderAloudController: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
-            guard let self, expectingFinish else { return }
+            guard let self, expectingFinish, currentUtterance === utterance else { return }
+            currentUtterance = nil
             expectingFinish = false
             finishedUnit()
         }
@@ -693,8 +698,15 @@ extension ReaderAloudController: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             guard let self, isRunning, isPlaying, playbackEngine == .system,
-                  units.indices.contains(unitIndex) else { return }
-            host?.follow(chapterIndex, units[unitIndex].offset + characterRange.location)
+                  currentUtterance === utterance, units.indices.contains(unitIndex) else { return }
+            let unit = units[unitIndex]
+            // AVSpeech 使用 UTF-16；阅读偏移是 Character。组合 Emoji 和前导空白要映射回原文。
+            let string = utterance.speechString
+            let end = min(max(NSMaxRange(characterRange), 0), string.utf16.count)
+            let spoken = (string as NSString).substring(to: end).count
+            let leading = unit.text.prefix(while: { $0.isWhitespace }).count
+            let position = min(max(leading + spoken - 1, 0), max(unit.text.count - 1, 0))
+            host?.follow(chapterIndex, unit.offset + position)
         }
     }
 }

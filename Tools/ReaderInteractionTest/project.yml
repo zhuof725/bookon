@@ -98,6 +98,8 @@ targets:
       - path: ../../Sources/App/ReaderCoverPageTurnView.swift
       - path: ../../Sources/App/ReaderContinuousScrollView.swift
       - path: ../../Sources/App/CommentViews.swift
+      - path: ../../Sources/App/AloudHighlightModel.swift
+      - path: ../../Sources/Engine/AloudHighlight.swift
       - path: ../../Sources/App/BubbleStyle.swift
       - path: ../../Sources/App/BubbleSVG.swift
       - path: ../../Sources/App/BubbleStyleEditor.swift

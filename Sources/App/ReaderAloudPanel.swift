@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// 听书朗读面板：对齐原版 `dialog_read_aloud.xml` 的控件组 —
 /// 上一章/上一句/播放暂停/停止/下一句/下一章，语速 −/+，定时，朗读引擎，朗读设置。
@@ -17,6 +18,7 @@ struct ReaderAloudPanel: View {
                     controlRow
                     speedRow
                     engineLink
+                    AloudPreloadCard()
                 }
                 .padding(16)
             }
@@ -31,7 +33,7 @@ struct ReaderAloudPanel: View {
                 }
             }
         }
-        .presentationDetents([.height(400), .large])
+        .presentationDetents([.height(560), .large])
         .presentationDragIndicator(.visible)
         // 打开面板未启动即自动开始；中途重新打开不打断正在读的。
         .onAppear { if !aloud.isRunning { aloud.openCurrent() } }
@@ -181,6 +183,84 @@ struct ReaderAloudPanel: View {
     }
 }
 
+/// 预加载段落设置：数字框 + −/+ 圆形按钮 + 滑杆，调整后立即持久化。
+/// 语音引擎为系统语音时无预加载，仍保留可调（切到在线引擎即生效）。
+struct AloudPreloadCard: View {
+    @AppStorage(AloudTTSConfig.preloadKey) private var storedCount = AloudTTSConfig.defaultPreloadCount
+    private let range = AloudTTSConfig.preloadRange
+    private var count: Int { AloudTTSConfig.clampedPreloadCount(storedCount) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("预加载").appFont(.headline)
+                .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text("预加载段落").appFont(.body)
+                    Spacer(minLength: 8)
+                    Text("\(count)")
+                        .font(.system(.title2, design: .default, weight: .regular))
+                        .monospacedDigit()
+                        .frame(minWidth: 56, minHeight: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                        .accessibilityIdentifier("reader.aloud.preloadValue")
+                    Text("段").appFont(.body).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 14) {
+                    stepButton(symbol: "minus", label: "减少预加载段落", enabled: count > range.lowerBound) {
+                        setCount(count - 1)
+                    }
+                    .accessibilityIdentifier("reader.aloud.preloadMinus")
+                    Slider(value: Binding(get: { Double(count) },
+                                          set: { setCount(Int($0.rounded())) }),
+                           in: Double(range.lowerBound)...Double(range.upperBound), step: 1)
+                        .tint(.accentColor)
+                        .accessibilityIdentifier("reader.aloud.preloadSlider")
+                        .accessibilityLabel("预加载段落")
+                    stepButton(symbol: "plus", label: "增加预加载段落", enabled: count < range.upperBound) {
+                        setCount(count + 1)
+                    }
+                    .accessibilityIdentifier("reader.aloud.preloadPlus")
+                }
+                Text("范围: \(range.lowerBound)-\(range.upperBound)，预加载更多段落可减少卡顿")
+                    .appFont(.footnote).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 16)
+            .modifier(SettingsGlassSurface())
+        }
+        .onAppear { setCount(storedCount) }
+        .onChange(of: storedCount) { setCount($0) }
+    }
+
+    private func stepButton(symbol: String, label: String, enabled: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(enabled ? Color.white : Color.white.opacity(0.7))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.accentColor.opacity(enabled ? 1 : 0.45)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+    }
+
+    private func setCount(_ value: Int) {
+        let clamped = AloudTTSConfig.clampedPreloadCount(value)
+        guard storedCount != clamped else { return }
+        storedCount = clamped
+    }
+}
+
 /// 朗读引擎管理：对齐原版 SpeakEngineDialog — 列表选择、长按登录、
 /// 添加/编辑/删除/导入/导出/清空缓存。选择立即生效并持久化。
 struct SpeakEngineList: View {
@@ -196,7 +276,7 @@ struct SpeakEngineList: View {
     @State private var deleting: HTTPTTS?
     @State private var loginEngine: HTTPTTS?
     @State private var message: String?
-
+    @StateObject private var auditioner = AloudEngineAudition()
     private var selectedID: String { AloudTTSConfig.selectedEngineID }
 
     var body: some View {
@@ -207,6 +287,10 @@ struct SpeakEngineList: View {
                         HStack(spacing: 12) {
                             Text("系统语音").appFont(.body)
                             Spacer()
+                            if auditioner.engineID == 0 {
+                                Image(systemName: auditioner.isPlaying ? "waveform" : "hourglass")
+                                    .foregroundStyle(.tint)
+                            }
                             Text("系统").appFont(.caption).foregroundStyle(.secondary)
                             if selectedID.isEmpty {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
@@ -215,6 +299,12 @@ struct SpeakEngineList: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("tts.system")
+                    .contextMenu {
+                        Button { auditioner.toggleSystem(reader: aloud) } label: {
+                            Label(auditioner.engineID == 0 ? "取消试听" : "试听", systemImage: auditioner.engineID == 0 ? "stop.circle" : "play.circle")
+                        }
+                        .accessibilityIdentifier("tts.audition.system")
+                    }
                 } header: { Text("语音引擎") }
 
                 Section {
@@ -239,7 +329,7 @@ struct SpeakEngineList: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") { dismiss() }.accessibilityIdentifier("tts.close")
+                    Button("完成") { auditioner.cancel(); dismiss() }.accessibilityIdentifier("tts.close")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -335,44 +425,90 @@ struct SpeakEngineList: View {
             } message: { Text(deleting?.displayName ?? "") }
         }
         .onAppear { engines.reload() }
+        .onDisappear { auditioner.cancel() }
+        .onChange(of: aloud.isPlaying) { if $0 { auditioner.cancel() } }
+        .onChange(of: aloud.isRunning) { if !$0 { auditioner.cancel() } }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notice in
+            if let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+               type == AVAudioSession.InterruptionType.began.rawValue {
+                auditioner.cancel()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notice in
+            if let reason = notice.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+               reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
+                auditioner.cancel()
+            }
+        }
+        .alert("试听失败", isPresented: Binding(get: { auditioner.errorMessage != nil },
+                                           set: { if !$0 { auditioner.dismissError() } })) {
+            Button("好", role: .cancel) { auditioner.dismissError() }
+        } message: {
+            Text(auditioner.errorMessage ?? "")
+        }
     }
 
     private func engineRow(_ engine: HTTPTTS) -> some View {
-        HStack(spacing: 12) {
-            Button { choose(engine) } label: {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(engine.displayName).appFont(.body).lineLimit(1)
-                        Text(engine.url).appFont(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            .accessibilityIdentifier("tts.url.\(engine.id)")
-                    }
-                    Spacer()
-                    if selectedID == "\(engine.id)" {
-                        Image(systemName: "checkmark").foregroundStyle(.tint)
-                    }
-                }.contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("tts.row.\(engine.id)")
-            Menu {
-                Button("设为当前引擎") { choose(engine) }
-                if engine.hasLogin {
-                    Button("登录") { loginEngine = engine }
+        Button { choose(engine) } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(engine.displayName).appFont(.body).lineLimit(1)
+                    Text(engine.url).appFont(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        .accessibilityIdentifier("tts.url.\(engine.id)")
                 }
-                Button("编辑") { editing = engine }
-                Button("复制配置") {
-                    if let s = getSingleJSONText(engine), !s.isEmpty {
-                        UIPasteboard.general.string = s
-                        show("已复制引擎配置")
+                Spacer(minLength: 0)
+                if auditioner.engineID == engine.id {
+                    if auditioner.isPlaying {
+                        Image(systemName: "waveform").foregroundStyle(.tint)
+                            .accessibilityLabel("正在试听")
+                    } else {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel("正在下载试听音频")
                     }
                 }
-                Button("删除", role: .destructive) { deleting = engine }
-            } label: {
-                Image(systemName: "ellipsis.circle").padding(.trailing, 2).contentShape(Rectangle())
+                if selectedID == "\(engine.id)" {
+                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("tts.menu.\(engine.id)")
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tts.row.\(engine.id)")
+        .accessibilityHint("长按显示更多操作")
+        .contextMenu { engineMenu(engine) }
+    }
+
+    /// 长按菜单：试听 + 原有操作。右侧三点入口已取消。
+    @ViewBuilder
+    private func engineMenu(_ engine: HTTPTTS) -> some View {
+        Button { audition(engine) } label: {
+            Label(auditioner.engineID == engine.id ? "取消试听" : "试听",
+                  systemImage: auditioner.engineID == engine.id ? "stop.circle" : "play.circle")
+        }
+        .accessibilityIdentifier("tts.audition.\(engine.id)")
+        Button("设为当前引擎") { choose(engine) }
+        if engine.hasLogin {
+            Button("登录") { auditioner.cancel(); loginEngine = engine }
+        }
+        Button("编辑") { auditioner.cancel(); editing = engine }
+        Button("复制配置") {
+            if let s = getSingleJSONText(engine), !s.isEmpty {
+                UIPasteboard.general.string = s
+                show("已复制引擎配置")
+            }
+        }
+        Button("删除", role: .destructive) { auditioner.cancel(); deleting = engine }
+    }
+
+    /// 使用真实引擎和登录配置试听固定短句，正文保持暂停。
+    private func audition(_ engine: HTTPTTS) {
+        if auditioner.engineID != engine.id, engine.hasLogin, !hasLoginInfo(engine) {
+            auditioner.cancel()
+            aloud.pause()
+            loginEngine = engine
+            return
+        }
+        auditioner.toggle(engine: engine, reader: aloud)
     }
 
     private func getSingleJSONText(_ engine: HTTPTTS) -> String? {
@@ -381,6 +517,7 @@ struct SpeakEngineList: View {
     }
 
     private func choose(_ engine: HTTPTTS?) {
+        auditioner.cancel()
         aloud.selectEngine(engine)
         if let e = engine {
             if e.hasLogin, !hasLoginInfo(e) { loginEngine = e }

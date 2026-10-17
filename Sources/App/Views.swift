@@ -599,7 +599,13 @@ struct ReaderView: View {
         .onChange(of: pageIndex) { _ in syncMenuProgress() }
         .onChange(of: pages.count) { _ in syncMenuProgress() }
         .onChange(of: loading) { value in if !value { syncMenuProgress() } }
-        .onChange(of: index) { _ in syncMenuProgress() }
+        .onChange(of: index) { _ in
+            aloud.highlight.clear()
+            syncMenuProgress()
+        }
+        .onChange(of: aloud.isRunning) { running in
+            if !running { aloud.highlight.clear() }
+        }
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
@@ -918,9 +924,9 @@ struct ReaderView: View {
                     .padding(.bottom, max(CGFloat(settings.fontSize) * 0.8, 14))
                     .contentShape(Rectangle())
                     .onTapGesture { toggleBars() }
-                ForEach(Array(content.readingBlocks.enumerated()), id: \.offset) { index, block in
-                    blockView(block)
-                        .padding(.top, scrollParagraphLeadingGap(in: content.readingBlocks, at: index))
+                ForEach(Array(content.readingBlocks.enumerated()), id: \.offset) { blockIndex, block in
+                    blockView(block, chapter: content.id, blockIndex: blockIndex)
+                        .padding(.top, scrollParagraphLeadingGap(in: content.readingBlocks, at: blockIndex))
                 }
             }
         }
@@ -1238,7 +1244,8 @@ struct ReaderView: View {
                 leftMargin: settings.leftMargin, rightMargin: settings.rightMargin,
                 topMargin: settings.topMargin, bottomMargin: settings.bottomMargin,
                 volumeTitle: chapter?.isVolume == true ? chapter?.title : nil,
-                showsChapterTitle: chapter?.isVolume != true).ignoresSafeArea())
+                showsChapterTitle: chapter?.isVolume != true,
+                aloudHighlight: aloud.highlight, aloudChapter: target).ignoresSafeArea())
         }
     }
 
@@ -1329,7 +1336,7 @@ struct ReaderView: View {
     }
 
     @ViewBuilder
-    private func blockView(_ block: ContentBlock) -> some View {
+    private func blockView(_ block: ContentBlock, chapter: Int? = nil, blockIndex: Int? = nil) -> some View {
         switch block {
         case .paragraph(let t, let count, let url):
             InlineCommentParagraph(text: t, count: count,
@@ -1337,6 +1344,10 @@ struct ReaderView: View {
                                     lineSpacing: settings.lineSpacingPoints,
                                     color: UIColor(theme.fg),
                                     fullJustify: settings.fullJustify,
+                                    highlightColor: ReaderAloudHighlightStyle.color(forBackground: UIColor(theme.bg)),
+                                    aloudHighlight: chapter == nil ? nil : aloud.highlight,
+                                    aloudChapter: chapter,
+                                    aloudBlock: blockIndex,
                                     onTextTap: { toggleBars() },
                                     selection: textSelectionActions,
                                     onTap: { commentTapped(url) })
@@ -1526,6 +1537,11 @@ struct ReaderView: View {
     /// 并保存阅读进度，退出后可以从朗读接着读。
     private func followAloud(chapter: Int, offset: Int) {
         guard aloud.isRunning, chapter == index, !loading else { return }
+        let highlight = settings.pageMode == 1
+            ? AloudHighlightLocator.locateInPages(offset: offset, chapter: chapter,
+                                                   pages: pages, blocks: readerBlocks)
+            : AloudHighlightLocator.locate(offset: offset, chapter: chapter, blocks: readerBlocks)
+        aloud.highlight.update(highlight)
         if settings.pageMode == 1 {
             guard !pages.isEmpty, pages.indices.contains(0) else { return }
             let target = Paginator.pageIndex(containing: offset, in: pages)

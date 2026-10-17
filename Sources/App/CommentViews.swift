@@ -199,12 +199,66 @@ struct InlineCommentParagraph: UIViewRepresentable {
     let onTap: () -> Void
     /// 长按选词后的菜单动作；nil 时不启用选择，正文点击仍交给翻页容器。
     var selection: ReaderTextSelectionActions?
+    /// 朗读高亮前缀长度（本段已读字符数）；0 = 不高亮。
+    var highlightLength: Int = 0
+    /// 高亮的背景色（跟随主题）。
+    var highlightColor: UIColor = ReaderAloudHighlightStyle.color
+    /// 朗读进度模型：订阅后只改文字底色，不触发重新排版或阅读器整树刷新。
+    var aloudHighlight: AloudHighlightModel?
+    var aloudChapter: Int?
+    /// 分页模式传页号；滚动模式为 nil（匹配 page 0）。
+    var aloudPage: Int?
+    var aloudBlock: Int?
+
+    final class Coordinator {
+        var model: AloudHighlightModel?
+        var token: NSObjectProtocol?
+        var chapter: Int?
+        var page: Int?
+        var block: Int?
+
+        deinit {
+            if let token { NotificationCenter.default.removeObserver(token) }
+        }
+
+        func subscribe(_ model: AloudHighlightModel?, view: CommentTextView) {
+            guard self.model !== model else { return }
+            if let token { NotificationCenter.default.removeObserver(token) }
+            token = nil
+            self.model = model
+            guard let model else { return }
+            token = NotificationCenter.default.addObserver(
+                forName: AloudHighlightModel.changedName, object: model, queue: .main
+            ) { [weak self, weak view] _ in
+                guard let self, let view else { return }
+                view.applyHighlight(length: self.currentLength(model: model),
+                                    color: view.highlightColor)
+            }
+        }
+
+        /// 当前视图负责的块命中朗读进度时返回已读字符数，否则 0。
+        func currentLength(model: AloudHighlightModel) -> Int {
+            guard let value = model.value,
+                  let chapter, let block,
+                  value.chapter == chapter, value.block == block else { return 0 }
+            if let page, value.page != page { return 0 }
+            return value.length
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     init(text: String, count: Int, fontSize: CGFloat, lineSpacing: CGFloat,
          color: UIColor, continuation: Bool = false, fullJustify: Bool = false,
          zhLayout: Bool = false, paragraphEnd: Bool = true,
          onTextTap: (() -> Void)? = nil,
          selection: ReaderTextSelectionActions? = nil,
+         highlightLength: Int = 0,
+         highlightColor: UIColor = ReaderAloudHighlightStyle.color,
+         aloudHighlight: AloudHighlightModel? = nil,
+         aloudChapter: Int? = nil,
+         aloudPage: Int? = nil,
+         aloudBlock: Int? = nil,
          onTap: @escaping () -> Void) {
         self.text = text
         self.count = count
@@ -217,6 +271,12 @@ struct InlineCommentParagraph: UIViewRepresentable {
         self.paragraphEnd = paragraphEnd
         self.onTextTap = onTextTap
         self.selection = selection
+        self.highlightLength = highlightLength
+        self.highlightColor = highlightColor
+        self.aloudHighlight = aloudHighlight
+        self.aloudChapter = aloudChapter
+        self.aloudPage = aloudPage
+        self.aloudBlock = aloudBlock
         self.onTap = onTap
     }
 
@@ -228,6 +288,12 @@ struct InlineCommentParagraph: UIViewRepresentable {
         view.selectionActions = selection
         view.isSelectable = selection != nil
         view.installTapHandling()
+        context.coordinator.chapter = aloudChapter
+        context.coordinator.page = aloudPage
+        context.coordinator.block = aloudBlock
+        context.coordinator.subscribe(aloudHighlight, view: view)
+        let initial = aloudHighlight.map { context.coordinator.currentLength(model: $0) } ?? highlightLength
+        view.applyHighlight(length: initial, color: highlightColor)
         return view
     }
 
@@ -236,10 +302,20 @@ struct InlineCommentParagraph: UIViewRepresentable {
         view.onTextTap = onTextTap
         view.selectionActions = selection
         view.isSelectable = selection != nil
+        context.coordinator.chapter = aloudChapter
+        context.coordinator.page = aloudPage
+        context.coordinator.block = aloudBlock
+        context.coordinator.subscribe(aloudHighlight, view: view)
         view.render(text: text, count: count, fontSize: fontSize, lineSpacing: lineSpacing,
                     color: color, continuation: continuation,
                     fullJustify: fullJustify, zhLayout: zhLayout,
                     paragraphEnd: paragraphEnd)
+        if let aloudHighlight {
+            view.applyHighlight(length: context.coordinator.currentLength(model: aloudHighlight),
+                                color: highlightColor)
+        } else {
+            view.applyHighlight(length: highlightLength, color: highlightColor)
+        }
     }
 
     @available(iOS 16.0, *)
@@ -263,6 +339,10 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
     private var bubbleIndex: Int?
     private var lastRenderKey: String?
     private var paragraphTap: UITapGestureRecognizer?
+    /// 保留期望前缀；重新测宽/排版时重挂，文本存储本身保持不变。
+    private(set) var highlightedRange = NSRange(location: 0, length: 0)
+    private var requestedHighlightLength = 0
+    private(set) var highlightColor: UIColor = ReaderAloudHighlightStyle.color
     private struct Paragraph {
         let text: String
         let count: Int
@@ -418,7 +498,34 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
         textContainerInset = .zero
         textContainer.lineFragmentPadding = 0
         textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        // UITextView 重建存储后重挂临时底色，不修改正文属性或选择范围。
+        applyHighlightAttribute()
         invalidateIntrinsicContentSize()
+    }
+
+    /// TextKit 临时底色只使显示失效，保留字形、分页和用户选择范围。
+    func applyHighlight(length: Int, color: UIColor) {
+        let clamped = max(length, 0)
+        guard clamped != requestedHighlightLength || !color.isEqual(highlightColor) else { return }
+        requestedHighlightLength = clamped
+        highlightColor = color
+        applyHighlightAttribute()
+    }
+
+    private func applyHighlightAttribute() {
+        let full = NSRange(location: 0, length: textStorage.length)
+        if full.length > 0 {
+            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: full)
+        }
+        highlightedRange = NSRange(location: 0, length: 0)
+        guard let paragraph, requestedHighlightLength > 0, full.length > 0 else { return }
+        // 范围限定到原文，不把分隔空格和段评附件涂色；Emoji/组合字符不拆开。
+        let displayed = ReaderTextLayout.displayText(for: paragraph.text)
+        let length = min(displayed.prefix(requestedHighlightLength).utf16.count, full.length)
+        guard length > 0 else { return }
+        highlightedRange = NSRange(location: 0, length: length)
+        layoutManager.addTemporaryAttribute(.backgroundColor, value: highlightColor,
+                                            forCharacterRange: highlightedRange)
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {

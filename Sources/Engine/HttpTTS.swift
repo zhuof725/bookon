@@ -250,6 +250,28 @@ enum AloudTTSConfig {
     static let engineKey = "reader.aloud.engine.v1"
     static let speedKey = "reader.aloud.speed.v1"
     static let timerKey = "reader.aloud.timer.v1"
+    static let preloadKey = "reader.aloud.preload.v1"
+    static let preloadRange = 1...20
+    static let defaultPreloadCount = 10
+
+    static func clampedPreloadCount(_ value: Int) -> Int {
+        min(max(value, preloadRange.lowerBound), preloadRange.upperBound)
+    }
+
+    /// 预加载段落数（在线引擎提前下载后续段落音频）：1–20，默认 10。
+    /// 预加载更多段落可减少朗读换段时的网络等待卡顿。
+    static var preloadCount: Int {
+        get {
+            let d = UserDefaults.standard
+            guard d.object(forKey: preloadKey) != nil else { return defaultPreloadCount }
+            let stored = d.integer(forKey: preloadKey)
+            let clamped = clampedPreloadCount(stored)
+            // 修复旧值或其他入口写入的越界值，持久化状态也保持在范围内。
+            if stored != clamped { d.set(clamped, forKey: preloadKey) }
+            return clamped
+        }
+        set { UserDefaults.standard.set(clampedPreloadCount(newValue), forKey: preloadKey) }
+    }
 
     /// 引擎选择：空 = 系统语音；数字字符串 = HttpTTS.id（与原版一致）。
     static var selectedEngineID: String {

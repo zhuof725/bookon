@@ -38,6 +38,8 @@ struct PageContentView: View {
     var bottomMargin: Double = 10
     var volumeTitle: String? = nil
     var showsChapterTitle = false
+    var aloudHighlight: AloudHighlightModel? = nil
+    var aloudChapter: Int? = nil
 
     private var effectiveLineSpacing: CGFloat {
         CGFloat(lineSpacing) + CGFloat(page.justifiedGap ?? 0)
@@ -108,6 +110,11 @@ struct PageContentView: View {
                                                 paragraphEnd: page.blockLineCounts.count == page.blocks.count
                                                     ? page.paragraphEndIndices.contains(blockIndex) : true,
                                                 selection: selection,
+                                                highlightColor: ReaderAloudHighlightStyle.color(forBackground: UIColor(bg)),
+                                                aloudHighlight: aloudHighlight,
+                                                aloudChapter: aloudChapter,
+                                                aloudPage: pageNumber - 1,
+                                                aloudBlock: blockIndex,
                                                 onTap: { onTapComment(url) })
                             .frame(maxWidth: .infinity, alignment: .leading)
                             // Use the exact measured row-box height. SwiftUI must
