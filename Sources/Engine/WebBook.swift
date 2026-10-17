@@ -216,39 +216,88 @@ enum WebBook {
     // MARK: TOC
     static func chapters(source: BookSource, book: Book) async throws -> [BookChapter] {
         guard let rule = source.ruleToc else { return [] }
-        var next: String? = book.tocUrl ?? book.bookUrl
         var visited = Set<String>()
-        var list: [BookChapter] = []
         var reverse = false
         var listRule = rule.chapterList ?? ""
         if listRule.hasPrefix("-") { reverse = true; listRule.removeFirst() }
         // 与 Legado BookChapterList 一致：nextTocUrl 返回多个地址时全部抓取（不再逐页追链）；
-        // 只有一个地址时沿链继续。待抓取队列去重，最多 30 页。
-        var queue: [String] = []
-        if let first = next, !first.isEmpty { queue.append(first) }
-        while !queue.isEmpty, visited.count < 30 {
-            let u = queue.removeFirst()
-            if u.isEmpty || visited.contains(u) { continue }
-            visited.insert(u)
-            let context = RuleContext(source: source, book: book)
-            let au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
-            let (body, url) = try await au.fetch()
-            DebugLog.recordSource(body, stage: 30)
-            let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
-            DebugLog.add("┌获取目录列表")
-            let nodes = ar.getElements(listRule)
-            DebugLog.add("└列表大小:\(nodes.count)")
-            DebugLog.add("┌解析目录列表")
-            list.append(contentsOf: parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url))
-            DebugLog.add("└目录列表解析完成")
-            let urls = splitNextUrls(ar.getString(rule.nextTocUrl), base: url)
-            for n in urls where !visited.contains(n) && !queue.contains(n) { queue.append(n) }
+        // 只有一个地址时沿链继续。地址去重，最多 30 页。
+        // 多页串行太慢（如喜马拉雅一次给 8 页、每页 280KB+），按小并发成批抓取、保持页序。
+        var wave: [String] = []
+        if let head = book.tocUrl ?? book.bookUrl, !head.isEmpty { wave.append(head) }
+        var pages: [[BookChapter]] = []
+        while !wave.isEmpty, visited.count < 30 {
+            let budget = max(30 - visited.count, 0)
+            var batch: [String] = []
+            for u in wave where !u.isEmpty && !visited.contains(u) && batch.count < budget {
+                visited.insert(u)
+                batch.append(u)
+            }
+            if batch.isEmpty { break }
+            let fetched = try await fetchTocBatch(batch, source: source, book: book,
+                                                  rule: rule, listRule: listRule)
+            var discovered: [String] = []
+            for page in fetched {
+                pages.append(page.chapters)
+                discovered.append(contentsOf: page.nextURLs)
+            }
+            wave = discovered
         }
         // 正文按 url 判重；分卷保留原位置与标题，不能因复用章链接被去重删除。
-        list = dedupeChapters(list)
+        var list = dedupeChapters(pages.flatMap { $0 })
         if reverse { list.reverse() }
         for i in list.indices { list[i].index = i }
         return list
+    }
+
+    /// 一批目录页的抓取结果（保持页序）。
+    private struct TocPageResult {
+        var chapters: [BookChapter]
+        var nextURLs: [String]
+    }
+
+    /// 并发抓取一批目录页（每批最多 4 个连接）；结果按入参顺序返回。
+    private static func fetchTocBatch(_ urls: [String], source: BookSource, book: Book,
+                                      rule: TocRule, listRule: String) async throws -> [TocPageResult] {
+        var results: [TocPageResult] = []
+        results.reserveCapacity(urls.count)
+        var start = 0
+        while start < urls.count {
+            let slice = Array(urls[start..<min(start + 4, urls.count)])
+            let batch = try await withThrowingTaskGroup(of: (Int, TocPageResult).self) { group in
+                for (offset, u) in slice.enumerated() {
+                    group.addTask {
+                        (offset, try await fetchTocPage(u, source: source, book: book,
+                                                        rule: rule, listRule: listRule))
+                    }
+                }
+                var collected: [(Int, TocPageResult)] = []
+                for try await item in group { collected.append(item) }
+                return collected.sorted { $0.0 < $1.0 }
+            }
+            results.append(contentsOf: batch.map { $0.1 })
+            start += 4
+        }
+        return results
+    }
+
+    /// 抓取一个目录页：取正文、解析章节、算出下一页地址。
+    private static func fetchTocPage(_ u: String, source: BookSource, book: Book,
+                                     rule: TocRule, listRule: String) async throws -> TocPageResult {
+        let context = RuleContext(source: source, book: book)
+        let au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header,
+                            context: context, jsLib: source.jsLib)
+        let (body, url) = try await au.fetch()
+        DebugLog.recordSource(body, stage: 30)
+        let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
+        DebugLog.add("┌获取目录列表")
+        let nodes = ar.getElements(listRule)
+        DebugLog.add("└列表大小:\(nodes.count)")
+        DebugLog.add("┌解析目录列表")
+        let parsed = parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url)
+        DebugLog.add("└目录列表解析完成")
+        let urls = splitNextUrls(ar.getString(rule.nextTocUrl), base: url)
+        return TocPageResult(chapters: parsed, nextURLs: urls)
     }
 
     /// nextTocUrl / nextContentUrl 可能返回多行地址：去空白、转绝对地址、去重并保持顺序。

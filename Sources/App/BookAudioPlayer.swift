@@ -78,7 +78,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         // 变速时保持音调（音频书倍速的关键设置）。
         item.audioTimePitchAlgorithm = .spectral
         let created = AVPlayer(playerItem: item)
-        created.automaticallyWaitsToMinimizeStalling = true
+        // 音频书起播优先：不等「缓冲到不易卡顿」的默认策略，拿到数据就开始。
+        created.automaticallyWaitsToMinimizeStalling = false
         player = created
         currentTime = 0
         duration = 0
