@@ -224,7 +224,8 @@ enum WebBook {
         // 只有一个地址时沿链继续。地址去重，最多 30 页。
         // 多页串行太慢（如喜马拉雅一次给 8 页、每页 280KB+），按小并发成批抓取、保持页序。
         var wave: [String] = []
-        if let head = book.tocUrl ?? book.bookUrl, !head.isEmpty { wave.append(head) }
+        let head = book.tocUrl ?? book.bookUrl
+        if !head.isEmpty { wave.append(head) }
         var pages: [[BookChapter]] = []
         while !wave.isEmpty, visited.count < 30 {
             let budget = max(30 - visited.count, 0)
