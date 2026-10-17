@@ -426,19 +426,14 @@ final class JSEngine {
     // are a plain map, not an OkHttp Headers object or a complete Java Map.
     function __response(r,jsoup){
         if(!r){throw new Error('HTTP response unavailable');}
-        // OkHttp Response：body() 是 ResponseBody，可 bytes()/string()（loginCheckJs 需要）。
-        var __binBody = {
-            bytes:function(){return r.bodyAsBytes ? r.bodyAsBytes() : [];},
-            string:function(){return r.body},
-            contentLength:function(){return r.length;}
-        };
         return {
             url:r.url,
             code:r.code,
             length:r.length,
             statusKnown:r.code !== 0,
-            body:function(){return __binBody;},
-            bodyAsBytes:function(){return r.bodyAsBytes ? r.bodyAsBytes() : [];},
+            body:function(){return r.body},
+            // Legado StrResponse.bodyAsBytes()：二进制响应原始字节（TTS 多段合并需要）。
+            bodyAsBytes:function(){return r.bodyAsBytes();},
             statusCode:function(){return r.code},
             isSuccessful:function(){return r.isSuccessful()},
             header:function(k){return r.header(String(k))},
