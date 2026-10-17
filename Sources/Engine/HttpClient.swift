@@ -290,18 +290,9 @@ struct AnalyzeUrl {
         return (data, resp, finalUrl)
     }
 
-    /// 正文暂存为 base64 前缀（旧行为只走 String UTF-8 编码；现对二进制正文先还原字节）。
-    /// 与原版一致：请求头/正文就绪后才生成 URLRequest。
+    /// 表单正文按 charset 编码（百分号编码后为 ASCII，与原 UTF-8 写法等价）。
     private func resolvedRequestBody() -> Data? {
         guard let raw = body, !raw.isEmpty else { return nil }
-        if raw.hasPrefix("base64,"), let data = Data(base64Encoded: String(raw.dropFirst(7))) {
-            raw = data.base64EncodedString()  // 如果是 "base64,...”，先取 base64 部分再以原样回去
-            let enc = raw
-            return Data(base64Encoded: enc)
-        }
-        if let enc = AnalyzeUrl.base64Prefixed(raw) {
-            return Data(base64Encoded: String(enc))
-        }
         return percentEncodedBody(raw).data(using: AnalyzeUrl.encoding(charset))
     }
 
@@ -373,7 +364,7 @@ struct AnalyzeUrl {
             text = String(data: data, encoding: AnalyzeUrl.encoding("gbk")) ?? t
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        let rawData: Data? = text != nil ? nil : data
+        let rawData: Data? = data
         DebugLog.add("≡获取成功:\(DebugLog.url(finalUrl))")
         if !(200..<300).contains(status) { DebugLog.add("◇HTTP 状态:\(status)") }
         #if canImport(UIKit) && canImport(WebKit)

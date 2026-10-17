@@ -34,7 +34,7 @@ import JavaScriptCore
         self.url = url
         self.body = body
         self.code = code
-        self.length = rawData?.count ?? body.count
+        self.length = body.count
         self.rawData = rawData
         self.responseHeaders = headers
         super.init()

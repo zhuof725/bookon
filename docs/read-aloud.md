@@ -42,7 +42,9 @@
 
 - 原版 ExoPlayer 边下边播（streamReadAloudAudio=true 时），此处统一下载后播，
   无开关；效果差异仅在单段首响延迟，队列与缓存行为一致。
-- 原版 loginCheckJs 响应再检查未实现；阿里云、Next 这类带 loginCheck 的引擎，
+- loginCheckJs 已支持：result.body().bytes()、result.newBuilder()…build()、java.post().bodyAsBytes()、
+  Packages.java.util.HashMap/Arrays.copyOfRange、okio.Buffer、okhttp3.MediaType/ResponseBody.create 的最小子集；
+  请求失败时（原版 getErrResponse）不再调用脚本。阿里云、Next 这类带 loginCheck 的引擎，
   登录信息正确时可用，自动恢复/自动换接口一次走不通。
 - 原版界面有「跟随系统语速」与「按页朗读」开关；这里去掉，语速直接由
   面板/设置管理，单元始终是段落。

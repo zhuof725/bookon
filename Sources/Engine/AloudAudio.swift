@@ -40,7 +40,7 @@ enum AloudAudioFetcher {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw AloudError.serverRejected(body.isEmpty ? "HTTP \(code)" : body)
         }
-        // 响应：字节 + 原始 Content-Type，wait loginCheckJs 重写。
+        // 响应字节 + 原始 Content-Type；有 loginCheckJs 时交给脚本检查/重写（原版 HttpReadAloudService）。
         var checkedData = data
         var contentType = ((http?.value(forHTTPHeaderField: "Content-Type") ?? "")
             .split(separator: ";").first.map(String.init) ?? "")
@@ -52,8 +52,7 @@ enum AloudAudioFetcher {
                 checkedData = bytes
                 if let ct = rewritten.contentType?.lowercased() { contentType = ct }
             } else if let message = rewritten.message {
-                contentType = "" // 由下方走 JSON/文本 报错路径
-                throw AloudError.serverRejected(message)
+                throw AloudError.scriptFailure(message)
             }
         }
         // 原版：返回 JSON/文本就是报错信息；contentType 校验是放宽的正则。
@@ -75,7 +74,7 @@ enum AloudAudioFetcher {
     /// loginCheckJs 执行后重写后的字节与最终 Content-Type；文本错误可另走 serverRejected。
     private struct Rewritten { let data: Data?; let contentType: String?; let message: String? }
 
-    /// 与原版一致：loginCheckJs 只当响应「未通过检查」时被调用；脚本可重写 body 或返回文本错误。
+    /// 与原版一致：每次拿到响应都执行 loginCheckJs，脚本可返回新响应（newBuilder().build()）或文本错误。
     private static func rewrite(engine: HTTPTTS, code: Int, contentType: String,
                                 data: Data, vars: [String: Any]) throws -> Rewritten {
         guard let js = engine.loginCheckJs?.trimmingCharacters(in: .whitespacesAndNewlines), !js.isEmpty else {
@@ -89,14 +88,15 @@ enum AloudAudioFetcher {
         if let resp = v as? TTSResponse {
             let bytes = resp.data
             guard !bytes.isEmpty else { return Rewritten(data: nil, contentType: nil, message: "loginCheckJs 返回空字节") }
-            let ct = resp.header("Content-Type") ?? contentType
+            let header = resp.header("Content-Type")
+            let ct = header.isEmpty ? contentType : header
             return Rewritten(data: bytes, contentType: ct, message: nil)
         }
         if let str = v as? String {
             let ct = str.hasPrefix("{") ? "application/json" : "text/plain"
             return Rewritten(data: str.data(using: .utf8), contentType: ct, message: nil)
         }
-        return Rewritten(data: nil, contentType: nil, message: "loginCheckJs 返回 \(String(describing: v))")
+        return Rewritten(data: nil, contentType: nil, message: v == nil ? "脚本执行出错" : "返回值不是响应")
     }
 
     private static func mergedHeader(engine: HTTPTTS, vars: [String: Any]) -> String {

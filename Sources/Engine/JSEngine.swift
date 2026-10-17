@@ -65,7 +65,7 @@ private final class HTTPBridgeWaiter: @unchecked Sendable {
     func code(_ c: Int) -> TTSResponseBuilderExports
     func message(_ m: String) -> TTSResponseBuilderExports
     func header(_ k: String, _ v: String) -> TTSResponseBuilderExports
-    func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports
+    func body(_ b: JSValue) -> TTSResponseBuilderExports
     func build() -> TTSResponseExports
 }
 final class TTSResponseBody: NSObject, TTSResponseBodyExports {
@@ -83,15 +83,15 @@ final class TTSResponseBuilder: NSObject, TTSResponseBuilderExports {
     private var _message = "OK"
     private var _headers: [(String, String)] = []
     private var _body: TTSResponseBody?
-    init() {}
+    override init() { super.init() }
     @objc func code(_ c: Int) -> TTSResponseBuilderExports { _code = c; return self }
     @objc func message(_ m: String) -> TTSResponseBuilderExports { _message = m; return self }
     @objc func header(_ k: String, _ v: String) -> TTSResponseBuilderExports { _headers.append((k, v)); return self }
-    @objc override func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports {
-        if let t = b as? TTSResponseBody { _body = t }
-        else if let arr = (b as? NSObject)?.value(forKey: "__bytes") as? [Int] {
-            _body = TTSResponseBody(data: Data(arr.map { UInt8(truncatingIfNeeded: $0) }),
-                                    mediaType: (b as? NSObject)?.value(forKey: "mediaType") as? String ?? "application/octet-stream")
+    @objc func body(_ b: JSValue) -> TTSResponseBuilderExports {
+        if let native = b.toObject() as? TTSResponseBody {
+            _body = native
+        } else if let arr = b.forProperty("__bytes")?.toArray() as? [NSNumber] {
+            _body = TTSResponseBody(data: Data(arr.map { UInt8(truncatingIfNeeded: $0.intValue) }))
         } else {
             _body = TTSResponseBody(data: Data())
         }
@@ -99,7 +99,8 @@ final class TTSResponseBuilder: NSObject, TTSResponseBuilderExports {
     }
     @objc func build() -> TTSResponseExports {
         let data = _body?.data ?? Data()
-        let ct = _body?.mediaType ?? "application/octet-stream"
+        let ct = _headers.last { $0.0.caseInsensitiveCompare("Content-Type") == .orderedSame }?.1
+            ?? _body?.mediaType ?? "application/octet-stream"
         return TTSResponse(data: data, url: "", code: _code, headers: ["Content-Type": ct])
     }
 }
@@ -111,7 +112,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
     init(data: Data, url: String, code: Int, headers: [String: String]) {
         self.data = data; self.url = url; self.code = code; self.headers = headers
     }
-    @objc override func body() -> TTSResponseBodyExports {
+    @objc func body() -> TTSResponseBodyExports {
         TTSResponseBody(data: data, mediaType: headers.first { $0.key.caseInsensitiveCompare("Content-Type") == .orderedSame }?.value ?? "application/octet-stream")
     }
     @objc func newBuilder() -> TTSResponseBuilderExports { TTSResponseBuilder() }
@@ -810,6 +811,7 @@ final class JSEngine {
             src.setObject(s.bookSourceName, forKeyedSubscript: "bookSourceName" as NSString)
             src.setObject(s.bookSourceComment ?? "", forKeyedSubscript: "bookSourceComment" as NSString)
             src.setObject(s.loginUi ?? "", forKeyedSubscript: "loginUi" as NSString)
+            src.setObject(s.loginUrl ?? "", forKeyedSubscript: "loginUrl" as NSString)
         }
         if let b = context?.book, let book = ctx.objectForKeyedSubscript("book") {
             book.setObject(b.bookUrl, forKeyedSubscript: "bookUrl" as NSString)
