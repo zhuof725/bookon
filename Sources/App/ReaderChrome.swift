@@ -85,6 +85,7 @@ struct ReaderTopChrome: View {
 /// Place in a safe-area-respecting `.overlay(alignment: .bottom)`.
 /// Progress is normalized to 0...1. The caller owns seeking and playback.
 struct ReaderBottomChrome: View {
+    @ThemePalette private var palette
     let chapter: String
     let positionLabel: String
     @Binding var progress: Double
