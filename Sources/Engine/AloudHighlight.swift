@@ -50,8 +50,8 @@ enum AloudHighlightLocator {
     /// 分页模式：字符偏移 → 所在页与页内块（长段落跨页时只高亮本页那一段）。
     static func locateInPages(offset: Int, chapter: Int, pages: [BookPage],
                               blocks: [ContentBlock]) -> AloudHighlight? {
-        let bounds = paragraphBounds(blocks)
-        guard !bounds.isEmpty, !pages.isEmpty, offset >= 0 else { return nil }
+        guard locate(offset: offset, chapter: chapter, blocks: blocks) != nil,
+              !pages.isEmpty else { return nil }
         // 用页的 startOffset 作为全局锚点；页内页面块只累计自身的文字长度。
         // 这样长段落跨页时，续页的第一页字符不会被前页的空块错位。
         for (pageIndex, page) in pages.enumerated() {

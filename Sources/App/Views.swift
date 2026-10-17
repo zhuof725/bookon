@@ -1344,12 +1344,12 @@ struct ReaderView: View {
                                     lineSpacing: settings.lineSpacingPoints,
                                     color: UIColor(theme.fg),
                                     fullJustify: settings.fullJustify,
+                                    onTextTap: { toggleBars() },
+                                    selection: textSelectionActions,
                                     highlightColor: ReaderAloudHighlightStyle.color(forBackground: UIColor(theme.bg)),
                                     aloudHighlight: chapter == nil ? nil : aloud.highlight,
                                     aloudChapter: chapter,
                                     aloudBlock: blockIndex,
-                                    onTextTap: { toggleBars() },
-                                    selection: textSelectionActions,
                                     onTap: { commentTapped(url) })
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .inlineBubble:

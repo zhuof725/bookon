@@ -287,7 +287,7 @@ struct SpeakEngineList: View {
                         HStack(spacing: 12) {
                             Text("系统语音").appFont(.body)
                             Spacer()
-                            if auditioner.engineID == 0 {
+                            if auditioner.isSystem {
                                 Image(systemName: auditioner.isPlaying ? "waveform" : "hourglass")
                                     .foregroundStyle(.tint)
                             }
@@ -301,7 +301,7 @@ struct SpeakEngineList: View {
                     .accessibilityIdentifier("tts.system")
                     .contextMenu {
                         Button { auditioner.toggleSystem(reader: aloud) } label: {
-                            Label(auditioner.engineID == 0 ? "取消试听" : "试听", systemImage: auditioner.engineID == 0 ? "stop.circle" : "play.circle")
+                            Label(auditioner.isSystem ? "取消试听" : "试听", systemImage: auditioner.isSystem ? "stop.circle" : "play.circle")
                         }
                         .accessibilityIdentifier("tts.audition.system")
                     }
@@ -502,12 +502,6 @@ struct SpeakEngineList: View {
 
     /// 使用真实引擎和登录配置试听固定短句，正文保持暂停。
     private func audition(_ engine: HTTPTTS) {
-        if auditioner.engineID != engine.id, engine.hasLogin, !hasLoginInfo(engine) {
-            auditioner.cancel()
-            aloud.pause()
-            loginEngine = engine
-            return
-        }
         auditioner.toggle(engine: engine, reader: aloud)
     }
 

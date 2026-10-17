@@ -7,13 +7,14 @@ import Combine
 final class AloudEngineAudition: NSObject, ObservableObject {
     @Published private(set) var engineID: Int64?
     @Published private(set) var isPlaying = false
+    @Published private(set) var isSystem = false
     @Published private(set) var errorMessage: String?
 
     private static let sampleText = "欢迎使用朗读功能。"
     private var requestID: UUID?
     private var downloadTask: Task<Void, Never>?
     private var systemTask: Task<Void, Never>?
-    private let systemSynthesizer = AVSpeechSynthesizer()
+    private var systemSynthesizer: AVSpeechSynthesizer?
     private var player: AVAudioPlayer?
     private weak var reader: ReaderAloudController?
     /// 只有试听自己激活的会话才有资格释放；主朗读暂停仍持有自己的会话。
@@ -53,31 +54,49 @@ final class AloudEngineAudition: NSObject, ObservableObject {
         }
     }
 
-    /// 试听系统语音；与 HTTP 试听使用同一固定示例文本。
+    func cancel() { finish() }
+
+    func dismissError() { errorMessage = nil }
+
+    /// 试听系统语音；每轮使用独立合成器，旧回调不会结束新试听。
     func toggleSystem(reader: ReaderAloudController) {
-        if engineID == 0 {
-            cancel()
-            return
-        }
+        if isSystem { cancel(); return }
         cancel()
+        errorMessage = nil
         reader.pause()
+        self.reader = reader
         let request = UUID()
         requestID = request
-        engineID = 0
-        errorMessage = nil
-        systemTask = Task { @MainActor [weak self] in
-            guard let self else { return }
+        isSystem = true
+        do {
+            try activateSessionIfNeeded()
+            let synthesizer = AVSpeechSynthesizer()
+            systemSynthesizer = synthesizer
             let utterance = AVSpeechUtterance(string: Self.sampleText)
             utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
             utterance.rate = ReaderAloudController.utteranceRate(AloudTTSConfig.speechRate)
-            self.systemSynthesizer.speak(utterance)
-            while self.systemSynthesizer.isSpeaking {
-                try? await Task.sleep(nanoseconds: 120_000_000)
-                guard !Task.isCancelled, self.requestID == request else { return }
+            synthesizer.speak(utterance)
+            isPlaying = true
+            systemTask = Task { @MainActor [weak self, synthesizer] in
+                // 留出合成器开始播放的时间；取消后不创建新播放。
+                repeat {
+                    do { try await Task.sleep(nanoseconds: 150_000_000) }
+                    catch { return }
+                    guard self?.requestID == request else { return }
+                } while synthesizer.isSpeaking
+                self?.finish()
             }
-            guard self.requestID == request else { return }
-            self.finish()
+        } catch {
+            finish(message: "试听失败：\(error.localizedDescription)")
         }
+    }
+
+    private func activateSessionIfNeeded() throws {
+        guard reader?.isRunning != true else { return }
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio, options: [])
+        try session.setActive(true)
+        activatedSession = true
     }
 
 
@@ -86,12 +105,7 @@ final class AloudEngineAudition: NSObject, ObservableObject {
         newPlayer.delegate = self
         // delegate 为弱引用；对象本身持续持有 player，直到结束或取消。
         player = newPlayer
-        if reader?.isRunning != true {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio, options: [])
-            try session.setActive(true)
-            activatedSession = true
-        }
+        try activateSessionIfNeeded()
         guard newPlayer.prepareToPlay(), newPlayer.play() else {
             throw PlaybackError.cannotStart
         }
@@ -105,7 +119,9 @@ final class AloudEngineAudition: NSObject, ObservableObject {
         downloadTask = nil
         systemTask?.cancel()
         systemTask = nil
-        systemSynthesizer.stopSpeaking(at: .immediate)
+        systemSynthesizer?.stopSpeaking(at: .immediate)
+        systemSynthesizer = nil
+        isSystem = false
         player?.delegate = nil
         player?.stop()
         player = nil
@@ -126,6 +142,7 @@ final class AloudEngineAudition: NSObject, ObservableObject {
 
     deinit {
         downloadTask?.cancel()
+        systemTask?.cancel()
         player?.stop()
         // 正常销毁前列表的 onDisappear 会 cancel；不在这里触碰共享音频会话。
     }

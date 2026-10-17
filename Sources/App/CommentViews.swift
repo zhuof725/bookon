@@ -210,30 +210,30 @@ struct InlineCommentParagraph: UIViewRepresentable {
     var aloudPage: Int?
     var aloudBlock: Int?
 
-    final class Coordinator {
+    @MainActor
+    final class Coordinator: NSObject {
         var model: AloudHighlightModel?
-        var token: NSObjectProtocol?
+        private weak var textView: CommentTextView?
         var chapter: Int?
         var page: Int?
         var block: Int?
 
-        deinit {
-            if let token { NotificationCenter.default.removeObserver(token) }
-        }
+        deinit { NotificationCenter.default.removeObserver(self) }
 
         func subscribe(_ model: AloudHighlightModel?, view: CommentTextView) {
+            textView = view
             guard self.model !== model else { return }
-            if let token { NotificationCenter.default.removeObserver(token) }
-            token = nil
+            NotificationCenter.default.removeObserver(self)
             self.model = model
             guard let model else { return }
-            token = NotificationCenter.default.addObserver(
-                forName: AloudHighlightModel.changedName, object: model, queue: .main
-            ) { [weak self, weak view] _ in
-                guard let self, let view else { return }
-                view.applyHighlight(length: self.currentLength(model: model),
-                                    color: view.highlightColor)
-            }
+            // 模型只在主线程广播；selector 同步绘制，不排队过期进度。
+            NotificationCenter.default.addObserver(self, selector: #selector(progressChanged(_:)),
+                name: AloudHighlightModel.changedName, object: model)
+        }
+
+        @objc private func progressChanged(_ notification: Notification) {
+            guard let model, let view = textView else { return }
+            view.applyHighlight(length: currentLength(model: model), color: view.highlightColor)
         }
 
         /// 当前视图负责的块命中朗读进度时返回已读字符数，否则 0。

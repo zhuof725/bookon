@@ -188,6 +188,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         isPlaying = true
         if isBuffering { return }
         if playbackEngine == .http, let player, player.url != nil {
+            expectingFinish = true
             player.play()
             startProgressTracking()
         } else {
@@ -373,6 +374,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 } catch is CancellationError {
                     return
                 } catch {
+                    guard !Task.isCancelled else { return }
                     handleDownloadError(error, key: key)
                     return
                 }
@@ -714,7 +716,7 @@ extension ReaderAloudController: AVSpeechSynthesizerDelegate {
 extension ReaderAloudController: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
-            guard let self, expectingFinish else { return }
+            guard let self, expectingFinish, self.player === player else { return }
             expectingFinish = false
             finishedUnit()
         }
