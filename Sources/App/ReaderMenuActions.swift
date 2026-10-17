@@ -1,5 +1,27 @@
 import SwiftUI
 import AVFoundation
+import UIKit
+
+/// 「字典」菜单项：调用系统词典 UI 查询选中的词。
+enum ReaderDictionaryLookup {
+    static func present(_ word: String) {
+        let term = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return }
+        // 系统词典通过 referenceLibrary 控制器提供；用公开的 lookup 通道打开。
+        let responder = UIReferenceLibraryViewController(term: term)
+        responder.modalPresentationStyle = .pageSheet
+        guard let presenter = topViewController() else { return }
+        presenter.present(responder, animated: true)
+    }
+
+    private static func topViewController() -> UIViewController? {
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first { $0.isKeyWindow }
+        var top = window?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
+    }
+}
 
 /// Retained for the reader lifetime; never speaks comment metadata or HTML.
 final class ReaderSpeechController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {

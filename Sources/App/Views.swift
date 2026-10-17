@@ -330,6 +330,10 @@ struct ReaderView: View {
     @State private var showSettings = false
     @State private var showBars = false
     @State private var showReaderSearch = false
+    @State private var selectedText = ""
+    @State private var showReplaceFromSelection = false
+    @State private var showBookmarks = false
+    @State private var bookmarkNotice: String?
     @State private var showBookInfo = false
     @State private var quickBusy = false
     @State private var quickMessage: String?
@@ -396,6 +400,25 @@ struct ReaderView: View {
                     onSearch: { showReaderSearch = true }, onSettings: { showSettings = true })
                     .transition(.opacity)
             }
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = bookmarkNotice {
+                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(theme.fg.opacity(0.82)))
+                    .padding(.bottom, 90)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("reader.notice")
+            }
+        }
+        .sheet(isPresented: $showBookmarks) {
+            ReaderBookmarkList(book: book, currentChapter: index, onOpen: { item in
+                showBookmarks = false
+                openBookmark(item)
+            }, onDelete: { id in ReaderBookmarkStore.shared.remove(id: id) })
+        }
+        .sheet(isPresented: $showReplaceFromSelection) {
+            BodyReplaceRulesView(seed: selectedText)
         }
         .sheet(isPresented: $showReaderSearch) {
             ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
@@ -580,6 +603,7 @@ struct ReaderView: View {
 
     private var quickEnabled: Set<String> {
         var items: Set<String> = ["rules"]
+        if !chapters.isEmpty { items.insert("bookmarks") }
         if chapters.indices.contains(index) { items.insert("refresh") }
         if !store.isLocal(book), let source = store.source(for: book.origin) {
             items.formUnion(["toc", "source"])
@@ -616,6 +640,7 @@ struct ReaderView: View {
             }
         case "login": quickLogin = true
         case "rules": quickRules = true
+        case "bookmarks": showBookmarks = true
         case "source": quickSources = true
         case "browser":
             if let url = quickBrowserURL { quickBrowser = BrowserTarget(url: url, title: book.name) }
@@ -1199,7 +1224,8 @@ struct ReaderView: View {
                 lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
                 title: chapter?.title ?? "",
                 pageNumber: i + 1, pageCount: chapterPages.count,
-                onTapComment: { commentTapped($0) }, safeInsets: pageInsets,
+                onTapComment: { commentTapped($0) }, selection: textSelectionActions,
+                onCopyImage: { copyImage($0) }, onSaveImage: { saveImageToPhotos($0) }, safeInsets: pageInsets,
                 paragraphSpacing: settings.paragraphSpacingPoints,
                 leftMargin: settings.leftMargin, rightMargin: settings.rightMargin,
                 topMargin: settings.topMargin, bottomMargin: settings.bottomMargin,
@@ -1304,6 +1330,7 @@ struct ReaderView: View {
                                     color: UIColor(theme.fg),
                                     fullJustify: settings.fullJustify,
                                     onTextTap: { toggleBars() },
+                                    selection: textSelectionActions,
                                     onTap: { commentTapped(url) })
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .inlineBubble:
@@ -1311,6 +1338,10 @@ struct ReaderView: View {
         case .image(let src, let click):
             ContentImageView(src: src)
                 .onTapGesture { commentTapped(click) }
+                .contextMenu {
+                    Button { copyImage(src) } label: { Label("拷贝图像", systemImage: "doc.on.doc") }
+                    Button { saveImageToPhotos(src) } label: { Label("保存到相机胶卷", systemImage: "square.and.arrow.down") }
+                }
         case .hotComment(let label, let t, let click):
             HStack(spacing: 10) {
                 Text(label).appFont(.system(size: max(settings.fontSize - 5, 11), weight: .bold)).foregroundStyle(.white)
@@ -1344,6 +1375,72 @@ struct ReaderView: View {
     private func go(_ i: Int) {
         guard !loading, let target = readableIndex(from: i, direction: i >= index ? 1 : -1) else { return }
         loadChapter(target, landing: .start)
+    }
+
+    /// 打开书签：跳到原章节，并尽量回到记录的位置。
+    private func openBookmark(_ item: ReaderBookmark) {
+        guard chapters.indices.contains(item.chapterIndex) else { return }
+        let landing: ChapterLanding = settings.pageMode == 1 ? .start : .saved(item.position)
+        if item.chapterIndex == index { return }
+        loadChapter(item.chapterIndex, landing: landing)
+    }
+
+    /// 长按选词的菜单动作：拷贝走系统剪贴板，替换用选中文字新建净化规则，书签记录选段。
+    private var textSelectionActions: ReaderTextSelectionActions {
+        ReaderTextSelectionActions(
+            onCopy: { UIPasteboard.general.string = $0 },
+            onReplace: { selected in
+                selectedText = selected
+                showReplaceFromSelection = true
+            },
+            onBookmark: { selected in bookmarkSelection(selected) })
+    }
+
+    private func bookmarkSelection(_ selected: String) {
+        let added = ReaderBookmarkStore.shared.toggle(ReaderBookmark(
+            id: UUID().uuidString, bookURL: book.bookUrl, bookName: book.name,
+            chapterIndex: index, chapterTitle: readerChapterTitle,
+            text: selected, position: currentReadingPosition(), createdAt: Date()))
+        bookmarkNotice = added ? "已加入书签" : "已取消书签"
+        let notice = bookmarkNotice
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if bookmarkNotice == notice { bookmarkNotice = nil }
+        }
+    }
+
+    /// 当前章内位置：滚动模式用千分比，分页模式用页码，仅用于书签回到原处。
+    private func currentReadingPosition() -> Int {
+        settings.pageMode == 1 ? pageIndex : scrollProgress.position
+    }
+
+    /// 图片长按：拷贝图像（走剪贴板）与保存到相册。data: URI 与网络地址都支持。
+    private func copyImage(_ src: String) {
+        Task { @MainActor in
+            guard let image = await ReaderImageExport.image(from: src) else {
+                bookmarkNotice = "图片不可用"
+                return
+            }
+            UIPasteboard.general.image = image
+            bookmarkNotice = "已拷贝图像"
+            let notice = bookmarkNotice
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if bookmarkNotice == notice { bookmarkNotice = nil }
+        }
+    }
+
+    private func saveImageToPhotos(_ src: String) {
+        Task { @MainActor in
+            guard let image = await ReaderImageExport.image(from: src) else {
+                bookmarkNotice = "图片不可用"
+                return
+            }
+            let message = await ReaderImageExport.saveToPhotos(image)
+            bookmarkNotice = message
+            let notice = bookmarkNotice
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if bookmarkNotice == notice { bookmarkNotice = nil }
+        }
     }
 
     private func loadChapter(_ target: Int, landing: ChapterLanding) {

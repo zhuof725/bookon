@@ -67,16 +67,13 @@ struct ContentImageView: View {
             guard let comma = src.firstIndex(of: ",") else { return }
             let meta = src[..<comma].lowercased()
             let payload = String(src[src.index(after: comma)...])
-            let data: Data?
-            if meta.contains(";base64") {
-                var p = payload.replacingOccurrences(of: "\\s", with: "", options: .regularExpression)
-                while p.count % 4 != 0 { p += "=" }
-                data = Data(base64Encoded: p)
-            } else { data = payload.removingPercentEncoding?.data(using: .utf8) }
-            guard let d = data else { return }
             if meta.contains("svg") {
+                // 段评气泡等 SVG：解码规则与正文数据源一致，但需要用 WebView 渲染。
+                guard let d = DataURIDecode.data(src) ?? payload.removingPercentEncoding?.data(using: .utf8) else { return }
                 svgHTML = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;background:transparent}svg{width:100%;height:auto}</style></head><body>" + (String(data: d, encoding: .utf8) ?? "") + "</body></html>"
-            } else { image = UIImage(data: d) }
+            } else {
+                image = DataURIDecode.data(src).flatMap(UIImage.init(data:))
+            }
         } else if let u = URL(string: src), let (d, _) = try? await URLSession.shared.data(from: u) {
             image = UIImage(data: d)
         }
@@ -200,11 +197,14 @@ struct InlineCommentParagraph: UIViewRepresentable {
     let paragraphEnd: Bool
     let onTextTap: (() -> Void)?
     let onTap: () -> Void
+    /// 长按选词后的菜单动作；nil 时不启用选择，正文点击仍交给翻页容器。
+    var selection: ReaderTextSelectionActions?
 
     init(text: String, count: Int, fontSize: CGFloat, lineSpacing: CGFloat,
          color: UIColor, continuation: Bool = false, fullJustify: Bool = false,
          zhLayout: Bool = false, paragraphEnd: Bool = true,
          onTextTap: (() -> Void)? = nil,
+         selection: ReaderTextSelectionActions? = nil,
          onTap: @escaping () -> Void) {
         self.text = text
         self.count = count
@@ -216,6 +216,7 @@ struct InlineCommentParagraph: UIViewRepresentable {
         self.zhLayout = zhLayout
         self.paragraphEnd = paragraphEnd
         self.onTextTap = onTextTap
+        self.selection = selection
         self.onTap = onTap
     }
 
@@ -224,6 +225,8 @@ struct InlineCommentParagraph: UIViewRepresentable {
         ReaderTextLayout.configure(view)
         view.onBubbleTap = onTap
         view.onTextTap = onTextTap
+        view.selectionActions = selection
+        view.isSelectable = selection != nil
         view.installTapHandling()
         return view
     }
@@ -231,6 +234,8 @@ struct InlineCommentParagraph: UIViewRepresentable {
     func updateUIView(_ view: CommentTextView, context: Context) {
         view.onBubbleTap = onTap
         view.onTextTap = onTextTap
+        view.selectionActions = selection
+        view.isSelectable = selection != nil
         view.render(text: text, count: count, fontSize: fontSize, lineSpacing: lineSpacing,
                     color: color, continuation: continuation,
                     fullJustify: fullJustify, zhLayout: zhLayout,
@@ -244,9 +249,17 @@ struct InlineCommentParagraph: UIViewRepresentable {
     }
 }
 
-final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
+/// 长按选词后的菜单动作。全选与字典由文本视图自己完成，其余交给阅读器。
+struct ReaderTextSelectionActions {
+    var onCopy: (String) -> Void = { UIPasteboard.general.string = $0 }
+    var onReplace: (String) -> Void = { _ in }
+    var onBookmark: (String) -> Void = { _ in }
+}
+
+final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextViewDelegate {
     var onBubbleTap: (() -> Void)?
     var onTextTap: (() -> Void)?
+    var selectionActions: ReaderTextSelectionActions?
     private var bubbleIndex: Int?
     private var lastRenderKey: String?
     private var paragraphTap: UITapGestureRecognizer?
@@ -267,6 +280,7 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
     private(set) var renderedWidth: CGFloat = 0
 
     func installTapHandling() {
+        if delegate == nil { delegate = self }
         guard paragraphTap == nil else { return }
         let tap = UITapGestureRecognizer(target: self, action: #selector(paragraphTapped(_:)))
         tap.delegate = self
@@ -313,6 +327,61 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate {
         guard tap.state == .ended else { return }
         if isBubble(at: tap.location(in: self)) { onBubbleTap?() }
         else { onTextTap?() }
+    }
+
+    // MARK: 长按选词菜单（拷贝 / 全选 / 字典 / 替换 / 书签）
+
+    /// 气泡图片不参与选择，避免「全选」把段评附件算进去。
+    private var bubbleAttachmentIndex: Int? {
+        guard let bubbleIndex, textStorage.length > 0,
+              bubbleIndex >= 0, bubbleIndex < textStorage.length,
+              textStorage.attribute(.attachment, at: bubbleIndex, effectiveRange: nil) != nil else { return nil }
+        return bubbleIndex
+    }
+
+    var selectedPlainText: String {
+        guard let range = selectedTextRange, !range.isEmpty else { return "" }
+        return text(in: range) ?? ""
+    }
+
+    private func selectEverything() {
+        if let bubble = bubbleAttachmentIndex {
+            selectedRange = NSRange(location: 0, length: bubble)
+        } else {
+            selectedRange = NSRange(location: 0, length: textStorage.length)
+        }
+    }
+
+    /// 自定义菜单替换系统菜单：只保留用户要求的五项。
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
+                  suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard let selectionActions else { return nil }
+        let selected = selectedPlainText
+        let copy = UIAction(title: "拷贝") { [weak self] _ in
+            guard let self else { return }
+            let value = self.selectedPlainText
+            guard !value.isEmpty else { return }
+            selectionActions.onCopy(value)
+            self.selectedRange = NSRange(location: 0, length: 0)
+        }
+        let selectAll = UIAction(title: "全选") { [weak self] _ in self?.selectEverything() }
+        let dictionary = UIAction(title: "字典") { [weak self] _ in
+            let value = self?.selectedPlainText ?? ""
+            guard !value.isEmpty else { return }
+            ReaderDictionaryLookup.present(value)
+        }
+        let replace = UIAction(title: "替换") { [weak self] _ in
+            let value = self?.selectedPlainText ?? ""
+            guard !value.isEmpty else { return }
+            self?.selectedRange = NSRange(location: 0, length: 0)
+            selectionActions.onReplace(value)
+        }
+        let bookmark = UIAction(title: "书签") { [weak self] _ in
+            let value = self?.selectedPlainText ?? ""
+            self?.selectedRange = NSRange(location: 0, length: 0)
+            selectionActions.onBookmark(value)
+        }
+        return UIMenu(children: [copy, selectAll, dictionary, replace, bookmark])
     }
 
     func render(text: String, count: Int, fontSize: CGFloat, lineSpacing: CGFloat,

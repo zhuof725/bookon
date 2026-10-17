@@ -425,8 +425,9 @@ final class ReaderCoverPageTurnController: UIViewController, UIGestureRecognizer
         var ancestor = touch.view
         while let node = ancestor {
             if node is UIControl { return false }
-            if let paragraph = node as? CommentTextView,
-               paragraph.isBubble(at: touch.location(in: paragraph)) { return false }
+            if let paragraph = node as? CommentTextView {
+                if paragraph.isBubble(at: touch.location(in: paragraph)) { return false }
+            }
             ancestor = node.superview
         }
         return true

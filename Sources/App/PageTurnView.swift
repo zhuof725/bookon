@@ -25,6 +25,11 @@ struct PageContentView: View {
     let pageNumber: Int
     let pageCount: Int
     let onTapComment: (String?) -> Void
+    /// 长按选词菜单动作；提为属性以免每次刷新都重建，导致选择状态丢失。
+    var selection: ReaderTextSelectionActions? = nil
+    /// 图片长按菜单；nil 时保持只响应点击（离线测试与预览）。
+    var onCopyImage: ((String) -> Void)? = nil
+    var onSaveImage: ((String) -> Void)? = nil
     var safeInsets = EdgeInsets()
     var paragraphSpacing: Double = 8
     var leftMargin: Double = 20
@@ -102,6 +107,7 @@ struct PageContentView: View {
                                                 zhLayout: page.zhLayout,
                                                 paragraphEnd: page.blockLineCounts.count == page.blocks.count
                                                     ? page.paragraphEndIndices.contains(blockIndex) : true,
+                                                selection: selection,
                                                 onTap: { onTapComment(url) })
                             .frame(maxWidth: .infinity, alignment: .leading)
                             // Use the exact measured row-box height. SwiftUI must
@@ -131,7 +137,12 @@ struct PageContentView: View {
                         .onTapGesture { onTapComment(click) }
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .image(let src, let click):
-                        ContentImageView(src: src).onTapGesture { onTapComment(click) }
+                        ContentImageView(src: src)
+                            .onTapGesture { onTapComment(click) }
+                            .contextMenu {
+                                if let onCopyImage { Button { onCopyImage(src) } label: { Label("拷贝图像", systemImage: "doc.on.doc") } }
+                                if let onSaveImage { Button { onSaveImage(src) } label: { Label("保存到相机胶卷", systemImage: "square.and.arrow.down") } }
+                            }
                             .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .inlineBubble:
                         EmptyView()

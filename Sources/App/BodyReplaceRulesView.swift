@@ -9,8 +9,14 @@ struct BodyReplaceRulesView: View {
     @State private var pendingDeletion: BodyReplaceRule?
     @State private var error: String?
     private let repository: BodyReplaceRepository
+    /// 从阅读器长按「替换」进来时的预填内容，直接打开新建规则并填好匹配文字。
+    private let seed: String?
+    @State private var seeding = false
 
-    init(defaults: UserDefaults = .standard) { repository = BodyReplaceRepository(defaults: defaults) }
+    init(defaults: UserDefaults = .standard, seed: String? = nil) {
+        repository = BodyReplaceRepository(defaults: defaults)
+        self.seed = seed
+    }
 
     private func persist(_ updated: [BodyReplaceRule]) -> String? {
         do { try repository.save(updated); rules = updated; return nil }
@@ -81,7 +87,14 @@ struct BodyReplaceRulesView: View {
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .toolbar(.hidden, for: .navigationBar).modifier(MonochromeAppStyle())
-        .onAppear { rules = repository.rules() }
+        .onAppear {
+            rules = repository.rules()
+            if let seed, !seed.isEmpty, !seeding {
+                seeding = true
+                editing = BodyReplaceRule(id: UUID().uuidString, name: "", pattern: seed,
+                                          replacement: "", isRegex: false, enabled: true)
+            }
+        }
         .sheet(item: $editing, onDismiss: {
             if let pendingDeletion { deleting = pendingDeletion; self.pendingDeletion = nil }
         }) { rule in

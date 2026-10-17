@@ -171,6 +171,7 @@ enum RuleRegression {
         ChapterNavigationRegression.run(check)
         try await ChapterContentCacheRegression.run(check)
         try LocalBookRegression.run(check)
+        ReaderBookmarkRegression.run(check)
         SearchRankingRegression.run(check)
         do {
             var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!

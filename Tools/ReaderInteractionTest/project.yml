@@ -61,6 +61,10 @@ targets:
       - path: AppFontHarness.swift
       - path: ShelfHarness.swift
       - path: ../../Sources/App/ShelfListRow.swift
+      - path: ../../Sources/App/ReaderBookmarkList.swift
+      - path: ../../Sources/App/ReaderImageExport.swift
+      - path: ../../Sources/Engine/DataURIDecode.swift
+      - path: ../../Sources/Engine/ReaderBookmarks.swift
       - path: DetailHarness.swift
       - path: ../../Sources/App/BookDetailScreen.swift
       - path: ../../Sources/App/BookshelfScreen.swift

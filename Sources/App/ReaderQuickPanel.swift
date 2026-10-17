@@ -59,7 +59,7 @@ struct ReaderQuickPanel: View {
                 }
                 if let message { Text(message).appFont(.footnote).foregroundStyle(palette.secondary)
                     .accessibilityIdentifier("reader.quick.status") }
-                Text("书签列表暂未支持；清缓存仅作用于当前章节。")
+                Text("书签来自长按正文选中文字；清缓存仅作用于当前章节。")
                     .appFont(.caption2).foregroundStyle(palette.secondary)
             }.padding(20)
         }

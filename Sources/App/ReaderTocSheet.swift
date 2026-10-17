@@ -235,20 +235,22 @@ struct ReaderTocSheet: View {
                 Text(chapter.title).appFont(.headline)
                     .foregroundStyle(chapter.index == currentIndex ? palette.accent : palette.secondary)
             } else {
-                HStack(spacing: 8) {
-                    Text(chapter.title)
-                        .foregroundStyle(chapter.index == currentIndex ? palette.accent : palette.primary)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(chapter.title)
+                            .foregroundStyle(chapter.index == currentIndex ? palette.accent : palette.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        if chapter.isVip {
+                            Image(systemName: "lock.fill").font(.caption).foregroundStyle(palette.secondary)
+                        }
+                        if isCached {
+                            Image(systemName: "arrow.down.circle.fill").font(.caption)
+                                .foregroundStyle(palette.secondary)
+                        }
+                    }
                     if let time = chapter.updateTime, !time.isEmpty {
                         Text(time).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
-                    }
-                    if chapter.isVip {
-                        Image(systemName: "lock.fill").font(.caption).foregroundStyle(palette.secondary)
-                    }
-                    if isCached {
-                        Image(systemName: "arrow.down.circle.fill").font(.caption)
-                            .foregroundStyle(palette.secondary)
                     }
                 }
             }
