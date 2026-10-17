@@ -428,6 +428,7 @@ struct ReaderView: View {
         .fullScreenCover(isPresented: $showAloudPanel) {
             AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
                             onRefreshToc: tocRefreshAction)
+                .modifier(AppThemeRoot())
         }
         .overlay(alignment: .bottom) {
             if let notice = aloud.notice, !showAloudPanel {

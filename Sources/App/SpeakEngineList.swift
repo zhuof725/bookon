@@ -7,6 +7,7 @@ struct AloudPreloadCard: View {
     @AppStorage(AloudTTSConfig.preloadKey) private var storedCount = AloudTTSConfig.defaultPreloadCount
     private let range = AloudTTSConfig.preloadRange
     private var count: Int { AloudTTSConfig.clampedPreloadCount(storedCount) }
+    @ThemePalette private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -22,14 +23,14 @@ struct AloudPreloadCard: View {
                         .frame(minWidth: 56, minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                                .fill(palette.surface)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                .stroke(palette.border, lineWidth: 1)
                         )
                         .accessibilityIdentifier("reader.aloud.preloadValue")
-                    Text("段").appFont(.body).foregroundStyle(.secondary)
+                    Text("段").appFont(.body).foregroundStyle(palette.secondary)
                 }
                 HStack(spacing: 14) {
                     stepButton(symbol: "minus", label: "减少预加载段落", enabled: count > range.lowerBound) {
@@ -39,7 +40,7 @@ struct AloudPreloadCard: View {
                     Slider(value: Binding(get: { Double(count) },
                                           set: { setCount(Int($0.rounded())) }),
                            in: Double(range.lowerBound)...Double(range.upperBound), step: 1)
-                        .tint(.accentColor)
+                        .tint(palette.accent)
                         .accessibilityIdentifier("reader.aloud.preloadSlider")
                         .accessibilityLabel("预加载段落")
                     stepButton(symbol: "plus", label: "增加预加载段落", enabled: count < range.upperBound) {
@@ -48,7 +49,7 @@ struct AloudPreloadCard: View {
                     .accessibilityIdentifier("reader.aloud.preloadPlus")
                 }
                 Text("范围: \(range.lowerBound)-\(range.upperBound)，预加载更多段落可减少卡顿")
-                    .appFont(.footnote).foregroundStyle(.secondary)
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
             }
             .padding(.horizontal, 16).padding(.vertical, 16)
             .modifier(SettingsGlassSurface())
@@ -62,9 +63,9 @@ struct AloudPreloadCard: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(enabled ? Color.white : Color.white.opacity(0.7))
+                .foregroundStyle(enabled ? palette.onAccent : palette.onAccent.opacity(0.7))
                 .frame(width: 34, height: 34)
-                .background(Circle().fill(Color.accentColor.opacity(enabled ? 1 : 0.45)))
+                .background(Circle().fill(palette.accent.opacity(enabled ? 1 : 0.45)))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -84,6 +85,7 @@ struct AloudPreloadCard: View {
 struct SpeakEngineList: View {
     @ObservedObject var aloud: ReaderAloudController
     @ObservedObject var engines = SpeakEngineModel.shared
+    @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var editing: HTTPTTS?
     @State private var showNewEditor = false
@@ -109,7 +111,7 @@ struct SpeakEngineList: View {
                                 Image(systemName: auditioner.isPlaying ? "waveform" : "hourglass")
                                     .foregroundStyle(.tint)
                             }
-                            Text("系统").appFont(.caption).foregroundStyle(.secondary)
+                            Text("系统").appFont(.caption).foregroundStyle(palette.secondary)
                             if selectedID.isEmpty {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }
@@ -128,7 +130,7 @@ struct SpeakEngineList: View {
                 Section {
                     if engines.list.isEmpty {
                         Text("还没有在线引擎\n菜单里可以「导入默认」或直接新建。")
-                            .appFont(.footnote).foregroundStyle(.secondary)
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
                             .accessibilityIdentifier("tts.empty")
                     } else {
@@ -139,10 +141,10 @@ struct SpeakEngineList: View {
                 } header: { Text("HTTP 引擎") }
 
                 if let message {
-                    Section { Text(message).appFont(.footnote).foregroundStyle(.secondary) }
+                    Section { Text(message).appFont(.footnote).foregroundStyle(palette.secondary) }
                 }
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(palette.primary)
             .navigationTitle("朗读引擎")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -271,7 +273,7 @@ struct SpeakEngineList: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(engine.displayName).appFont(.body).lineLimit(1)
-                    Text(engine.url).appFont(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    Text(engine.url).appFont(.caption2).foregroundStyle(palette.secondary).lineLimit(1)
                         .accessibilityIdentifier("tts.url.\(engine.id)")
                 }
                 Spacer(minLength: 0)

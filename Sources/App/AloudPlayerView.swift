@@ -12,6 +12,7 @@ struct AloudPlayerView: View {
     var onRefreshToc: (@MainActor () async -> String?)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @ThemePalette private var palette
     @AppStorage("reader.aloud.player.mode.v1") private var mode = 0
     @State private var showToc = false
     @State private var showQueue = false
@@ -34,9 +35,11 @@ struct AloudPlayerView: View {
             } else {
                 textBody
             }
-            Divider()
+            Rectangle().fill(palette.border).frame(height: 0.5)
             bottomBar
         }
+        .foregroundStyle(palette.primary)
+        .tint(palette.accent)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .statusBarHidden(false)
         // 打开播放器未启动即自动开始；中途重新打开不打断正在读的。
@@ -44,9 +47,9 @@ struct AloudPlayerView: View {
             if !aloud.isRunning { aloud.openCurrent() }
             aloud.refreshEngineLabel()
         }
-        .sheet(isPresented: $showToc) { tocSheet }
-        .sheet(isPresented: $showQueue) { queueSheet }
-        .sheet(isPresented: $showSettings, onDismiss: { aloud.refreshEngineLabel() }) { settingsSheet }
+        .sheet(isPresented: $showToc) { tocSheet.modifier(AppThemeRoot()) }
+        .sheet(isPresented: $showQueue) { queueSheet.modifier(AppThemeRoot()) }
+        .sheet(isPresented: $showSettings, onDismiss: { aloud.refreshEngineLabel() }) { settingsSheet.modifier(AppThemeRoot()) }
         .overlay(alignment: .bottom) { noticeToast }
     }
 
@@ -62,7 +65,7 @@ struct AloudPlayerView: View {
                             .font(.system(size: 17, weight: .semibold))
                         Text("返回").appFont(.body)
                     }
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(palette.accent)
                     .padding(.vertical, 8).padding(.trailing, 12)
                     .contentShape(Rectangle())
                 }
@@ -81,7 +84,7 @@ struct AloudPlayerView: View {
             modeButton(title: "正文", index: 1, id: "reader.aloud.modeText")
         }
         .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(0.08)))
+        .background(Capsule().fill(palette.primary.opacity(0.08)))
     }
 
     private func modeButton(title: String, index: Int, id: String) -> some View {
@@ -90,9 +93,9 @@ struct AloudPlayerView: View {
         } label: {
             Text(title)
                 .appFont(.subheadline.weight(mode == index ? .semibold : .regular))
-                .foregroundStyle(mode == index ? Color.white : Color.secondary)
+                .foregroundStyle(mode == index ? palette.onAccent : palette.secondary)
                 .frame(width: 86, height: 32)
-                .background(Capsule().fill(mode == index ? Color.accentColor : Color.clear))
+                .background(Capsule().fill(mode == index ? palette.accent : Color.clear))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -110,10 +113,10 @@ struct AloudPlayerView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if !book.author.isEmpty {
-                    Text(book.author).appFont(.subheadline).foregroundStyle(.secondary)
+                    Text(book.author).appFont(.subheadline).foregroundStyle(palette.secondary)
                 }
                 Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
-                    .appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    .appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
@@ -163,10 +166,10 @@ struct AloudPlayerView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.name).appFont(.headline).lineLimit(2)
                     if !book.author.isEmpty {
-                        Text(book.author).appFont(.caption).foregroundStyle(.secondary)
+                        Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
                     }
                     Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
-                        .appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
@@ -179,7 +182,7 @@ struct AloudPlayerView: View {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if aloud.unitList.isEmpty {
                             Text(aloud.isBuffering ? "正在加载正文…" : "正文加载后开始朗读")
-                                .appFont(.body).foregroundStyle(.secondary)
+                                .appFont(.body).foregroundStyle(palette.secondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 60)
                         } else {
@@ -188,7 +191,7 @@ struct AloudPlayerView: View {
                                     .appFont(.title3)
                                     .lineSpacing(8)
                                     .foregroundStyle(i == aloud.unitIndex
-                                        ? Color.accentColor : Color.primary.opacity(0.88))
+                                        ? palette.accent : palette.primary.opacity(0.88))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .id(i)
                                     .accessibilityIdentifier("reader.aloud.para.\(i)")
@@ -218,7 +221,7 @@ struct AloudPlayerView: View {
 
     private var playerCard: some View {
         VStack(spacing: 10) {
-            Capsule().fill(Color.secondary.opacity(0.3))
+            Capsule().fill(palette.secondary.opacity(0.3))
                 .frame(width: 40, height: 4)
                 .padding(.top, 8)
             progressBlock
@@ -228,9 +231,8 @@ struct AloudPlayerView: View {
         .padding(.bottom, 10)
         .padding(.top, 4)
         .background {
-            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 24, topTrailing: 24),
-                                   style: .continuous)
-                .fill(.regularMaterial)
+            ThemeSurface(shape: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 24, topTrailing: 24),
+                                                       style: .continuous), isCard: true)
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -4)
         }
     }
@@ -241,7 +243,7 @@ struct AloudPlayerView: View {
         Text(aloud.chapterIndex >= 0
             ? "\(aloud.chapterIndex + 1)/\(chapters.count)章"
             : "-/\(chapters.count)章")
-            .appFont(.caption).foregroundStyle(.secondary)
+            .appFont(.caption).foregroundStyle(palette.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("reader.aloud.chapterProgress")
     }
@@ -257,7 +259,7 @@ struct AloudPlayerView: View {
                     aloud.seekUnit(Int(value.rounded()))
                 }
             }
-            .tint(.accentColor)
+            .tint(palette.accent)
             .disabled(aloud.unitTotal <= 1)
             .accessibilityIdentifier("reader.aloud.slider")
             .accessibilityLabel("朗读进度")
@@ -271,7 +273,7 @@ struct AloudPlayerView: View {
                 }
                 .appFont(.caption)
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette.secondary)
             }
         }
     }
@@ -320,7 +322,7 @@ struct AloudPlayerView: View {
     private var queueButton: some View {
         Button { showQueue = true } label: {
             controlFrame(Image(systemName: "list.bullet")
-                .font(.system(size: 22)).foregroundStyle(.primary))
+                .font(.system(size: 22)).foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
         .disabled(aloud.unitList.isEmpty)
@@ -333,7 +335,7 @@ struct AloudPlayerView: View {
         return Button { aloud.manualChapter(direction: direction) } label: {
             controlFrame(Image(systemName: previous ? "gobackward.15" : "goforward.15")
                 .font(.system(size: 26))
-                .foregroundStyle(.primary))
+                .foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
         .disabled(!aloud.isRunning)
@@ -345,7 +347,7 @@ struct AloudPlayerView: View {
         let previous = direction < 0
         return Button { previous ? aloud.previousUnit() : aloud.nextUnit() } label: {
             controlFrame(Image(systemName: previous ? "backward.end.fill" : "forward.end.fill")
-                .font(.system(size: 26)).foregroundStyle(.primary))
+                .font(.system(size: 26)).foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
         .disabled(!aloud.isRunning)
@@ -356,13 +358,13 @@ struct AloudPlayerView: View {
     private var playButton: some View {
         Button { aloud.togglePlay() } label: {
             ZStack {
-                Circle().fill(Color.accentColor).frame(width: 74, height: 74)
+                Circle().fill(palette.accent).frame(width: 74, height: 74)
                 if aloud.isBuffering {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(palette.onAccent)
                 } else {
                     Image(systemName: aloud.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(palette.onAccent)
                         .offset(x: aloud.isPlaying ? 0 : 3)
                 }
             }
@@ -378,7 +380,7 @@ struct AloudPlayerView: View {
         Menu { speedMenuItems } label: {
             controlFrame(Text(speedTitle)
                 .appFont(.headline)
-                .foregroundStyle(.primary))
+                .foregroundStyle(palette.primary))
         }
         .accessibilityLabel("语速")
         .accessibilityIdentifier("reader.aloud.speedLabel")
@@ -420,7 +422,7 @@ struct AloudPlayerView: View {
             Image(systemName: symbol).font(.system(size: 22))
             Text(title).appFont(.caption)
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(palette.primary)
         .frame(maxWidth: .infinity, minHeight: 52)
         .contentShape(Rectangle())
     }
@@ -490,14 +492,14 @@ struct AloudPlayerView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text("\(i + 1)")
                                 .appFont(.caption).monospacedDigit()
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(palette.secondary)
                                 .frame(width: 34, alignment: .trailing)
                             Text(aloud.unitList[i].text)
                                 .appFont(.body)
                                 .lineLimit(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .foregroundStyle(i == aloud.unitIndex ? Color.accentColor : Color.primary)
+                        .foregroundStyle(i == aloud.unitIndex ? palette.accent : palette.primary)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -530,10 +532,10 @@ struct AloudPlayerView: View {
                             Image(systemName: "waveform.badge.mic").frame(width: 24)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("朗读引擎").appFont(.subheadline)
-                                Text(aloud.engineName).appFont(.caption).foregroundStyle(.secondary)
+                                Text(aloud.engineName).appFont(.caption).foregroundStyle(palette.secondary)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").appFont(.caption).foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right").appFont(.caption).foregroundStyle(palette.secondary)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .contentShape(Rectangle())
@@ -562,7 +564,7 @@ struct AloudPlayerView: View {
                     .accessibilityIdentifier("reader.aloud.stop")
 
                     Text("「返回」只收起播放器，朗读会在后台继续；想结束请在这里停止。")
-                        .appFont(.footnote).foregroundStyle(.secondary)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
                 }
