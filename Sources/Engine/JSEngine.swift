@@ -48,6 +48,79 @@ private final class HTTPBridgeWaiter: @unchecked Sendable {
     }
 }
 
+@objc protocol TTSResponseExports: JSExport {
+    var url: String { get }
+    var code: Int { get }
+    /// OkHttp body().bytes()：JSEngine 桥，字节按 JS 数组返回。
+    func body() -> TTSResponseBodyExports
+    func newBuilder() -> TTSResponseBuilderExports
+}
+@objc protocol TTSResponseBodyExports: JSExport {
+    func bytes() -> [Int]
+    func string() -> String
+    func contentLength() -> Int
+    var mediaType: String { get }
+}
+@objc protocol TTSResponseBuilderExports: JSExport {
+    func code(_ c: Int) -> TTSResponseBuilderExports
+    func message(_ m: String) -> TTSResponseBuilderExports
+    func header(_ k: String, _ v: String) -> TTSResponseBuilderExports
+    func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports
+    func build() -> TTSResponseExports
+}
+final class TTSResponseBody: NSObject, TTSResponseBodyExports {
+    let data: Data
+    let mediaType: String
+    init(data: Data, mediaType: String = "application/octet-stream") {
+        self.data = data; self.mediaType = mediaType
+    }
+    @objc func bytes() -> [Int] { SourceCrypto.toSigned(data) }
+    @objc func string() -> String { String(data: data, encoding: .utf8) ?? "" }
+    @objc func contentLength() -> Int { data.count }
+}
+final class TTSResponseBuilder: NSObject, TTSResponseBuilderExports {
+    private var _code = 200
+    private var _message = "OK"
+    private var _headers: [(String, String)] = []
+    private var _body: TTSResponseBody?
+    init() {}
+    @objc func code(_ c: Int) -> TTSResponseBuilderExports { _code = c; return self }
+    @objc func message(_ m: String) -> TTSResponseBuilderExports { _message = m; return self }
+    @objc func header(_ k: String, _ v: String) -> TTSResponseBuilderExports { _headers.append((k, v)); return self }
+    @objc func body(_ b: TTSResponseBodyExports) -> TTSResponseBuilderExports {
+        if let t = b as? TTSResponseBody { _body = t }
+        else if let arr = (b as? NSObject)?.value(forKey: "__bytes") as? [Int] {
+            _body = TTSResponseBody(data: Data(arr.map { UInt8(truncatingIfNeeded: $0) }),
+                                    mediaType: (b as? NSObject)?.value(forKey: "mediaType") as? String ?? "application/octet-stream")
+        } else {
+            _body = TTSResponseBody(data: Data())
+        }
+        return self
+    }
+    @objc func build() -> TTSResponseExports {
+        let data = _body?.data ?? Data()
+        let ct = _body?.mediaType ?? "application/octet-stream"
+        return TTSResponse(data: data, url: "", code: _code, headers: ["Content-Type": ct])
+    }
+}
+final class TTSResponse: NSObject, TTSResponseExports {
+    let data: Data
+    let url: String
+    let code: Int
+    private let headers: [String: String]
+    init(data: Data, url: String, code: Int, headers: [String: String]) {
+        self.data = data; self.url = url; self.code = code; self.headers = headers
+    }
+    @objc func body() -> TTSResponseBodyExports {
+        TTSResponseBody(data: data, mediaType: headers.first { $0.key.caseInsensitiveCompare("Content-Type") == .orderedSame }?.value ?? "application/octet-stream")
+    }
+    @objc func newBuilder() -> TTSResponseBuilderExports { TTSResponseBuilder() }
+    @objc func isSuccessful() -> Bool { (200...299).contains(code) }
+    @objc func header(_ name: String) -> String {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value ?? ""
+    }
+}
+
 /// Bridge object exposed to book-source JS as `java`.
 @objc protocol JavaBridgeExports: JSExport {
     /// Legado 约定：ajax 直接返回响应正文。
@@ -304,7 +377,7 @@ final class JSEngine {
         return m;
     }
     var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))}};
-    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},put:function(k,v){return java.storePut(k,String(v))},get:function(k){return java.storeGet(k)},
+    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},put:function(k,v){return java.storePut(k,String(v))},get:function(k){return java.storeGet(k)},
         getLoginInfoMap:function(){var s=String(__loginInfoMap());var m=__javaMap();try{var o=JSON.parse(s);Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){}return m;},
         getLoginInfo:function(){var v=__loginGet();return v==null||v===''?null:String(v);},
         putLoginInfo:function(v){return __loginPut(String(v));},
@@ -318,7 +391,33 @@ final class JSEngine {
         putVariable:function(k,v){var s=(v==null?'':String(v));return (typeof __bookVarPut==='function')?String(__bookVarPut(String(k),s)):s;},
         setVariable:function(k,v){return this.putVariable(k,v);}};
     var chapter={title:'',url:'',index:0};
-    var Packages={org:{jsoup:{Jsoup:{parse:function(html){return __jsoupParse(String(html));}}}}};
+    var Packages={
+        org:{jsoup:{Jsoup:{parse:function(html){return __jsoupParse(String(html));}}}},
+        java:{
+            util:{
+                HashMap:function(){},
+                Arrays:{copyOfRange:function(b,a,e){a=a||0;e=(e==null)?b.length:e;var o=[];for(var i=a;i<e&&i<b.length;i++)o.push(b[i]);return o;}}
+            }
+        },
+        okio:{Buffer:function(){}},
+        okhttp3:{
+            MediaType:{parse:function(s){return String(s||'');}},
+            ResponseBody:{
+                create:function(mediaType,total,buf){
+                    var b=(buf&&buf.__bytes)?buf.__bytes.slice():[];
+                    var len=(typeof total==='number'&&!isNaN(total))?total:b.length;
+                    return {mediaType:function(){return mediaType;},contentType:function(){return mediaType;},
+                            contentLength:function(){return len;},bytes:function(){return b;},
+                            string:function(){return typeof bytesToStr==='function'?bytesToStr(b):'';},
+                            __bytes:b,contentLengthOut:len};
+                }
+            }
+        }
+    };
+    Packages.java.util.HashMap.prototype.put=function(k,v){var prev;if(Object.prototype.hasOwnProperty.call(this,String(k)))prev=this[String(k)];else prev=null;this[String(k)]=v;return prev;};
+    Packages.okio.Buffer.prototype.write=function(arr){if(!arr)return;this.__bytes=this.__bytes||[];for(var i=0;i<arr.length;i++)this.__bytes.push(arr[i]);};
+    Packages.okio.Buffer.prototype.size=function(){return (this.__bytes||[]).length;};
+    var org=Packages.org;
     var org=Packages.org;
     // Preserve primitive code and url: neither can also be a same-named
     // method without breaking strict comparisons. code()/url() remain unsupported.
@@ -326,12 +425,19 @@ final class JSEngine {
     // are a plain map, not an OkHttp Headers object or a complete Java Map.
     function __response(r,jsoup){
         if(!r){throw new Error('HTTP response unavailable');}
+        // OkHttp Response：body() 是 ResponseBody，可 bytes()/string()（loginCheckJs 需要）。
+        var __binBody = {
+            bytes:function(){return r.bodyAsBytes ? r.bodyAsBytes() : [];},
+            string:function(){return r.body},
+            contentLength:function(){return r.length;}
+        };
         return {
             url:r.url,
             code:r.code,
             length:r.length,
             statusKnown:r.code !== 0,
-            body:function(){return r.body},
+            body:function(){return __binBody;},
+            bodyAsBytes:function(){return r.bodyAsBytes ? r.bodyAsBytes() : [];},
             statusCode:function(){return r.code},
             isSuccessful:function(){return r.isSuccessful()},
             header:function(k){return r.header(String(k))},
@@ -796,7 +902,12 @@ final class JSEngine {
         ctx.setObject(setContent, forKeyedSubscript: "__ruleSetContent" as NSString)
         ctx.setObject(ge, forKeyedSubscript: "__ruleGetElements" as NSString)
         ctx.setObject(parseHTML, forKeyedSubscript: "__jsoupParse" as NSString)
-        ctx.setObject(result ?? "", forKeyedSubscript: "result" as NSString)
+        // TTS loginCheckJs：result 是完整 Response（body().bytes()/newBuilder()），不包成 StrResponse。
+        if let t = result as? TTSResponse {
+            ctx.setObject(t, forKeyedSubscript: "result" as NSString)
+        } else {
+            ctx.setObject(result ?? "", forKeyedSubscript: "result" as NSString)
+        }
         ctx.setObject(baseUrl ?? "", forKeyedSubscript: "baseUrl" as NSString)
         ctx.setObject(result ?? "", forKeyedSubscript: "src" as NSString)
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }

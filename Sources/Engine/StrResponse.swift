@@ -16,6 +16,8 @@ import JavaScriptCore
     func headers() -> [String: String]
     func header(_ name: String) -> String
     func cookie(_ name: String) -> String
+    /// OkHttp body().bytes()：JS 侧 body().bytes() 入口（loginCheckJs 需要）
+    func bodyAsBytes() -> [Int]
 }
 
 @objc final class StrResponse: NSObject, StrResponseExports {
@@ -23,22 +25,30 @@ import JavaScriptCore
     let body: String
     let code: Int
     let length: Int
+    /// 响应原始字节：二进制响应有，文本响应由 body encode。
+    private let rawData: Data?
     private let responseHeaders: [String: String]
 
     /// Zero explicitly means unknown/non-HTTP status, never HTTP success.
-    init(url: String, body: String, code: Int = 0, headers: [String: String] = [:]) {
+    init(url: String, body: String, code: Int = 0, headers: [String: String] = [:], rawData: Data? = nil) {
         self.url = url
         self.body = body
         self.code = code
-        self.length = body.count
+        self.length = rawData?.count ?? body.count
+        self.rawData = rawData
         self.responseHeaders = headers
         super.init()
     }
 
     convenience init(_ response: HTTPResponseData) {
         self.init(url: response.url, body: response.body,
-                  code: response.code, headers: response.headers)
+                  code: response.code, headers: response.headers, rawData: response.rawData)
     }
+
+    /// 响应字节（原始为准，文本响应则用 utf8）。OkHttp body().bytes() 的直接对应。
+    var bodyBytes: Data { rawData ?? Data(body.utf8) }
+
+    @objc func bodyAsBytes() -> [Int] { SourceCrypto.toSigned(bodyBytes) }
 
     @objc func toString() -> String { body }
     @objc func valueOf() -> String { body }

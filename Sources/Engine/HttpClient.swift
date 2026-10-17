@@ -7,15 +7,18 @@ struct HTTPResponseData: Sendable {
     let url: String
     let code: Int
     let headers: [String: String]
+    /// 响应原始字节：文本解码失败的二进制为 nil，由 bodyBytes 兜底合成。
+    let rawData: Data?
 
-    init(body: String, url: String, code: Int = 0, headers: [String: String] = [:]) {
+    init(body: String, url: String, code: Int = 0, headers: [String: String] = [:], rawData: Data? = nil) {
         self.body = body
         self.url = url
         self.code = code
         self.headers = headers
+        self.rawData = rawData
     }
 
-    init(body: String, response: URLResponse, fallbackURL: String) {
+    init(body: String, response: URLResponse, fallbackURL: String, rawData: Data? = nil) {
         let http = response as? HTTPURLResponse
         var fields: [String: String] = [:]
         if let http = http {
@@ -24,8 +27,11 @@ struct HTTPResponseData: Sendable {
             }
         }
         self.init(body: body, url: response.url?.absoluteString ?? fallbackURL,
-                  code: http?.statusCode ?? 0, headers: fields)
+                  code: http?.statusCode ?? 0, headers: fields, rawData: rawData)
     }
+
+    /// response.body().bytes() 对应的总能拿到的字节（响应本质上就是字节流）。
+    var bodyBytes: Data { rawData ?? Data(body.utf8) }
 }
 
 /// Parses Legado-style URLs: `https://x.com/search?q={{key}}&p={{page}},{"method":"POST","body":"k={{key}}","charset":"gbk","headers":{...}}`
@@ -260,26 +266,46 @@ struct AnalyzeUrl {
             cfg.httpCookieAcceptPolicy = .never
             session = URLSession(configuration: cfg)
         }
-        let finalUrl = url.contains("%") ? url : percentEncoded(url)
-        guard let u = URL(string: finalUrl) else { throw URLError(.badURL) }
+        let (_, u) = try applyRequestURL()
+        let finalUrl = u.absoluteString
         var req = URLRequest(url: u, timeoutInterval: readTimeout)
         req.httpMethod = method
         if !cookieJarEnabled { req.httpShouldHandleCookies = false }
-        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        if req.value(forHTTPHeaderField: "User-Agent") == nil {
+            req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        }
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
-        if req.value(forHTTPHeaderField: "Referer") == nil, let host = URL(string: finalUrl)?.host {
+        if req.value(forHTTPHeaderField: "Referer") == nil, let host = u.host {
             req.setValue("\(u.scheme ?? "https")://\(host)/", forHTTPHeaderField: "Referer")
         }
-        if let b = body {
-            req.httpBody = percentEncodedBody(b).data(using: AnalyzeUrl.encoding(charset))
+        if let requestBody = resolvedRequestBody() {
+            req.httpBody = requestBody
             if req.value(forHTTPHeaderField: "Content-Type") == nil {
-                let isJson = b.trimmingCharacters(in: .whitespaces).hasPrefix("{")
+                let isJson = (body ?? "").trimmingCharacters(in: .whitespaces).hasPrefix("{")
                 req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             }
         }
         let (data, resp) = try await session.data(for: req)
         try Task.checkCancellation()
         return (data, resp, finalUrl)
+    }
+
+    /// 正文暂存为 base64 前缀（旧行为只走 String UTF-8 编码；现对二进制正文先还原字节）。
+    /// 与原版一致：请求头/正文就绪后才生成 URLRequest。
+    private func resolvedRequestBody() -> Data? {
+        guard let raw = body, !raw.isEmpty else { return nil }
+        if let enc = AnalyzeUrl.base64Prefixed(raw) {
+            return Data(base64Encoded: String(enc))
+        }
+        return percentEncodedBody(raw).data(using: AnalyzeUrl.encoding(charset))
+    }
+
+    /// 按 Legado 的「直接解析」生成最终 URL；已带百分号的串原样交 URL。
+    /// 返回登录可能写补充头的最终 URL 与 Foundation URL。
+    private func applyRequestURL() throws -> (String, URL) {
+        let s = url.contains("%") ? url : percentEncoded(url)
+        guard let u = URL(string: s) else { throw URLError(.badURL) }
+        return (s, u)
     }
 
     /// HTTP 4xx/5xx remain responses; transport errors and cancellation throw.
@@ -325,10 +351,10 @@ struct AnalyzeUrl {
         if req.value(forHTTPHeaderField: "Referer") == nil, let host = URL(string: finalUrl)?.host {
             req.setValue("\(u.scheme ?? "https")://\(host)/", forHTTPHeaderField: "Referer")
         }
-        if let b = body {
-            req.httpBody = percentEncodedBody(b).data(using: .utf8)
+        if let requestBody = resolvedRequestBody() {
+            req.httpBody = requestBody
             if req.value(forHTTPHeaderField: "Content-Type") == nil {
-                let isJson = b.trimmingCharacters(in: .whitespaces).hasPrefix("{")
+                let isJson = (body ?? "").trimmingCharacters(in: .whitespaces).hasPrefix("{")
                 req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             }
         }
@@ -342,6 +368,7 @@ struct AnalyzeUrl {
             text = String(data: data, encoding: AnalyzeUrl.encoding("gbk")) ?? t
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        let rawData: Data? = text != nil ? nil : data
         DebugLog.add("≡获取成功:\(DebugLog.url(finalUrl))")
         if !(200..<300).contains(status) { DebugLog.add("◇HTTP 状态:\(status)") }
         #if canImport(UIKit) && canImport(WebKit)
@@ -377,7 +404,7 @@ struct AnalyzeUrl {
         }
         #endif
         try Task.checkCancellation()
-        return HTTPResponseData(body: text ?? "", response: resp, fallbackURL: url)
+        return HTTPResponseData(body: text ?? "", response: resp, fallbackURL: url, rawData: rawData)
     }
 
     /// 表单 body 按 key=value 逐项做 URL 编码（与 Legado 一致），charset 为 gbk 时按 GBK 字节编码

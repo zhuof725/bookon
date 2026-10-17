@@ -6,6 +6,8 @@ enum AloudError: LocalizedError {
     case serverRejected(String)
     case contentTypeMismatch(String)
     case tooManyFailures(String)
+    /// loginCheckJs 把响应 body 重写为字节数组以外的类型（包含脚本 throw 的 nil）。
+    case scriptFailure(String)
 
     var errorDescription: String? {
         switch self {
@@ -13,6 +15,7 @@ enum AloudError: LocalizedError {
         case .serverRejected(let body): return "TTS 服务器返回错误：\(String(body.prefix(200)))"
         case .contentTypeMismatch(let type): return "返回类型不匹配：\(type)"
         case .tooManyFailures(let last): return "连续多次请求失败，已暂停朗读。\n\(last)"
+        case .scriptFailure(let m): return "引擎返回脚本失败：\(m)"
         }
     }
 }
@@ -37,12 +40,25 @@ enum AloudAudioFetcher {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw AloudError.serverRejected(body.isEmpty ? "HTTP \(code)" : body)
         }
-        let contentType = ((http?.value(forHTTPHeaderField: "Content-Type") ?? "")
+        // 响应：字节 + 原始 Content-Type，wait loginCheckJs 重写。
+        var checkedData = data
+        var contentType = ((http?.value(forHTTPHeaderField: "Content-Type") ?? "")
             .split(separator: ";").first.map(String.init) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let js = engine.loginCheckJs?.trimmingCharacters(in: .whitespacesAndNewlines), !js.isEmpty,
+           let rewritten = try? rewrite(engine: engine, code: http?.statusCode ?? 200, contentType: contentType,
+                                        data: data, vars: vars) {
+            if let bytes = rewritten.data {
+                checkedData = bytes
+                if let ct = rewritten.contentType?.lowercased() { contentType = ct }
+            } else if let message = rewritten.message {
+                contentType = "" // 由下方走 JSON/文本 报错路径
+                throw AloudError.serverRejected(message)
+            }
+        }
         // 原版：返回 JSON/文本就是报错信息；contentType 校验是放宽的正则。
         if contentType == "application/json" || contentType.hasPrefix("text/") || contentType.contains("problem+json") {
-            throw AloudError.serverRejected(String(data: data, encoding: .utf8) ?? "")
+            throw AloudError.serverRejected(String(data: checkedData, encoding: .utf8) ?? "")
         }
         if let expect = engine.contentType?.trimmingCharacters(in: .whitespacesAndNewlines), !expect.isEmpty {
             let pattern = try? NSRegularExpression(pattern: "^(?:" + expect + ")$", options: [])
@@ -52,8 +68,35 @@ enum AloudAudioFetcher {
                 throw AloudError.contentTypeMismatch(contentType)
             }
         }
-        guard !data.isEmpty else { throw AloudError.invalidURLOrEmptyAudio }
-        return data
+        guard !checkedData.isEmpty else { throw AloudError.invalidURLOrEmptyAudio }
+        return checkedData
+    }
+
+    /// loginCheckJs 执行后重写后的字节与最终 Content-Type；文本错误可另走 serverRejected。
+    private struct Rewritten { let data: Data?; let contentType: String?; let message: String? }
+
+    /// 与原版一致：loginCheckJs 只当响应「未通过检查」时被调用；脚本可重写 body 或返回文本错误。
+    private static func rewrite(engine: HTTPTTS, code: Int, contentType: String,
+                                data: Data, vars: [String: Any]) throws -> Rewritten {
+        guard let js = engine.loginCheckJs?.trimmingCharacters(in: .whitespacesAndNewlines), !js.isEmpty else {
+            return Rewritten(data: data, contentType: contentType, message: nil)
+        }
+        let shim = engine.bookSourceShim
+        let origin = TTSResponse(data: data, url: "", code: code, headers: ["Content-Type": contentType])
+        let v = JSEngine.shared.eval(js, result: origin, vars: vars, jsLib: engine.jsLib,
+                                     context: RuleContext(source: shim))
+        // 脚本产出两种可能：①newBuilder().build() → TTSResponse，按字节+新CT ②字符串 → JSON/文本错误
+        if let resp = v as? TTSResponse {
+            let bytes = resp.data
+            guard !bytes.isEmpty else { return Rewritten(data: nil, contentType: nil, message: "loginCheckJs 返回空字节") }
+            let ct = resp.header("Content-Type") ?? contentType
+            return Rewritten(data: bytes, contentType: ct, message: nil)
+        }
+        if let str = v as? String {
+            let ct = str.hasPrefix("{") ? "application/json" : "text/plain"
+            return Rewritten(data: str.data(using: .utf8), contentType: ct, message: nil)
+        }
+        return Rewritten(data: nil, contentType: nil, message: "loginCheckJs 返回 \(String(describing: v))")
     }
 
     private static func mergedHeader(engine: HTTPTTS, vars: [String: Any]) -> String {

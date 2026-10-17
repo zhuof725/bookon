@@ -141,6 +141,89 @@ enum HTTPTTSRegression {
             check(matched, "回环：非 2xx 归入 serverRejected")
         }
 
+
+        // 11. loginCheckJs：result.body().bytes() 读取字节 + newBuilder() 重组
+        var checkJsEngine = HTTPTTS(); checkJsEngine.id = 90002; checkJsEngine.name = "重组"
+        checkJsEngine.contentType = "audio/mpeg"
+        checkJsEngine.url = server.origin + "/multi,{"method":"POST","body":"t={{speakText}}"}"
+        checkJsEngine.loginCheckJs = """
+        (function(){
+            var bytes = result.body().bytes(); // StrResponse.bodyAsBytes 桥
+            return result.newBuilder().code(200).message("OK")
+                .header("Content-Type","audio/mpeg")
+                .body(result.body()).build();
+        })()
+        """
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00, 0x1A, 0x55, 0xFF, 0xAA]))
+        let checkBytes = try await AloudAudioFetcher.fetchAudio(engine: checkJsEngine, text: "对话段", speed: 15)
+        check(checkBytes.count > 0, "loginCheckJs 重组：body().bytes() 无损返回数据")
+
+        // 12. loginCheckJs 返回字符串（文本错误）→ serverRejected
+        var badEngine = HTTPTTS(); badEngine.id = 90003; badEngine.name = "文本错误"
+        badEngine.url = server.origin + "/bad,{"method":"POST"}"
+        badEngine.loginCheckJs = "(function(){ return "{error:'bad'}"; })()"
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00, 0x01]))
+        do { _ = try await AloudAudioFetcher.fetchAudio(engine: badEngine, text: "y", speed: 15); check(false, "loginCheckJs 字符串返回应走 serverRejected") }
+        catch {
+            let err = error as? AloudError
+            var matched = false
+            if case .serverRejected? = err { matched = true }
+            check(matched, "loginCheckJs 字符串 → serverRejected")
+        }
+
+        // 13. loginCheckJs 异常 → scriptFailure（脚本本身失败）
+        var throwEngine = HTTPTTS(); throwEngine.id = 90004; throwEngine.name = "脚本异常"
+        throwEngine.url = server.origin + "/x,{"method":"POST"}"
+        throwEngine.loginCheckJs = "(function(){ throw new Error('Packages 未定义'); })()"
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00]))
+        do { _ = try await AloudAudioFetcher.fetchAudio(engine: throwEngine, text: "y", speed: 15); check(false, "loginCheckJs 异常应走 scriptFailure") }
+        catch {
+            let err = error as? AloudError
+            var matched = false
+            if case .scriptFailure? = err { matched = true }
+            check(matched, "loginCheckJs 异常 → scriptFailure")
+        }
+
+        // 11. loginCheckJs：body().bytes() 读字节 + newBuilder() 重组
+        var cj = HTTPTTS(); cj.id = 90002; cj.name = "重组"; cj.contentType = "audio/mpeg"
+        cj.url = server.origin + "/multi,{\"method\":\"POST\",\"body\":\"t={{speakText}}\"}"
+        cj.loginCheckJs = """
+        (function(){
+            var bytes = result.body().bytes();
+            return result.newBuilder().code(200).message("OK")
+                .header("Content-Type","audio/mpeg").body(result.body()).build();
+        })()
+        """
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00, 0x1A, 0x55, 0xFF, 0xAA]))
+        let cjData = try await AloudAudioFetcher.fetchAudio(engine: cj, text: "对话段", speed: 15)
+        check(cjData.count > 0, "loginCheckJs 重组：返回数据 body().bytes() 无损")
+
+        // 12. loginCheckJs 返回字符串（文本错误）→ serverRejected
+        var cb = HTTPTTS(); cb.id = 90003; cb.name = "文本错误"
+        cb.url = server.origin + "/bad,{\"method\":\"POST\"}"
+        cb.loginCheckJs = "(function(){ return \"{error:'bad'}\"; })()"
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00, 0x01]))
+        do { _ = try await AloudAudioFetcher.fetchAudio(engine: cb, text: "y", speed: 15); check(false, "loginCheckJs 字符串返回应走 serverRejected") }
+        catch {
+            let err = error as? AloudError
+            var matched = false
+            if case .serverRejected? = err { matched = true }
+            check(matched, "loginCheckJs 字符串 → serverRejected")
+        }
+
+        // 13. loginCheckJs 异常 → scriptFailure
+        var ct = HTTPTTS(); ct.id = 90004; ct.name = "脚本异常"
+        ct.url = server.origin + "/x,{\"method\":\"POST\"}"
+        ct.loginCheckJs = "(function(){ throw new Error('Packages 未定义'); })()"
+        server.enqueue(status: 200, headers: ["Content-Type": "audio/mpeg"], body: Data([0x00]))
+        do { _ = try await AloudAudioFetcher.fetchAudio(engine: ct, text: "y", speed: 15); check(false, "loginCheckJs 异常应走 scriptFailure") }
+        catch {
+            let err = error as? AloudError
+            var matched = false
+            if case .scriptFailure? = err { matched = true }
+            check(matched, "loginCheckJs 异常 → scriptFailure")
+        }
+
         print("HTTPTTS 引擎+回环回归完成")
         server.stop()
     }
