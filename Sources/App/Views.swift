@@ -346,6 +346,8 @@ struct ReaderView: View {
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
     @StateObject private var aloud = ReaderAloudController()
+    /// 音频书源（如喜马拉雅）章节播放。
+    @StateObject private var bookAudio = BookAudioPlayer()
     @State private var showAloudPanel = false
     /// 朗读驱动的翻章不停止朗读；用户手动翻章到 loadChapter 处停止。
     @State private var aloudDrivenNav = false
@@ -374,7 +376,12 @@ struct ReaderView: View {
                     .onChange(of: geo.size) { _ in updateViewport(geo) }
                     .onChange(of: geo.safeAreaInsets) { _ in updateViewport(geo) }
             }.ignoresSafeArea().allowsHitTesting(false)
-            if settings.pageMode == 1 {
+            if bookAudio.chapterURL != nil {
+                AudioChapterView(audio: bookAudio, book: book,
+                                 positionLabel: "\(index + 1)/\(chapters.count)",
+                                 onPrevious: audioPreviousChapter,
+                                 onNext: audioNextChapter)
+            } else if settings.pageMode == 1 {
                 pagedBody
             } else {
                 continuousScrollBody
@@ -399,9 +406,13 @@ struct ReaderView: View {
                     progress: $menuProgress, canScrub: canScrubReader,
                     canPrevious: !loading && readableIndex(from: index - 1, direction: -1) != nil,
                     canNext: !loading && readableIndex(from: index + 1, direction: 1) != nil,
-                    isSpeaking: aloud.isRunning, background: theme.bg, foreground: theme.fg,
+                    isSpeaking: bookAudio.chapterURL != nil ? bookAudio.isPlaying : aloud.isRunning,
+                    background: theme.bg, foreground: theme.fg,
                     onScrub: scrubReader, onPrevious: { go(index - 1) }, onNext: { go(index + 1) },
-                    onTOC: { showToc = true }, onSpeech: { showAloudPanel = true },
+                    onTOC: { showToc = true },
+                    onSpeech: {
+                        if bookAudio.chapterURL != nil { bookAudio.toggle() } else { showAloudPanel = true }
+                    },
                     onSearch: { showReaderSearch = true }, onSettings: { showSettings = true })
                     .transition(.opacity)
             }
@@ -611,6 +622,7 @@ struct ReaderView: View {
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
+            bookAudio.stop()
             aloud.detach()
             persistContinuousProgress()
             closeReadingSession()
@@ -1470,6 +1482,32 @@ struct ReaderView: View {
         }
     }
 
+    // MARK: 音频书章节（喜马拉雅等音频源）
+
+    /// 开始播放音频章节；播完自动进下一章，锁屏上下曲同样跳章。
+    private func beginAudioChapter(_ target: Int) {
+        let chapter = chapters[target]
+        bookAudio.onFinish = { audioNextChapter() }
+        bookAudio.onRemoteNext = { audioNextChapter() }
+        bookAudio.onRemotePrevious = { audioPreviousChapter() }
+        bookAudio.play(url: chapter.url, title: chapter.title, album: book.name)
+    }
+
+    private func audioNextChapter() {
+        guard bookAudio.chapterURL != nil,
+              let next = readableIndex(from: index + 1, direction: 1) else {
+            bookAudio.stop()
+            return
+        }
+        loadChapter(next, landing: .start)
+    }
+
+    private func audioPreviousChapter() {
+        guard bookAudio.chapterURL != nil,
+              let previous = readableIndex(from: index - 1, direction: -1) else { return }
+        loadChapter(previous, landing: .start)
+    }
+
     // MARK: 听书朗读
 
     /// 注入朗读控制器需要的阅读器能力；闭包捕获 this 只读取当前 @State 值。
@@ -1601,6 +1639,20 @@ struct ReaderView: View {
         }
         guard chapters.indices.contains(target), contentRequestID == requestID else { return }
         let chapter = chapters[target]
+        if !store.isLocal(book), let source = store.source(for: book.origin),
+           AudioChapter.isAudio(source: source, chapter: chapter) {
+            // 音频章节：链接就是音频直链，不走正文抓取与排版，直接播放。
+            index = target
+            ChapterPrecacheManager.shared.updateCurrentIndex(target)
+            retryTarget = nil
+            error = nil
+            beginAudioChapter(target)
+            store.updateProgress(book, index: target, title: chapter.title)
+            noteReadingChapter(target)
+            store.updateScrollPosition(book, permille: 0)
+            return
+        }
+        bookAudio.stop()
         do {
             let raw = try await rawContent(at: target, priority: .userInitiated)
             try Task.checkCancellation()

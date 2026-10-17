@@ -7,6 +7,9 @@ enum ChapterContentLoader {
                         nextChapterURL: String?, priority: TaskPriority = .userInitiated) async throws -> String {
         // 卷名在本地展示，不对空 URL 或卷链接运行正文规则。
         guard !chapter.isVolume else { return chapter.title }
+        // 音频书源：章节链接就是音频直链，正文即该地址本身；
+        // 不下载音频当正文、不写正文缓存。阅读器据此走音频播放。
+        if AudioChapter.isAudio(source: source, chapter: chapter) { return chapter.url }
         let key = ChapterContentKey(sourceURL: source.bookSourceUrl, bookURL: book.bookUrl, chapterURL: chapter.url)
         let raw = try await ChapterContentCache.shared.content(for: key, priority: priority) {
             if let legacy = legacyContent(chapterURL: chapter.url) { return legacy }
