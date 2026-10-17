@@ -425,8 +425,9 @@ struct ReaderView: View {
         .sheet(isPresented: $showReplaceFromSelection) {
             BodyReplaceRulesView(seed: selectedText)
         }
-        .sheet(isPresented: $showAloudPanel) {
-            ReaderAloudPanel(aloud: aloud)
+        .fullScreenCover(isPresented: $showAloudPanel) {
+            AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
+                            onRefreshToc: tocRefreshAction)
         }
         .overlay(alignment: .bottom) {
             if let notice = aloud.notice, !showAloudPanel {

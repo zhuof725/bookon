@@ -43,6 +43,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     @Published private(set) var unitIndex = 0
     @Published private(set) var unitTotal = 0
     @Published private(set) var unitText = ""
+    /// 当前章全部朗读段落的快照，供全屏播放器正文模式与队列展示。
+    @Published private(set) var unitList: [AloudUnit] = []
     @Published private(set) var chapterTitle = ""
     @Published private(set) var timerLeft = 0
     @Published private(set) var notice: String?
@@ -144,6 +146,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         chapterIndex = chapter
         chapterTitle = host.chapterTitle(chapter)
         units = list
+        unitList = list
         unitIndex = resolveStartUnit(offset)
         unitTotal = list.count
         downloadErrorCount = 0
@@ -213,6 +216,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         player?.stop()
         player = nil
         units = []
+        unitList = []
         chapterIndex = -1
         unitTotal = 0
         unitText = ""
@@ -270,6 +274,43 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             return
         }
+        loadAndPlayChapter(next, direction: direction)
+    }
+
+    /// 目录里点选章节：朗读中直接跳到该章章首继续读（跨章跳过分卷）。
+    func seekChapter(_ target: Int) {
+        guard let host, isRunning, target != chapterIndex else { return }
+        let direction = target > chapterIndex ? 1 : -1
+        guard let next = host.readableChapter(target, direction) ?? host.readableChapter(target, -direction) else {
+            pushNotice("这一章没有可朗读的内容")
+            return
+        }
+        guard next != chapterIndex else { return }
+        cancelUnitPlayback()
+        loadAndPlayChapter(next, direction: 1)
+    }
+
+    /// 进度条/队列定位：跳到本章第 index 段；暂停时只定位不播放。
+    func seekUnit(_ index: Int) {
+        guard isRunning, units.indices.contains(index), index != unitIndex else { return }
+        cancelUnitPlayback()
+        unitIndex = index
+        unitTotal = units.count
+        unitText = units[index].text
+        host?.follow(chapterIndex, units[index].offset)
+        updateNowPlaying()
+        if isPlaying { playUnit() }
+    }
+
+    /// 当前段落音频的时间轴（在线引擎才有；系统语音 TTS 无时间概念返回 nil）。
+    var audioTime: (current: TimeInterval, duration: TimeInterval)? {
+        guard playbackEngine == .http, let player,
+              player.duration.isFinite, player.duration > 0 else { return nil }
+        return (player.currentTime, player.duration)
+    }
+
+    private func loadAndPlayChapter(_ next: Int, direction: Int) {
+        guard let host, isRunning else { return }
         isBuffering = true
         chapterTask?.cancel()
         chapterTask = Task { @MainActor in
@@ -285,6 +326,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             chapterIndex = next
             chapterTitle = host.chapterTitle(next)
             units = fresh
+            unitList = fresh
             unitTotal = fresh.count
             unitIndex = direction > 0 ? 0 : max(fresh.count - 1, 0)
             host.follow(next, fresh[unitIndex].offset)
