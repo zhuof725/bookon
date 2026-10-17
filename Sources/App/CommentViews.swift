@@ -513,19 +513,44 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
     }
 
     private func applyHighlightAttribute() {
-        let full = NSRange(location: 0, length: textStorage.length)
-        if full.length > 0 {
-            layoutManager.setTemporaryAttributes([:], forCharacterRange: full)
-        }
         highlightedRange = NSRange(location: 0, length: 0)
-        guard let paragraph, requestedHighlightLength > 0, full.length > 0 else { return }
+        guard let paragraph, requestedHighlightLength > 0, textStorage.length > 0 else {
+            setNeedsDisplay()
+            return
+        }
         // 范围限定到原文，不把分隔空格和段评附件涂色；Emoji/组合字符不拆开。
         let displayed = ReaderTextLayout.displayText(for: paragraph.text)
-        let length = min(displayed.prefix(requestedHighlightLength).utf16.count, full.length)
-        guard length > 0 else { return }
+        let length = min(displayed.prefix(requestedHighlightLength).utf16.count, textStorage.length)
+        guard length > 0 else {
+            setNeedsDisplay()
+            return
+        }
         highlightedRange = NSRange(location: 0, length: length)
-        layoutManager.setTemporaryAttributes([.backgroundColor: highlightColor],
-                                             forCharacterRange: highlightedRange)
+        setNeedsDisplay()
+    }
+
+    /// 在 TextKit 已排好的每一行文字后面绘制进度底色；不写入 attributedText。
+    private func drawAloudHighlight() {
+        guard highlightedRange.length > 0, textStorage.length > 0 else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: highlightedRange,
+                                                    actualCharacterRange: nil)
+        guard glyphRange.length > 0 else { return }
+        layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { _, _, _, lineGlyphs, _ in
+            let overlap = NSIntersectionRange(glyphRange, lineGlyphs)
+            guard overlap.length > 0 else { return }
+            var rect = self.layoutManager.boundingRect(forGlyphRange: overlap,
+                                                       in: self.textContainer)
+            guard !rect.isNull, !rect.isEmpty else { return }
+            rect = rect.insetBy(dx: -2, dy: -1)
+            self.highlightColor.setFill()
+            UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
+        }
+    }
+
+    override func draw(_ rect: CGRect) {
+        drawAloudHighlight()
+        super.draw(rect)
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {

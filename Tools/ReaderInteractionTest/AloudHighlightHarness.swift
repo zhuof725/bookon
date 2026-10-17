@@ -49,17 +49,16 @@ struct AloudHighlightHarnessView: View {
             if let text = view as? CommentTextView { return [text] }
             return view.subviews.flatMap(texts)
         }
-        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows).first(where: \.isKeyWindow)
-        let views = window.map { texts($0) } ?? []
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows).first(where: \.isKeyWindow) else { return "no-window" }
+        let views = texts(window)
         let sorted = views.sorted { $0.convert(.zero, to: window).y < $1.convert(.zero, to: window).y }
         let rows: [[String: Any]] = sorted.map { view in
             let lm = view.layoutManager
             lm.ensureLayout(for: view.textContainer)
             var painted: [Int] = []
-            for i in 0..<view.textStorage.length {
-                if lm.temporaryAttribute(.backgroundColor, atCharacterIndex: i, effectiveRange: nil) != nil { painted.append(i) }
-            }
+            let range = view.highlightedRange
+            if range.length > 0 { painted = Array(range.location..<NSMaxRange(range)) }
             var breaks: [Int] = []
             lm.enumerateLineFragments(forGlyphRange: lm.glyphRange(for: view.textContainer)) { _, _, _, range, _ in
                 breaks.append(NSMaxRange(lm.characterRange(forGlyphRange: range, actualCharacterRange: nil)))
