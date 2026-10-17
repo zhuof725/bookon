@@ -51,6 +51,7 @@ enum ReadingStatsEngine {
     static func dayKey(_ date: Date, calendar: Calendar) -> String {
         let f = DateFormatter()
         f.calendar = calendar
+        f.timeZone = calendar.timeZone
         f.locale = Locale(identifier: "zh_Hans_CN")
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: date)
@@ -156,6 +157,7 @@ enum ReadingStatsEngine {
     static func formatRange(_ start: Date, _ end: Date, period: ReadingStatsPeriod, calendar: Calendar) -> String {
         let f = DateFormatter()
         f.calendar = calendar
+        f.timeZone = calendar.timeZone
         f.locale = Locale(identifier: "zh_Hans_CN")
         switch period {
         case .week, .month: f.dateFormat = "M.d"
