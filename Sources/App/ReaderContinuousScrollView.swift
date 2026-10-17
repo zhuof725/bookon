@@ -44,12 +44,35 @@ private struct MeasuredScrollChapter: View {
     let content: AnyView
     let onHeight: (CGFloat) -> Void
     var body: some View {
-        content.frame(maxWidth: .infinity, alignment: .topLeading)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(GeometryReader { geometry in
-                Color.clear.preference(key: ScrollChapterHeightKey.self, value: geometry.size.height)
-            })
-            .onPreferenceChange(ScrollChapterHeightKey.self, perform: onHeight)
+        TopPinnedLayout {
+            content.frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: ScrollChapterHeightKey.self, value: geometry.size.height)
+                })
+                .onPreferenceChange(ScrollChapterHeightKey.self, perform: onHeight)
+        }
+    }
+}
+
+/// UIHostingController 会把比自身 frame 高的内容上下居中，上半截（标题、首段）落到
+/// frame 之上而无法滚到，松手又回弹到第二段。这里在实际布局时占满 frame 并把正文
+/// 钉在顶端，多出的高度只往下溢出，等新高度回报后重排；测量时（无界高度）仍返回自然高度。
+private struct TopPinnedLayout: Layout {
+    private func natural(_ subviews: Subviews, width: CGFloat?) -> CGSize {
+        subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: nil)) ?? .zero
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = natural(subviews, width: proposal.width)
+        let width = proposal.width ?? size.width
+        if let height = proposal.height, height.isFinite, height < 1_000_000 {
+            return CGSize(width: width, height: height)
+        }
+        return CGSize(width: width, height: size.height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.minX, y: bounds.minY), anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
