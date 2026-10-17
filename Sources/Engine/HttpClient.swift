@@ -251,7 +251,6 @@ struct AnalyzeUrl {
     func fetchData(session baseSession: URLSession = .shared,
                    readTimeout: TimeInterval = 120) async throws -> (data: Data, response: URLResponse, finalURL: String) {
         try Task.checkCancellation()
-        print("TTSDBG fetchData cookie=\(cookieJarEnabled) url=\(url)")
         let session: URLSession
         if cookieJarEnabled { session = baseSession } else {
             // ephemeral：自带的瞬态 Cookie 存储不跨会话持久化；显式禁用 Set-Cookie 与携带 Cookie。
@@ -278,9 +277,7 @@ struct AnalyzeUrl {
                 req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             }
         }
-        print("TTSDBG request ready method=\(req.httpMethod ?? "?") body=\(req.httpBody?.count ?? 0)")
         let (data, resp) = try await session.data(for: req)
-        print("TTSDBG response \(data.count)")
         try Task.checkCancellation()
         return (data, resp, finalUrl)
     }
