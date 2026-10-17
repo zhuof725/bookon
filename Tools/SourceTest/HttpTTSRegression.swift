@@ -148,35 +148,58 @@ enum HTTPTTSRegression {
 
 /// 回环 HTTP 服务器：串行应答 enqueue 的响应，报一次 request 摘要。
 /// 只允许本类中的可读详情写入报告，请求体原样可以观察（全部是合成数据）。
+/// 结构与 CookieLoopbackServer 相同：显式绑定 IPv4 loopback，ready 信号等待。
 final class TTSHarnessServer: @unchecked Sendable {
     struct RequestReport { let method: String; let path: String; let headers: [String: String]; let body: Data }
 
     private let queue = DispatchQueue(label: "TTSHarnessServer")
+    private let ready = DispatchSemaphore(value: 0)
     private var listener: NWListener?
+    private var port: UInt16?
     private var pending: [(Int, [String: String], Data)] = []
     private var lastRequest: RequestReport?
     private var stopped = false
 
     static func start() throws -> TTSHarnessServer {
         let server = TTSHarnessServer()
-        let listener = try NWListener(using: .tcp, on: .any)
-        server.listener = listener
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: server.queue)
-            connection.stateUpdateHandler = { state in
-                if case .failed = state { return }
-                guard case .ready = state else { return }
-                server.serve(connection)
-            }
-        }
-        listener.start(queue: server.queue)
-        var tries = 0
-        while server.listener?.port == nil && tries < 200 {
-            Thread.sleep(forTimeInterval: 0.01); tries += 1
-        }
-        guard let port = listener.port, port.rawValue > 0 else { throw URLError(.cannotCreateFile) }
-        server.origin = "http://127.0.0.1:\(port.rawValue)"
+        try server.bind()
+        server.origin = "http://127.0.0.1:\(server.port!)"
         return server
+    }
+
+    private func bind() throws {
+        try queue.sync {
+            let host = NWEndpoint.Host("127.0.0.1")
+            let parameters = NWParameters.tcp
+            parameters.requiredLocalEndpoint = .hostPort(host: host, port: .any)
+            let listener = try NWListener(using: parameters)
+            self.listener = listener
+            listener.stateUpdateHandler = { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .ready:
+                    self.port = listener.port?.rawValue
+                    self.ready.signal()
+                case .failed:
+                    self.ready.signal()
+                default: break
+                }
+            }
+            listener.newConnectionHandler = { [weak self] connection in
+                guard let self, !self.stopped else { connection.cancel(); return }
+                connection.start(queue: self.queue)
+                connection.stateUpdateHandler = { state in
+                    if case .failed = state { return }
+                    guard case .ready = state else { return }
+                    self.serve(connection)
+                }
+            }
+            listener.start(queue: self.queue)
+        }
+        guard ready.wait(timeout: .now() + 3) == .success, port != nil else {
+            stop()
+            throw URLError(.cannotCreateFile)
+        }
     }
 
     private(set) var origin = ""
