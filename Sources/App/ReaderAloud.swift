@@ -59,7 +59,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     var playbackEngine: PlaybackEngine { engine == nil ? .system : .http }
 
     private let synthesizer = AVSpeechSynthesizer()
-    private var player: AloudAudioPlayer?
+    private var player: AVAudioPlayer?
     private var audioTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var chapterTask: Task<Void, Never>?
@@ -190,9 +190,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
         guard isRunning, !isPlaying else { return }
         isPlaying = true
         if isBuffering { return }
-        if playbackEngine == .http, let player, player.hasAudio {
+        if playbackEngine == .http, let player, player.url != nil {
             expectingFinish = true
-            player.resumePlayback()
+            player.play()
             startProgressTracking()
         } else {
             playUnit()
@@ -399,10 +399,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func playHTTPUnit(_ unit: AloudUnit, speak: String, engine: HTTPTTS) {
         isBuffering = true
         audioTask?.cancel()
-        let speed = downloadSpeed(for: engine)
-        let rate = playbackRate(for: engine)
         let key = AloudAudioCache.shared.key(chapter: chapterTitle, engineURL: engine.url,
-                                             speed: speed, text: speak)
+                                             speed: AloudTTSConfig.httpSpeakSpeed, text: speak)
         audioTask = Task { @MainActor in
             let fileURL: URL
             if let cached = AloudAudioCache.shared.cachedFile(forKey: key) {
@@ -411,7 +409,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 do {
                     await waitForRateLimit(engine)
                     let data = try await AloudAudioFetcher.fetchAudio(
-                        engine: engine, text: speak, speed: speed)
+                        engine: engine, text: speak, speed: AloudTTSConfig.httpSpeakSpeed)
                     try Task.checkCancellation()
                     fileURL = try AloudAudioCache.shared.store(data, forKey: key)
                     downloadErrorCount = 0
@@ -425,34 +423,20 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             guard !Task.isCancelled, isRunning, isPlaying else { return }
             isBuffering = false
-            let newPlayer = AloudAudioPlayer()
-            player = newPlayer
-            expectingFinish = true
             do {
-                try newPlayer.play(url: fileURL, rate: rate) { [weak self] in
-                    guard let self, self.player === newPlayer, expectingFinish else { return }
-                    expectingFinish = false
-                    finishedUnit()
-                }
+                let newPlayer = try AVAudioPlayer(contentsOf: fileURL)
+                newPlayer.delegate = self
+                newPlayer.prepareToPlay()
+                player = newPlayer
                 playErrorCount = 0
+                newPlayer.play()
+                expectingFinish = true
                 startProgressTracking()
                 prefetch(from: unitIndex + 1)
             } catch {
-                expectingFinish = false
                 handlePlayError(key: key)
             }
         }
-    }
-
-    /// 请求服务端用的语速值：URL 不含 `{{speakSpeed}}` 的引擎用它固定基准值，
-    /// 保证缓存键稳定，倍速改由本机播放器变速实现。
-    private func downloadSpeed(for engine: HTTPTTS) -> Int {
-        engine.usesServerSpeed ? AloudTTSConfig.httpSpeakSpeed : 10
-    }
-
-    /// 本机播放速率：服务端不吃语速的引擎按界面倍速播放（音调不变）。
-    private func playbackRate(for engine: HTTPTTS) -> Float {
-        engine.usesServerSpeed ? 1 : Float(AloudTTSConfig.rateDisplay)
     }
 
     private func handleDownloadError(_ error: Error, key: String) {
@@ -490,7 +474,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         prefetchTask?.cancel()
         let snapshot = units
         let title = chapterTitle
-        let speed = downloadSpeed(for: engine)
+        let speed = AloudTTSConfig.httpSpeakSpeed
         let limit = min(index + AloudTTSConfig.preloadCount - 1, snapshot.count - 1)
         guard index <= limit else { return }
         prefetchTask = Task.detached(priority: .utility) { [weak self] in
@@ -542,6 +526,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         progressTask?.cancel()
         guard let player else { return }
         let unit = units[unitIndex]
+        let engine = playbackEngine
         progressTask = Task { @MainActor [weak self, unit] in
             guard let self else { return }
             let duration = max(player.duration, 0.1)
@@ -549,10 +534,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 guard !Task.isCancelled, isRunning, isPlaying,
-                      self.player === player,
                       self.unitIndex < self.units.count else { return }
                 let current = self.units[self.unitIndex]
                 guard current == unit else { return }
+                _ = engine
                 let index = min(Int(Double(chars) * player.currentTime / duration), chars - 1)
                 self.host?.follow(chapterIndex, unit.offset + max(index, 0))
             }
@@ -605,14 +590,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
         let clamped = min(max(speed, 0), 45)
         if clamped != speed { speed = clamped; return }
         AloudTTSConfig.speechRate = speed
-        // 原版 upTtsSpeechRate：改语速立即生效。
+        // 原版 upTtsSpeechRate：改语速立即生效（http 重新合成当前段）。
         guard isRunning, isPlaying else { return }
         if playbackEngine == .http {
-            // URL 不含 {{speakSpeed}} 的引擎服务端不吃语速：本机变速立即生效，不用重新合成。
-            if let engine, !engine.usesServerSpeed {
-                player?.setRate(playbackRate(for: engine))
-                return
-            }
             prefetchTask?.cancel()
             cancelUnitPlayback()
             playUnit()
@@ -771,6 +751,23 @@ extension ReaderAloudController: AVSpeechSynthesizerDelegate {
             let leading = unit.text.prefix(while: { $0.isWhitespace }).count
             let position = min(max(leading + spoken - 1, 0), max(unit.text.count - 1, 0))
             host?.follow(chapterIndex, unit.offset + position)
+        }
+    }
+}
+
+extension ReaderAloudController: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self, expectingFinish, self.player === player else { return }
+            expectingFinish = false
+            finishedUnit()
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            handlePlayError(key: "")
         }
     }
 }
