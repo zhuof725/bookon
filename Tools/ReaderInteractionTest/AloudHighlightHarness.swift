@@ -61,7 +61,7 @@ struct AloudHighlightHarnessView: View {
             if range.length > 0 { painted = Array(range.location..<NSMaxRange(range)) }
             var breaks: [Int] = []
             lm.enumerateLineFragments(forGlyphRange: lm.glyphRange(for: view.textContainer)) { _, _, _, range, _ in
-                breaks.append(NSMaxRange(lm.characterRange(forGlyphRange: range, actualCharacterRange: nil)))
+                breaks.append(NSMaxRange(lm.characterRange(forGlyphRange: range, actualGlyphRange: nil)))
             }
             return ["painted": painted, "breaks": breaks,
                 "height": Double(lm.usedRect(for: view.textContainer).height), "width": Double(view.renderedWidth),
