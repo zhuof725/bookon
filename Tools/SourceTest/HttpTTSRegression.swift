@@ -98,14 +98,18 @@ enum HTTPTTSRegression {
         check(analyzeJS.url == "https://tts.invalid/a?t=%E4%BD%A0%E5%A5%BD&s=15", "@js: URL 通过 jsLib 函数合成")
 
         // 9. 抓音频：本机回环，一个请求一个响应
+        print("MARK server start")
         let server = try TTSHarnessServer.start()
+        print("MARK server origin \(server.origin)")
         defer { server.stop() }
         // 正常音频 + Content-Type 校验通过
         var engine = HTTPTTS(); engine.id = 90001; engine.name = "回环"; engine.contentType = "audio/(wav|mpeg)"
         engine.url = server.origin + "/audio,{\"method\":\"POST\",\"body\":\"tex={{speakText}}&s={{speakSpeed}}\",\"headers\":{\"X-Test\":\"{{String(speakSpeed)}}\"}}"
         let wav = Data([0x00, 0x1A, 0x55, 0xFF, 0xAA])
         server.enqueue(status: 200, headers: ["Content-Type": "audio/wav"], body: wav)
+        print("MARK fetch begin")
         let got = try await AloudAudioFetcher.fetchAudio(engine: engine, text: "朗读一句", speed: 15)
+        print("MARK fetch end \(got.count) bytes")
         check(got == wav, "回环：二进制字节原样返回")
         let first = server.report()
         check(first?.method == "POST", "回环：POST 请求方法")
