@@ -85,6 +85,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
         cc.pauseCommand.isEnabled = false
         cc.nextTrackCommand.isEnabled = false
         cc.previousTrackCommand.isEnabled = false
+        cc.playCommand.removeTarget(nil)
+        cc.pauseCommand.removeTarget(nil)
+        cc.nextTrackCommand.removeTarget(nil)
+        cc.previousTrackCommand.removeTarget(nil)
     }
 
     // MARK: 宿主
@@ -633,27 +637,22 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     // MARK: 锁屏控制台
 
+    private var remoteRegistered = false
+
     private func updateRemoteCommands(enabled: Bool) {
         let cc = MPRemoteCommandCenter.shared()
         cc.playCommand.isEnabled = enabled
         cc.pauseCommand.isEnabled = enabled
         cc.nextTrackCommand.isEnabled = enabled
         cc.previousTrackCommand.isEnabled = enabled
-        cc.playCommand.removeTarget(self, action: #selector(remotePlay))
-        cc.pauseCommand.removeTarget(self, action: #selector(remotePause))
-        cc.nextTrackCommand.removeTarget(self, action: #selector(remoteNext))
-        cc.previousTrackCommand.removeTarget(self, action: #selector(remotePrevious))
-        guard enabled else { return }
-        cc.playCommand.addTarget(self, action: #selector(remotePlay))
-        cc.pauseCommand.addTarget(self, action: #selector(remotePause))
-        cc.nextTrackCommand.addTarget(self, action: #selector(remoteNext))
-        cc.previousTrackCommand.addTarget(self, action: #selector(remotePrevious))
+        guard enabled, !remoteRegistered else { return }
+        remoteRegistered = true
+        // 闭包统一登记，不点名当前系统对返回枚举的 Swift 名称（SDK 版本间有更名）。
+        _ = cc.playCommand.addTarget { [weak self] _ in self?.resume(); return .success }
+        _ = cc.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
+        _ = cc.nextTrackCommand.addTarget { [weak self] _ in self?.nextUnit(); return .success }
+        _ = cc.previousTrackCommand.addTarget { [weak self] _ in self?.previousUnit(); return .success }
     }
-
-    @objc private func remotePlay() -> MPRemoteCommandStatus { resume(); return .success }
-    @objc private func remotePause() -> MPRemoteCommandStatus { pause(); return .success }
-    @objc private func remoteNext() -> MPRemoteCommandStatus { nextUnit(); return .success }
-    @objc private func remotePrevious() -> MPRemoteCommandStatus { previousUnit(); return .success }
 
     private func updateNowPlaying() {
         guard isRunning else { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil; return }

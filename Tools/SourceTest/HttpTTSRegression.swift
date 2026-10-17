@@ -82,7 +82,7 @@ enum HTTPTTSRegression {
 
         // 8. URL 模板：{{speakText}}/{{speakSpeed}} 与 java.encodeURI
         let baidu = defaults[0]
-        let analyze = AnalyzeUrl(rawUrl: baidu.url, context: baidu.bookSourceShim, jsLib: baidu.jsLib,
+        let analyze = AnalyzeUrl(rawUrl: baidu.url, context: RuleContext(source: baidu.bookSourceShim), jsLib: baidu.jsLib,
                                  extraVars: ["speakText": "你好", "speakSpeed": 15])
         check(analyze.url == "http://tts.baidu.com/text2audio", "百度引擎：POST 前缀不受影响")
         check(analyze.method == "POST", "百度引擎：读取 options 的 method")
@@ -93,7 +93,7 @@ enum HTTPTTSRegression {
         var jsT = HTTPTTS()
         jsT.url = "@js:apiurl(speakText, speakSpeed);"
         jsT.jsLib = "function apiurl(t, s) { return 'https://tts.invalid/a?t=' + encodeURIComponent(t) + '&s=' + s; }"
-        let analyzeJS = AnalyzeUrl(rawUrl: jsT.url, context: jsT.bookSourceShim, jsLib: jsT.jsLib,
+        let analyzeJS = AnalyzeUrl(rawUrl: jsT.url, context: RuleContext(source: jsT.bookSourceShim), jsLib: jsT.jsLib,
                                    extraVars: ["speakText": "你好", "speakSpeed": 15])
         check(analyzeJS.url == "https://tts.invalid/a?t=%E4%BD%A0%E5%A5%BD&s=15", "@js: URL 通过 jsLib 函数合成")
 

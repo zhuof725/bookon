@@ -255,7 +255,7 @@ struct SpeakEngineList: View {
                         }
                         Button("导出全部引擎") { exportAll() }
                         .disabled(engines.list.isEmpty)
-                        Divider(role: .destructive)
+                        Divider()
                         Button("清空音频缓存") {
                             AloudAudioCache.shared.clear()
                             show("朗读音频缓存已清空")
