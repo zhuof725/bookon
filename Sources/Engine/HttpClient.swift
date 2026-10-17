@@ -254,9 +254,9 @@ struct AnalyzeUrl {
         print("TTSDBG fetchData cookie=\(cookieJarEnabled) url=\(url)")
         let session: URLSession
         if cookieJarEnabled { session = baseSession } else {
-            // ephemeral：不持久化 Cookie 缓存；显式关闭接受/存储 Cookie（Legado 原生也是不存不发）。
+            // ephemeral：自带的瞬态 Cookie 存储不跨会话持久化；显式禁用 Set-Cookie 与携带 Cookie。
+            // （不把 httpCookieStorage 置 nil：macOS CLI 上真 HTTP 请求会直接崩溃。）
             let cfg = URLSessionConfiguration.ephemeral
-            cfg.httpCookieStorage = nil
             cfg.httpShouldSetCookies = false
             cfg.httpCookieAcceptPolicy = .never
             session = URLSession(configuration: cfg)
