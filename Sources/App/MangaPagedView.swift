@@ -336,7 +336,13 @@ extension MangaPagedController: UICollectionViewDataSource, UICollectionViewDele
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate { settle() }
+        guard !decelerate else { return }
+        // 松手后还有一段「归位到整页」的吸附动画，等它走完再按最终偏移算页码，
+        // 否则半页位置四舍五入会短时间报错页。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.collectionView.isDecelerating == false else { return }
+            self.settle()
+        }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
