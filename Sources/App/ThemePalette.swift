@@ -193,10 +193,12 @@ struct AppGlassSurface<S: InsettableShape>: View {
 struct AppGlassModifier<S: InsettableShape>: ViewModifier {
     let shape: S
     var tint: Color = Color(uiColor: .secondarySystemBackground)
+    var tintOpacity: Double = 0.10
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content.background {
-            AppGlassSurface(shape: shape, tint: tint, reduceTransparency: reduceTransparency)
+            AppGlassSurface(shape: shape, tint: tint, tintOpacity: tintOpacity,
+                            reduceTransparency: reduceTransparency)
         }
     }
 }
@@ -216,8 +218,9 @@ struct IndependentGlassListRow: ViewModifier {
 
 extension View {
     func independentGlassRow() -> some View { modifier(IndependentGlassListRow()) }
-    func appGlass<S: InsettableShape>(in shape: S, tint: Color = Color(uiColor: .secondarySystemBackground)) -> some View {
-        modifier(AppGlassModifier(shape: shape, tint: tint))
+    func appGlass<S: InsettableShape>(in shape: S, tint: Color = Color(uiColor: .secondarySystemBackground),
+                                      tintOpacity: Double = 0.10) -> some View {
+        modifier(AppGlassModifier(shape: shape, tint: tint, tintOpacity: tintOpacity))
     }
 }
 

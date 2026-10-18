@@ -64,7 +64,8 @@ final class MangaSession: ObservableObject {
             currentPageCount = count
             let clamped = min(max(currentPage, 0), max(count - 1, 0))
             currentPage = clamped
-            requestScroll(toItemID: "c\(currentChapter)-p\(clamped)", animated: false)
+            requestScroll(toItemID: "c\(currentChapter)-p\(clamped)", chapter: currentChapter,
+                          page: clamped, animated: false)
             onProgress?(currentChapter, chapterTitle, clamped)
             onChapterRead?(currentChapter)
         }
@@ -178,9 +179,11 @@ final class MangaSession: ObservableObject {
             if loaded.contains(chapter) {
                 let count = pages[chapter]?.count ?? 0
                 currentPageCount = count
-                let clamped = min(max(page, 0), max(count - 1, 0))
+                // 负数表示落在本章最后一页（从章首往回翻时用）。
+                let clamped = page < 0 ? max(count - 1, 0) : min(max(page, 0), max(count - 1, 0))
                 currentPage = clamped
-                requestScroll(toItemID: "c\(chapter)-p\(clamped)", animated: false)
+                requestScroll(toItemID: "c\(chapter)-p\(clamped)", chapter: chapter,
+                              page: clamped, animated: false)
                 onProgress?(chapter, chapterTitle, clamped)
                 onChapterRead?(chapter)
             }
@@ -188,24 +191,27 @@ final class MangaSession: ObservableObject {
         }
     }
 
-    /// 上一章 / 下一章按钮。已加载的相邻章直接滚动过去（原版 moveToNextChapter 的队列命中路径）。
-    func goToAdjacentChapter(_ delta: Int) {
+    /// 上一章 / 下一章。已加载的相邻章直接跳过去（原版 moveToNextChapter 的队列命中路径）。
+    /// atLastPage：翻页模式从章首/章末越界进入时，向前一章要落在最后一页。
+    func goToAdjacentChapter(_ delta: Int, atLastPage: Bool = false) {
         let target = currentChapter + delta
         guard chapters.indices.contains(target) else { return }
         if loaded.contains(target) {
             let count = pages[target]?.count ?? 0
+            let landing = atLastPage ? max(count - 1, 0) : 0
             currentChapter = target
-            currentPage = 0
+            currentPage = landing
             currentPageCount = count
             chapterTitle = chapters[target].title
             expectation = (target, Date().addingTimeInterval(3))
             rebuild()
-            requestScroll(toItemID: "c\(target)-p0", animated: false)
-            onProgress?(target, chapterTitle, 0)
+            requestScroll(toItemID: "c\(target)-p\(landing)", chapter: target,
+                          page: landing, animated: false)
+            onProgress?(target, chapterTitle, landing)
             onChapterRead?(target)
             ensureNeighbors()
         } else {
-            jump(to: target)
+            jump(to: target, page: atLastPage ? -1 : 0)
         }
     }
 
@@ -217,7 +223,8 @@ final class MangaSession: ObservableObject {
         let clamped = min(max(page, 0), count - 1)
         currentPage = clamped
         currentPageCount = count
-        requestScroll(toItemID: "c\(currentChapter)-p\(clamped)", animated: false)
+        requestScroll(toItemID: "c\(currentChapter)-p\(clamped)", chapter: currentChapter,
+                      page: clamped, animated: false)
         if reportProgress { onProgress?(currentChapter, chapterTitle, clamped) }
     }
 
@@ -240,7 +247,8 @@ final class MangaSession: ObservableObject {
                 currentPageCount = count
                 let clamped = min(max(currentPage, 0), max(count - 1, 0))
                 currentPage = clamped
-                requestScroll(toItemID: "c\(chapter)-p\(clamped)", animated: false)
+                requestScroll(toItemID: "c\(chapter)-p\(clamped)", chapter: chapter,
+                              page: clamped, animated: false)
             }
             ensureNeighbors()
         }
@@ -347,16 +355,13 @@ final class MangaSession: ObservableObject {
         }
         for chapter in loaded.sorted() {
             guard let urls = pages[chapter], !urls.isEmpty else { continue }
-            let title = chapters[chapter].title
-            out.append(MangaFlatItem(id: "c\(chapter)-start", chapter: chapter,
-                                     kind: .chapterStart(title: title)))
+            // 不再插入「阅读 X / 已读完 X」分章标记：条漫要像参考图那样章节之间无缝相接，
+            // 分章标记会撑出两屏白带。章节名仍由顶部面板 / 切章提示展示。
             for (page, url) in urls.enumerated() {
                 out.append(MangaFlatItem(id: "c\(chapter)-p\(page)", chapter: chapter,
                                          kind: .page(chapter: chapter, index: page,
                                                      count: urls.count, url: url)))
             }
-            out.append(MangaFlatItem(id: "c\(chapter)-end", chapter: chapter,
-                                     kind: .chapterEnd(title: title)))
         }
         let next = currentChapter + 1
         if chapters.indices.contains(next) {
@@ -371,8 +376,9 @@ final class MangaSession: ObservableObject {
         if items != out { items = out }
     }
 
-    private func requestScroll(toItemID id: String, animated: Bool) {
-        scrollRequest = MangaScrollRequest(id: UUID(), itemID: id, animated: animated)
+    private func requestScroll(toItemID id: String, chapter: Int, page: Int, animated: Bool) {
+        scrollRequest = MangaScrollRequest(id: UUID(), itemID: id, animated: animated,
+                                           chapter: chapter, page: page)
     }
 }
 
@@ -394,28 +400,24 @@ struct MangaReaderView: View {
     let onRefreshTOC: (@MainActor () async -> String?)?
 
     @ThemePalette private var palette
+    @AppStorage(MangaReadingMode.storageKey) private var modeRaw = MangaReadingMode.fallback.rawValue
     @State private var barsVisible = true
     @State private var scrub: Double?
     @State private var notice: String?
     @State private var noticeToken = UUID()
     /// 自动修复旧目录只做一次，避免「本章没有图片」时反复刷新。
     @State private var autoRefreshedTOC = false
+    /// 换章时短暂浮出的章节名。不改布局，条漫在章节之间保持无缝相接。
+    @State private var chapterBanner: String?
+    @State private var bannerToken = UUID()
+    @State private var lastBannerChapter: Int?
+
+    private var mode: MangaReadingMode { MangaReadingMode(rawValue: modeRaw) ?? .fallback }
 
     var body: some View {
         ZStack {
             background.ignoresSafeArea()
-            MangaScrollView(items: manga.items,
-                            request: manga.scrollRequest,
-                            background: UIColor(background),
-                            foreground: UIColor(foreground),
-                            chromeVisible: barsVisible,
-                            onVisible: { chapter, page, count in
-                                manga.visible(chapter: chapter, page: page, count: count)
-                            },
-                            onNearEnd: { manga.nearEnd() },
-                            onNearStart: { manga.nearStart() },
-                            onRetryNeighbor: { chapter in manga.retryNeighbor(chapter) },
-                            onToggleChrome: { toggleBars() })
+            readerSurface
                 .ignoresSafeArea()
             if manga.items.isEmpty { statusOverlay }
             if barsVisible {
@@ -424,6 +426,21 @@ struct MangaReaderView: View {
                     Spacer(minLength: 0)
                     bottomBar
                 }
+                .transition(.opacity)
+            }
+            if let chapterBanner {
+                VStack {
+                    Text(chapterBanner)
+                        .appFont(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .padding(.top, 64)
+                    Spacer(minLength: 0)
+                }
+                .allowsHitTesting(false)
                 .transition(.opacity)
             }
             if let notice {
@@ -448,12 +465,76 @@ struct MangaReaderView: View {
             autoRefreshedTOC = true
             Task { await refreshTOC() }
         }
+        .onChange(of: manga.currentChapter) { chapter in
+            guard let previous = lastBannerChapter else {
+                lastBannerChapter = chapter
+                return
+            }
+            lastBannerChapter = chapter
+            guard chapter != previous else { return }
+            showChapterBanner()
+        }
+        .onChange(of: modeRaw) { _ in
+            // 切换阅读方式时把当前位置带到新容器（分页容器按页码，条漫按 itemID）。
+            manga.requestScroll(toPage: manga.currentPage, reportProgress: false)
+        }
+    }
+
+    @ViewBuilder
+    private var readerSurface: some View {
+        if mode.isPaged {
+            MangaPagedView(pages: pagedPages,
+                           chapter: manga.currentChapter,
+                           mode: mode,
+                           request: manga.scrollRequest,
+                           background: UIColor(background),
+                           foreground: UIColor(foreground),
+                           chromeVisible: barsVisible,
+                           onVisible: { chapter, page, count in
+                               manga.visible(chapter: chapter, page: page, count: count)
+                           },
+                           onNextChapter: { manga.goToAdjacentChapter(1) },
+                           onPrevChapter: { manga.goToAdjacentChapter(-1, atLastPage: true) },
+                           onToggleChrome: { toggleBars() })
+        } else {
+            MangaScrollView(items: manga.items,
+                            request: manga.scrollRequest,
+                            background: UIColor(background),
+                            foreground: UIColor(foreground),
+                            chromeVisible: barsVisible,
+                            onVisible: { chapter, page, count in
+                                manga.visible(chapter: chapter, page: page, count: count)
+                            },
+                            onNearEnd: { manga.nearEnd() },
+                            onNearStart: { manga.nearStart() },
+                            onRetryNeighbor: { chapter in manga.retryNeighbor(chapter) },
+                            onToggleChrome: { toggleBars() })
+        }
+    }
+
+    /// 分页模式只取当前章的图片，按阅读顺序排列。
+    private var pagedPages: [String] {
+        manga.items.compactMap { item -> String? in
+            guard item.chapter == manga.currentChapter,
+                  case .page(_, _, _, let url) = item.kind else { return nil }
+            return url
+        }
     }
 
     private func toggleBars() {
-        // 轻触反馈让面板呼出更有“响应感”。
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeInOut(duration: 0.15)) { barsVisible.toggle() }
+    }
+
+    private func showChapterBanner() {
+        guard !manga.chapterTitle.isEmpty else { return }
+        withAnimation(.easeOut(duration: 0.15)) { chapterBanner = manga.chapterTitle }
+        let token = UUID()
+        bannerToken = token
+        Task {
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            guard bannerToken == token else { return }
+            withAnimation(.easeIn(duration: 0.25)) { chapterBanner = nil }
+        }
     }
 
     // MARK: 顶部浮动面板（参考图：左圆钮 + 居中章节名 + 右侧更多，无底色）
@@ -497,6 +578,22 @@ struct MangaReaderView: View {
 
     private var moreMenu: some View {
         Menu {
+            Menu {
+                ForEach(MangaReadingMode.allCases) { option in
+                    Button {
+                        modeRaw = option.rawValue
+                    } label: {
+                        if option == mode {
+                            Label(option.title, systemImage: "checkmark")
+                        } else {
+                            Label(option.title, systemImage: option.symbol)
+                        }
+                    }
+                }
+            } label: {
+                Label("阅读方式（\(mode.title)）", systemImage: "book")
+            }
+            Divider()
             Button { manga.goToAdjacentChapter(-1) } label: { Label("上一章", systemImage: "chevron.up") }
                 .disabled(manga.currentChapter <= 0)
             Button { manga.goToAdjacentChapter(1) } label: { Label("下一章", systemImage: "chevron.down") }
@@ -537,47 +634,49 @@ struct MangaReaderView: View {
     }
 
     private var bottomBar: some View {
-        Slider(value: Binding(get: { pageProgress }, set: { value in
-            scrub = value
-            let count = pageCount
-            guard count > 0 else { return }
-            let page = Int((value * Double(max(count - 1, 0))).rounded())
-            manga.requestScroll(toPage: page, reportProgress: false)
-        }), in: 0...1) { editing in
-            if !editing {
-                if let value = scrub {
-                    scrub = nil
-                    let count = pageCount
-                    if count > 0 {
-                        let page = Int((value * Double(max(count - 1, 0))).rounded())
-                        manga.requestScroll(toPage: page)
-                    }
+        VStack(spacing: 1) {
+            MangaPageSlider(fraction: pageProgress,
+                            onScrub: { value in applyScrub(value, commit: false) },
+                            onCommit: { value in applyScrub(value, commit: true) })
+                .frame(height: 22)
+            ZStack {
+                Text(pageLabel)
+                    .appFont(.system(size: 13, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.black.opacity(0.75))
+                    .accessibilityIdentifier("reader.manga.footer")
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text(remainingText)
+                        .appFont(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.black.opacity(0.45))
                 }
             }
+            .frame(height: 18)
         }
-        .tint(palette.accent)
-        .accessibilityIdentifier("reader.manga.slider")
-        .overlay {
-            Text(pageLabel)
-                .appFont(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(foreground.opacity(0.85))
-                .allowsHitTesting(false)
-                .accessibilityIdentifier("reader.manga.footer")
-        }
-        .overlay(alignment: .trailing) {
-            Text(remainingText)
-                .appFont(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(foreground.opacity(0.6))
-                .padding(.trailing, 14)
-                .allowsHitTesting(false)
-        }
-        .padding(.horizontal, 18)
-        .frame(height: 44)
-        .appGlass(in: Capsule(), tint: background)
+        .padding(.horizontal, 12)
+        .padding(.top, 7)
+        .padding(.bottom, 6)
+        .frame(height: 58)
+        // 参考图里底栏是一层奶白玻璃：固定用白色淡染，不随阅读背景/主题变深，
+        // 否则压在深色漫画上会变成一条黑带（滑块和文字也会糊在一起）。
+        .appGlass(in: Capsule(), tint: .white, tintOpacity: 0.34)
         .padding(.horizontal, 20)
         .padding(.bottom, 6)
+    }
+
+    private func applyScrub(_ value: Double, commit: Bool) {
+        let count = pageCount
+        guard count > 0 else { return }
+        let page = Int((value * Double(max(count - 1, 0))).rounded())
+        if commit {
+            scrub = nil
+            manga.requestScroll(toPage: page)
+        } else {
+            scrub = value
+            manga.requestScroll(toPage: page, reportProgress: false)
+        }
     }
 
     // MARK: 覆盖层与动作
@@ -623,5 +722,59 @@ struct MangaReaderView: View {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             if noticeToken == token { notice = nil }
         }
+    }
+}
+
+// MARK: - 底栏滑块（参考图样式）
+
+/// 细轨道 + 白色药丸滑块的页进度条。
+/// 系统 Slider 在 iOS 26 上会把整条轨道填成主题色，压在漫画上是一条粗黑条，
+/// 参考图（浏览器里的阅读页）是细白轨 + 白色滑块，所以这里自绘。
+private struct MangaPageSlider: View {
+    let fraction: Double
+    let onScrub: (Double) -> Void
+    let onCommit: (Double) -> Void
+
+    private let thumb = CGSize(width: 30, height: 16)
+    private let trackHeight: CGFloat = 5
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            let usable = max(width - thumb.width, 1)
+            let progress = min(max(fraction, 0), 1)
+            let travel = usable * progress
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.black.opacity(0.14))
+                    .frame(width: usable, height: trackHeight)
+                    .offset(x: thumb.width / 2)
+                Capsule()
+                    .fill(Color.black.opacity(0.38))
+                    .frame(width: max(travel, trackHeight), height: trackHeight)
+                    .offset(x: thumb.width / 2)
+                RoundedRectangle(cornerRadius: thumb.height / 2, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: thumb.width, height: thumb.height)
+                    .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
+                    .offset(x: travel)
+            }
+            .frame(width: width, height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in onScrub(fraction(for: value.location.x, usable: usable)) }
+                    .onEnded { value in onCommit(fraction(for: value.location.x, usable: usable)) }
+            )
+        }
+        .accessibilityElement()
+        .accessibilityLabel("页进度")
+        .accessibilityValue("\(Int((min(max(fraction, 0), 1)) * 100))%")
+        .accessibilityIdentifier("reader.manga.slider")
+    }
+
+    private func fraction(for x: CGFloat, usable: CGFloat) -> Double {
+        let value = (x - thumb.width / 2) / usable
+        return min(max(Double(value), 0), 1)
     }
 }

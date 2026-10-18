@@ -34,6 +34,9 @@ struct MangaScrollRequest: Equatable {
     let id: UUID
     let itemID: String
     var animated: Bool = false
+    /// 目标章节与页码：分页容器按页码定位，条漫容器按 itemID 定位。
+    var chapter: Int = -1
+    var page: Int = -1
 }
 
 // MARK: - 图片加载（内存缓存 + 降采样 + 进度）
