@@ -750,7 +750,14 @@ struct ReaderView: View {
                             onDetails: { showBookInfo = true },
                             onSettings: { showSettings = true },
                             onClearChapter: { Task { await clearMangaChapterCache() } },
-                            onRefreshTOC: tocRefreshAction)
+                            onRefreshTOC: {
+                                let message = await refreshToc()
+                                // 刷新后让漫画会话改用新目录（旧缓存的章节地址可能未展开变量）。
+                                if let latest = store.cachedToc(book) {
+                                    manga.replaceChapters(latest)
+                                }
+                                return message
+                            })
         }
     }
 
@@ -811,9 +818,7 @@ struct ReaderView: View {
     private func refreshToc() async -> String? {
         guard let source = store.source(for: book.origin) else { return "找不到书源" }
         do {
-            var b = book
-            if b.tocUrl == nil { b = try await WebBook.bookInfo(source: source, book: b) }
-            let latest = try await WebBook.chapters(source: source, book: b)
+            let latest = try await freshChapters(source: source, book: book)
             guard !latest.isEmpty else { return "书源返回空目录，已保留原目录" }
             let oldCount = chapters.count
             let currentURL = chapters.indices.contains(index) ? chapters[index].url : nil
@@ -829,6 +834,10 @@ struct ReaderView: View {
                 }
             } else if let currentURL, let found = latest.firstIndex(where: { $0.url == currentURL }) {
                 if found != index { index = found }
+            } else if mangaMode,
+                      let relocated = MangaBook.relocatedIndex(in: latest, title: currentTitle, fallback: index) {
+                // 漫画目录修复后章节地址会变化：按标题重定位当前章。
+                index = relocated
             } else if index >= latest.count {
                 index = latest.count - 1
             }
@@ -903,11 +912,17 @@ struct ReaderView: View {
         index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         if let c = store.cachedToc(book), !c.isEmpty {
             chapters = c
+            // 旧版本缓存的目录可能留下未展开的 @get/{{ }}（如漫画 comic_id），
+            // 这类章节地址请求正文会失败；重抓一次目录（详情页会重新写入 @put 变量）。
+            if c.contains(where: { MangaBook.isUnresolvedChapterURL($0.url) }) {
+                if let repaired = try? await freshChapters(source: s, book: book), !repaired.isEmpty {
+                    chapters = repaired
+                    store.saveToc(book, repaired)
+                }
+            }
         } else {
             do {
-                var b = book
-                if b.tocUrl == nil { b = try await WebBook.bookInfo(source: s, book: b) }
-                chapters = try await WebBook.chapters(source: s, book: b)
+                chapters = try await freshChapters(source: s, book: book)
                 store.saveToc(book, chapters)
             } catch {
                 self.error = "目录加载失败：\(error.localizedDescription)"
@@ -937,6 +952,16 @@ struct ReaderView: View {
             return
         }
         await loadInitialChapter()
+    }
+
+    /// 重新抓取目录：目录规则用 `@get:{…}` 取详情页 `@put` 变量（漫画 comic_id）时，
+    /// 先跑一次详情页把变量写进当前会话，否则章节地址会缺参数（漫画接口报「漫画标识不能为空」）。
+    private func freshChapters(source: BookSource, book: Book) async throws -> [BookChapter] {
+        var b = book
+        if b.tocUrl == nil || WebBook.tocRuleUsesVariables(source) {
+            b = try await WebBook.bookInfo(source: source, book: b)
+        }
+        return try await WebBook.chapters(source: source, book: b)
     }
 
     private func startLocal() async {

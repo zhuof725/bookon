@@ -30,6 +30,26 @@ enum MangaBookRegression {
         check(MangaBook.chapterStartTitle("第1话 重生") == "阅读 第1话 重生"
               && MangaBook.chapterEndTitle("第1话 重生") == "已读完 第1话 重生", "漫画：分章标记文案")
 
+        // 旧目录缓存修复：残留模板的章节地址会被识别并触发重抓。
+        check(MangaBook.isUnresolvedChapterURL(
+            "https://comic.mkzcdn.com/chapter/content/?chapter_id=1&comic_id=@get:{comic_id}"),
+            "漫画：识别未展开 @get 的旧章节地址")
+        check(MangaBook.isUnresolvedChapterURL("https://h.invalid/c?x={{$.id}}"), "漫画：识别未展开的模板地址")
+        check(!MangaBook.isUnresolvedChapterURL(
+            "https://comic.mkzcdn.com/chapter/content/?chapter_id=1&comic_id=207622"),
+            "漫画：正常章节地址不误判")
+        check(WebBook.tocRuleUsesVariables(source), "漫画：目录规则依赖 @get 变量（重抓前要先跑详情）")
+        check(!WebBook.tocRuleUsesVariables(textSource), "漫画：普通目录规则不触发详情预跑")
+        let relocatePool = [
+            BookChapter(url: "u1", title: "第1话", index: 0),
+            BookChapter(url: "u2", title: "第2话", index: 1),
+        ]
+        check(MangaBook.relocatedIndex(in: relocatePool, title: "第2话", fallback: 0) == 1,
+              "漫画：目录刷新后按标题重定位当前章")
+        check(MangaBook.relocatedIndex(in: relocatePool, title: "不存在", fallback: 9) == 1,
+              "漫画：标题找不到时退回原序号并钳制")
+        check(MangaBook.relocatedIndex(in: [], title: "第1话", fallback: 0) == nil, "漫画：空目录返回 nil")
+
         // 2. 图片地址提取（对应原版 BookHelp.flowImages + NetworkUtils.getAbsoluteURL）
         let mixed = """
         <p>文字</p><img src="http://a.invalid/1.jpg"><img src="http://a.invalid/1.jpg"><img src='/rel/2.png'>
@@ -107,6 +127,31 @@ enum MangaBookRegression {
         let updateTime = chapters.first?.updateTime ?? ""
         check(updateTime.contains("🕗") && updateTime.contains("2017/"),
               "漫画：updateTime 的 java.timeFormat（实际 \(updateTime)）")
+
+        // 6.5 变量丢失（旧目录缓存 / 重启后未跑详情）时的失败与修复路径：
+        // 章节地址会缺 comic_id，服务端报「漫画标识不能为空」；先跑一次详情页再抓目录即可恢复。
+        let staleBook = Book(bookUrl: "https://comic.mkzcdn.com/comic/info/?comic_id=207622&stale=1",
+                             name: "妖神记", origin: source.bookSourceUrl)
+        let staleContext = RuleContext(source: source, book: staleBook)
+        let staleAnalyzer = AnalyzeRule(content: tocBody, baseUrl: tocURL,
+                                        jsLib: source.jsLib, context: staleContext)
+        let staleChapters = WebBook.parseChapterNodes(staleAnalyzer.getElements(tocRule.chapterList),
+                                                      rule: tocRule, ar: staleAnalyzer, baseUrl: tocURL)
+        check(staleChapters.first?.url == "https://comic.mkzcdn.com/chapter/content/?chapter_id=476064&comic_id=",
+              "漫画：变量缺失时章节地址缺 comic_id（实际 \(staleChapters.first?.url ?? "nil")）")
+        check(!MangaBook.isUnresolvedChapterURL(staleChapters.first?.url ?? ""),
+              "漫画：缺变量的地址没有残留模板，靠重跑详情页修复")
+        _ = WebBook.parseBookInfo(source: source, book: staleBook, body: infoBody,
+                                  url: staleBook.bookUrl,
+                                  context: RuleContext(source: source, book: staleBook))
+        let repairedContext = RuleContext(source: source, book: staleBook)
+        let repairedAnalyzer = AnalyzeRule(content: tocBody, baseUrl: tocURL,
+                                           jsLib: source.jsLib, context: repairedContext)
+        let repairedChapters = WebBook.parseChapterNodes(repairedAnalyzer.getElements(tocRule.chapterList),
+                                                         rule: tocRule, ar: repairedAnalyzer, baseUrl: tocURL)
+        check(repairedChapters.first?.url
+              == "https://comic.mkzcdn.com/chapter/content/?chapter_id=476064&comic_id=207622",
+              "漫画：重跑详情页后目录地址恢复（实际 \(repairedChapters.first?.url ?? "nil")）")
 
         // 7. 正文解析：图片规则 + JS 包装成 <img>，再按原版方式取地址
         let contentBody = try fixture("manga-content.json")

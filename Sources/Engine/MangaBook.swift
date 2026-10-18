@@ -46,4 +46,21 @@ enum MangaBook {
     /// 目录里的「阅读 X / 已读完 X」分章标记文案（与原文案一致）。
     static func chapterStartTitle(_ title: String) -> String { "阅读 \(title)" }
     static func chapterEndTitle(_ title: String) -> String { "已读完 \(title)" }
+
+    /// 章节地址里是否还残留未展开的规则模板。
+    /// 旧版本缓存的目录会把 `@get:{comic_id}` 原样存下来（甚至 `{{…}}`），
+    /// 这类地址请求正文会失败（武芊漫画返回「漫画标识不能为空」），需要重抓目录。
+    static func isUnresolvedChapterURL(_ url: String) -> Bool {
+        url.contains("@get:{") || url.contains("{{")
+    }
+
+    /// 目录刷新后按标题重新定位当前章：修复后的章节地址会变化，不能按 URL 匹配。
+    static func relocatedIndex(in chapters: [BookChapter], title: String?, fallback: Int) -> Int? {
+        guard !chapters.isEmpty else { return nil }
+        if let title, !title.isEmpty,
+           let found = chapters.firstIndex(where: { $0.title == title }) {
+            return found
+        }
+        return min(max(fallback, 0), chapters.count - 1)
+    }
 }

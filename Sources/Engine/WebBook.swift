@@ -214,6 +214,12 @@ enum WebBook {
     }
 
     // MARK: TOC
+    /// 目录规则用 `@get:{…}` 读取详情页 `@put` 的变量（如漫画章节地址里的 comic_id）：
+    /// 重新抓目录前必须先跑一次详情页，把变量写进当前会话，否则章节地址会缺参数。
+    static func tocRuleUsesVariables(_ source: BookSource) -> Bool {
+        (source.ruleToc?.chapterUrl ?? "").range(of: "@get:", options: .caseInsensitive) != nil
+    }
+
     static func chapters(source: BookSource, book: Book) async throws -> [BookChapter] {
         guard let rule = source.ruleToc else { return [] }
         var visited = Set<String>()

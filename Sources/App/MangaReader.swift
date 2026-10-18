@@ -132,6 +132,26 @@ final class MangaSession: ObservableObject {
     /// 目录跳转：清空已加载窗口，重新从目标章加载（原版 moveTo 系列也会重置三章窗口）。
     func jump(to chapter: Int, page: Int = 0) {
         guard configured, chapters.indices.contains(chapter) else { return }
+        resetWindow(to: chapter, title: chapters[chapter].title, page: page)
+        loadWindow(positioningPage: page)
+    }
+
+    /// 目录刷新后替换章节列表：按标题重定位当前章（修复后的章节地址会变化），
+    /// 清空窗口重新加载并保留本章页位置。
+    func replaceChapters(_ newChapters: [BookChapter]) {
+        guard configured, !newChapters.isEmpty else { return }
+        let title = chapterTitle
+        let oldIndex = currentChapter
+        let page = currentPage
+        let relocated = MangaBook.relocatedIndex(in: newChapters, title: title, fallback: oldIndex)
+            ?? min(oldIndex, newChapters.count - 1)
+        chapters = newChapters
+        chapterCount = newChapters.count
+        resetWindow(to: relocated, title: newChapters[relocated].title, page: page)
+        loadWindow(positioningPage: page)
+    }
+
+    private func resetWindow(to chapter: Int, title: String, page: Int) {
         stop()
         pages.removeAll()
         loaded.removeAll()
@@ -141,10 +161,15 @@ final class MangaSession: ObservableObject {
         currentChapter = chapter
         currentPage = max(page, 0)
         currentPageCount = 0
-        chapterTitle = chapters[chapter].title
+        chapterTitle = title
         errorMessage = nil
         expectation = (chapter, Date().addingTimeInterval(3))
         rebuild()
+    }
+
+    /// 加载当前章，成功后定位到指定页并补齐相邻章。
+    private func loadWindow(positioningPage page: Int) {
+        let chapter = currentChapter
         Task { [weak self] in
             guard let self else { return }
             if let task = beginLoad(chapter, isCurrent: true) { await task.value }
@@ -256,6 +281,13 @@ final class MangaSession: ObservableObject {
                 rebuild()
             }
         }
+        // 旧目录缓存的章节地址可能残留未展开的变量（@get/{{ }}）：直接给出可操作的提示。
+        if MangaBook.isUnresolvedChapterURL(chapters[index].url) {
+            failed.insert(index)
+            attempts[index, default: 0] += 1
+            if index == currentChapter { errorMessage = "目录已过期（章节地址未展开），请点「刷新目录」" }
+            return
+        }
         do {
             let nextURL = chapters.indices.contains(index + 1) ? chapters[index + 1].url : nil
             let raw = try await ChapterContentLoader.content(source: source, book: book,
@@ -359,6 +391,8 @@ struct MangaReaderView: View {
     @State private var scrub: Double?
     @State private var notice: String?
     @State private var noticeToken = UUID()
+    /// 自动修复旧目录只做一次，避免「本章没有图片」时反复刷新。
+    @State private var autoRefreshedTOC = false
 
     var body: some View {
         ZStack {
@@ -399,6 +433,13 @@ struct MangaReaderView: View {
         }
         .foregroundStyle(foreground)
         .task { await manga.start() }
+        .onChange(of: manga.errorMessage) { message in
+            // 第一次出现「本章没有图片」时，多半是旧目录缓存导致章节地址失效：
+            // 自动刷新一次目录（会先跑详情页补齐变量）再重载当前章。
+            guard message == "本章没有图片", !autoRefreshedTOC else { return }
+            autoRefreshedTOC = true
+            Task { await refreshTOC() }
+        }
     }
 
     private func toggleBars() {
@@ -539,9 +580,15 @@ struct MangaReaderView: View {
                 Text("正在加载图片列表…").appFont(.footnote).foregroundStyle(foreground.opacity(0.7))
             } else if let message = manga.errorMessage {
                 Text(message).appFont(.footnote).foregroundStyle(foreground.opacity(0.8))
-                Button("重试") { manga.reloadCurrent() }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("reader.manga.retry")
+                    .multilineTextAlignment(.center).padding(.horizontal, 24)
+                HStack(spacing: 12) {
+                    Button("重试") { manga.reloadCurrent() }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("reader.manga.retry")
+                    Button("刷新目录") { Task { await refreshTOC() } }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("reader.manga.refreshTOC")
+                }
             } else {
                 Text("正在准备…").appFont(.footnote).foregroundStyle(foreground.opacity(0.7))
             }
