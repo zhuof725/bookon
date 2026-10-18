@@ -206,8 +206,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         message = nil
         updateRemoteCommands(enabled: false)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        // 释放同样放到后台队列；串行队列保证与激活顺序一致，也不卡主线程。
-        AudioSessionActivator.setActive(false, options: [.notifyOthersOnDeactivation])
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: [.notifyOthersOnDeactivation])
         sessionActive = false
     }
 
@@ -500,11 +500,12 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     // MARK: 音频会话 / 锁屏
 
     /// 整场会话只激活一次；切章不经过这里，避免每章重设音频会话。
-    /// 激活本身在后台串行队列执行（setCategory/setActive 会阻塞主线程）。
     private func activateSessionIfNeeded() {
         guard !sessionActive else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .spokenAudio, options: [])
+        try? session.setActive(true)
         sessionActive = true
-        AudioSessionActivator.activate(category: .playback, mode: .spokenAudio)
     }
 
     private func updateNowPlaying() {

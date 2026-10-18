@@ -74,7 +74,6 @@ targets:
       - path: ReaderTocHarness.swift
       - path: AudioHarness.swift
       - path: ../../Sources/App/BookAudioPlayer.swift
-      - path: ../../Sources/App/AudioSessionActivator.swift
       - path: Fixtures/audio
         buildPhase: resources
         type: folder
