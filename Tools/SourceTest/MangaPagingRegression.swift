@@ -98,5 +98,25 @@ enum MangaPagingRegression {
         check(MangaPaging.tapStep(fraction: 0.19, mode: .vertical) == -1
               && MangaPaging.tapStep(fraction: 0.81, mode: .vertical) == 1,
               "点按：纵向两端 20% 留给翻页")
+
+        // 点按坐标要先减掉滚动偏移（location(in:) 是内容坐标）。
+        // 否则翻到第 3 页后点按永远落在翻页区，三种翻页模式都呼不出面板。
+        check(MangaPaging.visibleFraction(contentPoint: 200, offset: 0, length: 400) == 0.5,
+              "点按：未滚动时按屏宽归一化")
+        check(MangaPaging.visibleFraction(contentPoint: 1400, offset: 1200, length: 400) == 0.5,
+              "点按：第 3 页处的中心点仍归一化为 0.5")
+        check(MangaPaging.visibleFraction(contentPoint: 1240, offset: 1200, length: 400) == 0.1,
+              "点按：第 3 页左侧 10% 处归一化为 0.1")
+        check(MangaPaging.visibleFraction(contentPoint: 600, offset: 0, length: 400) == 1.0
+              && MangaPaging.visibleFraction(contentPoint: 100, offset: 300, length: 400) == 0,
+              "点按：可见区域外的位置被钳到 0…1")
+        check(MangaPaging.visibleFraction(contentPoint: 10, offset: 0, length: 0) == 1.0,
+              "点按：长度为 0 不除零")
+        // 端到端：翻到后面的页面，中间点按必须是「呼出面板」而不是翻页。
+        let middleTap = MangaPaging.visibleFraction(contentPoint: 1400, offset: 1200, length: 400)
+        check(MangaPaging.tapStep(fraction: middleTap, mode: .leftToRight) == 0
+              && MangaPaging.tapStep(fraction: middleTap, mode: .rightToLeft) == 0
+              && MangaPaging.tapStep(fraction: middleTap, mode: .vertical) == 0,
+              "点按：翻到后面页后中间点按仍是呼出面板")
     }
 }

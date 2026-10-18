@@ -479,9 +479,15 @@ final class MangaScrollController: UIViewController {
             return
         }
         // 面板隐藏时：左下 / 右下翻一屏；其余任意位置都呼出面板（不再要求点在正中）。
+        // 分区按「可见区域」算：location(in: collectionView) 是内容坐标，随滚动变大。
         let width = max(collectionView.bounds.width, 1)
         let height = max(collectionView.bounds.height, 1)
-        let xf = point.x / width, yf = point.y / height
+        let xf = MangaPaging.visibleFraction(contentPoint: point.x,
+                                             offset: collectionView.contentOffset.x,
+                                             length: width)
+        let yf = MangaPaging.visibleFraction(contentPoint: point.y,
+                                             offset: collectionView.contentOffset.y,
+                                             length: height)
         if yf > 0.66 {
             if xf < 0.33 { scrollPage(-1); return }
             if xf > 0.66 { scrollPage(1); return }

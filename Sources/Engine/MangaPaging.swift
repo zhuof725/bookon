@@ -102,4 +102,14 @@ enum MangaPaging {
             return 0
         }
     }
+
+    /// 把点按位置换算成「可见区域」内的相对位置（0…1）。
+    /// `UIGestureRecognizer.location(in: scrollView)` 落在滚动内容坐标里
+    /// （滚动视图的 bounds.origin 就是 contentOffset），直接除以宽高会随着滚动
+    /// 变成 3.4、7.8… 被钳到 1 后永远落在翻页区，翻到后面就呼不出面板。
+    /// 这里先减掉滚动偏移再归一化。
+    static func visibleFraction(contentPoint: CGFloat, offset: CGFloat, length: CGFloat) -> Double {
+        let visible = contentPoint - offset
+        return min(max(Double(visible / max(length, 1)), 0), 1)
+    }
 }

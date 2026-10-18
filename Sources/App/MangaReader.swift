@@ -431,12 +431,12 @@ struct MangaReaderView: View {
                 VStack {
                     Text(chapterBanner)
                         .appFont(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(foreground)
                         .lineLimit(1)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
-                        .appGlass(in: Capsule(), tint: .black, tintOpacity: 0.32)
-                        .overlay { Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5) }
+                        .appGlass(in: Capsule(), tint: background, tintOpacity: 0.30)
+                        .overlay { Capsule().strokeBorder(foreground.opacity(0.25), lineWidth: 0.5) }
                         .padding(.top, 64)
                     Spacer(minLength: 0)
                 }
@@ -568,7 +568,7 @@ struct MangaReaderView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 42, height: 42)
                 .appGlass(in: Circle(), tint: background)
-                .overlay { Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5) }
+                .overlay { Circle().strokeBorder(foreground.opacity(0.25), lineWidth: 0.5) }
                 .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
                 .contentShape(Circle())
         }
@@ -610,7 +610,7 @@ struct MangaReaderView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 42, height: 42)
                 .appGlass(in: Circle(), tint: background)
-                .overlay { Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5) }
+                .overlay { Circle().strokeBorder(foreground.opacity(0.25), lineWidth: 0.5) }
                 .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
                 .contentShape(Circle())
         }
@@ -639,6 +639,7 @@ struct MangaReaderView: View {
     private var bottomBar: some View {
         VStack(spacing: 1) {
             MangaPageSlider(fraction: pageProgress,
+                            tint: foreground,
                             onScrub: { value in applyScrub(value, commit: false) },
                             onCommit: { value in applyScrub(value, commit: true) })
                 .frame(height: 22)
@@ -646,14 +647,14 @@ struct MangaReaderView: View {
                 Text(pageLabel)
                     .appFont(.system(size: 13, weight: .medium))
                     .monospacedDigit()
-                    .foregroundStyle(Color.black.opacity(0.75))
+                    .foregroundStyle(foreground.opacity(0.85))
                     .accessibilityIdentifier("reader.manga.footer")
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     Text(remainingText)
                         .appFont(.system(size: 12))
                         .monospacedDigit()
-                        .foregroundStyle(Color.black.opacity(0.45))
+                        .foregroundStyle(foreground.opacity(0.55))
                 }
             }
             .frame(height: 18)
@@ -662,10 +663,10 @@ struct MangaReaderView: View {
         .padding(.top, 7)
         .padding(.bottom, 6)
         .frame(height: 58)
-        // 面板做成真玻璃：奶白淡染的毛玻璃，页面内容能从后面透出来（iOS 26 走 glassEffect），
-        // 再加一道亮边和投影，读起来是「一块玻璃」而不是实心白药丸。
-        .appGlass(in: Capsule(), tint: .white, tintOpacity: 0.32)
-        .overlay { Capsule().strokeBorder(Color.white.opacity(0.45), lineWidth: 0.5) }
+        // 面板是玻璃质感，而且跟着画布颜色走：画布黑就是深色玻璃 + 白字，
+        // 画布白就是浅色玻璃 + 黑字。淡染取画布色、亮边/文字取前景色。
+        .appGlass(in: Capsule(), tint: background, tintOpacity: 0.30)
+        .overlay { Capsule().strokeBorder(foreground.opacity(0.35), lineWidth: 0.5) }
         .shadow(color: .black.opacity(0.22), radius: 12, y: 3)
         .padding(.horizontal, 20)
         .padding(.bottom, 6)
@@ -732,11 +733,13 @@ struct MangaReaderView: View {
 
 // MARK: - 底栏滑块（参考图样式）
 
-/// 细轨道 + 白色药丸滑块的页进度条。
-/// 系统 Slider 在 iOS 26 上会把整条轨道填成主题色，压在漫画上是一条粗黑条，
-/// 参考图（浏览器里的阅读页）是细白轨 + 白色滑块，所以这里自绘。
+/// 细轨道 + 药丸滑块的页进度条。
+/// 系统 Slider 在 iOS 26 上会把整条轨道填成主题色，压在漫画上是一条粗条，
+/// 参考图（浏览器里的阅读页）是细轨道 + 药丸滑块，所以这里自绘。
+/// 颜色跟随画布前景：黑画布是白滑块/白字，白画布是黑滑块/黑字。
 private struct MangaPageSlider: View {
     let fraction: Double
+    let tint: Color
     let onScrub: (Double) -> Void
     let onCommit: (Double) -> Void
 
@@ -751,15 +754,15 @@ private struct MangaPageSlider: View {
             let travel = usable * progress
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.black.opacity(0.14))
+                    .fill(tint.opacity(0.22))
                     .frame(width: usable, height: trackHeight)
                     .offset(x: thumb.width / 2)
                 Capsule()
-                    .fill(Color.black.opacity(0.38))
+                    .fill(tint.opacity(0.55))
                     .frame(width: max(travel, trackHeight), height: trackHeight)
                     .offset(x: thumb.width / 2)
                 RoundedRectangle(cornerRadius: thumb.height / 2, style: .continuous)
-                    .fill(Color.white)
+                    .fill(tint)
                     .frame(width: thumb.width, height: thumb.height)
                     .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
                     .offset(x: travel)

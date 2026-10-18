@@ -247,11 +247,17 @@ final class MangaPagedController: UIViewController {
             onToggleChrome?()
             return
         }
+        // 分区必须按可见区域算：location(in: collectionView) 落在内容坐标里，
+        // 翻到第 3 页后 x 已经是 3 倍屏宽，直接归一化会被钳到 1，永远走翻页分支、呼不出面板。
         let fraction: Double
         if mode == .vertical {
-            fraction = Double(point.y / max(pageSize.height, 1))
+            fraction = MangaPaging.visibleFraction(contentPoint: point.y,
+                                                   offset: collectionView.contentOffset.y,
+                                                   length: pageSize.height)
         } else {
-            fraction = Double(point.x / max(pageSize.width, 1))
+            fraction = MangaPaging.visibleFraction(contentPoint: point.x,
+                                                   offset: collectionView.contentOffset.x,
+                                                   length: pageSize.width)
         }
         let step = MangaPaging.tapStep(fraction: fraction, mode: mode)
         if step == 0 {
