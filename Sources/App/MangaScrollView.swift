@@ -312,6 +312,8 @@ final class MangaScrollController: UIViewController {
         ])
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         tap.cancelsTouchesInView = false
+        // 与滚动手势并行识别：手指轻微移动时点按不被滚动起手吞掉，面板更容易呼出。
+        tap.delegate = self
         collectionView.addGestureRecognizer(tap)
     }
 
@@ -639,6 +641,17 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         reportVisible(force: true)
         checkEdges()
+    }
+}
+
+// MARK: - 点按手势
+
+extension MangaScrollController: UIGestureRecognizerDelegate {
+    /// 与滚动并行识别：手指轻微移动（未达到滚动阈值）时点按仍然有效，面板呼出更灵敏；
+    /// 真正开始滚动时 tap 会因为位移超过容差而失败，不会误触。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        other === collectionView.panGestureRecognizer
     }
 }
 
