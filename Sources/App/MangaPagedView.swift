@@ -175,7 +175,7 @@ final class MangaPagedController: UIViewController {
         let index = MangaPaging.itemIndex(forPage: clamped, count: pages.count, mode: mode)
         collectionView.layoutIfNeeded()
         let indexPath = IndexPath(item: index, section: 0)
-        if animated {
+        if animated, collectionView.window != nil {
             collectionView.scrollToItem(at: indexPath,
                                         at: mode == .vertical ? .top : .left,
                                         animated: true)
