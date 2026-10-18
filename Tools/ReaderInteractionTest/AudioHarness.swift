@@ -121,9 +121,6 @@ struct AudioHarnessView: View {
             Text(stateText)
                 .font(.system(size: 11))
                 .multilineTextAlignment(.center)
-                .lineLimit(3)
-                // 固定高度：状态文字长度变化不再推动按钮位置，减少合成点击落点漂移。
-                .frame(height: 54)
                 .accessibilityIdentifier("audio.state")
             HStack(spacing: 8) {
                 Button("播放第一章") { playChapter(0) }
