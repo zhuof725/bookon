@@ -13,8 +13,12 @@ enum MangaBookRegression {
         func fixture(_ name: String) throws -> String {
             try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
         }
-        let source = try JSONDecoder().decode(BookSource.self,
-                                              from: Data(contentsOf: dir.appendingPathComponent("manga-wuqian.json")))
+        let sourceList = try JSONDecoder().decode([BookSource].self,
+                                                  from: Data(contentsOf: dir.appendingPathComponent("manga-wuqian.json")))
+        guard let source = sourceList.first else {
+            check(false, "漫画：书源夹具可解码")
+            return
+        }
 
         // 1. 书源类型识别（原版按 bookSourceType == 2 进入漫画阅读器）
         check(source.bookSourceName == "武芊漫画" && source.bookSourceType == 2, "漫画：书源解码，类型为图片源")

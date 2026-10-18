@@ -55,8 +55,7 @@ final class MangaSession: ObservableObject {
 
     /// 打开漫画：先加载当前章，然后按原版取「当前章 ± 1」。
     func start() async {
-        guard configured, !started, let book, let source,
-              chapters.indices.contains(currentChapter) else { return }
+        guard configured, !started, chapters.indices.contains(currentChapter) else { return }
         started = true
         expectation = (currentChapter, Date().addingTimeInterval(3))
         if let task = beginLoad(currentChapter, isCurrent: true) { await task.value }
@@ -235,7 +234,8 @@ final class MangaSession: ObservableObject {
         guard let book, let source, chapters.indices.contains(index),
               !loaded.contains(index), !loading.contains(index), tasks[index] == nil else { return nil }
         let task = Task { @MainActor [weak self] in
-            await self?.loadChapter(index, isCurrent: isCurrent, book: book, source: source)
+            guard let self else { return }
+            await self.loadChapter(index, isCurrent: isCurrent, book: book, source: source)
         }
         tasks[index] = task
         return task
@@ -248,12 +248,13 @@ final class MangaSession: ObservableObject {
         if index == currentChapter { loadingChapter = true; errorMessage = nil }
         defer {
             // 只有同一轮加载才清理状态；jump 取消后的迟到清理不能覆盖新一轮。
-            guard loadTokens[index] == token else { return }
-            loadTokens[index] = nil
-            loading.remove(index)
-            tasks[index] = nil
-            if index == currentChapter { loadingChapter = false }
-            rebuild()
+            if loadTokens[index] == token {
+                loadTokens[index] = nil
+                loading.remove(index)
+                tasks[index] = nil
+                if index == currentChapter { loadingChapter = false }
+                rebuild()
+            }
         }
         do {
             let nextURL = chapters.indices.contains(index + 1) ? chapters[index + 1].url : nil
@@ -357,6 +358,7 @@ struct MangaReaderView: View {
     @State private var barsVisible = true
     @State private var scrub: Double?
     @State private var notice: String?
+    @State private var noticeToken = UUID()
 
     var body: some View {
         ZStack {
@@ -459,6 +461,8 @@ struct MangaReaderView: View {
 
     // MARK: 底栏（上一章 / 本章进度 / 下一章）
 
+    private var pageCount: Int { max(manga.currentPageCount, 0) }
+
     private var pageProgress: Double {
         if let scrub { return scrub }
         let count = max(manga.currentPageCount, 1)
@@ -555,10 +559,11 @@ struct MangaReaderView: View {
 
     private func showNotice(_ text: String) {
         notice = text
-        Task { [weak self] in
+        let token = UUID()
+        noticeToken = token
+        Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard let self, self.notice == text else { return }
-            self.notice = nil
+            if noticeToken == token { notice = nil }
         }
     }
 }
