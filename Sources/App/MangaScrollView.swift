@@ -85,6 +85,17 @@ final class MangaImageLoader {
             if let p = progressByURL[url] { progress(p) }
             return
         }
+        // data: 图片（原版 flowImages 保留 data: 地址）本地解码，不经过 URLSession。
+        if url.lowercased().hasPrefix("data:") {
+            callbacks[url] = [progress]
+            completions[url] = [completion]
+            if let data = DataURIDecode.data(url), let image = UIImage(data: data) {
+                finish(url: url, result: .success(image))
+            } else {
+                finish(url: url, result: .failure(URLError(.cannotDecodeContentData)))
+            }
+            return
+        }
         guard let requestURL = URL(string: url) else { completion(nil); return }
         callbacks[url] = [progress]
         completions[url] = [completion]
@@ -221,6 +232,8 @@ struct MangaScrollView: UIViewControllerRepresentable {
     let onVisible: (_ chapter: Int, _ page: Int, _ count: Int) -> Void
     let onNearEnd: () -> Void
     let onNearStart: () -> Void
+    /// 相邻章加载失败哨兵点按：按章号重试。
+    let onRetryNeighbor: (_ chapter: Int) -> Void
     let onCenterTap: () -> Void
 
     func makeUIViewController(context: Context) -> MangaScrollController {
@@ -248,6 +261,7 @@ final class MangaScrollController: UIViewController {
     private var onVisible: ((Int, Int, Int) -> Void)?
     private var onNearEnd: (() -> Void)?
     private var onNearStart: (() -> Void)?
+    private var onRetryNeighbor: ((Int) -> Void)?
     private var onCenterTap: (() -> Void)?
 
     /// 程序化跳转后锁定锚点：目标图片加载导致高度变化时保持目标位置不动。
@@ -295,6 +309,7 @@ final class MangaScrollController: UIViewController {
         onVisible = config.onVisible
         onNearEnd = config.onNearEnd
         onNearStart = config.onNearStart
+        onRetryNeighbor = config.onRetryNeighbor
         onCenterTap = config.onCenterTap
         if containerBackground != config.background {
             containerBackground = config.background
@@ -556,10 +571,8 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
                 MangaImageLoader.shared.retry(url: url)
                 cell.restartLoading { [weak self] in self?.imageDidLoad() }
             }
-        case .retryNext:
-            onNearEnd?()
-        case .retryPrev:
-            onNearStart?()
+        case .retryNext, .retryPrev:
+            onRetryNeighbor?(items[indexPath.item].chapter)
         default:
             break
         }

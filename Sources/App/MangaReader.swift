@@ -372,6 +372,7 @@ struct MangaReaderView: View {
                             },
                             onNearEnd: { manga.nearEnd() },
                             onNearStart: { manga.nearStart() },
+                            onRetryNeighbor: { chapter in manga.retryNeighbor(chapter) },
                             onCenterTap: { toggleBars() })
                 .ignoresSafeArea()
             if manga.items.isEmpty { statusOverlay }
