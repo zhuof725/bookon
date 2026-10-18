@@ -35,9 +35,9 @@ struct LegadoApp: App {
                     if phase != .active {
                         JavaBridge.store.flush()
                         ReadingStatsStore.shared.flush()
+                        // 离开前台（后台/App 切换器）即视为正常结束，避免强杀被误记为闪退。
+                        CrashReporter.markSessionClean()
                     }
-                    // 只有真正进入后台才算正常结束；前台闪退会保留 session 标记。
-                    if phase == .background { CrashReporter.markSessionClean() }
                 }
                 .alert(importMessage ?? "", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
                     Button("好", role: .cancel) {}

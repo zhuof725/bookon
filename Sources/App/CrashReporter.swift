@@ -56,15 +56,9 @@ enum CrashReporter {
         promotePendingReports()
         note("启动 \(deviceSummary())")
 
-        NSSetUncaughtExceptionHandler { exception in
-            handleException(exception)
-        }
+        NSSetUncaughtExceptionHandler(crashExceptionCallback)
         for sig in [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP] {
-            _ = signal(sig) { number in
-                handleSignal(number)
-                _ = signal(number, SIG_DFL)
-                raise(number)
-            }
+            _ = signal(sig, crashSignalCallback)
         }
     }
 
@@ -127,7 +121,7 @@ enum CrashReporter {
         try? "".write(to: markerURL, atomically: true, encoding: .utf8)
     }
 
-    private static func handleException(_ exception: NSException) {
+    static func handleException(_ exception: NSException) {
         var text = reportHeader(kind: "未捕获异常")
         text += "异常: \(exception.name.rawValue)\n"
         text += "原因: \(exception.reason ?? "-")\n"
@@ -136,7 +130,7 @@ enum CrashReporter {
         writeReport(text, kind: "exception")
     }
 
-    private static func handleSignal(_ number: Int32) {
+    static func handleSignal(_ number: Int32) {
         guard !pendingPath.isEmpty else { return }
         let fd = pendingPath.withUnsafeBufferPointer {
             open($0.baseAddress!, O_CREAT | O_WRONLY | O_TRUNC, mode_t(0o644))
@@ -260,4 +254,16 @@ enum CrashReporter {
             "======== \(report.kind) ========\n" + report.contents
         }.joined(separator: "\n\n")
     }
+}
+
+// 顶层 C 回调：@convention(c) 的函数指针不能引用类型成员，用全局函数转发。
+// 信号回调里只做 CrashReporter.handleSignal 的异步信号安全操作，然后恢复默认处理并重新抛出。
+private func crashExceptionCallback(_ exception: NSException) {
+    CrashReporter.handleException(exception)
+}
+
+private func crashSignalCallback(_ signalNumber: Int32) {
+    CrashReporter.handleSignal(signalNumber)
+    _ = signal(signalNumber, SIG_DFL)
+    raise(signalNumber)
 }
