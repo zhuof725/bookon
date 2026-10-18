@@ -230,12 +230,14 @@ struct MangaScrollView: UIViewControllerRepresentable {
     let request: MangaScrollRequest?
     let background: UIColor
     let foreground: UIColor
+    /// 面板当前是否显示：显示时点任意位置收起，隐藏时点任意位置（翻页区除外）呼出。
+    let chromeVisible: Bool
     let onVisible: (_ chapter: Int, _ page: Int, _ count: Int) -> Void
     let onNearEnd: () -> Void
     let onNearStart: () -> Void
     /// 相邻章加载失败哨兵点按：按章号重试。
     let onRetryNeighbor: (_ chapter: Int) -> Void
-    let onCenterTap: () -> Void
+    let onToggleChrome: () -> Void
 
     func makeUIViewController(context: Context) -> MangaScrollController {
         let controller = MangaScrollController()
@@ -263,7 +265,8 @@ final class MangaScrollController: UIViewController {
     private var onNearEnd: (() -> Void)?
     private var onNearStart: (() -> Void)?
     private var onRetryNeighbor: ((Int) -> Void)?
-    private var onCenterTap: (() -> Void)?
+    private var onToggleChrome: (() -> Void)?
+    private var chromeVisible = true
 
     /// 程序化跳转后锁定锚点：目标图片加载导致高度变化时保持目标位置不动。
     private struct ScrollAnchor { let itemID: String; let delta: CGFloat }
@@ -293,6 +296,8 @@ final class MangaScrollController: UIViewController {
         collectionView.contentInsetAdjustmentBehavior = .never
         collectionView.showsVerticalScrollIndicator = false
         collectionView.scrollsToTop = false
+        // 不要延迟把触摸事件转给内容视图，点按分区响应更即时。
+        collectionView.delaysContentTouches = false
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(MangaPageCell.self, forCellWithReuseIdentifier: MangaPageCell.reuseID)
@@ -315,7 +320,8 @@ final class MangaScrollController: UIViewController {
         onNearEnd = config.onNearEnd
         onNearStart = config.onNearStart
         onRetryNeighbor = config.onRetryNeighbor
-        onCenterTap = config.onCenterTap
+        onToggleChrome = config.onToggleChrome
+        chromeVisible = config.chromeVisible
         if containerBackground != config.background {
             containerBackground = config.background
             view.backgroundColor = config.background
@@ -462,15 +468,20 @@ final class MangaScrollController: UIViewController {
                 break
             }
         }
+        // 面板显示时：点任意位置收起。
+        if chromeVisible {
+            onToggleChrome?()
+            return
+        }
+        // 面板隐藏时：左下 / 右下翻一屏；其余任意位置都呼出面板（不再要求点在正中）。
         let width = max(collectionView.bounds.width, 1)
         let height = max(collectionView.bounds.height, 1)
         let xf = point.x / width, yf = point.y / height
-        if (0.33...0.66).contains(xf), (0.33...0.66).contains(yf) {
-            onCenterTap?()
-            return
+        if yf > 0.66 {
+            if xf < 0.33 { scrollPage(-1); return }
+            if xf > 0.66 { scrollPage(1); return }
         }
-        guard yf > 0.66 else { return }
-        if xf < 0.33 { scrollPage(-1) } else if xf > 0.66 { scrollPage(1) }
+        onToggleChrome?()
     }
 
     func scrollPage(_ direction: Int) {

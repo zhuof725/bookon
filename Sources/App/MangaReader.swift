@@ -408,13 +408,14 @@ struct MangaReaderView: View {
                             request: manga.scrollRequest,
                             background: UIColor(background),
                             foreground: UIColor(foreground),
+                            chromeVisible: barsVisible,
                             onVisible: { chapter, page, count in
                                 manga.visible(chapter: chapter, page: page, count: count)
                             },
                             onNearEnd: { manga.nearEnd() },
                             onNearStart: { manga.nearStart() },
                             onRetryNeighbor: { chapter in manga.retryNeighbor(chapter) },
-                            onCenterTap: { toggleBars() })
+                            onToggleChrome: { toggleBars() })
                 .ignoresSafeArea()
             if manga.items.isEmpty { statusOverlay }
             if barsVisible {
@@ -450,6 +451,8 @@ struct MangaReaderView: View {
     }
 
     private func toggleBars() {
+        // 轻触反馈让面板呼出更有“响应感”。
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeInOut(duration: 0.15)) { barsVisible.toggle() }
     }
 
