@@ -1,4 +1,15 @@
 import Foundation
+import CoreGraphics
+
+/// 图片超分执行器：CoreML 实现在 App 层，Engine 只留注入点，
+/// 这样封面加载这类「会被测试工程单独编译」的文件不用拖着整个超分模块。
+/// 不注入（或注入后返回 nil）就保持原图。
+enum UpscaleRuntime {
+    /// 漫画页：(源图, 显示宽度像素) -> 放大后的图。
+    static var mangaUpscaler: ((_ image: CGImage, _ targetWidth: Int) async -> CGImage?)?
+    /// 封面：(源图, 显示宽度像素, 缓存键) -> 放大后的图（实现内部自己缓存）。
+    static var coverUpscaler: ((_ image: CGImage, _ targetWidth: Int, _ cacheKey: String) async -> CGImage?)?
+}
 
 /// 图片超分档位。档位决定用哪个模型：快速走 waifu2x（1MB 级），高质量走 Real-ESRGAN（30MB 级）。
 enum UpscaleQuality: String, CaseIterable, Identifiable {

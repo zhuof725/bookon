@@ -33,20 +33,16 @@ final class LocalCoverImageLoader: ObservableObject {
         }.value
         guard !Task.isCancelled, generation == token, sourceURL == url else { return }
         var result = decoded
-        // 封面超分：只放大比显示目标小的封面，结果走内存+磁盘缓存，避免每次滚动都重新推理。
+        // 封面超分：只放大比显示目标小的封面。放大与缓存由 UpscaleRuntime 承担
+        // （Engine 层注入点，测试工程里没有超分实现时保持原图）。
         if UpscaleSettings.coverEnabled,
            let cgImage = decoded?.cgImage,
            UpscaleSettings.shouldUpscale(pixelWidth: cgImage.width,
                                          pixelHeight: cgImage.height,
                                          targetWidth: pixelBudget) {
-            let cacheKey = UpscaleImageCache.key(
-                "\(url.absoluteString)|\(pixelBudget)|\(UpscaleSettings.quality.rawValue)")
-            if let cached = UpscaleImageCache.image(forKey: cacheKey) {
-                result = cached
-            } else if let upscaled = await UpscaleEngine.shared.upscaleCover(cgImage, targetWidth: pixelBudget) {
-                let image = UIImage(cgImage: upscaled)
-                UpscaleImageCache.store(image, forKey: cacheKey)
-                result = image
+            let cacheKey = "\(url.absoluteString)|\(pixelBudget)|\(UpscaleSettings.quality.rawValue)"
+            if let upscaled = await UpscaleRuntime.coverUpscaler?(cgImage, pixelBudget, cacheKey) {
+                result = UIImage(cgImage: upscaled)
             }
         }
         if let result { image = result; didFail = false }

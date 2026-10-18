@@ -9,6 +9,25 @@ final class UpscaleEngine {
     static let shared = UpscaleEngine()
     private init() {}
 
+    /// 注入到 Engine 的执行器（App 启动时调用一次）。
+    /// 封面的放大结果在这里做内存 + 磁盘缓存，调用方不用关心。
+    static func register() {
+        UpscaleRuntime.mangaUpscaler = { image, targetWidth in
+            await UpscaleEngine.shared.upscaleManga(image, targetWidth: targetWidth)
+        }
+        UpscaleRuntime.coverUpscaler = { image, targetWidth, cacheKey in
+            if let cached = UpscaleImageCache.image(forKey: cacheKey) {
+                return cached.cgImage
+            }
+            guard let output = await UpscaleEngine.shared.upscaleCover(image, targetWidth: targetWidth) else {
+                return nil
+            }
+            let stored = UIImage(cgImage: output)
+            UpscaleImageCache.store(stored, forKey: cacheKey)
+            return stored.cgImage
+        }
+    }
+
     /// 漫画页：`targetWidth` 是显示宽度（像素）。长条漫/超大图会被策略直接跳过。
     func upscaleManga(_ image: CGImage?, targetWidth: Int) async -> CGImage? {
         guard UpscaleSettings.mangaEnabled else { return nil }
