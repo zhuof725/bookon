@@ -395,7 +395,6 @@ struct MangaReaderView: View {
     let onBack: () -> Void
     let onTOC: () -> Void
     let onDetails: () -> Void
-    let onSettings: () -> Void
     let onClearChapter: () -> Void
     let onRefreshTOC: (@MainActor () async -> String?)?
 
@@ -436,7 +435,7 @@ struct MangaReaderView: View {
                         .lineLimit(1)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
-                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
                         .padding(.top, 64)
                     Spacer(minLength: 0)
                 }
@@ -603,7 +602,6 @@ struct MangaReaderView: View {
             Button(role: .destructive) { onClearChapter() } label: { Label("清除本话缓存并重载", systemImage: "trash") }
             Divider()
             Button { onDetails() } label: { Label("书籍操作", systemImage: "book") }
-            Button { onSettings() } label: { Label("阅读设置", systemImage: "textformat.size") }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 16, weight: .semibold))

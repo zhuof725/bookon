@@ -81,20 +81,22 @@ enum MangaPaging {
 
     /// 点按分区：返回 -1 上一页 / +1 下一页 / 0 呼出或收起面板。
     /// fraction 是手指在翻页轴上的相对位置（0…1）。
+    /// 只把两端各 20% 留给翻页，中间 60% 都呼出面板——翻页本来就有滑动，
+    /// 面板必须一按就出（用户反馈四种阅读方式下呼出面板要灵敏）。
     static func tapStep(fraction: Double, mode: MangaReadingMode) -> Int {
         let f = min(max(fraction, 0), 1)
         switch mode {
         case .vertical:
-            if f < 0.30 { return -1 }
-            if f > 0.70 { return 1 }
+            if f < 0.20 { return -1 }
+            if f > 0.80 { return 1 }
             return 0
         case .leftToRight:
-            if f < 0.33 { return -1 }
-            if f > 0.66 { return 1 }
+            if f < 0.20 { return -1 }
+            if f > 0.80 { return 1 }
             return 0
         case .rightToLeft:
-            if f < 0.33 { return 1 }
-            if f > 0.66 { return -1 }
+            if f < 0.20 { return 1 }
+            if f > 0.80 { return -1 }
             return 0
         case .webtoon:
             return 0

@@ -88,5 +88,15 @@ enum MangaPagingRegression {
         check(MangaPaging.tapStep(fraction: -5, mode: .leftToRight) == -1
               && MangaPaging.tapStep(fraction: 5, mode: .rightToLeft) == -1,
               "点按：相对位置越界被钳制")
+        // 呼出面板必须灵敏：中间 60% 都归面板，两端各只有 20% 用来翻页。
+        for mode in [MangaReadingMode.leftToRight, .rightToLeft, .vertical] {
+            for fraction in [0.25, 0.5, 0.75] {
+                check(MangaPaging.tapStep(fraction: fraction, mode: mode) == 0,
+                      "点按：\(mode.title) \(fraction) 处呼出面板")
+            }
+        }
+        check(MangaPaging.tapStep(fraction: 0.19, mode: .vertical) == -1
+              && MangaPaging.tapStep(fraction: 0.81, mode: .vertical) == 1,
+              "点按：纵向两端 20% 留给翻页")
     }
 }

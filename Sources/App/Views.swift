@@ -743,12 +743,12 @@ struct ReaderView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            MangaReaderView(manga: manga, book: book, background: theme.bg, foreground: theme.fg,
+            // 漫画阅读器固定黑色画布：翻页模式下页面四周是留白，黑色观感更好（用户要求）。
+            MangaReaderView(manga: manga, book: book, background: .black, foreground: .white,
                             sourceLabel: readerSourceName,
                             onBack: { dismiss() },
                             onTOC: { showToc = true },
                             onDetails: { showBookInfo = true },
-                            onSettings: { showSettings = true },
                             onClearChapter: { Task { await clearMangaChapterCache() } },
                             onRefreshTOC: {
                                 let message = await refreshToc()
