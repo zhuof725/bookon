@@ -418,6 +418,9 @@ final class MangaScrollController: UIViewController {
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: collectionView)
         if let indexPath = collectionView.indexPathForItem(at: point), indexPath.item < items.count {
+            if let cell = collectionView.cellForItem(at: indexPath) as? MangaPageCell, cell.isFailed {
+                return // 失败图点按走重试，不触发翻屏/菜单
+            }
             switch items[indexPath.item].kind {
             case .retryPrev, .retryNext:
                 return // 交给 didSelectItemAt 触发重试

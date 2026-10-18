@@ -99,7 +99,6 @@ final class MangaSession: ObservableObject {
             chapterTitle = chapters[chapter].title
             rebuild()
             ensureNeighbors()
-            expectation = (chapter, Date().addingTimeInterval(1.5))
             onChapterRead?(chapter)
             changed = true
         } else if page != currentPage {

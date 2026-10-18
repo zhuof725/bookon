@@ -506,7 +506,7 @@ struct ReaderView: View {
         .sheet(isPresented: $showToc) {
             ReaderTocSheet(chapters: chapters, currentIndex: index,
                            manager: .shared,
-                           onSelect: { target in showToc = false; go(target) },
+                           onSelect: { target in showToc = false; openChapter(target) },
                            onRefresh: tocRefreshAction)
         }
         .sheet(isPresented: $showSettings) {
@@ -729,6 +729,46 @@ struct ReaderView: View {
         }
     }
 
+    // MARK: 漫画
+
+    @ViewBuilder
+    private var mangaBody: some View {
+        if chapters.isEmpty || loading {
+            VStack(spacing: 10) {
+                if loading { ProgressView() }
+                if let error {
+                    Text(error).appFont(.footnote).foregroundStyle(theme.fg.opacity(0.75))
+                        .multilineTextAlignment(.center).padding(.horizontal, 24)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            MangaReaderView(manga: manga, book: book, background: theme.bg, foreground: theme.fg,
+                            sourceLabel: readerSourceName,
+                            onBack: { dismiss() },
+                            onTOC: { showToc = true },
+                            onDetails: { showBookInfo = true },
+                            onSettings: { showSettings = true },
+                            onClearChapter: { Task { await clearMangaChapterCache() } },
+                            onRefreshTOC: tocRefreshAction)
+        }
+    }
+
+    /// 目录点击：漫画走会话跳转（重置章节窗口），文字书照旧。
+    private func openChapter(_ target: Int) {
+        if mangaMode { manga.jump(to: target) } else { go(target) }
+    }
+
+    /// 漫画「清除本话缓存并重载」：删掉当前章正文缓存后重新加载图片列表。
+    private func clearMangaChapterCache() async {
+        guard !store.isLocal(book), let source = store.source(for: book.origin),
+              chapters.indices.contains(index) else { return }
+        ChapterPrecacheManager.shared.cancelPrecache()
+        try? await ChapterContentCache.shared.removeChapter(for: ChapterContentKey(
+            sourceURL: source.bookSourceUrl, bookURL: book.bookUrl, chapterURL: chapters[index].url))
+        manga.reloadCurrent()
+    }
+
     private var readerSourceName: String {
         if !book.originName.isEmpty { return book.originName }
         return store.source(for: book.origin)?.bookSourceName ?? (store.isLocal(book) ? "本地书籍" : "未知书源")
@@ -883,6 +923,19 @@ struct ReaderView: View {
             error = "目录中没有可读章节"; loading = false; return
         }
         index = first
+        if mangaMode {
+            // 漫画：正文是图片列表，不走进度条/分页，直接交给漫画阅读器。
+            let savedPage = requestedChapter == nil ? store.scrollPosition(book) : 0
+            manga.configure(book: book, source: s, chapters: chapters, start: first, page: savedPage,
+                            onProgress: { chapter, title, page in
+                                if index != chapter { index = chapter }
+                                ChapterPrecacheManager.shared.updateCurrentIndex(chapter)
+                                store.updateMangaProgress(book, chapterIndex: chapter, title: title, page: page)
+                            },
+                            onChapterRead: { chapter in noteReadingChapter(chapter) })
+            loading = false
+            return
+        }
         await loadInitialChapter()
     }
 
