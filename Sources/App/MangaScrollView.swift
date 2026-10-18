@@ -133,6 +133,7 @@ final class MangaImageLoader {
             for completion in completions { completion(image) }
         case .failure:
             lastFailed[url] = Date()
+            CrashReporter.note("漫画图片失败 \(String(url.prefix(140)))")
             for completion in completions { completion(nil) }
         }
     }

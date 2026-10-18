@@ -906,6 +906,7 @@ struct ReaderView: View {
     private func start() async {
         // Stable per-reader snapshot: current and prefetched chapters use identical rules.
         bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
+        CrashReporter.note("打开阅读 \(book.name)")
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
         mangaMode = MangaBook.isManga(source: s)
@@ -940,6 +941,7 @@ struct ReaderView: View {
         index = first
         if mangaMode {
             // 漫画：正文是图片列表，不走进度条/分页，直接交给漫画阅读器。
+            CrashReporter.note("进入漫画阅读 \(book.name) 共\(chapters.count)章 起始第\(first + 1)章")
             let savedPage = requestedChapter == nil ? store.scrollPosition(book) : 0
             manga.configure(book: book, source: s, chapters: chapters, start: first, page: savedPage,
                             onProgress: { chapter, title, page in

@@ -228,6 +228,7 @@ struct StatsGlass: ViewModifier {
 struct LibraryProfileView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
+    @State private var crashCount = 0
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -263,6 +264,9 @@ struct LibraryProfileView: View {
                     NavigationLink { CacheManagementView() } label: { LibraryLinkLabel(title: "缓存管理", symbol: "internaldrive") }
                         .accessibilityIdentifier("library.cache")
                     LibraryCardDivider()
+                    NavigationLink { CrashLogView() } label: { LibraryLinkLabel(title: crashCount > 0 ? "崩溃日志（\(crashCount)）" : "崩溃日志", symbol: "exclamationmark.triangle") }
+                        .accessibilityIdentifier("library.crashLogs")
+                    LibraryCardDivider()
                     LibraryValueRow(title: "已导入书源", value: "\(store.sources.count) 个")
                     LibraryCardDivider()
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
@@ -281,6 +285,7 @@ struct LibraryProfileView: View {
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
+        .onAppear { crashCount = CrashReporter.reports().count }
         .navigationTitle("我的")
         .toolbar(.visible, for: .navigationBar)
     }

@@ -132,6 +132,7 @@ final class MangaSession: ObservableObject {
     /// 目录跳转：清空已加载窗口，重新从目标章加载（原版 moveTo 系列也会重置三章窗口）。
     func jump(to chapter: Int, page: Int = 0) {
         guard configured, chapters.indices.contains(chapter) else { return }
+        CrashReporter.note("漫画目录跳转 第\(chapter + 1)章 \(chapters[chapter].title)")
         resetWindow(to: chapter, title: chapters[chapter].title, page: page)
         loadWindow(positioningPage: page)
     }
@@ -147,6 +148,7 @@ final class MangaSession: ObservableObject {
             ?? min(oldIndex, newChapters.count - 1)
         chapters = newChapters
         chapterCount = newChapters.count
+        CrashReporter.note("漫画目录更新 共\(newChapters.count)章 定位第\(relocated + 1)章")
         resetWindow(to: relocated, title: newChapters[relocated].title, page: page)
         loadWindow(positioningPage: page)
     }
@@ -286,8 +288,10 @@ final class MangaSession: ObservableObject {
             failed.insert(index)
             attempts[index, default: 0] += 1
             if index == currentChapter { errorMessage = "目录已过期（章节地址未展开），请点「刷新目录」" }
+            CrashReporter.note("漫画章节地址未展开 第\(index + 1)章 \(chapters[index].url)")
             return
         }
+        CrashReporter.note("漫画加载 第\(index + 1)章 \(chapters[index].title) \(chapters[index].url)")
         do {
             let nextURL = chapters.indices.contains(index + 1) ? chapters[index + 1].url : nil
             let raw = try await ChapterContentLoader.content(source: source, book: book,
@@ -299,11 +303,13 @@ final class MangaSession: ObservableObject {
                 failed.insert(index)
                 attempts[index, default: 0] += 1
                 if index == currentChapter { errorMessage = "本章没有图片" }
+                CrashReporter.note("漫画本章没有图片 第\(index + 1)章 正文 \(raw.count) 字")
             } else {
                 pages[index] = urls
                 loaded.insert(index)
                 failed.remove(index)
                 if index == currentChapter { errorMessage = nil }
+                CrashReporter.note("漫画加载完成 第\(index + 1)章 图片 \(urls.count) 张")
             }
         } catch is CancellationError {
             // 主动停止/换章导致的中断不算失败。
@@ -311,6 +317,7 @@ final class MangaSession: ObservableObject {
             failed.insert(index)
             attempts[index, default: 0] += 1
             if index == currentChapter { errorMessage = error.localizedDescription }
+            CrashReporter.note("漫画加载失败 第\(index + 1)章: \(error.localizedDescription)")
         }
     }
 

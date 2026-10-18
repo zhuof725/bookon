@@ -9,6 +9,11 @@ struct LegadoApp: App {
     @State private var importMessage: String?
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // 尽早安装：未捕获异常 / 信号都写入本机崩溃日志（我的 → 崩溃日志）。
+        CrashReporter.install()
+    }
+
     private var appColorScheme: ColorScheme? {
         (AppAppearance(rawValue: appearanceRawValue) ?? .system).colorScheme
     }
@@ -27,7 +32,12 @@ struct LegadoApp: App {
                 .onOpenURL { handle($0) }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
-                    if phase != .active { JavaBridge.store.flush(); ReadingStatsStore.shared.flush() }
+                    if phase != .active {
+                        JavaBridge.store.flush()
+                        ReadingStatsStore.shared.flush()
+                    }
+                    // 只有真正进入后台才算正常结束；前台闪退会保留 session 标记。
+                    if phase == .background { CrashReporter.markSessionClean() }
                 }
                 .alert(importMessage ?? "", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
                     Button("好", role: .cancel) {}
