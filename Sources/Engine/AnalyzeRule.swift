@@ -136,6 +136,9 @@ final class AnalyzeRule {
     func getString(_ rule: String?, from obj: Any? = nil) -> String {
         guard var rule = rule, !rule.isEmpty else { return "" }
         rule = resolvePut(rule, from: obj)
+        // 只含 @put 的规则（如漫画详情 name 规则只存 comic_id）不产出文本；
+        // 不能把当前正文当成匹配结果返回。
+        guard !rule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
         if let g = obj as? [String], AnalyzeRule.hasGroupRef(rule) {
             rule = AnalyzeRule.fillGroups(rule, g)
             if !rule.contains("<js>") && rule.range(of: "@js:", options: .caseInsensitive) == nil {
@@ -160,6 +163,7 @@ final class AnalyzeRule {
     func getStringList(_ rule: String?, from obj: Any? = nil) -> [String] {
         guard var rule = rule, !rule.isEmpty else { return [] }
         rule = resolvePut(rule, from: obj)
+        guard !rule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         var cur: Any = obj ?? content
         let parts = splitJS(rule)
         for (index, part) in parts.enumerated() {
