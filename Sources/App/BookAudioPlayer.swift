@@ -23,12 +23,18 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// 锁屏「下一章 / 上一章」回调，由阅读器接到章节跳转。
     var onRemoteNext: (() -> Void)?
     var onRemotePrevious: (() -> Void)?
+    /// 当前章播放失败（多为时间签名链接过期返回 403）回调；
+    /// 阅读器据此刷新目录换新链接后重试，本播放器保持原状态不改。
+    var onPlaybackFailed: (() -> Void)?
 
     private var player: AVPlayer?
     private var album = ""
     private var timeObserver: Any?
     private var itemEndObserver: NSObjectProtocol?
     private var itemFailureObserver: NSObjectProtocol?
+    private var itemStatusObserver: NSKeyValueObservation?
+    /// 一次播放只上报一次失败，避免状态与结束通知重复触发。
+    private var failureNotified = false
     private var systemObservers: [NSObjectProtocol] = []
     private var messageTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
@@ -70,6 +76,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
             return
         }
         stop()
+        failureNotified = false
         chapterTitle = title
         self.album = album
         chapterURL = url
@@ -162,16 +169,29 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         }
         itemFailureObserver = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime,
                                                  object: item, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pushMessage("音频播放失败，点播放重试")
-            }
+            Task { @MainActor [weak self] in self?.handlePlaybackFailure() }
         }
+        // 签名过期（403）会让条目在加载阶段直接 failed，这条路径同样要上报。
+        itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor [weak self] in self?.handlePlaybackFailure() }
+        }
+    }
+
+    /// 播放失败上报一次：提示用户并通知阅读器（可能刷新目录换新链接后重试）。
+    private func handlePlaybackFailure() {
+        guard !failureNotified else { return }
+        failureNotified = true
+        pushMessage("音频播放失败，点播放重试")
+        onPlaybackFailed?()
     }
 
     private func removeItemObservers() {
         let center = NotificationCenter.default
         if let token = itemEndObserver { center.removeObserver(token); itemEndObserver = nil }
         if let token = itemFailureObserver { center.removeObserver(token); itemFailureObserver = nil }
+        itemStatusObserver?.invalidate()
+        itemStatusObserver = nil
     }
 
     private func startTimeObserver(_ player: AVPlayer) {

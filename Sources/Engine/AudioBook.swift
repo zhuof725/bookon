@@ -34,4 +34,15 @@ enum AudioChapter {
         let single = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return isDirectAudioURL(single) ? single : nil
     }
+
+    /// 刷新目录后重新定位当前音频章：音频直链每次抓取都会重新签名，URL 必然变化，
+    /// 不能按 URL 匹配；按标题定位，找不到时退回原序号（按新目录长度钳制）。
+    static func relocatedIndex(in chapters: [BookChapter], title: String?, fallback: Int) -> Int? {
+        guard !chapters.isEmpty else { return nil }
+        if let title, !title.isEmpty,
+           let found = chapters.firstIndex(where: { $0.title == title }) {
+            return found
+        }
+        return min(max(fallback, 0), chapters.count - 1)
+    }
 }

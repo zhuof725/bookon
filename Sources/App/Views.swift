@@ -348,6 +348,8 @@ struct ReaderView: View {
     @StateObject private var aloud = ReaderAloudController()
     /// 音频书源（如喜马拉雅）章节播放。
     @StateObject private var bookAudio = BookAudioPlayer()
+    /// 音频章链接过期已自动刷新重试过（每次进入章节重置，防止失败循环）。
+    @State private var audioFailureRetried = false
     @State private var showAloudPanel = false
     /// 朗读驱动的翻章不停止朗读；用户手动翻章到 loadChapter 处停止。
     @State private var aloudDrivenNav = false
@@ -766,9 +768,17 @@ struct ReaderView: View {
             guard !latest.isEmpty else { return "书源返回空目录，已保留原目录" }
             let oldCount = chapters.count
             let currentURL = chapters.indices.contains(index) ? chapters[index].url : nil
+            let currentTitle = chapters.indices.contains(index) ? chapters[index].title : nil
+            let currentIsAudio = chapters.indices.contains(index)
+                && AudioChapter.isAudio(source: source, chapter: chapters[index])
             chapters = latest
             store.saveToc(book, latest)
-            if let currentURL, let found = latest.firstIndex(where: { $0.url == currentURL }) {
+            if currentIsAudio {
+                // 音频直链每次抓取都会重新签名，URL 必然变化：按标题重新定位当前章。
+                if let relocated = AudioChapter.relocatedIndex(in: latest, title: currentTitle, fallback: index) {
+                    index = relocated
+                }
+            } else if let currentURL, let found = latest.firstIndex(where: { $0.url == currentURL }) {
                 if found != index { index = found }
             } else if index >= latest.count {
                 index = latest.count - 1
@@ -1490,7 +1500,32 @@ struct ReaderView: View {
         bookAudio.onFinish = { audioNextChapter() }
         bookAudio.onRemoteNext = { audioNextChapter() }
         bookAudio.onRemotePrevious = { audioPreviousChapter() }
+        bookAudio.onPlaybackFailed = { audioPlaybackFailed() }
         bookAudio.play(url: chapter.url, title: chapter.title, album: book.name)
+    }
+
+    /// 喜马拉雅类音频直链带时间签名，书架缓存目录里的旧链接会 403。
+    /// 播放失败时自动刷新目录换新链接，再按新链接重试当前章一次。
+    private func audioPlaybackFailed() {
+        guard bookAudio.chapterURL != nil, !audioFailureRetried else { return }
+        audioFailureRetried = true
+        Task { @MainActor in
+            let refreshMessage = await refreshToc()
+            guard bookAudio.chapterURL != nil, chapters.indices.contains(index) else { return }
+            // 目录没刷新成功就别拿旧链接再试一遍。
+            if let refreshMessage,
+               refreshMessage.hasPrefix("找不到书源") || refreshMessage.hasPrefix("刷新失败")
+                   || refreshMessage.hasPrefix("书源返回空目录") {
+                return
+            }
+            guard let source = store.source(for: book.origin),
+                  AudioChapter.isAudio(source: source, chapter: chapters[index]) else { return }
+            ChapterPrecacheManager.shared.updateCurrentIndex(index)
+            retryTarget = nil
+            error = nil
+            store.updateProgress(book, index: index, title: chapters[index].title)
+            beginAudioChapter(index)
+        }
     }
 
     private func audioNextChapter() {
@@ -1609,6 +1644,8 @@ struct ReaderView: View {
 
     private func loadChapter(_ target: Int, landing: ChapterLanding) {
         guard !loading, chapters.indices.contains(target) else { return }
+        // 新的导航重新给一次「链接过期自动重试」的预算。
+        audioFailureRetried = false
         // 朗读控制器自己请求 openChapter 时 aloudDrivenNav 为真，朗读继续；
         // 其他途径（手动翻章/书签/边缘到达）都会在这里停止朗读。
         if !aloudDrivenNav { aloud.stop() }

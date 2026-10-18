@@ -37,5 +37,19 @@ enum AudioChapterRegression {
         let volumeText = try await ChapterContentLoader.content(source: audio, book: book, chapter: volume,
                                                                 nextChapterURL: nil)
         check(volumeText == "第一卷", "卷标题仍按本地展示")
+
+        // 刷新目录后按标题重定位（音频直链每次抓取都会重新签名，URL 必然变化）。
+        let refreshed = [
+            BookChapter(url: "https://vod.xmcdn.com/x.m4a?sign=new1", title: "第1集", index: 0),
+            BookChapter(url: "https://vod.xmcdn.com/y.m4a?sign=new2", title: "第2集", index: 1),
+        ]
+        check(AudioChapter.relocatedIndex(in: refreshed, title: "第2集", fallback: 0) == 1,
+              "刷新后按标题定位到新链接的同一章")
+        check(AudioChapter.relocatedIndex(in: refreshed, title: "不存在", fallback: 9) == 1,
+              "标题找不到时退回原序号并按新目录长度钳制")
+        check(AudioChapter.relocatedIndex(in: refreshed, title: nil, fallback: 0) == 0,
+              "无标题时用原序号")
+        check(AudioChapter.relocatedIndex(in: [], title: "第1集", fallback: 0) == nil,
+              "空目录返回 nil")
     }
 }
