@@ -128,6 +128,8 @@ enum CrashReporter {
         text += "调用栈:\n" + exception.callStackSymbols.joined(separator: "\n") + "\n"
         text += "最近操作：\n" + readBreadcrumbs()
         writeReport(text, kind: "exception")
+        // 已经写过完整报告，避免下次启动再补一条「上次会话异常结束」。
+        try? FileManager.default.removeItem(at: markerURL)
     }
 
     static func handleSignal(_ number: Int32) {
