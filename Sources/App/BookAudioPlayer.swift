@@ -14,6 +14,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     @Published private(set) var currentTime: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var message: String?
+    /// 临时诊断行（截图排障）：链接、签名年龄、HTTP 探测与播放器状态。
+    @Published private(set) var diagnostics = ""
     @Published var speed: Double = BookAudioPlayer.loadSpeed() {
         didSet { BookAudioPlayer.saveSpeed(speed); applyRate() }
     }
@@ -35,6 +37,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     /// 一次播放只上报一次失败，避免状态与结束通知重复触发。
     private var failureNotified = false
+    private var playerStatusObserver: NSKeyValueObservation?
+    private var probeTask: Task<Void, Never>?
+    private var linkProbe = "未探测"
+    private var signatureText = ""
     private var systemObservers: [NSObjectProtocol] = []
     private var messageTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
@@ -93,6 +99,12 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         isBuffering = true
         registerItemObservers(item)
         startTimeObserver(created)
+        // 缓冲状态用 KVO 更新：周期性时间回调在卡住/失败时不可靠，界面会永远停在「正在缓冲」。
+        playerStatusObserver = created.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            let status = player.timeControlStatus
+            Task { @MainActor [weak self] in self?.playerStatusChanged(status) }
+        }
+        startLinkProbe(url)
         updateRemoteCommands(enabled: true)
         created.playImmediately(atRate: Float(speed))
         isPlaying = true
@@ -111,8 +123,13 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     }
 
     func resume() {
-        guard !isPlaying, player != nil else { return }
-        player?.playImmediately(atRate: Float(speed))
+        guard !isPlaying, let queuePlayer = player else { return }
+        // 失败过的条目不能原地续播：按同一地址重建再播（等链接刷新后重试也走这里）。
+        if let failedURL = chapterURL, queuePlayer.currentItem?.status == .failed {
+            play(url: failedURL.absoluteString, title: chapterTitle, album: album)
+            return
+        }
+        queuePlayer.playImmediately(atRate: Float(speed))
         isPlaying = true
         updateNowPlaying()
     }
@@ -120,6 +137,13 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     func stop() {
         removeItemObservers()
         removeTimeObserver()
+        playerStatusObserver?.invalidate()
+        playerStatusObserver = nil
+        probeTask?.cancel()
+        probeTask = nil
+        linkProbe = "未探测"
+        signatureText = ""
+        diagnostics = ""
         player?.pause()
         player = nil
         chapterURL = nil
@@ -182,8 +206,89 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private func handlePlaybackFailure() {
         guard !failureNotified else { return }
         failureNotified = true
+        // 失败时立刻结束缓冲显示，否则界面停在「正在缓冲」会把错误提示挡住。
+        isBuffering = false
         pushMessage("音频播放失败，点播放重试")
+        refreshDiagnostics()
         onPlaybackFailed?()
+    }
+
+    // MARK: 诊断（临时）
+
+    private func playerStatusChanged(_ status: AVPlayer.TimeControlStatus) {
+        switch status {
+        case .playing:
+            isBuffering = false
+        case .waitingToPlayAtSpecifiedRate:
+            if isPlaying { isBuffering = true }
+        case .paused:
+            isBuffering = false
+        @unknown default:
+            break
+        }
+        refreshDiagnostics()
+    }
+
+    /// 用与播放相同的地址发一个 Range 探测，把 HTTP 结果与签名年龄显示到界面上。
+    private func startLinkProbe(_ url: URL) {
+        probeTask?.cancel()
+        linkProbe = "探测中…"
+        signatureText = Self.signatureAge(from: url)
+        refreshDiagnostics()
+        probeTask = Task { @MainActor [weak self] in
+            var request = URLRequest(url: url)
+            request.setValue("bytes=0-1", forHTTPHeaderField: "Range")
+            request.timeoutInterval = 15
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                self?.linkProbe = "HTTP \(code)"
+            } catch {
+                self?.linkProbe = "失败 \(error.localizedDescription.prefix(36))"
+            }
+            self?.refreshDiagnostics()
+        }
+    }
+
+    /// buy_key 链接的 timestamp 参数（微秒）= 签名签发时刻，用于判断链接是否过期。
+    private static func signatureAge(from url: URL) -> String {
+        guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              let raw = items.first(where: { $0.name == "timestamp" })?.value,
+              let micros = Double(raw), micros > 0 else { return "无签名字段" }
+        let age = Date().timeIntervalSince1970 - micros / 1_000_000
+        guard age > 0 else { return "刚刚签名" }
+        if age < 3600 { return String(format: "签名 %.0f 分钟前", age / 60) }
+        if age < 86400 { return String(format: "签名 %.1f 小时前", age / 3600) }
+        return String(format: "签名 %.1f 天前", age / 86400)
+    }
+
+    private func refreshDiagnostics() {
+        guard chapterURL != nil else { diagnostics = ""; return }
+        let host = chapterURL.map { ($0.host ?? "?") + $0.path } ?? "-"
+        let itemText: String
+        if let item = player?.currentItem {
+            switch item.status {
+            case .unknown: itemText = "unknown"
+            case .readyToPlay: itemText = "ready"
+            case .failed: itemText = "failed \((item.error as? NSError)?.code ?? 0)"
+            @unknown default: itemText = "?"
+            }
+        } else {
+            itemText = "无条目"
+        }
+        let statusText: String
+        if let player {
+            switch player.timeControlStatus {
+            case .playing: statusText = "playing"
+            case .waitingToPlayAtSpecifiedRate: statusText = "waiting"
+            case .paused: statusText = "paused"
+            @unknown default: statusText = "?"
+            }
+        } else {
+            statusText = "无播放器"
+        }
+        let next = "\(host.suffix(60))\n\(signatureText) · \(linkProbe)\n条目 \(itemText) · \(statusText)"
+        if diagnostics != next { diagnostics = next }
     }
 
     private func removeItemObservers() {
@@ -204,6 +309,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 let total = currentItem.duration.seconds
                 if total.isFinite, total > 0 { self.duration = total }
                 self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                self.refreshDiagnostics()
             }
         }
     }
@@ -343,6 +449,16 @@ struct AudioChapterView: View {
             .lineLimit(2)
             .padding(.top, 6)
             .padding(.horizontal, 24)
+            if !audio.diagnostics.isEmpty {
+                Text(audio.diagnostics)
+                    .font(.system(size: 10, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(5)
+                    .foregroundStyle(palette.secondary)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("reader.audio.diagnostics")
+            }
             Spacer(minLength: 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
