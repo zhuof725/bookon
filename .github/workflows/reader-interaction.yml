@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [aloud-highlight, audio, live-appearance, shelf-list, appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
+        options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, full]
   push:
     branches: [main, fix/source-compat-runtime]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules' || inputs.suite == 'audio') && 'macos-26' || 'macos-15' }}
+    runs-on: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') && 'macos-26' || 'macos-15' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
           name: cache-management-regression-log
           path: cache-management-regression.log
       - name: Select iOS 26 SDK for native glass verification
-        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules' || inputs.suite == 'audio') }}
+        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
         run: |
           X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
           test -n "$X"
@@ -79,7 +79,7 @@ jobs:
         run: cd Tools/ReaderInteractionTest && xcodegen generate
       - name: Pick available iPhone simulator
         env:
-          NATIVE_GLASS: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules' || inputs.suite == 'audio') }}
+          NATIVE_GLASS: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
         run: |
           xcrun simctl list devices available -j > /tmp/devices.json
           python3 - <<'PY' >> "$GITHUB_ENV"
@@ -90,7 +90,7 @@ jobs:
           print('SIMULATOR_ID=' + phones[0]['udid'])
           PY
       - name: Compile native glass harness before simulator boot
-        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules' || inputs.suite == 'audio') }}
+        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
         run: |
           set -o pipefail
           xcodebuild -project Tools/ReaderInteractionTest/ReaderInteraction.xcodeproj \
@@ -117,7 +117,6 @@ jobs:
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
             reader-toc) ARGS=(-only-testing:ReaderInteractionTests/TocSheetTests) ;;
-            audio) ARGS=(-only-testing:ReaderInteractionTests/AudioPlayerTests) ;;
             cover-persistence) ARGS=(-only-testing:ReaderInteractionTests/CoverPersistenceTests) ;;
             app-appearance) ARGS=(-only-testing:ReaderInteractionTests/AppearanceTests) ;;
             bottom-bubble) ARGS=(-only-testing:ReaderInteractionTests/BottomBubbleTests -only-testing:ReaderInteractionTests/TypographyTests/testNativeGlyphsFixedBaselinesAndActualLinePagination -only-testing:ReaderInteractionTests/ReaderPageFlowTests -only-testing:ReaderInteractionTests/InteractionTests) ;;

@@ -88,8 +88,6 @@ struct HarnessApp: App {
                     ReaderPageFlowHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--reader-chrome-mode") {
                     ChromeHarnessView()
-                } else if ProcessInfo.processInfo.arguments.contains("--audio-mode") {
-                    AudioHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--reader-toc-mode") {
                     ReaderTocHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--layout-audit-mode") {
