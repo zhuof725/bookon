@@ -270,6 +270,8 @@ final class MangaScrollController: UIViewController {
     private var lockedAnchor: ScrollAnchor?
     private var lockReleaseWork: DispatchWorkItem?
     private var lastScrollTick = Date.distantPast
+    /// 图片加载后的重排合并成一拍，避免在 UIKit 布局周期内重入。
+    private var layoutRefreshScheduled = false
 
     private static let markerHeight: CGFloat = 64
     private static let sentinelHeight: CGFloat = 88
@@ -401,7 +403,20 @@ final class MangaScrollController: UIViewController {
     }
 
     /// 图片加载完成、高度变化后调用：调整偏移保持当前可见内容不动。
+    /// 统一延后一拍执行：UIKit 可能在 cellForItemAt / 预取 / 布局周期里同步回调，
+    /// 当场 layoutIfNeeded 会重入 UICollectionView 的内部更新并触发断言崩溃。
     func imageDidLoad() {
+        guard !layoutRefreshScheduled else { return }
+        layoutRefreshScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.layoutRefreshScheduled = false
+            self.refreshLayoutAfterImageLoad()
+        }
+    }
+
+    private func refreshLayoutAfterImageLoad() {
+        guard isViewLoaded, collectionView.window != nil else { return }
         let anchor = lockedAnchor ?? captureAnchor()
         collectionView.collectionViewLayout.invalidateLayout()
         collectionView.setNeedsLayout()
@@ -719,7 +734,7 @@ final class MangaPageCell: UICollectionViewCell {
         progressLabel.textColor = foreground.withAlphaComponent(0.7)
         failLabel.textColor = foreground.withAlphaComponent(0.7)
         if let image = MangaImageLoader.shared.cachedImage(for: url) {
-            apply(image)
+            apply(image, notify: false)
             return
         }
         if MangaImageLoader.shared.hasFailed(for: url) {
@@ -764,13 +779,16 @@ final class MangaPageCell: UICollectionViewCell {
         })
     }
 
-    private func apply(_ image: UIImage) {
+    private func apply(_ image: UIImage, notify: Bool = true) {
         spinner.stopAnimating()
         progressLabel.text = nil
         failLabel.isHidden = true
         isFailed = false
         imageView.image = image
-        onLoaded?()
+        // 缓存命中时（cellForItemAt 里同步走到这里）不能回调 onLoaded：
+        // 那会在 UIKit 正在更新可见单元格时重入 layoutIfNeeded，触发内部断言崩溃。
+        // 缓存命中说明宽高比已知，布局本来就已经正确，不需要再重排。
+        if notify { onLoaded?() }
     }
 
     private func showFailure() {
