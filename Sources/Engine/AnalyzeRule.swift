@@ -153,7 +153,47 @@ final class AnalyzeRule {
         return AnalyzeRule.asString(cur).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// replaceRegex 是「对正文做替换」的规则，Legado 直接把它作用在正文字符串上。
+    /// 对应原版 AnalyzeRule.getStringList（`kind` 等字段使用）：
+    /// JSON 多值结果保持「字符串数组」，在后续 @js 阶段以 JS 数组传入
+    /// （如 `$..theme_id @js: Array.from(result)[0]…` 依赖数组语义），
+    /// 最终按数组项 / 行展开为字符串列表。
+    func getStringList(_ rule: String?, from obj: Any? = nil) -> [String] {
+        guard var rule = rule, !rule.isEmpty else { return [] }
+        rule = resolvePut(rule, from: obj)
+        var cur: Any = obj ?? content
+        let parts = splitJS(rule)
+        for (index, part) in parts.enumerated() {
+            let (isJs, s) = part
+            if isJs {
+                cur = runJS(s, cur)
+                continue
+            }
+            if let str = cur as? String, cur as AnyObject !== content as AnyObject {
+                cur = AnalyzeRule.parse(str, baseUrl: baseUrl)
+            }
+            let nextIsJS = index + 1 < parts.count && parts[index + 1].0
+            if nextIsJS, let list = jsonStringValues(cur, s) {
+                cur = list
+            } else {
+                cur = stringValue(cur, s)
+            }
+        }
+        if let list = cur as? [Any] {
+            return list.map { AnalyzeRule.asString($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }
+        return AnalyzeRule.asString(cur)
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// 纯 JSON 规则在当前节点上的求值结果列表；不是 JSON 规则时返回 nil（退回字符串语义）。
+    private func jsonStringValues(_ obj: Any, _ rule: String) -> [Any]? {
+        let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("@@"), isJsonRule(trimmed, obj) else { return nil }
+        return JsonPath.query(jsonRoot(obj), stripPrefix(trimmed))
+    }
     /// 不能用 getString(_:from:)：那会先把正文当 HTML 解析、再用默认 prettyPrint 序列化，
     /// 段与段之间的换行会被并成空格（整章变一段）。这里对字符串求值，不做 HTML 解析。
     /// 只有完全不像替换规则的写法（既没有 ## 也没有 JS）才退回旧路径。

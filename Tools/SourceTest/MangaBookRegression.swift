@@ -32,8 +32,8 @@ enum MangaBookRegression {
 
         // 2. 图片地址提取（对应原版 BookHelp.flowImages + NetworkUtils.getAbsoluteURL）
         let mixed = """
-        <p>文字</p><img src="http://a.invalid/1.jpg"><img src='/rel/2.png'>
-        <IMG SRC=/rel3/3.webp><img src="http://a.invalid/1.jpg">
+        <p>文字</p><img src="http://a.invalid/1.jpg"><img src="http://a.invalid/1.jpg"><img src='/rel/2.png'>
+        <IMG SRC=/rel3/3.webp>
         """
         let extracted = MangaBook.imageURLs(in: mixed, baseURL: "https://comic.mkzcdn.com/chapters/123.html")
         check(extracted == [

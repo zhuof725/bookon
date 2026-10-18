@@ -59,7 +59,7 @@ enum WebBook {
             if b.name.isEmpty { continue }
             b.author = itemRule.getString(rule.author)
             itemContext.book = b
-            b.kind = nilIfEmpty(itemRule.getString(rule.kind))
+            b.kind = nilIfEmpty(itemRule.getStringList(rule.kind).joined(separator: ","))
             itemContext.book = b
             b.wordCount = nilIfEmpty(itemRule.getString(rule.wordCount))
             itemContext.book = b
@@ -201,7 +201,7 @@ enum WebBook {
         let n = s(rule.name); if !n.isEmpty { b.name = n }
         let a = s(rule.author); if !a.isEmpty { b.author = a }
         if let v = nilIfEmpty(s(rule.intro)) { b.intro = displayIntro(v) }
-        if let v = nilIfEmpty(s(rule.kind)) { b.kind = v }
+        if let v = nilIfEmpty(ar.getStringList(rule.kind, from: root).joined(separator: ",")) { b.kind = v }
         if let v = nilIfEmpty(s(rule.lastChapter)) { b.lastChapter = v }
         if let v = nilIfEmpty(s(rule.wordCount)) { b.wordCount = v }
         if let v = nilIfEmpty(ar.getCoverString(rule.coverUrl, from: root)) {
