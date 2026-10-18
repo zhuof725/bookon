@@ -272,6 +272,8 @@ final class MangaScrollController: UIViewController {
 
     private static let markerHeight: CGFloat = 64
     private static let sentinelHeight: CGFloat = 88
+    /// 图片未加载时的估高比例（宽 → 高）。常见条漫 800×1131 ≈ 1.41。
+    private static let placeholderAspect: CGFloat = 1.42
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -401,6 +403,7 @@ final class MangaScrollController: UIViewController {
     func imageDidLoad() {
         let anchor = lockedAnchor ?? captureAnchor()
         collectionView.collectionViewLayout.invalidateLayout()
+        collectionView.setNeedsLayout()
         collectionView.layoutIfNeeded()
         if let anchor { reanchor(anchor) }
         reportVisible(force: true)
@@ -505,7 +508,9 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
         switch item.kind {
         case .page(_, let index, let count, let url):
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaPageCell.reuseID, for: indexPath) as! MangaPageCell
-            cell.configure(url: url, page: index, count: count, foreground: containerForeground)
+            cell.configure(url: url, page: index, count: count, foreground: containerForeground) { [weak self] in
+                self?.imageDidLoad()
+            }
             return cell
         case .chapterStart(let title):
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
@@ -545,8 +550,9 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
             if let aspect = MangaImageLoader.shared.aspect(for: url), aspect.width > 0 {
                 return CGSize(width: width, height: ceil(width * aspect.height / aspect.width))
             }
-            // 未加载：先按一屏高度占位（原版未加载时 item 高度 MATCH_PARENT）。
-            return CGSize(width: width, height: max(collectionView.bounds.height, 320))
+            // 未加载：按常见条漫比例占位。用一屏高度占位时，图片按比例居中会在上下留下
+            // 大片空白（浅色主题下就是白带）；用 1.42 估高，误差只有几个点。
+            return CGSize(width: width, height: max(ceil(width * Self.placeholderAspect), 320))
         case .chapterStart, .chapterEnd:
             return CGSize(width: width, height: Self.markerHeight)
         default:
@@ -556,9 +562,7 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         if let cell = cell as? MangaPageCell {
-            cell.startLoadingIfNeeded(onLoad: { [weak self] in
-                self?.imageDidLoad()
-            })
+            cell.startLoadingIfNeeded()
         }
     }
 
@@ -704,8 +708,9 @@ final class MangaPageCell: UICollectionViewCell {
         failLabel.isHidden = true
     }
 
-    func configure(url: String, page: Int, count: Int, foreground: UIColor) {
+    func configure(url: String, page: Int, count: Int, foreground: UIColor, onLoad: @escaping () -> Void) {
         currentURL = url
+        onLoaded = onLoad
         isFailed = false
         imageView.image = nil
         failLabel.isHidden = true
@@ -720,18 +725,16 @@ final class MangaPageCell: UICollectionViewCell {
             showFailure()
             return
         }
+        // 只展示加载态；真正的下载在 willDisplay 时开始，保证完成回调里 onLoaded 已经就位。
+        // 否则图片完成时没人通知外层重排，单元格会一直停在一屏高的占位尺寸（图片上下留白）。
         spinner.startAnimating()
         progressLabel.text = nil
-        loadImage(url: url)
     }
 
-    /// willDisplay 时调用：cellForItemAt 里已经开始加载，这里只负责补挂完成回调。
-    func startLoadingIfNeeded(onLoad: @escaping () -> Void) {
-        onLoaded = onLoad
-        if imageView.image == nil && !isFailed && MangaImageLoader.shared.progress(for: currentURL) == nil {
-            // 已有缓存/失败态在 configure 里处理过；这里兜底重新触发一次加载。
-            loadImage(url: currentURL)
-        }
+    /// willDisplay 时调用：开始（或加入）当前 URL 的图片加载。
+    func startLoadingIfNeeded() {
+        guard imageView.image == nil, !isFailed, !currentURL.isEmpty else { return }
+        loadImage(url: currentURL)
     }
 
     func restartLoading(_ onLoad: @escaping () -> Void) {

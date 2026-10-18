@@ -446,62 +446,70 @@ struct MangaReaderView: View {
         withAnimation(.easeInOut(duration: 0.15)) { barsVisible.toggle() }
     }
 
-    // MARK: 顶栏
+    // MARK: 顶部浮动面板（参考图：左圆钮 + 居中章节名 + 右侧更多，无底色）
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                HStack(spacing: 3) {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
-                    Text("返回").appFont(.body)
-                }
-                .foregroundStyle(palette.accent)
-                .padding(.vertical, 8).padding(.trailing, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("reader.manga.back")
+        ZStack {
+            Text(manga.chapterTitle.isEmpty ? book.name : manga.chapterTitle)
+                .appFont(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .foregroundStyle(foreground)
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+                .padding(.horizontal, 104)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("reader.manga.title")
 
-            VStack(spacing: 2) {
-                Text(book.name).appFont(.system(size: 15, weight: .semibold)).lineLimit(1)
-                Text(manga.chapterTitle.isEmpty ? sourceLabel : manga.chapterTitle)
-                    .appFont(.system(size: 12)).foregroundStyle(foreground.opacity(0.65)).lineLimit(1)
+            HStack(spacing: 10) {
+                circleButton("xmark", label: "关闭", id: "reader.manga.back", action: onBack)
+                circleButton("list.bullet", label: "目录", id: "reader.manga.toc", action: onTOC)
+                Spacer(minLength: 0)
+                moreMenu
             }
-            .frame(maxWidth: .infinity)
-            .accessibilityIdentifier("reader.manga.title")
-
-            Button(action: onTOC) {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(foreground)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("目录")
-            .accessibilityIdentifier("reader.manga.toc")
-
-            Menu {
-                Button { Task { await refreshTOC() } } label: { Label("刷新目录", systemImage: "arrow.clockwise") }
-                Button(role: .destructive) { onClearChapter() } label: { Label("清除本话缓存并重载", systemImage: "trash") }
-                Button { onDetails() } label: { Label("书籍操作", systemImage: "book") }
-                Button { onSettings() } label: { Label("阅读设置", systemImage: "textformat.size") }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(foreground)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("更多")
-            .accessibilityIdentifier("reader.manga.menu")
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(background.opacity(0.94))
+        .padding(.top, 6)
     }
 
-    // MARK: 底栏（上一章 / 本章进度 / 下一章）
+    private func circleButton(_ system: String, label: String, id: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 42, height: 42)
+                .appGlass(in: Circle(), tint: background)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(foreground)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button { manga.goToAdjacentChapter(-1) } label: { Label("上一章", systemImage: "chevron.up") }
+                .disabled(manga.currentChapter <= 0)
+            Button { manga.goToAdjacentChapter(1) } label: { Label("下一章", systemImage: "chevron.down") }
+                .disabled(manga.currentChapter >= manga.chapterCount - 1)
+            Divider()
+            Button { Task { await refreshTOC() } } label: { Label("刷新目录", systemImage: "arrow.clockwise") }
+            Button(role: .destructive) { onClearChapter() } label: { Label("清除本话缓存并重载", systemImage: "trash") }
+            Divider()
+            Button { onDetails() } label: { Label("书籍操作", systemImage: "book") }
+            Button { onSettings() } label: { Label("阅读设置", systemImage: "textformat.size") }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 42, height: 42)
+                .appGlass(in: Circle(), tint: background)
+                .contentShape(Circle())
+        }
+        .foregroundStyle(foreground)
+        .accessibilityLabel("更多")
+        .accessibilityIdentifier("reader.manga.menu")
+    }
+
+    // MARK: 底部胶囊（页进度，参考图：滑块 + 页码 + 剩余页数）
 
     private var pageCount: Int { max(manga.currentPageCount, 0) }
 
@@ -512,62 +520,54 @@ struct MangaReaderView: View {
         return min(max(Double(manga.currentPage) / Double(count - 1), 0), 1)
     }
 
-    private var bottomBar: some View {
-        VStack(spacing: 6) {
-            Text(footerText)
-                .appFont(.caption)
-                .foregroundStyle(foreground.opacity(0.7))
-                .lineLimit(1)
-                .accessibilityIdentifier("reader.manga.footer")
-            HStack(spacing: 14) {
-                Button("上一章") { manga.goToAdjacentChapter(-1) }
-                    .appFont(.footnote)
-                    .foregroundStyle(manga.currentChapter > 0 ? palette.accent : foreground.opacity(0.35))
-                    .disabled(manga.currentChapter <= 0)
-                    .accessibilityIdentifier("reader.manga.prevChapter")
+    private var pageLabel: String { "\(manga.currentPage + 1) / \(max(pageCount, 1))" }
 
-                Slider(value: Binding(get: { pageProgress }, set: { value in
-                    scrub = value
-                    let count = pageCount
-                    guard count > 0 else { return }
-                    let page = Int((value * Double(max(count - 1, 0))).rounded())
-                    manga.requestScroll(toPage: page, reportProgress: false)
-                }), in: 0...1) { editing in
-                    if !editing {
-                        if let value = scrub {
-                            scrub = nil
-                            let count = pageCount
-                            if count > 0 {
-                                let page = Int((value * Double(max(count - 1, 0))).rounded())
-                                manga.requestScroll(toPage: page)
-                            }
-                        }
-                    }
-                }
-                .tint(palette.accent)
-                .accessibilityIdentifier("reader.manga.slider")
-
-                Button("下一章") { manga.goToAdjacentChapter(1) }
-                    .appFont(.footnote)
-                    .foregroundStyle(manga.currentChapter < manga.chapterCount - 1 ? palette.accent : foreground.opacity(0.35))
-                    .disabled(manga.currentChapter >= manga.chapterCount - 1)
-                    .accessibilityIdentifier("reader.manga.nextChapter")
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity)
-        .background(background.opacity(0.94))
+    private var remainingText: String {
+        "剩余 \(max(pageCount - manga.currentPage - 1, 0)) 页"
     }
 
-    private var magazineCount: Int { max(manga.currentPageCount, 0) }
-
-    private var footerText: String {
-        let page = manga.currentPage + 1
-        let total = max(manga.currentPageCount, 1)
-        let chapter = manga.currentChapter + 1
-        return "\(manga.chapterTitle)  第 \(page)/\(total) 页 · 第 \(chapter)/\(manga.chapterCount) 章"
+    private var bottomBar: some View {
+        Slider(value: Binding(get: { pageProgress }, set: { value in
+            scrub = value
+            let count = pageCount
+            guard count > 0 else { return }
+            let page = Int((value * Double(max(count - 1, 0))).rounded())
+            manga.requestScroll(toPage: page, reportProgress: false)
+        }), in: 0...1) { editing in
+            if !editing {
+                if let value = scrub {
+                    scrub = nil
+                    let count = pageCount
+                    if count > 0 {
+                        let page = Int((value * Double(max(count - 1, 0))).rounded())
+                        manga.requestScroll(toPage: page)
+                    }
+                }
+            }
+        }
+        .tint(palette.accent)
+        .accessibilityIdentifier("reader.manga.slider")
+        .overlay {
+            Text(pageLabel)
+                .appFont(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(foreground.opacity(0.85))
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("reader.manga.footer")
+        }
+        .overlay(alignment: .trailing) {
+            Text(remainingText)
+                .appFont(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(foreground.opacity(0.6))
+                .padding(.trailing, 14)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 44)
+        .appGlass(in: Capsule(), tint: background)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 6)
     }
 
     // MARK: 覆盖层与动作
