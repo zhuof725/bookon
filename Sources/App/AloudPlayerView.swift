@@ -271,20 +271,44 @@ struct AloudPlayerView: View {
 
     private var progressBlock: some View {
         VStack(spacing: 0) {
-            Slider(value: Binding(
-                    get: { scrub ?? Double(aloud.unitIndex) },
-                    set: { scrub = $0 }),
-                in: 0...Double(max(aloud.unitTotal - 1, 1)), step: 1) { editing in
-                if !editing, let value = scrub {
-                    scrub = nil
-                    aloud.seekUnit(Int(value.rounded()))
+            if aloud.chapterDuration > 0 {
+                // 在线引擎：本章播放进度（各段音频时长累计 + 当前段进度）。
+                Slider(value: Binding(
+                        get: { scrub ?? min(max(aloud.chapterPlayed / aloud.chapterDuration, 0), 1) },
+                        set: { scrub = $0 }), in: 0...1) { editing in
+                    if !editing, let value = scrub {
+                        scrub = nil
+                        aloud.seekChapterProgress(value)
+                    }
                 }
-            }
-            .tint(palette.accent)
-            .disabled(aloud.unitTotal <= 1)
-            .accessibilityIdentifier("reader.aloud.slider")
-            .accessibilityLabel("朗读进度")
-            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                .tint(palette.accent)
+                .accessibilityIdentifier("reader.aloud.slider")
+                .accessibilityLabel("本章播放进度")
+                HStack {
+                    Text(AloudPlayerView.timeString(aloud.chapterPlayed))
+                        .accessibilityIdentifier("reader.aloud.timeCurrent")
+                    Spacer()
+                    Text("-" + AloudPlayerView.timeString(max(aloud.chapterDuration - aloud.chapterPlayed, 0)))
+                        .accessibilityIdentifier("reader.aloud.timeRemaining")
+                }
+                .appFont(.caption)
+                .monospacedDigit()
+                .foregroundStyle(palette.secondary)
+            } else {
+                // 系统语音没有音频时长：保留按段定位的进度。
+                Slider(value: Binding(
+                        get: { scrub ?? Double(aloud.unitIndex) },
+                        set: { scrub = $0 }),
+                    in: 0...Double(max(aloud.unitTotal - 1, 1)), step: 1) { editing in
+                    if !editing, let value = scrub {
+                        scrub = nil
+                        aloud.seekUnit(Int(value.rounded()))
+                    }
+                }
+                .tint(palette.accent)
+                .disabled(aloud.unitTotal <= 1)
+                .accessibilityIdentifier("reader.aloud.slider")
+                .accessibilityLabel("朗读进度")
                 HStack {
                     Text(currentTimeLabel)
                         .accessibilityIdentifier("reader.aloud.timeCurrent")
@@ -331,7 +355,8 @@ struct AloudPlayerView: View {
                 chapterButton(direction: -1)
                 playButton
                 chapterButton(direction: 1)
-                speedLabel
+                // 倍速只在底栏显示；右侧留同宽占位，播放键保持居中。
+                Color.clear.frame(maxWidth: .infinity, minHeight: 72)
             }
         }
     }
@@ -395,16 +420,6 @@ struct AloudPlayerView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(aloud.isPlaying ? "暂停" : "播放")
         .accessibilityIdentifier("reader.aloud.play")
-    }
-
-    private var speedLabel: some View {
-        Menu { speedMenuItems } label: {
-            controlFrame(Text(speedTitle)
-                .appFont(.headline)
-                .foregroundStyle(palette.primary))
-        }
-        .accessibilityLabel("语速")
-        .accessibilityIdentifier("reader.aloud.speedLabel")
     }
 
     // MARK: 底栏

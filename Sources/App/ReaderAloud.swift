@@ -46,6 +46,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 当前章全部朗读段落的快照，供全屏播放器正文模式与队列展示。
     @Published private(set) var unitList: [AloudUnit] = []
     @Published private(set) var chapterTitle = ""
+    /// 本章播放进度：已播放秒数 / 估算总时长（在线引擎按各段音频时长累计、
+    /// 未知段按字数估算；系统语音没有音频时长，保持 0/0）。
+    @Published private(set) var chapterPlayed: TimeInterval = 0
+    @Published private(set) var chapterDuration: TimeInterval = 0
     @Published private(set) var timerLeft = 0
     @Published private(set) var notice: String?
     @Published private(set) var engineName = AloudTTSConfig.engineLabel
@@ -56,6 +60,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var host: ReaderAloudHost?
     private var units: [AloudUnit] = []
     private var engine: HTTPTTS?
+    /// 本章各段已知的音频时长（在线引擎，随播放逐段记录），用于本章进度条。
+    private var unitDurations: [Int: TimeInterval] = [:]
     var playbackEngine: PlaybackEngine { engine == nil ? .system : .http }
 
     private let synthesizer = AVSpeechSynthesizer()
@@ -152,6 +158,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         unitList = list
         unitIndex = resolveStartUnit(offset)
         unitTotal = list.count
+        unitDurations.removeAll()
         downloadErrorCount = 0
         playErrorCount = 0
         activateSession()
@@ -225,6 +232,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
         chapterIndex = -1
         unitTotal = 0
         unitText = ""
+        unitDurations.removeAll()
+        chapterPlayed = 0
+        chapterDuration = 0
         updateRemoteCommands(enabled: false)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         let session = AVAudioSession.sharedInstance()
@@ -303,8 +313,75 @@ final class ReaderAloudController: NSObject, ObservableObject {
         unitTotal = units.count
         unitText = units[index].text
         host?.follow(chapterIndex, units[index].offset)
+        updateChapterProgress()
         updateNowPlaying()
         if isPlaying { playUnit() }
+    }
+
+    // MARK: 本章播放进度
+
+    /// 拖动本章进度条：按比例定位到对应时间段所在的段。
+    func seekChapterProgress(_ fraction: Double) {
+        guard isRunning, !units.isEmpty else { return }
+        let model = chapterTimeline()
+        guard model.total > 0 else { return }
+        let target = min(max(fraction, 0), 1) * model.total
+        var index = 0
+        for i in model.starts.indices where model.starts[i] <= target { index = i }
+        seekUnit(index)
+    }
+
+    /// 记录当前段的音频时长并刷新本章进度（在线引擎；系统语音没有时间概念）。
+    private func updateChapterProgress() {
+        guard playbackEngine == .http, units.indices.contains(unitIndex) else {
+            chapterPlayed = 0
+            chapterDuration = 0
+            return
+        }
+        let loaded = playerLoadedUnit
+        if loaded?.chapter == chapterIndex, loaded?.unit == unitIndex,
+           let player, player.hasAudio, player.duration > 0 {
+            unitDurations[unitIndex] = player.duration
+        }
+        let model = chapterTimeline()
+        guard model.total > 0 else {
+            chapterPlayed = 0
+            chapterDuration = 0
+            return
+        }
+        let base = model.starts.indices.contains(unitIndex) ? model.starts[unitIndex] : 0
+        let inside: TimeInterval = (loaded?.chapter == chapterIndex && loaded?.unit == unitIndex)
+            ? max(player?.currentTime ?? 0, 0) : 0
+        chapterDuration = model.total
+        chapterPlayed = min(max(base + inside, 0), model.total)
+    }
+
+    /// 本章各段的累计时间轴：已知时长的段用实际时长，未知段按字数 × 步长估算；
+    /// 步长优先用已播段标定，没有已知段时按 0.18 秒/字随倍速缩放。
+    private func chapterTimeline() -> (starts: [TimeInterval], total: TimeInterval) {
+        guard !units.isEmpty else { return ([], 0) }
+        var knownSeconds: TimeInterval = 0
+        var knownChars = 0
+        for (i, unit) in units.enumerated() {
+            if let known = unitDurations[i], known > 0 {
+                knownSeconds += known
+                knownChars += max(unit.text.count, 1)
+            }
+        }
+        let fallbackPace = 0.18 / max(AloudTTSConfig.rateDisplay(for: speed), 0.5)
+        let pace = knownChars > 0 ? knownSeconds / TimeInterval(knownChars) : fallbackPace
+        var starts: [TimeInterval] = []
+        starts.reserveCapacity(units.count)
+        var cursor: TimeInterval = 0
+        for (i, unit) in units.enumerated() {
+            starts.append(cursor)
+            if let known = unitDurations[i], known > 0 {
+                cursor += known
+            } else {
+                cursor += TimeInterval(max(unit.text.count, 1)) * pace
+            }
+        }
+        return (starts, cursor)
     }
 
     /// 当前段落音频的时间轴（在线引擎才有；系统语音 TTS 无时间概念返回 nil）。
@@ -333,6 +410,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             units = fresh
             unitList = fresh
             unitTotal = fresh.count
+            unitDurations.removeAll()
             unitIndex = direction > 0 ? 0 : max(fresh.count - 1, 0)
             host.follow(next, fresh[unitIndex].offset)
             updateNowPlaying()
@@ -364,6 +442,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         isBuffering = false
         host.follow(chapterIndex, unit.offset)
         updateNowPlaying()
+        updateChapterProgress()
         guard let speak = AloudText.speakText(for: unit.text) else {
             // 整段没有字母数字（如纯标点分隔行）：直接进下一段。
             Task { @MainActor in
@@ -576,6 +655,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 _ = engine
                 let index = min(Int(Double(chars) * player.currentTime / duration), chars - 1)
                 self.host?.follow(chapterIndex, unit.offset + max(index, 0))
+                self.unitDurations[self.unitIndex] = max(player.duration, 0.1)
+                self.updateChapterProgress()
             }
         }
     }
@@ -635,7 +716,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 return
             }
             prefetchTask?.cancel()
+            unitDurations.removeAll()
             cancelUnitPlayback()
+            updateChapterProgress()
             playUnit()
         } else {
             expectStop()

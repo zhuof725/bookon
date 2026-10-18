@@ -382,7 +382,10 @@ struct ReaderView: View {
                 AudioChapterView(audio: bookAudio, book: book,
                                  positionLabel: "\(index + 1)/\(chapters.count)",
                                  onPrevious: audioPreviousChapter,
-                                 onNext: audioNextChapter)
+                                 onNext: audioNextChapter,
+                                 onBack: { dismiss() },
+                                 onTOC: { showToc = true },
+                                 onSettings: { showSettings = true })
             } else if settings.pageMode == 1 {
                 pagedBody
             } else {
@@ -901,14 +904,6 @@ struct ReaderView: View {
             VStack(spacing: 8) {
                 if loading { ProgressView() }
                 else if let error { Text(error).foregroundStyle(.red) }
-                // 诊断（临时）：音频源的书卡在文字加载时，显示章节判定与地址，便于截图排障。
-                if loading, let hint = audioDebugHint {
-                    Text("音频判定 " + hint)
-                        .font(.system(size: 10, design: .monospaced))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
-                        .accessibilityIdentifier("reader.audio.detectHint")
-                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -1501,16 +1496,6 @@ struct ReaderView: View {
     }
 
     // MARK: 音频书章节（喜马拉雅等音频源）
-
-    /// 诊断（临时）：当前章是否会被当成音频，以及书源类型与章节地址前缀。
-    private var audioDebugHint: String? {
-        guard chapters.indices.contains(index) else { return nil }
-        let chapter = chapters[index]
-        let source = store.source(for: book.origin)
-        let direct = AudioChapter.isDirectAudioURL(chapter.url)
-        guard source?.bookSourceType == 1 || direct else { return nil }
-        return "type=\(source?.bookSourceType ?? -1) · \(direct ? "直链" : "非直链") · \(chapter.url.prefix(70))"
-    }
 
     /// 开始播放音频章节；播完自动进下一章，锁屏上下曲同样跳章。
     private func beginAudioChapter(_ target: Int) {

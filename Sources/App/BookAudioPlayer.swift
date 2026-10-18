@@ -14,8 +14,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     @Published private(set) var currentTime: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var message: String?
-    /// 临时诊断行（截图排障）：链接、签名年龄、HTTP 探测与播放器状态。
-    @Published private(set) var diagnostics = ""
+    /// 定时停止：剩余分钟（0 = 未设置）。
+    @Published private(set) var sleepMinutesLeft = 0
     @Published var speed: Double = BookAudioPlayer.loadSpeed() {
         didSet { BookAudioPlayer.saveSpeed(speed); applyRate() }
     }
@@ -38,9 +38,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// 一次播放只上报一次失败，避免状态与结束通知重复触发。
     private var failureNotified = false
     private var playerStatusObserver: NSKeyValueObservation?
-    private var probeTask: Task<Void, Never>?
-    private var linkProbe = "未探测"
-    private var signatureText = ""
+    private var sleepTask: Task<Void, Never>?
+    private var sleepSecondsLeft = 0
     private var systemObservers: [NSObjectProtocol] = []
     private var messageTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
@@ -104,7 +103,6 @@ final class BookAudioPlayer: NSObject, ObservableObject {
             let status = player.timeControlStatus
             Task { @MainActor [weak self] in self?.playerStatusChanged(status) }
         }
-        startLinkProbe(url)
         updateRemoteCommands(enabled: true)
         created.playImmediately(atRate: Float(speed))
         isPlaying = true
@@ -139,11 +137,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         removeTimeObserver()
         playerStatusObserver?.invalidate()
         playerStatusObserver = nil
-        probeTask?.cancel()
-        probeTask = nil
-        linkProbe = "未探测"
-        signatureText = ""
-        diagnostics = ""
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepSecondsLeft = 0
+        sleepMinutesLeft = 0
         player?.pause()
         player = nil
         chapterURL = nil
@@ -209,11 +206,31 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         // 失败时立刻结束缓冲显示，否则界面停在「正在缓冲」会把错误提示挡住。
         isBuffering = false
         pushMessage("音频播放失败，点播放重试")
-        refreshDiagnostics()
         onPlaybackFailed?()
     }
 
-    // MARK: 诊断（临时）
+    // MARK: 定时停止（按播放时长倒计时，暂停不计）
+
+    func setSleepTimer(minutes: Int) {
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepSecondsLeft = max(0, minutes) * 60
+        sleepMinutesLeft = sleepSecondsLeft > 0 ? max(1, Int(ceil(Double(sleepSecondsLeft) / 60))) : 0
+        guard sleepSecondsLeft > 0 else { return }
+        sleepTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled, let self, self.sleepSecondsLeft > 0 {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                if Task.isCancelled { return }
+                guard self.isPlaying else { continue }
+                self.sleepSecondsLeft -= 5
+                self.sleepMinutesLeft = max(0, Int(ceil(Double(self.sleepSecondsLeft) / 60)))
+                if self.sleepSecondsLeft <= 0 {
+                    self.pause()
+                    break
+                }
+            }
+        }
+    }
 
     private func playerStatusChanged(_ status: AVPlayer.TimeControlStatus) {
         switch status {
@@ -226,69 +243,6 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         @unknown default:
             break
         }
-        refreshDiagnostics()
-    }
-
-    /// 用与播放相同的地址发一个 Range 探测，把 HTTP 结果与签名年龄显示到界面上。
-    private func startLinkProbe(_ url: URL) {
-        probeTask?.cancel()
-        linkProbe = "探测中…"
-        signatureText = Self.signatureAge(from: url)
-        refreshDiagnostics()
-        probeTask = Task { @MainActor [weak self] in
-            var request = URLRequest(url: url)
-            request.setValue("bytes=0-1", forHTTPHeaderField: "Range")
-            request.timeoutInterval = 15
-            do {
-                let (_, response) = try await URLSession.shared.data(for: request)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                self?.linkProbe = "HTTP \(code)"
-            } catch {
-                self?.linkProbe = "失败 \(error.localizedDescription.prefix(36))"
-            }
-            self?.refreshDiagnostics()
-        }
-    }
-
-    /// buy_key 链接的 timestamp 参数（微秒）= 签名签发时刻，用于判断链接是否过期。
-    private static func signatureAge(from url: URL) -> String {
-        guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-              let raw = items.first(where: { $0.name == "timestamp" })?.value,
-              let micros = Double(raw), micros > 0 else { return "无签名字段" }
-        let age = Date().timeIntervalSince1970 - micros / 1_000_000
-        guard age > 0 else { return "刚刚签名" }
-        if age < 3600 { return String(format: "签名 %.0f 分钟前", age / 60) }
-        if age < 86400 { return String(format: "签名 %.1f 小时前", age / 3600) }
-        return String(format: "签名 %.1f 天前", age / 86400)
-    }
-
-    private func refreshDiagnostics() {
-        guard chapterURL != nil else { diagnostics = ""; return }
-        let host = chapterURL.map { ($0.host ?? "?") + $0.path } ?? "-"
-        let itemText: String
-        if let item = player?.currentItem {
-            switch item.status {
-            case .unknown: itemText = "unknown"
-            case .readyToPlay: itemText = "ready"
-            case .failed: itemText = "failed \((item.error as? NSError)?.code ?? 0)"
-            @unknown default: itemText = "?"
-            }
-        } else {
-            itemText = "无条目"
-        }
-        let statusText: String
-        if let player {
-            switch player.timeControlStatus {
-            case .playing: statusText = "playing"
-            case .waitingToPlayAtSpecifiedRate: statusText = "waiting"
-            case .paused: statusText = "paused"
-            @unknown default: statusText = "?"
-            }
-        } else {
-            statusText = "无播放器"
-        }
-        let next = "\(host.suffix(60))\n\(signatureText) · \(linkProbe)\n条目 \(itemText) · \(statusText)"
-        if diagnostics != next { diagnostics = next }
     }
 
     private func removeItemObservers() {
@@ -309,7 +263,6 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 let total = currentItem.duration.seconds
                 if total.isFinite, total > 0 { self.duration = total }
                 self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate
-                self.refreshDiagnostics()
             }
         }
     }
@@ -399,72 +352,107 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         }
     }
 }
-
-/// 音频章节阅读界面：封面 + 章节信息 + 进度 + 播放控制 + 倍速。
+/// 音频章节阅读界面：整体布局与听书播放器（AloudPlayerView）一致 ——
+/// 顶栏返回、书名/作者/章节、大封面、章节进度、播放进度条、控制行、底栏（目录/倍速/定时/设置）。
 struct AudioChapterView: View {
     @ObservedObject var audio: BookAudioPlayer
     let book: Book
     let positionLabel: String
     let onPrevious: () -> Void
     let onNext: () -> Void
+    let onBack: () -> Void
+    let onTOC: () -> Void
+    let onSettings: () -> Void
 
     @ThemePalette private var palette
     @State private var scrub: Double?
 
     private let speedPresets: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 12)
+            topBar
+            titleBlock
+            Spacer(minLength: 8)
             BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900)
-                .frame(width: 200, height: 266)
+                .frame(width: 240, height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 8)
+                .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)
                 .accessibilityIdentifier("reader.audio.cover")
-            VStack(spacing: 6) {
-                Text(book.name).appFont(.headline).lineLimit(1)
-                Text(audio.chapterTitle)
-                    .appFont(.subheadline).foregroundStyle(palette.secondary)
-                    .lineLimit(2).multilineTextAlignment(.center)
-                    .accessibilityIdentifier("reader.audio.title")
-                Text(positionLabel).appFont(.caption).foregroundStyle(palette.secondary)
-            }
-            .padding(.top, 16)
-            .padding(.horizontal, 24)
             Spacer(minLength: 8)
-            progressBlock.padding(.horizontal, 28)
-            controls.padding(.top, 4)
-            speedRow.padding(.top, 4)
-            Group {
-                if audio.isBuffering {
-                    Text("正在缓冲…")
-                } else if let message = audio.message {
-                    Text(message)
-                } else {
-                    Text(" ")
-                }
-            }
-            .appFont(.caption)
-            .foregroundStyle(audio.message == nil ? palette.secondary : .red)
-            .lineLimit(2)
-            .padding(.top, 6)
-            .padding(.horizontal, 24)
-            if !audio.diagnostics.isEmpty {
-                Text(audio.diagnostics)
-                    .font(.system(size: 10, design: .monospaced))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(5)
-                    .foregroundStyle(palette.secondary)
-                    .padding(.top, 8)
-                    .padding(.horizontal, 16)
-                    .accessibilityIdentifier("reader.audio.diagnostics")
-            }
-            Spacer(minLength: 8)
+            statusLine
+            chapterCountLabel
+            progressBlock
+            controlsRow
+            Spacer(minLength: 6)
+            Rectangle().fill(palette.border).frame(height: 0.5)
+            bottomBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(palette.primary)
         .tint(palette.accent)
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
+    }
+
+    // MARK: 顶栏
+
+    private var topBar: some View {
+        HStack {
+            Button { onBack() } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("返回").appFont(.body)
+                }
+                .foregroundStyle(palette.accent)
+                .padding(.vertical, 8).padding(.trailing, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("reader.audio.back")
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(book.name)
+                .appFont(.title3.bold())
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if !book.author.isEmpty {
+                Text(book.author).appFont(.subheadline).foregroundStyle(palette.secondary)
+            }
+            Text(audio.chapterTitle.isEmpty ? " " : audio.chapterTitle)
+                .appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(1)
+                .accessibilityIdentifier("reader.audio.title")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+    }
+
+    /// 缓冲/错误状态放在听书播放器「当前句」的位置。
+    private var statusLine: some View {
+        Text(audio.isBuffering ? "正在缓冲…" : (audio.message ?? " "))
+            .appFont(.subheadline)
+            .foregroundStyle(audio.message == nil ? palette.secondary : .red)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("reader.audio.status")
+    }
+
+    private var chapterCountLabel: some View {
+        Text(positionLabel + "章")
+            .appFont(.caption).foregroundStyle(palette.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 6)
+            .accessibilityIdentifier("reader.audio.chapterProgress")
     }
 
     private var fraction: Double {
@@ -486,30 +474,35 @@ struct AudioChapterView: View {
             .accessibilityIdentifier("reader.audio.slider")
             .accessibilityLabel("播放进度")
             HStack {
-                Text(AloudPlayerView.timeString(audio.currentTime))
+                Text(PlaybackTimeText.string(audio.currentTime))
                     .accessibilityIdentifier("reader.audio.timeCurrent")
                 Spacer()
-                Text("-" + AloudPlayerView.timeString(max(audio.duration - audio.currentTime, 0)))
+                Text("-" + PlaybackTimeText.string(max(audio.duration - audio.currentTime, 0)))
                     .accessibilityIdentifier("reader.audio.timeRemaining")
             }
             .appFont(.caption)
             .monospacedDigit()
             .foregroundStyle(palette.secondary)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 6)
     }
 
-    private var controls: some View {
+    // MARK: 控制行
+
+    /// 与听书播放器一致：⏮/⏭ 15 秒图标对应上一章/下一章；倍速只在底栏，右侧留同宽占位保持播放键居中。
+    private var controlsRow: some View {
         HStack(spacing: 0) {
-            controlButton(symbol: "gobackward.15", label: "后退15秒",
-                          id: "reader.audio.back15") { audio.skip(-15) }
-            controlButton(symbol: "backward.end.fill", label: "上一章",
+            controlButton(symbol: "list.bullet", label: "目录",
+                          id: "reader.audio.tocRow", action: onTOC)
+            controlButton(symbol: "gobackward.15", label: "上一章",
                           id: "reader.audio.prevChapter", action: onPrevious)
             playButton
-            controlButton(symbol: "forward.end.fill", label: "下一章",
+            controlButton(symbol: "goforward.15", label: "下一章",
                           id: "reader.audio.nextChapter", action: onNext)
-            controlButton(symbol: "goforward.15", label: "前进15秒",
-                          id: "reader.audio.forward15") { audio.skip(15) }
+            Color.clear.frame(maxWidth: .infinity, minHeight: 72)
         }
+        .padding(.top, 10)
     }
 
     private func controlButton(symbol: String, label: String, id: String,
@@ -547,28 +540,78 @@ struct AudioChapterView: View {
         .accessibilityIdentifier("reader.audio.play")
     }
 
-    private var speedRow: some View {
-        Menu {
-            ForEach(speedPresets.indices, id: \.self) { i in
-                Button {
-                    audio.speed = speedPresets[i]
-                } label: {
-                    if abs(audio.speed - speedPresets[i]) < 0.01 {
-                        Label(speedText(speedPresets[i]), systemImage: "checkmark")
-                    } else {
-                        Text(speedText(speedPresets[i]))
-                    }
-                }
-                .accessibilityIdentifier("reader.audio.speed.\(speedText(speedPresets[i]))")
+    // MARK: 底栏
+
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            bottomItem(title: "目录", symbol: "list.bullet.rectangle",
+                       id: "reader.audio.toc") { onTOC() }
+            Menu { speedMenuItems } label: {
+                bottomLabel(title: speedText(audio.speed), symbol: "speedometer")
             }
-        } label: {
-            Text(speedText(audio.speed) + " 倍速")
-                .appFont(.subheadline)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .contentShape(Rectangle())
+            .accessibilityLabel("倍速")
+            .accessibilityIdentifier("reader.audio.speed")
+            Menu { timerMenuItems } label: {
+                bottomLabel(title: timerTitle, symbol: "stopwatch")
+            }
+            .accessibilityLabel("定时")
+            .accessibilityIdentifier("reader.audio.timer")
+            bottomItem(title: "设置", symbol: "gearshape",
+                       id: "reader.audio.settings") { onSettings() }
         }
-        .accessibilityLabel("倍速")
-        .accessibilityIdentifier("reader.audio.speed")
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func bottomItem(title: String, symbol: String, id: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) { bottomLabel(title: title, symbol: symbol) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityIdentifier(id)
+    }
+
+    private func bottomLabel(title: String, symbol: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 22))
+            Text(title).appFont(.caption)
+        }
+        .foregroundStyle(palette.primary)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    private var timerTitle: String {
+        audio.sleepMinutesLeft > 0 ? "\(audio.sleepMinutesLeft)分钟" : "定时"
+    }
+
+    @ViewBuilder
+    private var speedMenuItems: some View {
+        ForEach(speedPresets.indices, id: \.self) { i in
+            Button {
+                audio.speed = speedPresets[i]
+            } label: {
+                if abs(audio.speed - speedPresets[i]) < 0.01 {
+                    Label(speedText(speedPresets[i]), systemImage: "checkmark")
+                } else {
+                    Text(speedText(speedPresets[i]))
+                }
+            }
+            .accessibilityIdentifier("reader.audio.speed.\(speedText(speedPresets[i]))")
+        }
+    }
+
+    @ViewBuilder
+    private var timerMenuItems: some View {
+        ForEach(timerPresets, id: \.self) { minutes in
+            if minutes == 0 {
+                Button("关闭定时") { audio.setSleepTimer(minutes: 0) }
+                    .accessibilityIdentifier("reader.audio.timer.0")
+            } else {
+                Button("\(minutes) 分钟") { audio.setSleepTimer(minutes: minutes) }
+                    .accessibilityIdentifier("reader.audio.timer.\(minutes)")
+            }
+        }
     }
 
     private func speedText(_ value: Double) -> String {
