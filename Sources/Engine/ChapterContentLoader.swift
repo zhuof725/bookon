@@ -17,6 +17,9 @@ enum ChapterContentLoader {
             return try await WebBook.rawContent(source: source, chapter: chapter,
                                                 nextChapterUrl: nextChapterURL, book: book)
         }
+        // 漫画（图片源）的正文是 <img> 图片列表，不做文字段落归一化；
+        // 图片地址由阅读器用 MangaBook.imageURLs 提取。
+        if MangaBook.isManga(source: source) { return raw }
         // Also normalize cache hits, so users do not have to clear old chapter caches
         // after this paragraph-layout fix (it applies to every book source).
         return WebBook.normalizeParagraphBoundaries(raw)

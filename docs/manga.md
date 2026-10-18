@@ -1,0 +1,47 @@
+# 漫画（图片源）支持
+
+对齐原版 legado 的漫画阅读：`bookSourceType == 2` 的书源（如「武芊漫画」）在阅读时
+进入漫画阅读器，而不是文字排版。
+
+## 书源识别
+
+- `MangaBook.isManga(source:)`：书源类型为 2 即漫画源（与原版按 bookSourceType 进入
+  ReadMangaActivity 一致）。
+- 阅读器启动时判定（`ReaderView.start()`），漫画书源跳过文字正文加载，交给 `MangaSession`。
+
+## 正文与图片提取（`Sources/Engine/MangaBook.swift`)
+
+- 漫画源的正文规则输出是一组 `<img>` 标签（「武芊漫画」用 JS 把 `$.data[*].image`
+  的地址逐行包成 `<img src="…">`）。
+- `MangaBook.imageURLs(in:baseURL:)` 对应原版 `BookHelp.flowImages`：
+  - 宽松匹配 `<img … src="…">`（双引号为主，兼容单引号/无引号）；
+  - 相对地址相对章节地址转绝对（`NetworkUtils.getAbsoluteURL`）；
+  - `javascript:` 丢弃、`data:` 保留；
+  - 相邻重复地址只保留一个（原版 `distinctUntilChanged`）。
+- 正文缓存与文字书共用（`ChapterContentCache`），但不做段落归一化。
+
+## 阅读器（`Sources/App/MangaReader.swift` + `MangaScrollView.swift`）
+
+对应原版 ReadManga / ReadMangaActivity：
+
+- **三章窗口**：`MangaSession` 维护「上一章 / 当前章 / 下一章」的图片列表
+  （原版 prev/cur/next MangaChapter 与 loadContent ±1），滚动到章尾/章头前自动补齐；
+  相邻章加载失败后显示「点按重试」，自动重试只做一次。
+- **连续滚动**：UICollectionView（对应原版 RecyclerView）竖向滚动全部图片，
+  图片按屏幕宽度降采样、单元格复用以控制内存；未加载图片按一屏高度占位，
+  加载完成后按真实宽高比排版并保持当前可见内容位置不动。
+- **分章标记**：每章开始「阅读 X」、结束「已读完 X」（原版 ReaderLoading 标记），
+  最后一章末尾显示「暂无章节了！」。
+- **点击分区**（同原版 WebtoonFrame）：中央呼出/收起菜单；左下翻上、右下翻下各一屏。
+- **菜单**：顶栏返回 / 书名与章节名 / 目录 / 更多（刷新目录、清除本话缓存并重载、
+  书籍操作、阅读设置）；底栏「上一章 — 本章页进度 — 下一章」。
+- **进度**：`durChapterPos` 存「本章第几张图」（原版 durChapterPos 语义），
+  章节切换 / 页变化时经 `AppStore.updateMangaProgress` 落盘；目录跳转走 `jump(to:)`
+  会重置章节窗口。
+- 图片加载失败显示「图片加载失败，点按重试」；当前章加载失败有整屏重试。
+
+## 未做（与真机验证项）
+
+- 双指缩放 / 双击放大（原版 WebtoonRecyclerView 的缩放手势）。
+- 灰度 / 墨水屏 / 色彩滤镜、自动翻页 / 自动滚动、横屏滚动、图片保存长按菜单。
+- 真机观感与流量（图片按需加载，无磁盘缓存）。

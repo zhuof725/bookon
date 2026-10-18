@@ -238,6 +238,13 @@ final class AnalyzeRule {
         let combination = RuleScanner.split(rule, by: ["&&", "||", "%%"])
         if rule.contains("{{") {
             out = template(obj, rule)
+            // Kotlin 在同一趟里替换 @get:{…} 与 {{…}}，两种写法可以出现在同一条规则中
+            // （漫画源 chapterUrl 末尾的 &comic_id=@get:{comic_id} 就是与 {{}} 混用）。
+            if out.range(of: "@get:{", options: .caseInsensitive) != nil {
+                out = RuleScanner.replaceGroups(out, marker: "@get:{", caseInsensitive: true) {
+                    self.context.get($0)
+                }
+            }
         } else if rule.range(of: "@get:{", options: .caseInsensitive) != nil {
             // Kotlin treats @get substitutions as literal output, not a new selector.
             out = RuleScanner.replaceGroups(rule, marker: "@get:{", caseInsensitive: true) {

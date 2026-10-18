@@ -251,6 +251,17 @@ final class AppStore: ObservableObject {
         books.first(where: { $0.bookUrl == b.bookUrl })?.durChapterPos ?? b.durChapterPos
     }
 
+    /// 漫画进度：durChapterPos 存「本章第几张图」（0 起），与原版 ReadManga 一致。
+    /// 与文字阅读的千分比位置共用同一字段，但一本漫画只会被漫画阅读器写入。
+    func updateMangaProgress(_ b: Book, chapterIndex: Int, title: String?, page: Int) {
+        guard let i = books.firstIndex(where: { $0.bookUrl == b.bookUrl }) else { return }
+        books[i].durChapterIndex = chapterIndex
+        books[i].durChapterTitle = title
+        books[i].durChapterPos = max(page, 0)
+        books[i].lastReadAt = Date()
+        saveBooksDebounced()
+    }
+
     private var saveTask: Task<Void, Never>?
     /// 滚动时会频繁更新，合并写盘；进入后台或离开页面时调用 flushProgress 立即落盘。
     private func saveBooksDebounced() {

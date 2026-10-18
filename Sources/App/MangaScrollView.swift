@@ -1,0 +1,763 @@
+import SwiftUI
+import UIKit
+import ImageIO
+
+// MARK: - 扁平化条目（阅读器与滚动容器之间的最小数据）
+
+struct MangaFlatItem: Identifiable, Equatable {
+    enum Kind: Equatable {
+        /// 章节开始标记「阅读 X」。
+        case chapterStart(title: String)
+        /// 章节结束标记「已读完 X」。
+        case chapterEnd(title: String)
+        /// 一张图片。index 本章第几张（0 起），count 本章总数。
+        case page(chapter: Int, index: Int, count: Int, url: String)
+        case loadingPrev
+        case retryPrev
+        case loadingNext
+        case retryNext
+        case noMore
+    }
+
+    let id: String
+    /// 所属章节（哨兵条目取相邻章节号）。
+    let chapter: Int
+    let kind: Kind
+
+    var pageURL: String? {
+        if case .page(_, _, _, let url) = kind { return url }
+        return nil
+    }
+}
+
+struct MangaScrollRequest: Equatable {
+    let id: UUID
+    let itemID: String
+    var animated: Bool = false
+}
+
+// MARK: - 图片加载（内存缓存 + 降采样 + 进度）
+
+/// 漫画图片加载器。对应原版 Glide 的用法：按屏幕宽度降采样、只在内存里保留少量图片。
+@MainActor
+final class MangaImageLoader {
+    static let shared = MangaImageLoader()
+
+    private let cache = NSCache<NSString, UIImage>()
+    private var aspects: [String: CGSize] = [:]
+    private var progressByURL: [String: Double] = [:]
+    private var lastFailed: [String: Date] = [:]
+    private var tasks: [String: Task<Void, Never>] = [:]
+    private var callbacks: [String: [(Double) -> Void]] = [:]
+    private var completions: [String: [(UIImage?) -> Void]] = [:]
+
+    /// 屏幕物理宽度；原版 loadManga 的 override(displayMetrics.widthPixels, SIZE_ORIGINAL)。
+    private var targetPixelWidth: CGFloat {
+        let width = UIScreen.main.bounds.width
+        let scale = UIScreen.main.scale
+        return min(max(width * scale, 480), 1600)
+    }
+
+    private init() {
+        cache.totalCostLimit = 96 * 1024 * 1024
+        cache.countLimit = 24
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.cache.removeAllObjects() }
+        }
+    }
+
+    func cachedImage(for url: String) -> UIImage? { cache.object(forKey: url as NSString) }
+    /// 图片像素尺寸（宽×高）。已知宽高比后，布局可以先用真实高度，减少加载完成后的位置跳动。
+    func aspect(for url: String) -> CGSize? { aspects[url] }
+    func progress(for url: String) -> Double? { progressByURL[url] }
+    func hasFailed(for url: String) -> Bool { lastFailed[url] != nil }
+
+    /// 开始（或加入）一张图片的加载。progress/completion 可能被调用多次，调用方自行按 URL 过滤。
+    func load(url: String, progress: @escaping (Double) -> Void, completion: @escaping (UIImage?) -> Void) {
+        if let image = cache.object(forKey: url as NSString) {
+            completion(image)
+            return
+        }
+        if tasks[url] != nil {
+            callbacks[url, default: []].append(progress)
+            completions[url, default: []].append(completion)
+            if let p = progressByURL[url] { progress(p) }
+            return
+        }
+        guard let requestURL = URL(string: url) else { completion(nil); return }
+        callbacks[url] = [progress]
+        completions[url] = [completion]
+        tasks[url] = Task { [weak self] in
+            let result = await Self.fetch(requestURL: requestURL) { [weak self] fraction in
+                Task { @MainActor in
+                    guard let self, self.tasks[url] != nil else { return }
+                    let previous = self.progressByURL[url] ?? 0
+                    guard fraction - previous >= 0.02 || fraction >= 1 else { return }
+                    self.progressByURL[url] = fraction
+                    for callback in self.callbacks[url] ?? [] { callback(fraction) }
+                }
+            }
+            self?.finish(url: url, result: result)
+        }
+    }
+
+    /// 用户在失败图上点按重试。
+    func retry(url: String) {
+        lastFailed[url] = nil
+    }
+
+    private func finish(url: String, result: Result<UIImage, Error>) {
+        tasks[url] = nil
+        progressByURL[url] = nil
+        callbacks.removeValue(forKey: url)
+        let completions = self.completions.removeValue(forKey: url) ?? []
+        switch result {
+        case .success(let image):
+            let cost = Int(image.size.width * image.scale * image.size.height * image.scale * 4)
+            cache.setObject(image, forKey: url as NSString, cost: cost)
+            aspects[url] = CGSize(width: image.size.width * image.scale,
+                                  height: image.size.height * image.scale)
+            lastFailed[url] = nil
+            for completion in completions { completion(image) }
+        case .failure:
+            lastFailed[url] = Date()
+            for completion in completions { completion(nil) }
+        }
+    }
+
+    private nonisolated static func fetch(requestURL: URL, progress: @escaping (Double) -> Void) async -> Result<UIImage, Error> {
+        do {
+            let (data, response) = try await downloadWithProgress(requestURL: requestURL, progress: progress)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
+            guard let image = await downsample(data: data, targetPixelWidth: target) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            return .success(image)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// URLSessionDownloadTask 自带 Progress，可以在下载过程中回报百分比（原版显示百分比）。
+    private nonisolated static func downloadWithProgress(requestURL: URL,
+                                                         progress: @escaping (Double) -> Void) async throws -> (Data, URLResponse) {
+        final class TaskBox: @unchecked Sendable {
+            var task: URLSessionDownloadTask?
+            var observation: NSKeyValueObservation?
+        }
+        let box = TaskBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = URLSession.shared.downloadTask(with: requestURL) { fileURL, response, error in
+                    defer { box.observation = nil }
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let fileURL, let response else {
+                        continuation.resume(throwing: URLError(.badServerResponse))
+                        return
+                    }
+                    defer { try? FileManager.default.removeItem(at: fileURL) }
+                    do {
+                        let data = try Data(contentsOf: fileURL)
+                        continuation.resume(returning: (data, response))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+                box.task = task
+                var lastReported: Double = -1
+                box.observation = task.progress.observe(\.fractionCompleted, options: [.new]) { _, change in
+                    guard let value = change.newValue, value.isFinite else { return }
+                    guard value - lastReported >= 0.02 || value >= 1 else { return }
+                    lastReported = value
+                    progress(value)
+                }
+                task.resume()
+            }
+        } onCancel: {
+            box.task?.cancel()
+        }
+    }
+
+    /// 按目标宽度降采样（保持宽高比），避免原图整张进内存。
+    nonisolated static func downsample(data: Data, targetPixelWidth: CGFloat) async -> UIImage? {
+        await Task.detached(priority: .utility) {
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+            let width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
+            let height = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
+            if width > 0, height > 0, width <= Double(targetPixelWidth) {
+                return UIImage(data: data)
+            }
+            let ratio = width > 0 ? min(1, Double(targetPixelWidth) / width) : 1
+            let thumbMax = max(Double(targetPixelWidth), max(width, height) * ratio)
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: thumbMax,
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return UIImage(data: data)
+            }
+            return UIImage(cgImage: cgImage)
+        }.value
+    }
+}
+
+// MARK: - SwiftUI 包装
+
+struct MangaScrollView: UIViewControllerRepresentable {
+    let items: [MangaFlatItem]
+    let request: MangaScrollRequest?
+    let background: UIColor
+    let foreground: UIColor
+    let onVisible: (_ chapter: Int, _ page: Int, _ count: Int) -> Void
+    let onNearEnd: () -> Void
+    let onNearStart: () -> Void
+    let onCenterTap: () -> Void
+
+    func makeUIViewController(context: Context) -> MangaScrollController {
+        let controller = MangaScrollController()
+        controller.update(self)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: MangaScrollController, context: Context) {
+        controller.update(self)
+    }
+}
+
+// MARK: - 滚动容器（UICollectionView：图片懒加载 + 复用，对应原版 RecyclerView）
+
+final class MangaScrollController: UIViewController {
+    private var collectionView: UICollectionView!
+    private var items: [MangaFlatItem] = []
+    private var itemIndexByID: [String: Int] = [:]
+    private var appliedRequestID: UUID?
+    private var lastReported: (chapter: Int, page: Int) = (-1, -1)
+    private var containerBackground: UIColor = .black
+    private var containerForeground: UIColor = .white
+
+    private var onVisible: ((Int, Int, Int) -> Void)?
+    private var onNearEnd: (() -> Void)?
+    private var onNearStart: (() -> Void)?
+    private var onCenterTap: (() -> Void)?
+
+    /// 程序化跳转后锁定锚点：目标图片加载导致高度变化时保持目标位置不动。
+    private struct ScrollAnchor { let itemID: String; let delta: CGFloat }
+    private var lockedAnchor: ScrollAnchor?
+    private var lockReleaseWork: DispatchWorkItem?
+    private var lastScrollTick = Date.distantPast
+
+    private static let markerHeight: CGFloat = 64
+    private static let sentinelHeight: CGFloat = 88
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .vertical
+        layout.minimumLineSpacing = 0
+        layout.minimumInteritemSpacing = 0
+        layout.sectionInset = .zero
+        layout.estimatedItemSize = .zero
+        collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.alwaysBounceVertical = true
+        collectionView.contentInsetAdjustmentBehavior = .never
+        collectionView.showsVerticalScrollIndicator = false
+        collectionView.scrollsToTop = false
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(MangaPageCell.self, forCellWithReuseIdentifier: MangaPageCell.reuseID)
+        collectionView.register(MangaMarkerCell.self, forCellWithReuseIdentifier: MangaMarkerCell.reuseID)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(collectionView)
+        NSLayoutConstraint.activate([
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: view.topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        tap.cancelsTouchesInView = false
+        collectionView.addGestureRecognizer(tap)
+    }
+
+    func update(_ config: MangaScrollView) {
+        onVisible = config.onVisible
+        onNearEnd = config.onNearEnd
+        onNearStart = config.onNearStart
+        onCenterTap = config.onCenterTap
+        if containerBackground != config.background {
+            containerBackground = config.background
+            view.backgroundColor = config.background
+            collectionView.backgroundColor = config.background
+        }
+        containerForeground = config.foreground
+        apply(items: config.items)
+        apply(request: config.request)
+    }
+
+    // MARK: 列表更新（保留滚动位置的差量更新）
+
+    private func apply(items newItems: [MangaFlatItem]) {
+        let oldIDs = items.map(\.id)
+        let newIDs = newItems.map(\.id)
+        guard oldIDs != newIDs else {
+            items = newItems
+            itemIndexByID = Dictionary(uniqueKeysWithValues: newItems.enumerated().map { ($0.element.id, $0.offset) })
+            return
+        }
+        let anchor = lockedAnchor ?? captureAnchor()
+        let oldCount = oldIDs.count, newCount = newIDs.count
+        var prefix = 0
+        while prefix < oldCount, prefix < newCount, oldIDs[prefix] == newIDs[prefix] { prefix += 1 }
+        var suffix = 0
+        while suffix < oldCount - prefix, suffix < newCount - prefix,
+              oldIDs[oldCount - 1 - suffix] == newIDs[newCount - 1 - suffix] { suffix += 1 }
+        let removed = Array(prefix..<(oldCount - suffix)).map { IndexPath(item: $0, section: 0) }
+        let inserted = Array(prefix..<(newCount - suffix)).map { IndexPath(item: $0, section: 0) }
+
+        items = newItems
+        itemIndexByID = Dictionary(uniqueKeysWithValues: newItems.enumerated().map { ($0.element.id, $0.offset) })
+
+        if oldIDs.isEmpty || newIDs.isEmpty {
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+            if let anchor, itemIndexByID[anchor.itemID] != nil {
+                reanchor(anchor)
+            }
+            return
+        }
+        if removed.isEmpty && inserted.isEmpty {
+            // 只有顺序变化，重建即可（不会出现在当前使用方式里）。
+            collectionView.reloadData()
+            if let anchor { reanchor(anchor) }
+            return
+        }
+        if prefix == 0 && suffix == 0 && !oldIDs.isEmpty && !newIDs.isEmpty {
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+            if let anchor, itemIndexByID[anchor.itemID] != nil {
+                reanchor(anchor)
+            } else {
+                collectionView.setContentOffset(.zero, animated: false)
+            }
+            return
+        }
+        collectionView.performBatchUpdates {
+            if !removed.isEmpty { collectionView.deleteItems(at: removed) }
+            if !inserted.isEmpty { collectionView.insertItems(at: inserted) }
+        } completion: { [weak self] _ in
+            self?.collectionView.layoutIfNeeded()
+            if let anchor { self?.reanchor(anchor) }
+        }
+    }
+
+    private func apply(request: MangaScrollRequest?) {
+        guard let request, request.id != appliedRequestID else { return }
+        appliedRequestID = request.id
+        guard let index = itemIndexByID[request.itemID] else { return }
+        let indexPath = IndexPath(item: index, section: 0)
+        collectionView.layoutIfNeeded()
+        collectionView.scrollToItem(at: indexPath, at: .top, animated: request.animated)
+        lockedAnchor = ScrollAnchor(itemID: request.itemID, delta: 0)
+        scheduleLockRelease()
+    }
+
+    private func scheduleLockRelease() {
+        lockReleaseWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.lockedAnchor = nil
+        }
+        lockReleaseWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
+    }
+
+    /// 图片加载完成、高度变化后调用：调整偏移保持当前可见内容不动。
+    func imageDidLoad() {
+        let anchor = lockedAnchor ?? captureAnchor()
+        collectionView.collectionViewLayout.invalidateLayout()
+        collectionView.layoutIfNeeded()
+        if let anchor { reanchor(anchor) }
+        reportVisible(force: true)
+    }
+
+    private func captureAnchor() -> ScrollAnchor? {
+        let offsetY = collectionView.contentOffset.y
+        for indexPath in collectionView.indexPathsForVisibleItems.sorted() {
+            guard indexPath.item < items.count,
+                  let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { continue }
+            if attributes.frame.maxY > offsetY + 0.5 {
+                return ScrollAnchor(itemID: items[indexPath.item].id, delta: offsetY - attributes.frame.minY)
+            }
+        }
+        return nil
+    }
+
+    private func reanchor(_ anchor: ScrollAnchor) {
+        guard let index = itemIndexByID[anchor.itemID],
+              let attributes = collectionView.layoutAttributesForItem(at: IndexPath(item: index, section: 0)) else { return }
+        let maximum = max(collectionView.contentSize.height - collectionView.bounds.height, 0)
+        let target = min(max(attributes.frame.minY + anchor.delta, 0), maximum)
+        if abs(collectionView.contentOffset.y - target) > 0.5 {
+            collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+        }
+    }
+
+    // MARK: 点击分区（与原版一致：中央=菜单；左下/右下=上下翻一屏）
+
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        let point = gesture.location(in: collectionView)
+        if let indexPath = collectionView.indexPathForItem(at: point), indexPath.item < items.count {
+            switch items[indexPath.item].kind {
+            case .retryPrev, .retryNext:
+                return // 交给 didSelectItemAt 触发重试
+            default:
+                break
+            }
+        }
+        let width = max(collectionView.bounds.width, 1)
+        let height = max(collectionView.bounds.height, 1)
+        let xf = point.x / width, yf = point.y / height
+        if (0.33...0.66).contains(xf), (0.33...0.66).contains(yf) {
+            onCenterTap?()
+            return
+        }
+        guard yf > 0.66 else { return }
+        if xf < 0.33 { scrollPage(-1) } else if xf > 0.66 { scrollPage(1) }
+    }
+
+    func scrollPage(_ direction: Int) {
+        let height = collectionView.bounds.height
+        let maximum = max(collectionView.contentSize.height - collectionView.bounds.height, 0)
+        let target = min(max(collectionView.contentOffset.y + CGFloat(direction) * height, 0), maximum)
+        guard abs(target - collectionView.contentOffset.y) > 1 else { return }
+        collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: true)
+    }
+
+    // MARK: 可见项回报
+
+    private func reportVisible(force: Bool = false) {
+        var chapter = -1, page = 0, count = 0
+        for indexPath in collectionView.indexPathsForVisibleItems.sorted() where indexPath.item < items.count {
+            let item = items[indexPath.item]
+            switch item.kind {
+            case .page(let c, let index, let total, _):
+                chapter = c; page = index; count = total
+            case .chapterStart, .chapterEnd:
+                if chapter == -1 { chapter = item.chapter; page = 0 }
+            default:
+                break
+            }
+            if chapter != -1 { break }
+        }
+        guard chapter != -1 else { return }
+        if !force, chapter == lastReported.chapter, page == lastReported.page { return }
+        lastReported = (chapter, page)
+        onVisible?(chapter, page, count)
+    }
+
+    private func checkEdges() {
+        let offsetY = collectionView.contentOffset.y
+        let height = collectionView.bounds.height
+        let remaining = collectionView.contentSize.height - (offsetY + height)
+        if remaining < height * 1.5 { onNearEnd?() }
+        if offsetY < height * 0.9 { onNearStart?() }
+    }
+}
+
+// MARK: - 数据源 / 代理
+
+extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        items.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let item = items[indexPath.item]
+        switch item.kind {
+        case .page(_, let index, let count, let url):
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaPageCell.reuseID, for: indexPath) as! MangaPageCell
+            cell.configure(url: url, page: index, count: count, foreground: containerForeground)
+            return cell
+        case .chapterStart(let title):
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: MangaBook.chapterStartTitle(title), foreground: containerForeground)
+            return cell
+        case .chapterEnd(let title):
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: MangaBook.chapterEndTitle(title), foreground: containerForeground)
+            return cell
+        case .loadingPrev:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: "正在加载上一章…", foreground: containerForeground)
+            return cell
+        case .retryPrev:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: "上一章加载失败，点按重试", foreground: containerForeground)
+            return cell
+        case .loadingNext:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: "正在加载下一章…", foreground: containerForeground)
+            return cell
+        case .retryNext:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: "下一章加载失败，点按重试", foreground: containerForeground)
+            return cell
+        case .noMore:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MangaMarkerCell.reuseID, for: indexPath) as! MangaMarkerCell
+            cell.configure(text: "暂无章节了！", foreground: containerForeground)
+            return cell
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let width = max(collectionView.bounds.width, 1)
+        switch items[indexPath.item].kind {
+        case .page(_, _, _, let url):
+            if let aspect = MangaImageLoader.shared.aspect(for: url), aspect.width > 0 {
+                return CGSize(width: width, height: ceil(width * aspect.height / aspect.width))
+            }
+            // 未加载：先按一屏高度占位（原版未加载时 item 高度 MATCH_PARENT）。
+            return CGSize(width: width, height: max(collectionView.bounds.height, 320))
+        case .chapterStart, .chapterEnd:
+            return CGSize(width: width, height: Self.markerHeight)
+        default:
+            return CGSize(width: width, height: Self.sentinelHeight)
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        if let cell = cell as? MangaPageCell {
+            cell.startLoadingIfNeeded(onLoad: { [weak self] in
+                self?.imageDidLoad()
+            })
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        collectionView.deselectItem(at: indexPath, animated: false)
+        guard indexPath.item < items.count else { return }
+        switch items[indexPath.item].kind {
+        case .page(_, _, _, let url):
+            if let cell = collectionView.cellForItem(at: indexPath) as? MangaPageCell, cell.isFailed {
+                MangaImageLoader.shared.retry(url: url)
+                cell.restartLoading { [weak self] in self?.imageDidLoad() }
+            }
+        case .retryNext:
+            onNearEnd?()
+        case .retryPrev:
+            onNearStart?()
+        default:
+            break
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
+        guard indexPath.item < items.count else { return false }
+        switch items[indexPath.item].kind {
+        case .retryPrev, .retryNext: return true
+        case .page(_, _, _, _): return true
+        default: return false
+        }
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let now = Date()
+        guard now.timeIntervalSince(lastScrollTick) > 0.2 else { return }
+        lastScrollTick = now
+        reportVisible()
+        checkEdges()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        lockReleaseWork?.cancel()
+        lockedAnchor = nil
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        reportVisible(force: true)
+        checkEdges()
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportVisible(force: true)
+        checkEdges()
+    }
+}
+
+// MARK: - 单元格
+
+final class MangaMarkerCell: UICollectionViewCell {
+    static let reuseID = "MangaMarkerCell"
+    private let label = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: 14, weight: .medium)
+        label.numberOfLines = 2
+        contentView.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 24),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(text: String, foreground: UIColor) {
+        label.text = text
+        label.textColor = foreground.withAlphaComponent(0.6)
+    }
+}
+
+final class MangaPageCell: UICollectionViewCell {
+    static let reuseID = "MangaPageCell"
+
+    private let imageView = UIImageView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let progressLabel = UILabel()
+    private let failLabel = UILabel()
+
+    private(set) var currentURL: String = ""
+    private(set) var isFailed = false
+    private var onLoaded: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.backgroundColor = .clear
+
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        contentView.addSubview(imageView)
+
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.hidesWhenStopped = true
+        contentView.addSubview(spinner)
+
+        progressLabel.translatesAutoresizingMaskIntoConstraints = false
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        progressLabel.textAlignment = .center
+        contentView.addSubview(progressLabel)
+
+        failLabel.translatesAutoresizingMaskIntoConstraints = false
+        failLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        failLabel.textAlignment = .center
+        failLabel.text = "图片加载失败，点按重试"
+        failLabel.isHidden = true
+        contentView.addSubview(failLabel)
+
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            spinner.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            progressLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            progressLabel.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 8),
+            failLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            failLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        currentURL = ""
+        isFailed = false
+        onLoaded = nil
+        imageView.image = nil
+        spinner.stopAnimating()
+        progressLabel.text = nil
+        failLabel.isHidden = true
+    }
+
+    func configure(url: String, page: Int, count: Int, foreground: UIColor) {
+        currentURL = url
+        isFailed = false
+        imageView.image = nil
+        failLabel.isHidden = true
+        spinner.color = foreground.withAlphaComponent(0.8)
+        progressLabel.textColor = foreground.withAlphaComponent(0.7)
+        failLabel.textColor = foreground.withAlphaComponent(0.7)
+        if let image = MangaImageLoader.shared.cachedImage(for: url) {
+            apply(image)
+            return
+        }
+        if MangaImageLoader.shared.hasFailed(for: url) {
+            showFailure()
+            return
+        }
+        spinner.startAnimating()
+        progressLabel.text = nil
+        loadImage(url: url)
+    }
+
+    /// willDisplay 时调用：cellForItemAt 里已经开始加载，这里只负责补挂完成回调。
+    func startLoadingIfNeeded(onLoad: @escaping () -> Void) {
+        onLoaded = onLoad
+        if imageView.image == nil && !isFailed && MangaImageLoader.shared.progress(for: currentURL) == nil {
+            // 已有缓存/失败态在 configure 里处理过；这里兜底重新触发一次加载。
+            loadImage(url: currentURL)
+        }
+    }
+
+    func restartLoading(_ onLoad: @escaping () -> Void) {
+        onLoaded = onLoad
+        isFailed = false
+        failLabel.isHidden = true
+        imageView.image = nil
+        spinner.startAnimating()
+        progressLabel.text = nil
+        loadImage(url: currentURL)
+    }
+
+    private func loadImage(url: String) {
+        guard !url.isEmpty else { return }
+        spinner.startAnimating()
+        MangaImageLoader.shared.load(url: url, progress: { [weak self] fraction in
+            guard let self, self.currentURL == url, !self.isFailed else { return }
+            self.progressLabel.text = "\(Int((fraction * 100).rounded()))%"
+        }, completion: { [weak self] image in
+            guard let self, self.currentURL == url else { return }
+            if let image {
+                self.apply(image)
+            } else {
+                self.showFailure()
+            }
+        })
+    }
+
+    private func apply(_ image: UIImage) {
+        spinner.stopAnimating()
+        progressLabel.text = nil
+        failLabel.isHidden = true
+        isFailed = false
+        imageView.image = image
+        onLoaded?()
+    }
+
+    private func showFailure() {
+        spinner.stopAnimating()
+        progressLabel.text = nil
+        imageView.image = nil
+        failLabel.isHidden = false
+        isFailed = true
+    }
+}

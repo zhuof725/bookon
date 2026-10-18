@@ -142,6 +142,7 @@ enum RuleRegression {
         try LoginFormRegression.run(check)
         try QimoSourceRegression.run(check)
         try await AudioChapterRegression.run(check)
+        try MangaBookRegression.run(check)
         try ShushanSourceRegression.run(check)
         try LoginToastRegression.run(check)
         ContentLayoutRegression.run(check)

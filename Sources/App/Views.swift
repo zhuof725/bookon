@@ -355,6 +355,9 @@ struct ReaderView: View {
     @State private var aloudDrivenNav = false
     /// 朗读跟随的最近一次滚动位置（千分比节流用）。
     @State private var aloudScrollPermille = -1000
+    /// 漫画书源（bookSourceType == 2）：走漫画阅读器而不是文字排版。
+    @State private var mangaMode = false
+    @StateObject private var manga = MangaSession()
 
     private func toggleBars() {
         if !showBars { persistContinuousProgress(); syncMenuProgress() }
@@ -378,7 +381,9 @@ struct ReaderView: View {
                     .onChange(of: geo.size) { _ in updateViewport(geo) }
                     .onChange(of: geo.safeAreaInsets) { _ in updateViewport(geo) }
             }.ignoresSafeArea().allowsHitTesting(false)
-            if bookAudio.chapterURL != nil {
+            if mangaMode {
+                mangaBody
+            } else if bookAudio.chapterURL != nil {
                 AudioChapterView(audio: bookAudio, book: book,
                                  positionLabel: "\(index + 1)/\(chapters.count)",
                                  onPrevious: audioPreviousChapter,
@@ -628,6 +633,7 @@ struct ReaderView: View {
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
             bookAudio.stop()
+            manga.stop()
             aloud.detach()
             persistContinuousProgress()
             closeReadingSession()
@@ -853,6 +859,7 @@ struct ReaderView: View {
         bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
+        mangaMode = MangaBook.isManga(source: s)
         index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         if let c = store.cachedToc(book), !c.isEmpty {
             chapters = c
@@ -1118,6 +1125,10 @@ struct ReaderView: View {
     /// 正文与邻章共享版式；只在布局改变时换标识，主题变化直接重绘各个纸面。
     private func repaginate(keepOffset: Int? = nil) {
         cancelPreparation()
+        guard !mangaMode else {
+            preparedChapters.removeAll()
+            return
+        }
         guard settings.pageMode == 1, screenSize.width > 0 else {
             preparedChapters.removeAll()
             return
