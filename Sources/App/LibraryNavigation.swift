@@ -257,6 +257,9 @@ struct LibraryProfileView: View {
                         NavigationLink { AppAppearanceSettingsView() } label: { LibraryLinkLabel(title: "外观主题", symbol: "circle.lefthalf.filled") }
                             .accessibilityIdentifier("library.appearance")
                         LibraryCardDivider()
+                        NavigationLink { UpscaleSettingsView() } label: { LibraryLinkLabel(title: "图片超分", symbol: "wand.and.rays") }
+                            .accessibilityIdentifier("library.upscaling")
+                        LibraryCardDivider()
                         NavigationLink { SearchView() } label: { LibraryLinkLabel(title: "搜索书籍", symbol: "magnifyingglass") }
                     }
                 }

@@ -21,17 +21,35 @@ final class LocalCoverImageLoader: ObservableObject {
             didFail = false
         }
         guard let url, url.isFileURL else { return }
+        let pixelBudget = max(1, min(pixelSize, 1200))
         let decoded: UIImage? = await Task.detached(priority: .utility) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
                   let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: max(1, min(pixelSize, 1200))
+                    kCGImageSourceThumbnailMaxPixelSize: pixelBudget
                   ] as CFDictionary) else { return nil }
             return UIImage(cgImage: thumbnail)
         }.value
         guard !Task.isCancelled, generation == token, sourceURL == url else { return }
-        if let decoded { image = decoded; didFail = false }
+        var result = decoded
+        // 封面超分：只放大比显示目标小的封面，结果走内存+磁盘缓存，避免每次滚动都重新推理。
+        if UpscaleSettings.coverEnabled,
+           let cgImage = decoded?.cgImage,
+           UpscaleSettings.shouldUpscale(pixelWidth: cgImage.width,
+                                         pixelHeight: cgImage.height,
+                                         targetWidth: pixelBudget) {
+            let cacheKey = UpscaleImageCache.key(
+                "\(url.absoluteString)|\(pixelBudget)|\(UpscaleSettings.quality.rawValue)")
+            if let cached = UpscaleImageCache.image(forKey: cacheKey) {
+                result = cached
+            } else if let upscaled = await UpscaleEngine.shared.upscaleCover(cgImage, targetWidth: pixelBudget) {
+                let image = UIImage(cgImage: upscaled)
+                UpscaleImageCache.store(image, forKey: cacheKey)
+                result = image
+            }
+        }
+        if let result { image = result; didFail = false }
         else { didFail = image == nil }
     }
 }
