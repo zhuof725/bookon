@@ -435,7 +435,8 @@ struct MangaReaderView: View {
                         .lineLimit(1)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
-                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .appGlass(in: Capsule(), tint: .black, tintOpacity: 0.32)
+                        .overlay { Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5) }
                         .padding(.top, 64)
                     Spacer(minLength: 0)
                 }
@@ -567,6 +568,8 @@ struct MangaReaderView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 42, height: 42)
                 .appGlass(in: Circle(), tint: background)
+                .overlay { Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -607,6 +610,8 @@ struct MangaReaderView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 42, height: 42)
                 .appGlass(in: Circle(), tint: background)
+                .overlay { Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
                 .contentShape(Circle())
         }
         .foregroundStyle(foreground)
@@ -657,9 +662,11 @@ struct MangaReaderView: View {
         .padding(.top, 7)
         .padding(.bottom, 6)
         .frame(height: 58)
-        // 参考图里底栏是一层奶白玻璃：固定用白色淡染，不随阅读背景/主题变深，
-        // 否则压在深色漫画上会变成一条黑带（滑块和文字也会糊在一起）。
-        .appGlass(in: Capsule(), tint: .white, tintOpacity: 0.34)
+        // 面板做成真玻璃：奶白淡染的毛玻璃，页面内容能从后面透出来（iOS 26 走 glassEffect），
+        // 再加一道亮边和投影，读起来是「一块玻璃」而不是实心白药丸。
+        .appGlass(in: Capsule(), tint: .white, tintOpacity: 0.32)
+        .overlay { Capsule().strokeBorder(Color.white.opacity(0.45), lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.22), radius: 12, y: 3)
         .padding(.horizontal, 20)
         .padding(.bottom, 6)
     }
