@@ -166,6 +166,8 @@ struct DiscoverSourceView: View {
     @State private var loading = true
     @State private var reloadToken = UUID()
     @State private var selectedKindURL: String?
+    @State private var controlValues: [String: String] = [:]
+    @State private var applyingControl = false
     @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.magazine.rawValue
     @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.cycle.rawValue
     @AppStorage(DiscoverSettings.rankingKeywordsKey) private var keywordsRaw = ""
@@ -181,6 +183,13 @@ struct DiscoverSourceView: View {
     }
 
     private var errorText: String? { DiscoverCatalog.kindError(kinds) }
+    /// 顶部筛选行：只显示有选项的 select 控件，跳过纯装饰横幅（如「████ 男生 ████」）。
+    private var controls: [SourceDiagnostics.ExploreKind] {
+        kinds.filter { kind in
+            guard (kind.type ?? "") == "select", !(kind.chars ?? []).isEmpty else { return false }
+            return !DiscoverCatalog.isDecorativeControlTitle(kind.title)
+        }
+    }
     private var sections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
         DiscoverCatalog.kindSections(kinds)
     }
@@ -214,6 +223,7 @@ struct DiscoverSourceView: View {
     private var magazineLayout: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
+                filterRows
                 stateRows
                 if !loading, errorText == nil, !sections.isEmpty {
                     ForEach(Array(sections.enumerated()), id: \.offset) { pair in
@@ -247,6 +257,7 @@ struct DiscoverSourceView: View {
 
     private var listLayout: some View {
         VStack(spacing: 0) {
+            filterRows
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(flatItems, id: \.self) { kind in
@@ -293,6 +304,23 @@ struct DiscoverSourceView: View {
                 .padding(.vertical, 12)
             }
             .refreshable { await refreshAll() }
+        }
+    }
+
+    @ViewBuilder private var filterRows: some View {
+        if !controls.isEmpty {
+            DiscoverFilterBar(controls: controls, values: controlValues) { control, value in
+                applyControl(control, value: value)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+        }
+        if applyingControl {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("正在切换…").appFont(.footnote).foregroundStyle(palette.secondary)
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -367,6 +395,7 @@ struct DiscoverSourceView: View {
         let src = source
         if !force, let cached = DiscoverKindsCache.cached(source: source.bookSourceUrl) {
             kinds = cached
+            controlValues = Self.controlValues(from: cached)
             loading = false
             applyDefaultSelection()
             return
@@ -376,11 +405,50 @@ struct DiscoverSourceView: View {
             SourceDiagnostics.exploreKinds(source: src)
         }.value
         kinds = result
+        controlValues = Self.controlValues(from: result)
         loading = false
         if DiscoverCatalog.kindError(result) == nil, !result.isEmpty {
             DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
         }
         applyDefaultSelection()
+    }
+
+    /// 切换筛选控件：执行控件 action（写书源配置），然后重新读取分类列表。
+    private func applyControl(_ control: SourceDiagnostics.ExploreKind, value: String) {
+        guard let action = control.action, !action.isEmpty else { return }
+        var info = controlValues
+        info[control.title] = value
+        controlValues = info
+        applyingControl = true
+        let src = source
+        Task {
+            _ = await Task.detached(priority: .userInitiated) {
+                SourceDiagnostics.applyExploreControl(source: src, action: action, info: info)
+            }.value
+            let result = await Task.detached(priority: .userInitiated) {
+                SourceDiagnostics.exploreKinds(source: src)
+            }.value
+            kinds = result
+            if DiscoverCatalog.kindError(result) == nil, !result.isEmpty {
+                DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
+            }
+            var values = Self.controlValues(from: result)
+            if values[control.title] == nil { values[control.title] = value }
+            controlValues = values
+            applyingControl = false
+        }
+    }
+
+    private static func controlValues(from kinds: [SourceDiagnostics.ExploreKind]) -> [String: String] {
+        var values: [String: String] = [:]
+        for kind in kinds where (kind.type ?? "") == "select" {
+            if let def = kind.defaultValue, !def.isEmpty {
+                values[kind.title] = def
+            } else if let first = kind.chars?.first {
+                values[kind.title] = first
+            }
+        }
+        return values
     }
 
     private func applyDefaultSelection() {

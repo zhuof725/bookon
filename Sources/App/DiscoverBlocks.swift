@@ -312,3 +312,51 @@ struct DiscoverBookListRow: View {
         .contentShape(Rectangle())
     }
 }
+
+/// 发现页筛选控件行（书山聚合扩展）：select 控件显示为胶囊，点开选择后执行书源 action。
+struct DiscoverFilterBar: View {
+    @ThemePalette private var palette
+    let controls: [SourceDiagnostics.ExploreKind]
+    let values: [String: String]
+    let onSelect: (SourceDiagnostics.ExploreKind, String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(controls, id: \.title) { control in
+                    Menu {
+                        ForEach(control.chars ?? [], id: \.self) { option in
+                            Button {
+                                onSelect(control, option)
+                            } label: {
+                                if values[control.title] == option {
+                                    Label(option, systemImage: "checkmark")
+                                } else {
+                                    Text(option)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(control.title)
+                                .appFont(.system(size: 13))
+                                .foregroundStyle(palette.secondary)
+                            Text(values[control.title] ?? control.defaultValue ?? "")
+                                .appFont(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(palette.primary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(palette.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: 34)
+                        .background { ThemeSurface(shape: Capsule()) }
+                    }
+                    .accessibilityIdentifier("discover.filter.\(control.title)")
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+}

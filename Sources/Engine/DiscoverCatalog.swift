@@ -75,6 +75,15 @@ enum DiscoverCatalog {
         return false
     }
 
+    /// 发现控件是否只是装饰性横幅（如「██████ 男 生 ██████」）：装饰字符占比过高时跳过不显示。
+    static func isDecorativeControlTitle(_ title: String) -> Bool {
+        let decoration = CharacterSet(charactersIn: "█▓▒░■□●○◆◇★☆·•-—=~_+|/\\ ")
+        let scalars = Array(title.unicodeScalars)
+        guard !scalars.isEmpty else { return true }
+        let decorated = scalars.filter { decoration.contains($0) }.count
+        return Double(decorated) / Double(scalars.count) > 0.5
+    }
+
     /// 发现脚本失败：原版在脚本出错时返回 ERROR: 项，页面据此显示错误与重试。
     static func kindError(_ kinds: [SourceDiagnostics.ExploreKind]) -> String? {
         kinds.first { $0.title.hasPrefix("ERROR:") }?.title
