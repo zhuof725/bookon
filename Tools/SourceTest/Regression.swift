@@ -230,8 +230,8 @@ enum RuleRegression {
         check(brokenAR.getString("/plain/{{$.id}}\n<js>result + '!'</js>", from: brokenItem) == "/plain/abc!",
               "脚本正常时仍以脚本结果为准")
         // 结尾反引号缺失（复制书源常见）：自动补齐后按原脚本求值
-        let truncatedRule = "/api/x\n<js>\n`data:;base64,${java.base64Encode(result)},{\"type\":\"mw\"}\n</js>"
-        check(brokenAR.getString(truncatedRule, from: brokenItem) == "data:;base64,L2FwaS94,{\"type\":\"mw\"}",
+        let truncatedRule = "/api/x/{{$.id}}\n<js>\n`data:;base64,${java.base64Encode(result)},{\"type\":\"mw\"}\n</js>"
+        check(brokenAR.getString(truncatedRule, from: brokenItem) == "data:;base64,L2FwaS94L2FiYw==,{\"type\":\"mw\"}",
               "结尾反引号缺失的脚本自动补齐")
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
