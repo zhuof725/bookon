@@ -34,13 +34,30 @@ private struct SheetCorner: ViewModifier {
 
 struct CommentWebView: UIViewRepresentable {
     let url: URL
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero)
         web.customUserAgent = WebViewSupport.userAgent
+        web.navigationDelegate = context.coordinator
         web.load(URLRequest(url: url))
         return web
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    /// 段评页在白名单域名上（证书过期已按白名单放行）：WebView 的 TLS 校验必须走同一套规则，
+    /// 否则加载失败只剩一片空白。
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+                      completionHandler: @escaping (WKWebView.AuthChallengeDisposition, URLCredential?) -> Void) {
+            guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+                  ExpiredCertificateAllowance.isAllowed(host: challenge.protectionSpace.host),
+                  let trust = challenge.protectionSpace.serverTrust,
+                  let credential = ExpiredCertificateAllowance.credential(trust: trust) else {
+                completionHandler(.performDefaultHandling, nil); return
+            }
+            completionHandler(.useCredential, credential)
+        }
+    }
 }
 
 /// 正文里的图片块：支持 data: URI（SVG 章评气泡、图片）与网络图片。

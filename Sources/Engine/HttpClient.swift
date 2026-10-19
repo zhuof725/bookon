@@ -458,21 +458,25 @@ final class ExpiredCertificateAllowance: NSObject, URLSessionTaskDelegate {
               let trust = challenge.protectionSpace.serverTrust else {
             completionHandler(.performDefaultHandling, nil); return
         }
+        if let credential = Self.credential(trust: trust, host: challenge.protectionSpace.host) {
+            completionHandler(.useCredential, credential)
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+
+    /// 校验通过返回 nil（走默认）；唯一问题是过期时把校验时间挪到证书有效期内重新评估，
+    /// 域名与签发链仍照旧检查，通过则返回凭据。URLSession 与 WebView 共用。
+    static func credential(trust: SecTrust, host: String? = nil) -> URLCredential? {
         var error: CFError?
-        if SecTrustEvaluateWithError(trust, &error) {
-            completionHandler(.performDefaultHandling, nil); return
-        }
-        // 只容忍过期：把校验时间挪到证书有效期内重新评估，其余检查（域名、签发链）照旧。
-        if let error, CFErrorGetCode(error) == Int(errSecCertificateExpired),
-           let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first,
-           let notBefore = Self.notBefore(leaf) {
-            SecTrustSetVerifyDate(trust, notBefore.addingTimeInterval(86_400) as CFDate)
-            if SecTrustEvaluateWithError(trust, nil) {
-                DebugLog.add("◇\(challenge.protectionSpace.host) 证书已过期，按白名单继续连接")
-                completionHandler(.useCredential, URLCredential(trust: trust)); return
-            }
-        }
-        completionHandler(.performDefaultHandling, nil)
+        if SecTrustEvaluateWithError(trust, &error) { return nil }
+        guard CFErrorGetCode(error) == Int(errSecCertificateExpired),
+              let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first,
+              let notBefore = notBefore(leaf) else { return nil }
+        SecTrustSetVerifyDate(trust, notBefore.addingTimeInterval(86_400) as CFDate)
+        guard SecTrustEvaluateWithError(trust, nil) else { return nil }
+        if let host { DebugLog.add("◇\(host) 证书已过期，按白名单继续连接") }
+        return URLCredential(trust: trust)
     }
 
     /// 从 DER 中取 notBefore（Validity 第一个 UTCTime/GeneralizedTime）。

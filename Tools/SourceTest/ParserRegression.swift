@@ -120,5 +120,13 @@ enum ParserRegression {
         if templateNodes.count == 2 {
             check(templateDoc.getString(#"@js:'{{java.getString("ownText")}}'"#, from: templateNodes[1]) == "B", "内嵌模板 java.getString 使用当前原生节点而非整篇文档")
         }
+    
+        // 段评白名单：只放行 gxom.lol / gxom.mom 及其子域，其它域名不在名单内。
+        check(ExpiredCertificateAllowance.isAllowed(host: "qimao.gxom.lol")
+              && ExpiredCertificateAllowance.isAllowed(host: "qimao.gxom.mom")
+              && ExpiredCertificateAllowance.isAllowed(host: "gxom.lol"), "段评证书白名单包含两个域名及裸域")
+        check(!ExpiredCertificateAllowance.isAllowed(host: "gxom.lol.evil.com")
+              && !ExpiredCertificateAllowance.isAllowed(host: "wtzw.com")
+              && !ExpiredCertificateAllowance.isAllowed(host: "qimao.gxom.lol.cn"), "段评证书白名单不放过相似域名")
     }
 }
