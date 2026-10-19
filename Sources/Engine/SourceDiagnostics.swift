@@ -23,7 +23,7 @@ enum SourceDiagnostics {
         return .search(k)
     }
 
-    struct ExploreKind: Equatable, Hashable {
+    struct ExploreKind: Equatable, Hashable, Codable {
         let title: String
         let url: String?
         /// 发现页控件（书山聚合扩展）：text / button / select；nil = 普通分类。

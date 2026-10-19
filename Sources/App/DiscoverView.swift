@@ -331,28 +331,42 @@ struct DiscoverSourceView: View {
         loader.preload(flatItems[(index + 1)...end].compactMap { $0.url })
     }
 
-    private func load() async {
+    /// 读取发现分类：缓存期内直接用缓存（不重新执行发现脚本），force 用于下拉刷新。
+    private func load(force: Bool = false) async {
         let src = source
+        if !force, let cached = DiscoverKindsCache.cached(source: source.bookSourceUrl) {
+            kinds = cached
+            loading = false
+            applyDefaultSelection()
+            return
+        }
         loading = true
         let result = await Task.detached(priority: .userInitiated) {
             SourceDiagnostics.exploreKinds(source: src)
         }.value
         kinds = result
         loading = false
-        let items = DiscoverCatalog.kindSections(result).flatMap(\.items)
-        if selectedKindURL == nil, let first = items.first?.url {
-            selectedKindURL = first
-            if pageLayout == .list {
-                await loader.load(first)
-            }
+        if DiscoverCatalog.kindError(result) == nil, !result.isEmpty {
+            DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
+        }
+        applyDefaultSelection()
+    }
+
+    private func applyDefaultSelection() {
+        let items = DiscoverCatalog.kindSections(kinds).flatMap(\.items)
+        guard selectedKindURL == nil, let first = items.first?.url else { return }
+        selectedKindURL = first
+        if pageLayout == .list {
+            Task { await loader.load(first) }
         }
     }
 
-    /// 下拉刷新：清缓存并重新拉取已加载的板块。
+    /// 下拉刷新：清缓存并重新拉取分类与已加载的板块。
     private func refreshAll() async {
         DiscoverBlockCache.clear()
+        DiscoverKindsCache.clear()
         let loaded = Array(loader.books.keys)
-        await load()
+        await load(force: true)
         for url in loaded {
             await loader.load(url, force: true)
         }

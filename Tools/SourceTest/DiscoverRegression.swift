@@ -96,6 +96,30 @@ enum DiscoverRegression {
         check(DiscoverSettings.RankingMode(rawValue: "keyword") == DiscoverSettings.RankingMode.keyword
               && DiscoverSettings.PageLayout(rawValue: "list") == DiscoverSettings.PageLayout.list, "设置：枚举存储值")
 
+        // 3f. 缓存往返：板块书单与发现分类（真实文件读写）
+        DiscoverBlockCache.clear()
+        DiscoverKindsCache.clear()
+        let cacheSource = "https://cache.test/source"
+        let cacheURL = "/list?page=1"
+        var cacheBook = Book(bookUrl: "https://book.test/1", name: "缓存测试书", author: "作者")
+        cacheBook.intro = "简介"
+        DiscoverBlockCache.store(source: cacheSource, url: cacheURL, books: [cacheBook])
+        let cachedBooks = DiscoverBlockCache.cached(source: cacheSource, url: cacheURL)
+        check(cachedBooks?.count == 1 && cachedBooks?.first?.name == "缓存测试书"
+              && cachedBooks?.first?.intro == "简介", "缓存：板块书单往返")
+        check(DiscoverBlockCache.cached(source: cacheSource, url: cacheURL,
+                                        now: Date().addingTimeInterval(400 * 86400)) == nil,
+              "缓存：过期后为空")
+        let cacheKinds = [SourceDiagnostics.ExploreKind(title: "推荐", url: "/rec"),
+                          SourceDiagnostics.ExploreKind(title: "性别", url: nil, type: "select",
+                                                        chars: ["男", "女"], defaultValue: "男")]
+        DiscoverKindsCache.store(source: cacheSource, kinds: cacheKinds)
+        check(DiscoverKindsCache.cached(source: cacheSource) == cacheKinds, "缓存：发现分类往返")
+        DiscoverBlockCache.clear()
+        DiscoverKindsCache.clear()
+        check(DiscoverBlockCache.cached(source: cacheSource, url: cacheURL) == nil
+              && DiscoverKindsCache.cached(source: cacheSource) == nil, "缓存：清理后为空")
+
         // 4. 类型标签
         var manga = g1
         manga.bookSourceType = 2
