@@ -47,7 +47,8 @@ enum UpscaleRegression {
         check(UpscaleSettings.outputSize(pixelWidth: 800, pixelHeight: 1200).width == 1600
               && UpscaleSettings.outputSize(pixelWidth: 800, pixelHeight: 1200).height == 2400,
               "超分：输出是 2 倍")
-        check(UpscaleSettings.maxInputWidth * UpscaleSettings.maxInputHeight > UpscaleSettings.maxInputPixels,
+        check(UpscaleSettings.maxInputWidth * UpscaleSettings.maxInputHeight
+              > UpscaleQuality.fast.maxInputPixels,
               "超分：像素上限是实际生效的约束（不是死代码）")
     }
 }
