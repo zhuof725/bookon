@@ -387,10 +387,19 @@ final class JSEngine {
         getLoginHeaderMap:function(){var v=__loginHeaderGet();if(v==null||v==='')return null;var m=Object.create(null);try{var o=JSON.parse(String(v));Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){return null;}return m;},
         putLoginHeader:function(v){__loginHeaderPut(String(v));},
         removeLoginHeader:function(){__loginHeaderRemove();}};
-    var book={name:'',author:'',bookUrl:'',tocUrl:'',type:0,
+    var book={name:'',author:'',bookUrl:'',tocUrl:'',type:0,durChapterIndex:0,durChapterTitle:'',
         getVariable:function(k){return (typeof __bookVarGet==='function')?String(__bookVarGet(String(k))):'';},
         putVariable:function(k,v){var s=(v==null?'':String(v));return (typeof __bookVarPut==='function')?String(__bookVarPut(String(k),s)):s;},
-        setVariable:function(k,v){return this.putVariable(k,v);}};
+        setVariable:function(k,v){return this.putVariable(k,v);},
+        // Legado 的阅读配置在 iOS 端没有对应存储：给出可读对象与无副作用的 setter，
+        // 书源脚本普遍会读 book.readConfig.useReplaceRule 或调用 book.setUseReplaceRule(false)。
+        get readConfig(){return this.__readConfig||(this.__readConfig={useReplaceRule:false,replaceRules:[],replacementMode:0});},
+        set readConfig(v){this.__readConfig=v;},
+        get replaceRules(){return this.readConfig.replaceRules;},
+        set replaceRules(v){this.readConfig.replaceRules=v;},
+        setUseReplaceRule:function(){return '';},
+        setReplaceRule:function(){return '';},
+        getUseReplaceRule:function(){return false;}};
     var chapter={title:'',url:'',index:0};
     var Packages={
         org:{jsoup:{Jsoup:{parse:function(html){return __jsoupParse(String(html));}}}},

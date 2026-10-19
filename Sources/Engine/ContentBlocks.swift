@@ -242,10 +242,13 @@ enum ContentBlocks {
         }
     }
 
+    /// 书源把「标签 + 一行评论」的卡片都画成 SVG：起点用「热评」，番茄/大灰狼用「神评论」。
+    private static let hotCommentLabels: Set<String> = ["热评", "神评论", "精选评论", "精彩评论"]
+
     /// 识别书源生成的两类评论 SVG：热评（标签+一行）与「本章说」汇总。其他 SVG 返回 nil，仍按图片显示。
     static func nativeBlock(fromSVG svg: String, click: String?) -> ContentBlock? {
         let texts = svgTexts(svg)
-        if texts.count == 2, texts[0] == "热评" {
+        if texts.count == 2, Self.hotCommentLabels.contains(texts[0]) {
             return .hotComment(label: texts[0], text: texts[1], clickURL: click)
         }
         if texts.count >= 2, texts[0] == "本章说" {

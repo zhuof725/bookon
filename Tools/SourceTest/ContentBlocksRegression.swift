@@ -51,6 +51,12 @@ enum CommentCardRegression {
             check(t == "本章说" && c == "33 条评论 〉" && u == url, "章评卡片：标题、计数、点击网址")
         } else { check(false, "章评卡片：应识别为 chapterComments") }
 
+        // 神评论标签（大灰狼/番茄书源）：与热评同属「标签+一行」的评论卡片。
+        let god = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"108\"><rect width=\"100%\" height=\"100%\" fill=\"rgba(255,255,255,0.55)\" rx=\"30\"/><rect x=\"35\" y=\"28\" width=\"125\" height=\"52\" rx=\"16\" fill=\"#F06260\"/><text x=\"97\" y=\"65\" font-size=\"32\" fill=\"#FFFFFF\" text-anchor=\"middle\" font-weight=\"bold\">神评论</text><text x=\"175\" y=\"67\" font-size=\"38\" fill=\"#333333\">这本书越看越上头</text></svg>"
+        let gb = ContentBlocks.parse("<img src=\"data:image/svg+xml;base64,\(b64(god))\" onClick=\"java.startBrowser('\(url)')\"/>")
+        check(gb.count == 1 && gb[0] == .hotComment(label: "神评论", text: "这本书越看越上头", clickURL: url),
+              "神评论卡片：番茄的「神评论」标签同样转成原生热评块")
+
         let other = "<svg xmlns=\"http://www.w3.org/2000/svg\"><circle r=\"5\"/></svg>"
         let ob = ContentBlocks.parse("<img src=\"data:image/svg+xml;base64,\(b64(other))\"/>")
         check({ if case .image? = ob.first { return true }; return false }(), "热评卡片：不是评论的 SVG 仍按图片显示")

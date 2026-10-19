@@ -135,5 +135,12 @@ enum JSBridgeRegression {
         // 没有 return 的脚本保持原有「最后一个表达式即结果」语义。
         check(engine.evalString("var z = 7; z + 1", jsLib: library, context: context) == "8",
               "无 return 的脚本仍按完成值返回")
+        // 大灰狼书源：详情简介脚本读 book.readConfig.useReplaceRule 并调用 book.setUseReplaceRule(false)，
+        // 缺这两个成员会让整段脚本抛错、简介只剩半截。
+        check(engine.evalString("String(book.readConfig.useReplaceRule) + '|' + String(book.setUseReplaceRule(false))",
+                                jsLib: library, context: context) == "false|",
+              "book 暴露 readConfig 与 setUseReplaceRule，脚本不再抛错")
+        check(engine.evalString("String(book.readConfig == null)", jsLib: library, context: context) == "false",
+              "book.readConfig 默认可读")
     }
 }
