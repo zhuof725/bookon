@@ -118,5 +118,17 @@ enum JSBridgeRegression {
               "AnalyzeRule JS pipeline receives native elements")
         check(pipeline.first.map { rule.getString("@css:h1@text", from: $0) } == "Pipeline",
               "subsequent rule query uses the JS-returned document rather than original response")
+
+        // Legado 书源脚本常用顶层 return 结束（发现/登录脚本）；求值必须能执行并拿到返回值。
+        check(engine.evalString("var a = 2;\nreturn 'r' + a;", jsLib: library, context: context) == "r2",
+              "顶层 return 脚本可执行并返回结果")
+        check(engine.evalString("var list = [1,2,3];\nreturn list;", jsLib: library, context: context) == "1\n2\n3",
+              "顶层 return 数组按多值返回")
+        // 顶层 return 脚本的副作用仍要落在同一脚本上下文的变量上。
+        check(engine.evalString("var q = 5; return q * 2;", jsLib: library, context: context) == "10",
+              "顶层 return 脚本内语句先于 return 执行")
+        // 没有 return 的脚本保持原有「最后一个表达式即结果」语义。
+        check(engine.evalString("var z = 7; z + 1", jsLib: library, context: context) == "8",
+              "无 return 的脚本仍按完成值返回")
     }
 }

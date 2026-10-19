@@ -948,7 +948,19 @@ final class JSEngine {
         // A rule's let/const bindings must not collide with bridge globals or
         // change the lexical scope captured by jsLib helpers. A block preserves
         // JavaScript completion values (unlike an IIFE without an explicit return).
-        guard let v = ctx.evaluateScript("{\n" + script + "\n}"), !v.isUndefined, !v.isNull else { return nil }
+        let previousHandler = ctx.exceptionHandler
+        var thrown: String?
+        ctx.exceptionHandler = { _, value in thrown = value?.toString() }
+        defer { ctx.exceptionHandler = previousHandler }
+        var value = ctx.evaluateScript("{\n" + script + "\n}")
+        // Legado 书源脚本普遍用顶层 return 结尾（发现规则、登录脚本等）。裸块与顶层脚本都
+        // 不允许 return，属解析期失败（尚未执行任何语句），因此可以安全地改用函数体重试。
+        if let message = thrown, message.contains("Illegal return statement"),
+           value == nil || value!.isUndefined || value!.isNull {
+            thrown = nil
+            value = ctx.evaluateScript("(function(){\n" + script + "\n})()")
+        }
+        guard let v = value, !v.isUndefined, !v.isNull else { return nil }
         if v.isString || v.isNumber || v.isBoolean { return v.toString() }
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }
