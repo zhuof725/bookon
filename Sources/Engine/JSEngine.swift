@@ -418,6 +418,42 @@ final class JSEngine {
     Packages.java.util.HashMap.prototype.put=function(k,v){var prev;if(Object.prototype.hasOwnProperty.call(this,String(k)))prev=this[String(k)];else prev=null;this[String(k)]=v;return prev;};
     Packages.okio.Buffer.prototype.write=function(arr){if(!arr)return;this.__bytes=this.__bytes||[];for(var i=0;i<arr.length;i++)this.__bytes.push(arr[i]);};
     Packages.okio.Buffer.prototype.size=function(){return (this.__bytes||[]).length;};
+    // Rhino JavaImporter 子集（七猫正文 AES 解密）：with(importer) 里的 String 是 java.lang.String，
+    // String(byte[]) 按 UTF-8 解码；"...".getBytes() 取字节；Cipher/SecretKeySpec/IvParameterSpec 走原生加密桥。
+    String.prototype.getBytes=function(cs){return java.strToBytes(String(this),cs==null?'UTF-8':String(cs));};
+    Packages.java.lang={String:function(v,cs){
+        if(v!=null&&typeof v==='object'&&typeof v.length==='number'){return java.bytesToStr(v,cs==null?'UTF-8':String(cs));}
+        return String(v);
+    }};
+    Packages.java.util.Base64={
+        getDecoder:function(){return {decode:function(s){
+            var b=(typeof s==='string')?s:java.bytesToStr(s,'UTF-8');var r=java.base64DecodeToByteArray(b);return r==null?[]:r;}};},
+        getEncoder:function(){return {encodeToString:function(b){return String(java.base64Encode(java.bytesToStr(b,'ISO-8859-1')));}};}
+    };
+    Packages.javax={crypto:{
+        spec:{
+            SecretKeySpec:function(key,alg){return {__key:key,__alg:String(alg||''),getEncoded:function(){return key;}};},
+            IvParameterSpec:function(iv){return {__iv:iv,getIV:function(){return iv;}};}
+        },
+        Cipher:{ENCRYPT_MODE:1,DECRYPT_MODE:2,getInstance:function(t){
+            var c={__t:String(t),__mode:2,__key:null,__iv:null};
+            c.init=function(mode,key,iv){c.__mode=Number(mode);c.__key=key&&key.__key!=null?key.__key:key;c.__iv=iv&&iv.__iv!=null?iv.__iv:(iv==null?null:iv);};
+            c.doFinal=function(d){
+                var sc=java.createSymmetricCrypto(c.__t,c.__key,c.__iv);
+                return c.__mode===1?sc.encrypt(d):sc.decrypt(d);
+            };
+            return c;
+        }}
+    }};
+    function JavaImporter(){for(var i=0;i<arguments.length;i++){this.importPackage(arguments[i]);}}
+    Object.defineProperty(JavaImporter.prototype,'importPackage',{enumerable:false,value:function(){
+        for(var i=0;i<arguments.length;i++){var p=arguments[i];if(!p)continue;
+            for(var k in p){if(Object.prototype.hasOwnProperty.call(p,k)){this[k]=p[k];}}}
+    }});
+    Object.defineProperty(JavaImporter.prototype,'importClass',{enumerable:false,value:function(){
+        for(var i=0;i<arguments.length;i++){var c=arguments[i];if(c&&c.__name){this[c.__name]=c;}}
+    }});
+    function importPackage(){JavaImporter.prototype.importPackage.apply(this,arguments);}
     var org=Packages.org;
     var org=Packages.org;
     // Preserve primitive code and url: neither can also be a same-named

@@ -72,5 +72,27 @@ enum CryptoBridgeRegression {
         check(js("typeof java.deviceID") == "undefined", "deviceID 与 Legado 一致地不存在")
         check(js("(function(){try{java.deviceID();return 'ios'}catch(e){return 'android'}})()") == "android",
               "书源的 deviceType 探测判定为 Android")
+
+        // 七猫正文：Rhino JavaImporter + javax.crypto 写法（向量由 openssl aes-128-cbc 生成，IV 为 0..15）。
+        check(js("""
+            var javaImport = new JavaImporter();
+            javaImport.importPackage(Packages.java.lang, Packages.javax.crypto.spec, Packages.javax.crypto, Packages.java.util);
+            with(javaImport) {
+                function decode(content) {
+                    var ivEncData = Base64.getDecoder().decode(String(content));
+                    var key = SecretKeySpec(String("242ccb8230d709e1").getBytes(), "AES");
+                    var iv = IvParameterSpec(Arrays.copyOfRange(ivEncData, 0, 16));
+                    var chipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+                    chipher.init(2, key, iv);
+                    return String(chipher.doFinal(Arrays.copyOfRange(ivEncData, 16, ivEncData.length)));
+                }
+            }
+            decode('AAECAwQFBgcICQoLDA0OD5r3tRK/YjBbJ+ukZ2XwmJwJms0YDpuAtaRHOkZ4JHA/');
+            """) == "第一章\n你好，七猫", "JavaImporter + Cipher AES/CBC 解密七猫正文")
+        // 相对书籍地址带请求选项时，选项不能被编码进网址（七猫详情 401 的根因）。
+        let rel = AnalyzeUrl.absolute("/api/v4/book/detail?id=1&sign=x,{\"headers\":{\"sign\":\"y\"}}", base: "https://api-bc.wtzw.com#md")
+        check(rel == "https://api-bc.wtzw.com/api/v4/book/detail?id=1&sign=x,{\"headers\":{\"sign\":\"y\"}}", "相对地址转绝对时保留请求选项 ,{headers}")
+        let req = AnalyzeUrl(rawUrl: rel, baseUrl: "https://api-bc.wtzw.com#md")
+        check(req.headers["sign"] == "y", "转绝对后的地址仍能解析出请求头")
     }
 }

@@ -30,14 +30,21 @@ final class RuleContext {
         // A recovered request may not regenerate every book variable. Retain
         // existing values as a base, then prefer the fresh candidate snapshot.
         if preservingExisting, let id = child.bookID {
+            Self.load(&Self.bookVariables, scope: "book", id: id)
             overlay(Self.bookVariables[id] ?? [:])
         }
         if let pending = pendingBookVariables {
             overlay(inheritedBookVariables)
             overlay(pending)
         } else {
-            if let id = sourceID { overlay(Self.sourceVariables[id] ?? [:]) }
-            if let id = bookID { overlay(Self.bookVariables[id] ?? [:]) }
+            if let id = sourceID {
+                Self.load(&Self.sourceVariables, scope: "source", id: id)
+                overlay(Self.sourceVariables[id] ?? [:])
+            }
+            if let id = bookID {
+                Self.load(&Self.bookVariables, scope: "book", id: id)
+                overlay(Self.bookVariables[id] ?? [:])
+            }
             if let id = chapterID { overlay(Self.chapterVariables[id] ?? [:]) }
         }
         child.inheritedBookVariables = snapshot
@@ -58,7 +65,9 @@ final class RuleContext {
             // 与临时 get 一致：空值回退到继承的列表快照。
             if !value.isEmpty || values[key] == nil { values[key] = value }
         }
+        Self.load(&Self.bookVariables, scope: "book", id: id)
         Self.bookVariables[id, default: [:]].merge(values) { _, new in new }
+        Self.save(Self.bookVariables, scope: "book", id: id)
         pendingBookVariables = nil
         inheritedBookVariables.removeAll()
     }
@@ -67,6 +76,28 @@ final class RuleContext {
     private static var sourceVariables: [String: [String: String]] = [:]
     private static var bookVariables: [String: [String: String]] = [:]
     private static var chapterVariables: [String: [String: String]] = [:]
+    /// 已从磁盘读回的作用域（每个作用域每进程只读一次）。
+    private static var loadedScopes = Set<String>()
+
+    /// 原版 source 级 java.put 存 CacheManager、book 级存 Book.variableMap（数据库），重启后仍在。
+    /// 这里落到 JavaBridge.store（Application Support 的 JSON），避免重启后 `java.get('bid')`
+    /// 之类的值为空导致签名失败。调用方须已持有 lock。
+    private static func load(_ table: inout [String: [String: String]], scope: String, id: String) {
+        let key = "__ctx_\(scope)_\(id)"
+        guard loadedScopes.insert(key).inserted,
+              let raw = JavaBridge.store.get(key), let data = raw.data(using: .utf8),
+              let saved = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return }
+        // 内存里的新值优先于磁盘旧值。
+        table[id, default: [:]].merge(saved) { current, _ in current }
+    }
+
+    private static func save(_ table: [String: [String: String]], scope: String, id: String) {
+        guard let values = table[id],
+              let data = try? JSONSerialization.data(withJSONObject: values, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else { return }
+        JavaBridge.store.set("__ctx_\(scope)_\(id)", text)
+    }
+
     /// book.getVariable/putVariable 的独立存储，与规则变量表互不影响。
     private static var bookVariableStore: [String: [String: String]] = [:]
 
@@ -149,9 +180,13 @@ final class RuleContext {
         } else if let id = chapterID {
             Self.chapterVariables[id, default: [:]][key] = value
         } else if let id = bookID {
+            Self.load(&Self.bookVariables, scope: "book", id: id)
             Self.bookVariables[id, default: [:]][key] = value
+            Self.save(Self.bookVariables, scope: "book", id: id)
         } else if let id = sourceID {
+            Self.load(&Self.sourceVariables, scope: "source", id: id)
             Self.sourceVariables[id, default: [:]][key] = value
+            Self.save(Self.sourceVariables, scope: "source", id: id)
         } else {
             variables[key] = value
         }
@@ -168,6 +203,8 @@ final class RuleContext {
             return inheritedBookVariables[key] ?? variables[key] ?? ""
         }
         if let value = Self.value(key, in: Self.chapterVariables, id: chapterID), !value.isEmpty { return value }
+        if let id = bookID { Self.load(&Self.bookVariables, scope: "book", id: id) }
+        if let id = sourceID { Self.load(&Self.sourceVariables, scope: "source", id: id) }
         if let value = Self.value(key, in: Self.bookVariables, id: bookID), !value.isEmpty { return value }
         if let value = Self.value(key, in: Self.sourceVariables, id: sourceID), !value.isEmpty { return value }
         return variables[key] ?? ""

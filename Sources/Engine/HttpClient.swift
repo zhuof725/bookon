@@ -76,6 +76,10 @@ struct AnalyzeUrl {
                 s = String(s[..<r.lowerBound])
             }
         }
+        // `地址,` + 空的 java.get("headers")（变量丢失时）会留下结尾逗号，它会进入签名参数导致验签失败。
+        if options == nil, s.hasSuffix(",") {
+            s = String(s.dropLast()).trimmingCharacters(in: .whitespaces)
+        }
         url = AnalyzeUrl.absolute(s, base: baseUrl)
         for (k, v) in AnalyzeUrl.headerFields(sourceHeader, key: key, page: page,
                                               baseUrl: baseUrl, context: context, jsLib: jsLib,
@@ -211,6 +215,11 @@ struct AnalyzeUrl {
 
     static func absolute(_ s: String, base: String?) -> String {
         if s.hasPrefix("http://") || s.hasPrefix("https://") || s.hasPrefix("data:") { return s }
+        // Legado 请求选项 `,{...}` 不属于网址：只解析前半段再原样拼回。
+        // 否则 iOS 17+ 的 URL(string:) 会把 {"headers":…} 百分号编码进查询参数，请求头随之丢失。
+        if let r = s.range(of: ",\\s*\\{", options: .regularExpression) {
+            return absolute(String(s[..<r.lowerBound]), base: base) + String(s[r.lowerBound...])
+        }
         guard let b = base.map({ AnalyzeUrl.cleanSourceUrl($0) }), let bu = URL(string: b) else { return s }
         return URL(string: s, relativeTo: bu)?.absoluteString ?? s
     }
