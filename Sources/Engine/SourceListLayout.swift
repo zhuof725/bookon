@@ -1,14 +1,13 @@
 import Foundation
 
-/// 书源列表（书源管理 / 发现）的展示方式：网格卡片或列表行。
-/// 网格列数可选 2...4，其余存储值自动钳制回范围内，纯逻辑便于离线回归。
+/// 发现页书源列表的展示方式：宫格卡片或列表行。
 enum SourceListLayout: String, CaseIterable {
     case grid
     case list
 
     var title: String {
         switch self {
-        case .grid: return "网格"
+        case .grid: return "宫格"
         case .list: return "列表"
         }
     }
@@ -20,18 +19,6 @@ enum SourceListLayout: String, CaseIterable {
         }
     }
 
-    /// UserDefaults 键：书源页布局（grid / list）与网格列数。
+    /// UserDefaults 键：发现页书源的排列方式（grid / list）。
     static let layoutKey = "sources.layout.v1"
-    static let columnsKey = "sources.columns.v1"
-    static let defaultColumns = 2
-
-    /// 网格列数可选项。
-    static let columnChoices = [2, 3, 4]
-
-    /// 把存储的列数钳制到可选项范围内；缺省（或越界）回落默认值。
-    static func clampedColumns(_ value: Int) -> Int {
-        let low = columnChoices.first ?? defaultColumns
-        let high = columnChoices.last ?? defaultColumns
-        return min(max(value, low), high)
-    }
 }

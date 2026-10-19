@@ -55,12 +55,11 @@ enum DiscoverRegression {
         check(DiscoverCatalog.cardSubtitle(blankGroup) == "a.invalid", "发现：空白分组回落域名")
         check(DiscoverCatalog.cardSubtitle(enabled) == "a.invalid", "发现：无分组显示域名")
 
-        // 3c. 网格布局偏好：列数钳制与存储值
-        check(SourceListLayout.clampedColumns(2) == 2 && SourceListLayout.clampedColumns(4) == 4, "网格：列数范围")
-        check(SourceListLayout.clampedColumns(9) == 4 && SourceListLayout.clampedColumns(0) == 2, "网格：越界列数钳制")
+        // 3c. 排列方式偏好：存储值与显示名
         check(SourceListLayout(rawValue: "grid") == SourceListLayout.grid
               && SourceListLayout(rawValue: "list") == SourceListLayout.list
-              && SourceListLayout(rawValue: "wat") == nil, "网格：布局存储值")
+              && SourceListLayout(rawValue: "wat") == nil, "排列方式：存储值")
+        check(SourceListLayout.grid.title == "宫格" && SourceListLayout.list.title == "列表", "排列方式：显示名")
 
         // 4. 类型标签
         var manga = g1

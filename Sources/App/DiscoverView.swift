@@ -11,35 +11,40 @@ struct DiscoverView: View {
     }
 
     var body: some View {
-        List {
-            if sections.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("没有可以浏览的书源").appFont(.headline)
-                    Text("在「我的 → 书库管理 → 书源」里给书源填写「发现地址」并保持启用，带发现规则的书源会按分组出现在这里。")
-                        .appFont(.footnote).foregroundStyle(palette.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .independentGlassRow()
-            } else {
-                ForEach(sections, id: \.name) { section in
-                    NavigationLink {
-                        DiscoverGroupView(groupName: section.name)
-                    } label: {
-                        DiscoverGroupCard(name: section.name, count: section.sources.count)
+        VStack(spacing: 0) {
+            HStack {
+                Spacer(minLength: 0)
+                DiscoverLayoutMenu()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            List {
+                if sections.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("没有可以浏览的书源").appFont(.headline)
+                        Text("在「我的 → 书库管理 → 书源」里给书源填写「发现地址」并保持启用，带发现规则的书源会按分组出现在这里。")
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .independentGlassRow()
-                    .accessibilityIdentifier("discover.group.\(section.name)")
+                } else {
+                    ForEach(sections, id: \.name) { section in
+                        NavigationLink {
+                            DiscoverGroupView(groupName: section.name)
+                        } label: {
+                            DiscoverGroupCard(name: section.name, count: section.sources.count)
+                        }
+                        .independentGlassRow()
+                        .accessibilityIdentifier("discover.group.\(section.name)")
+                    }
                 }
             }
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("发现")
         .toolbar(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) { DiscoverLayoutMenu() }
-        }
         .accessibilityIdentifier("discover.page")
     }
 }
@@ -51,13 +56,11 @@ struct DiscoverGroupView: View {
     @EnvironmentObject var store: AppStore
     let groupName: String
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
-    @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
 
     private var sources: [BookSource] {
         DiscoverCatalog.sources(inGroup: groupName, from: store.sources)
     }
     private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
-    private var columns: Int { SourceListLayout.clampedColumns(columnsValue) }
 
     var body: some View {
         List {
@@ -66,7 +69,7 @@ struct DiscoverGroupView: View {
                     .appFont(.footnote).foregroundStyle(palette.secondary)
                     .independentGlassRow()
             } else if layout == .grid {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
                     ForEach(sources) { source in
                         NavigationLink {
                             DiscoverSourceView(source: source)
@@ -98,9 +101,6 @@ struct DiscoverGroupView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(groupName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) { DiscoverLayoutMenu() }
-        }
     }
 }
 
@@ -402,14 +402,13 @@ private struct DiscoverSourceHeader: View {
     }
 }
 
-/// 发现页右上角「…」：改变书源排列方式（网格 / 列表）与网格列数。
-/// 一级「发现」与二级分组页共用，切换后二级书源列表立即按新排列显示。
+/// 发现页右上角「…」：切换书源排列方式（宫格 / 列表）。
+/// 切换后分组里的书源列表立即按所选方式显示。
 struct DiscoverLayoutMenu: View {
+    @ThemePalette private var palette
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
-    @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
 
     private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
-    private var columns: Int { SourceListLayout.clampedColumns(columnsValue) }
 
     var body: some View {
         Menu {
@@ -427,25 +426,14 @@ struct DiscoverLayoutMenu: View {
                     .accessibilityIdentifier("discover.layout.\(value.rawValue)")
                 }
             }
-            if layout == .grid {
-                Section("网格列数") {
-                    ForEach(SourceListLayout.columnChoices, id: \.self) { count in
-                        Button {
-                            columnsValue = count
-                        } label: {
-                            if count == columns {
-                                Label("\(count) 列", systemImage: "checkmark")
-                            } else {
-                                Text("\(count) 列")
-                            }
-                        }
-                        .accessibilityIdentifier("discover.columns.\(count)")
-                    }
-                }
-            }
         } label: {
             Image(systemName: "ellipsis")
+                .font(.system(size: 20, weight: .bold))
+                .frame(width: 44, height: 44)
+                .background { ThemeSurface(shape: Circle()) }
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(palette.primary)
         .accessibilityLabel("排列方式")
         .accessibilityIdentifier("discover.layout.menu")
     }
