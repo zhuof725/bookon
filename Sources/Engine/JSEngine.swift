@@ -955,8 +955,7 @@ final class JSEngine {
         var value = ctx.evaluateScript("{\n" + script + "\n}")
         // Legado 书源脚本普遍用顶层 return 结尾（发现规则、登录脚本等）。裸块与顶层脚本都
         // 不允许 return，属解析期失败（尚未执行任何语句），因此可以安全地改用函数体重试。
-        if let message = thrown, message.contains("Illegal return statement"),
-           value == nil || value!.isUndefined || value!.isNull {
+        if let message = thrown, message.contains("Illegal return statement") {
             thrown = nil
             value = ctx.evaluateScript("(function(){\n" + script + "\n})()")
         }
