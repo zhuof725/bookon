@@ -48,7 +48,7 @@ struct CommentWebView: UIViewRepresentable {
     /// 否则加载失败只剩一片空白。
     final class Coordinator: NSObject, WKNavigationDelegate {
         func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
-                      completionHandler: @escaping (WKWebView.AuthChallengeDisposition, URLCredential?) -> Void) {
+                      completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
             guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
                   ExpiredCertificateAllowance.isAllowed(host: challenge.protectionSpace.host),
                   let trust = challenge.protectionSpace.serverTrust,
