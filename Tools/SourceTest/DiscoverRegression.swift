@@ -101,7 +101,8 @@ enum DiscoverRegression {
         DiscoverKindsCache.clear()
         let cacheSource = "https://cache.test/source"
         let cacheURL = "/list?page=1"
-        var cacheBook = Book(bookUrl: "https://book.test/1", name: "缓存测试书", author: "作者")
+        var cacheBook = Book(bookUrl: "https://book.test/1", name: "缓存测试书", author: "作者",
+                             origin: cacheSource)
         cacheBook.intro = "简介"
         DiscoverBlockCache.store(source: cacheSource, url: cacheURL, books: [cacheBook])
         let cachedBooks = DiscoverBlockCache.cached(source: cacheSource, url: cacheURL)
