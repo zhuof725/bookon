@@ -37,6 +37,9 @@ struct DiscoverView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("发现")
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) { DiscoverLayoutMenu() }
+        }
         .accessibilityIdentifier("discover.page")
     }
 }
@@ -47,21 +50,22 @@ struct DiscoverGroupView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     let groupName: String
+    @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
     @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
 
     private var sources: [BookSource] {
         DiscoverCatalog.sources(inGroup: groupName, from: store.sources)
     }
+    private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
     private var columns: Int { SourceListLayout.clampedColumns(columnsValue) }
 
     var body: some View {
-        ScrollView {
+        List {
             if sources.isEmpty {
                 Text("这个分组暂时没有可以浏览的书源")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20).padding(.top, 12)
-            } else {
+                    .independentGlassRow()
+            } else if layout == .grid {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
                     ForEach(sources) { source in
                         NavigationLink {
@@ -74,13 +78,29 @@ struct DiscoverGroupView: View {
                         .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 24)
+                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(sources) { source in
+                    NavigationLink {
+                        DiscoverSourceView(source: source)
+                    } label: {
+                        DiscoverSourceCard(source: source)
+                    }
+                    .independentGlassRow()
+                    .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
+                }
             }
         }
+        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(groupName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) { DiscoverLayoutMenu() }
+        }
     }
 }
 
@@ -342,6 +362,26 @@ private struct DiscoverGroupCard: View {
     }
 }
 
+private struct DiscoverSourceCard: View {
+    @ThemePalette private var palette
+    let source: BookSource
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SourceAvatarView(name: source.bookSourceName)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(source.bookSourceName).appFont(.headline).lineLimit(1)
+                    if let tag = source.discoverTypeLabel { SourceTagPill(text: tag) }
+                }
+                Text(DiscoverCatalog.displayDomain(source.bookSourceUrl))
+                    .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+        }
+    }
+}
+
 private struct DiscoverSourceHeader: View {
     @ThemePalette private var palette
     let source: BookSource
@@ -359,5 +399,54 @@ private struct DiscoverSourceHeader: View {
             }
             Spacer(minLength: 8)
         }
+    }
+}
+
+/// 发现页右上角「…」：改变书源排列方式（网格 / 列表）与网格列数。
+/// 一级「发现」与二级分组页共用，切换后二级书源列表立即按新排列显示。
+struct DiscoverLayoutMenu: View {
+    @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
+    @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
+
+    private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
+    private var columns: Int { SourceListLayout.clampedColumns(columnsValue) }
+
+    var body: some View {
+        Menu {
+            Section("排列方式") {
+                ForEach(SourceListLayout.allCases, id: \.rawValue) { value in
+                    Button {
+                        layoutRaw = value.rawValue
+                    } label: {
+                        if value == layout {
+                            Label(value.title, systemImage: "checkmark")
+                        } else {
+                            Text(value.title)
+                        }
+                    }
+                    .accessibilityIdentifier("discover.layout.\(value.rawValue)")
+                }
+            }
+            if layout == .grid {
+                Section("网格列数") {
+                    ForEach(SourceListLayout.columnChoices, id: \.self) { count in
+                        Button {
+                            columnsValue = count
+                        } label: {
+                            if count == columns {
+                                Label("\(count) 列", systemImage: "checkmark")
+                            } else {
+                                Text("\(count) 列")
+                            }
+                        }
+                        .accessibilityIdentifier("discover.columns.\(count)")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .accessibilityLabel("排列方式")
+        .accessibilityIdentifier("discover.layout.menu")
     }
 }
