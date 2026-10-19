@@ -83,11 +83,21 @@ enum DiscoverRegression {
         check(!DiscoverCatalog.isRankingTitle("猜你喜欢") && !DiscoverCatalog.isRankingTitle("西方奇幻"),
               "发现：普通分类识别")
         check(DiscoverCatalog.isDecorativeControlTitle("██████ 男 生 ██████"), "发现：装饰性控件标题识别")
+        check(DiscoverCatalog.isDecorativeControlTitle("■■■■■■■■ 男 生 ■■■■■■■■"), "发现：真实七猫横幅识别")
         check(DiscoverCatalog.isDecorativeControlTitle("████████████████"), "发现：纯方块横幅识别")
         check(DiscoverCatalog.isDecorativeControlTitle("■□●○◆◇★☆"), "发现：其它填充符识别")
         check(!DiscoverCatalog.isDecorativeControlTitle("性别") && !DiscoverCatalog.isDecorativeControlTitle("源站")
               && !DiscoverCatalog.isDecorativeControlTitle("段评图标")
               && !DiscoverCatalog.isDecorativeControlTitle("性别 ♂ 男频"), "发现：正常控件标题保留")
+        let bannerKinds = [
+            SourceDiagnostics.ExploreKind(title: "■■■■■■■■ 男 生 ■■■■■■■■", url: nil),
+            SourceDiagnostics.ExploreKind(title: "都市人生", url: "/a"),
+            SourceDiagnostics.ExploreKind(title: "异术超能", url: "/b")
+        ]
+        check(DiscoverCatalog.kindSections(bannerKinds).count == 1
+              && DiscoverCatalog.kindSections(bannerKinds).first?.header == nil
+              && DiscoverCatalog.kindSections(bannerKinds).first?.items.count == 2,
+              "发现：装饰横幅不渲染为分类标题")
 
         // 3e. 发现设置：关键词解析、样式判定、列数钳制
         check(DiscoverSettings.keywords(from: nil) == DiscoverSettings.defaultKeywords, "设置：默认关键词")

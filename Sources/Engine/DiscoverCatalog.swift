@@ -58,7 +58,7 @@ enum DiscoverCatalog {
             if let type = kind.type, !type.isEmpty { continue }
             if (kind.url ?? "").isEmpty {
                 flush()
-                header = kind.title
+                header = isDecorativeControlTitle(kind.title) ? nil : kind.title
             } else {
                 items.append(kind)
             }
