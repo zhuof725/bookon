@@ -5,6 +5,12 @@ import Foundation
 
 setvbuf(stdout, nil, _IOLBF, 0)
 let args = CommandLine.arguments
+if let i = args.firstIndex(of: "--probe-toc") {
+    let file = args.count > i + 1 ? args[i + 1] : "mowan.json"
+    let probeKey = args.count > i + 2 ? args[i + 2] : "我的"
+    do { try await TocProbe.run(file: file, key: probeKey); exit(0) }
+    catch { print("PROBE ERROR: \(error)"); exit(1) }
+}
 if args.contains("--regression") {
     do { try await RuleRegression.run(); exit(0) }
     catch { print("REGRESSION ERROR: \(error)"); exit(1) }

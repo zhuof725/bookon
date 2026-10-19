@@ -15,6 +15,10 @@ on:
         description: 批量校验（校验书源：搜索→详情→目录→正文，失败写回失效分组）
         type: boolean
         default: false
+      probe:
+        description: 目录诊断（打印目录页原始内容、节点类型与标题/地址规则输出）
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -66,7 +70,15 @@ jobs:
         run: |
           set -o pipefail
           $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch "${SOURCES_FILE:-user-sources.json}" 我的 90 2 0 2>&1 | tee batch-check.log
-      - name: Upload diagnostics
+      - name: TOC probe
+        if: ${{ inputs.probe }}
+        env:
+          SOURCES_FILE: ${{ github.event.inputs.file }}
+          TEST_KEY: ${{ github.event.inputs.key }}
+        run: |
+          set -o pipefail
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-toc "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee toc-probe.log
+
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -74,6 +86,7 @@ jobs:
           path: |
             user-source-test.log
             batch-check.log
+            toc-probe.log
             regression.log
             test-build.log
             dumps/
