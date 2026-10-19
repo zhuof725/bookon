@@ -42,8 +42,8 @@ enum DiscoverCatalog {
         return group.isEmpty ? displayDomain(source.bookSourceUrl) : group
     }
 
-    /// 发现分类切节：原版发现规则里没有网址的项是分组标题（如「推荐」「最热」），
-    /// 其余按出现顺序归入当前小节；空小节（只有标题没有分类）被丢弃。
+    /// 发现分类切节：控件项（text/button/select）不参与；原版发现规则里没有网址的项是分组标题
+    /// （如「推荐」「最热」），其余按出现顺序归入当前小节；空小节（只有标题没有分类）被丢弃。
     static func kindSections(_ kinds: [SourceDiagnostics.ExploreKind])
         -> [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
         var out: [(header: String?, items: [SourceDiagnostics.ExploreKind])] = []
@@ -55,6 +55,7 @@ enum DiscoverCatalog {
             items = []
         }
         for kind in kinds {
+            if let type = kind.type, !type.isEmpty { continue }
             if (kind.url ?? "").isEmpty {
                 flush()
                 header = kind.title
@@ -64,6 +65,14 @@ enum DiscoverCatalog {
         }
         flush()
         return out
+    }
+
+    /// 榜单类板块用排名横条展示（分类名含「榜 / 推荐 / 排行 / 热门 / 热搜」），其余用封面网格。
+    static func isRankingTitle(_ title: String) -> Bool {
+        for keyword in ["榜", "推荐", "排行", "热门", "热搜"] where title.contains(keyword) {
+            return true
+        }
+        return false
     }
 
     /// 发现脚本失败：原版在脚本出错时返回 ERROR: 项，页面据此显示错误与重试。

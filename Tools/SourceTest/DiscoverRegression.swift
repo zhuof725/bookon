@@ -61,6 +61,28 @@ enum DiscoverRegression {
               && SourceListLayout(rawValue: "wat") == nil, "排列方式：存储值")
         check(SourceListLayout.grid.title == "网格" && SourceListLayout.list.title == "列表", "排列方式：显示名")
 
+        // 3d. 发现控件解析（书山聚合扩展）：type/action/chars/default/布局百分比
+        let controlRule = """
+        [{"title":"☃关键词","type":"text","style":{"layout_flexGrow":1,"layout_flexBasisPercent":0.6}},
+         {"title":"源站","type":"select","chars":["A站","B站"],"default":"A站","action":"(function(){ setConfigs.call(this,{source:'A'}); })()","style":{"layout_flexBasisPercent":0.4}},
+         {"title":"推荐","url":"/rec"}]
+        """
+        let controlKinds = SourceDiagnostics.parseExploreKinds(controlRule)
+        check(controlKinds.count == 3, "发现：控件数组解析数量")
+        check(controlKinds[0].type == "text" && controlKinds[0].url == nil, "发现：text 控件识别")
+        check(controlKinds[1].type == "select" && controlKinds[1].chars == ["A站", "B站"]
+              && controlKinds[1].defaultValue == "A站" && (controlKinds[1].action ?? "").contains("setConfigs"),
+              "发现：select 控件字段")
+        check(abs((controlKinds[1].flexBasis ?? 0) - 0.4) < 0.0001, "发现：控件布局百分比")
+        check(controlKinds[2].type == nil && controlKinds[2].url == "/rec", "发现：普通分类保持原样")
+        let controlSections = DiscoverCatalog.kindSections(controlKinds)
+        check(controlSections.count == 1 && controlSections[0].items.map(\.title) == ["推荐"],
+              "发现：控件不进入分类小节")
+        check(DiscoverCatalog.isRankingTitle("个性推荐") && DiscoverCatalog.isRankingTitle("巅峰榜单")
+              && DiscoverCatalog.isRankingTitle("热搜榜"), "发现：榜单分类识别")
+        check(!DiscoverCatalog.isRankingTitle("猜你喜欢") && !DiscoverCatalog.isRankingTitle("西方奇幻"),
+              "发现：普通分类识别")
+
         // 4. 类型标签
         var manga = g1
         manga.bookSourceType = 2

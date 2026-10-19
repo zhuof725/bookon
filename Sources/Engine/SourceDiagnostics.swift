@@ -23,12 +23,19 @@ enum SourceDiagnostics {
         return .search(k)
     }
 
-    struct ExploreKind: Equatable {
+    struct ExploreKind: Equatable, Hashable {
         let title: String
         let url: String?
+        /// 发现页控件（书山聚合扩展）：text / button / select；nil = 普通分类。
+        var type: String? = nil
+        var action: String? = nil
+        var chars: [String]? = nil
+        var defaultValue: String? = nil
+        /// style.layout_flexBasisPercent（原版按钮宽度参考）。
+        var flexBasis: Double? = nil
     }
 
-    /// 解析发现规则文本：JSON 数组按 title/url 取；否则按 `&&` 或换行分组，每组 `标题::网址`（与原版 exploreKinds 一致）。
+    /// 解析发现规则文本：JSON 数组按 title/url 取（同时保留控件字段）；否则按 `&&` 或换行分组，每组 `标题::网址`（与原版 exploreKinds 一致）。
     static func parseExploreKinds(_ ruleStr: String) -> [ExploreKind] {
         let t = ruleStr.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.hasPrefix("["), let data = t.data(using: .utf8),
@@ -37,7 +44,23 @@ enum SourceDiagnostics {
                 guard let d = item as? [String: Any] else { return nil }
                 let title = (d["title"] as? String) ?? ""
                 let url = (d["url"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                return ExploreKind(title: title, url: url)
+                var kind = ExploreKind(title: title, url: url)
+                if let type = d["type"] as? String {
+                    let normalized = type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if !normalized.isEmpty { kind.type = normalized }
+                }
+                kind.action = (d["action"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                kind.chars = (d["chars"] as? [Any])?.compactMap { $0 as? String }
+                if let def = d["default"] as? String {
+                    kind.defaultValue = def
+                } else if let def = d["default"] as? NSNumber {
+                    kind.defaultValue = def.stringValue
+                }
+                if let style = d["style"] as? [String: Any],
+                   let basis = style["layout_flexBasisPercent"] as? NSNumber {
+                    kind.flexBasis = basis.doubleValue
+                }
+                return kind
             }
         }
         guard let re = try? NSRegularExpression(pattern: "(&&|\n)+") else { return [] }
@@ -77,6 +100,18 @@ enum SourceDiagnostics {
             ruleStr = out
         }
         return parseExploreKinds(ruleStr)
+    }
+
+    /// 执行发现页控件的 action（书山聚合扩展）：注入 infoMap（当前控件值），返回是否执行成功。
+    /// 脚本里的 setConfigs 把配置写进书源变量（磁盘持久化），随后重新读取发现分类即可生效。
+    static func applyExploreControl(source: BookSource, action: String, info: [String: String]) -> Bool {
+        let script = action.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !script.isEmpty else { return false }
+        let context = RuleContext(source: source)
+        let out = JSEngine.shared.evalString(script, baseUrl: source.bookSourceUrl,
+                                             vars: ["infoMap": info], jsLib: source.jsLib,
+                                             context: context)
+        return out != nil
     }
 
     /// 发现页书籍列表：ruleExplore 优先，缺省时用搜索规则。page 供分类地址里的 {{page}}（加载更多）。
