@@ -75,13 +75,18 @@ enum DiscoverCatalog {
         return false
     }
 
-    /// 发现控件是否只是装饰性横幅（如「██████ 男 生 ██████」）：装饰字符占比过高时跳过不显示。
+    /// 控件标题是否只是装饰性横幅（如「████████ 男 生 ██████」）：
+    /// 有效文字（字母/数字/汉字）占比不足一半时判定为装饰，整行跳过不显示。
+    /// 不依赖具体方块字符，任何填充符（█■□◼⬛▬…）都能识别。
     static func isDecorativeControlTitle(_ title: String) -> Bool {
-        let decoration = CharacterSet(charactersIn: "█▓▒░■□●○◆◇★☆·•-—=~_+|/\\ ")
         let scalars = Array(title.unicodeScalars)
         guard !scalars.isEmpty else { return true }
-        let decorated = scalars.filter { decoration.contains($0) }.count
-        return Double(decorated) / Double(scalars.count) > 0.5
+        var meaningful = 0
+        for scalar in scalars
+            where CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar) {
+            meaningful += 1
+        }
+        return Double(meaningful) / Double(scalars.count) < 0.5
     }
 
     /// 发现脚本失败：原版在脚本出错时返回 ERROR: 项，页面据此显示错误与重试。

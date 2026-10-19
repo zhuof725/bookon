@@ -225,6 +225,7 @@ struct DiscoverSourceView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 filterRows
                 stateRows
+
                 if !loading, errorText == nil, !sections.isEmpty {
                     ForEach(Array(sections.enumerated()), id: \.offset) { pair in
                         if let header = pair.element.header {
