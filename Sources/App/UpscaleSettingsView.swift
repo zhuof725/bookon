@@ -14,6 +14,8 @@ struct UpscaleSettingsView: View {
     @State private var notice: String?
     @State private var selfTesting = false
     @State private var selfTestResult: String?
+    @State private var showCompare = false
+    @StateObject private var stats = UpscaleStats.shared
 
     private var quality: Binding<UpscaleQuality> {
         Binding(get: { UpscaleQuality(rawValue: qualityRaw) ?? .fast },
@@ -49,6 +51,53 @@ struct UpscaleSettingsView: View {
                 ForEach(modelRows, id: \.file) { row in
                     modelRow(row)
                 }
+
+                // 运行情况：直接看到「有没有作用在封面上」，以及最近一次为什么跳过。
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("运行情况").appFont(.body).foregroundStyle(palette.primary)
+                        Spacer(minLength: 0)
+                        Button {
+                            stats.reset()
+                        } label: {
+                            Text("清零").appFont(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    Text("封面：\(stats.coverLine ?? "本次启动还没处理过封面")")
+                        .appFont(.caption).foregroundStyle(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("upscale.stats.cover")
+                    Text("漫画页：\(stats.mangaLine ?? "本次启动还没处理过漫画页")")
+                        .appFont(.caption).foregroundStyle(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("upscale.stats.manga")
+                    Text("统计从本次启动开始；同一张图放大一次后走缓存，不会重复推理。")
+                        .appFont(.caption2).foregroundStyle(palette.secondary)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SettingsGlassSurface())
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("效果对比").appFont(.body).foregroundStyle(palette.primary)
+                        Text("拿一本书的封面，把原图像素与超分后的同一块并排放大看")
+                            .appFont(.caption).foregroundStyle(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        showCompare = true
+                    } label: {
+                        Text("对比").appFont(.caption).padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("upscale.compare")
+                }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SettingsGlassSurface())
 
                 // 试跑：用一张测试图跑通整条链路，确认模型在这台机器上真能用。
                 HStack(spacing: 12) {
@@ -118,6 +167,7 @@ struct UpscaleSettingsView: View {
         .navigationTitle("图片超分")
         .toolbar(.visible, for: .navigationBar)
         .task { await refresh() }
+        .sheet(isPresented: $showCompare) { UpscaleCompareSheet() }
     }
 
     // MARK: 行

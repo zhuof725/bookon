@@ -58,13 +58,13 @@ final class UpscaleEngine {
     /// 漫画页：`targetWidth` 是显示宽度（像素）。长条漫/超大图会被策略直接跳过。
     func upscaleManga(_ image: CGImage?, targetWidth: Int) async -> CGImage? {
         guard UpscaleSettings.mangaEnabled else { return nil }
-        return await run(image, targetWidth: targetWidth, gate: Self.mangaGate)
+        return await run(image, targetWidth: targetWidth, kind: .manga, gate: Self.mangaGate)
     }
 
     /// 封面：`targetWidth` 是封面位图目标宽度（像素）。
     func upscaleCover(_ image: CGImage?, targetWidth: Int) async -> CGImage? {
         guard UpscaleSettings.coverEnabled else { return nil }
-        return await run(image, targetWidth: targetWidth, gate: Self.coverGate)
+        return await run(image, targetWidth: targetWidth, kind: .cover, gate: Self.coverGate)
     }
 
     /// 设置页「试跑一次」：用一张 64×64 小图跑通整条链路，返回结果描述。
@@ -109,13 +109,15 @@ final class UpscaleEngine {
                        intent: CGColorRenderingIntent.defaultIntent)
     }
 
-    private func run(_ image: CGImage?, targetWidth: Int, gate: UpscaleGate) async -> CGImage? {
+    private func run(_ image: CGImage?, targetWidth: Int, kind: UpscaleKind, gate: UpscaleGate) async -> CGImage? {
         guard let image else { return nil }
         let quality = UpscaleSettings.quality
         guard UpscaleSettings.shouldUpscale(pixelWidth: image.width,
                                             pixelHeight: image.height,
                                             targetWidth: targetWidth,
                                             quality: quality) else {
+            UpscaleStats.shared.record(kind,
+                "跳过：\(image.width)×\(image.height) 不小于显示宽度 \(targetWidth)px（或超出档位上限）")
             return nil
         }
         // 串行：并发推理容易在内存吃紧时失败，而失败一次就是一张黑图。
@@ -123,13 +125,36 @@ final class UpscaleEngine {
         defer { Task { await gate.release() } }
         do {
             guard let model = try await UpscaleModelStore.shared.model(for: quality) else {
+                UpscaleStats.shared.record(kind, "跳过：还没下载模型（档位：\(quality.title)）")
                 return nil // 没装模型就保持原图
             }
+            let start = Date()
             let output = await model.process(image)
-            if output == nil {
+            let cost = String(format: "%.2fs", Date().timeIntervalSince(start))
+            guard let output else {
+                UpscaleStats.shared.record(kind, "失败：推理未成功（\(cost)），保持原图")
                 UpscaleLog.error("推理失败，回退原图 \(image.width)x\(image.height)")
+                return nil
             }
+            UpscaleStats.shared.recordSuccess(kind, detail:
+                "\(cost) · \(image.width)×\(image.height) → \(output.width)×\(output.height)")
             return output
+        } catch {
+            UpscaleStats.shared.record(kind, "失败：模型加载出错（\(error.localizedDescription)）")
+            UpscaleLog.error("模型加载失败 \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// 效果对比用：无视尺寸策略直接跑一次（仍需要已装模型）。
+    func upscaleForPreview(_ image: CGImage) async -> CGImage? {
+        await Self.coverGate.acquire()
+        defer { Task { await Self.coverGate.release() } }
+        do {
+            guard let model = try await UpscaleModelStore.shared.model(for: UpscaleSettings.quality) else {
+                return nil
+            }
+            return await model.process(image)
         } catch {
             UpscaleLog.error("模型加载失败 \(error.localizedDescription)")
             return nil
