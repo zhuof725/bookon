@@ -85,10 +85,12 @@ struct UpscaleCompareSheet: View {
         }
         sizes = "《\(book.name)》 \(original.width)×\(original.height) → \(upscaled.width)×\(upscaled.height)"
         status = "左边是把原图放大到同样大小（能看到糊/锯齿），右边是超分后的同一块区域。"
-        let cropWidth = max(original.width / 3, 32)
-        let cropHeight = max(original.height / 3, 32)
-        let sourceRect = CGRect(x: (original.width - cropWidth) / 2,
-                                y: (original.height - cropHeight) / 2,
+        let sourceWidth = CGFloat(original.width)
+        let sourceHeight = CGFloat(original.height)
+        let cropWidth = max((sourceWidth / 3).rounded(), 32)
+        let cropHeight = max((sourceHeight / 3).rounded(), 32)
+        let sourceRect = CGRect(x: ((sourceWidth - cropWidth) / 2).rounded(),
+                                y: ((sourceHeight - cropHeight) / 2).rounded(),
                                 width: cropWidth, height: cropHeight)
         originalCrop = original.cropping(to: sourceRect).map { UIImage(cgImage: $0) }
         let scaledRect = CGRect(x: sourceRect.origin.x * 2, y: sourceRect.origin.y * 2,
