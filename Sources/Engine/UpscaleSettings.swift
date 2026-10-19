@@ -40,6 +40,15 @@ enum UpscaleQuality: String, CaseIterable, Identifiable {
         }
     }
 
+    /// 单张输入的最大像素数：Real-ESRGAN 慢得多、也吃内存，上限压更低。
+    /// 快速（waifu2x）约 800×2200，高质量（Real-ESRGAN）约 800×1500。
+    var maxInputPixels: Int {
+        switch self {
+        case .fast: return 1_800_000
+        case .best: return 1_200_000
+        }
+    }
+
     /// 对应模型的大致体积（用于设置页显示）。
     var modelSize: Int {
         switch self {
@@ -60,7 +69,6 @@ enum UpscaleSettings {
     /// 放大是 2 倍输出，一张 800×1200 的页放大后解码约 15MB，更大的图要跳过。
     static let maxInputWidth = 1300
     static let maxInputHeight = 2200
-    static let maxInputPixels = 1_800_000
 
     // MARK: 开关（UserDefaults，键名稳定）
 
@@ -83,10 +91,11 @@ enum UpscaleSettings {
 
     /// 是否值得放大：原图比显示目标还小才有收益（超分补的是分辨率缺口）。
     /// 输入太大（长条漫、高清单图）直接跳过，避免内存和推理时间爆炸。
-    static func shouldUpscale(pixelWidth: Int, pixelHeight: Int, targetWidth: Int) -> Bool {
+    static func shouldUpscale(pixelWidth: Int, pixelHeight: Int, targetWidth: Int,
+                              quality: UpscaleQuality = .fast) -> Bool {
         guard pixelWidth > 0, pixelHeight > 0, targetWidth > 0 else { return false }
         guard pixelWidth <= maxInputWidth, pixelHeight <= maxInputHeight else { return false }
-        guard pixelWidth * pixelHeight <= maxInputPixels else { return false }
+        guard pixelWidth * pixelHeight <= quality.maxInputPixels else { return false }
         return pixelWidth < targetWidth
     }
 

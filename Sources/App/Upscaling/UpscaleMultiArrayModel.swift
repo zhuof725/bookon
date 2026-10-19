@@ -141,17 +141,26 @@ extension MultiArrayModel {
         }
 
         // feed image block arrays into the model
-        let predictionStream = AsyncStream<(Int, MLMultiArray)> { [inputName, outputName] continuation in
+        // 注意：推理失败时不能把输入缓冲当成输出交出去 —— 输入是 [1,3,256,256]、输出是 [1,3,512,512]，
+        // 尺寸对不上，装配阶段读越界会得到一整片 0，也就是用户看到的「封面变黑」。
+        // 失败就整张放弃，让调用方保持原图。
+        let predictionStream = AsyncStream<(Int, MLMultiArray?)> { [inputName, outputName] continuation in
             Task.detached {
                 for await (i, multi) in multiArrayStream {
-                    var buffer = multi
-                    if let prediction = try? self.mlmodel.prediction(inputName: inputName, outputName: outputName, input: buffer) {
-                        buffer = prediction
-                    } else {
-                        UpscaleLog.error("Failed to get output from multiarray model")
+                    defer { returnBuffer(multi) }
+                    do {
+                        if let prediction = try self.mlmodel.prediction(inputName: inputName,
+                                                                       outputName: outputName,
+                                                                       input: multi) {
+                            continuation.yield((i, prediction))
+                        } else {
+                            UpscaleLog.error("模型没有返回输出")
+                            continuation.yield((i, nil))
+                        }
+                    } catch {
+                        UpscaleLog.error("模型推理失败：\(error.localizedDescription)")
+                        continuation.yield((i, nil))
                     }
-                    continuation.yield((i, buffer))
-                    returnBuffer(multi)
                 }
                 continuation.finish()
             }
@@ -177,8 +186,13 @@ extension MultiArrayModel {
         // process final output
         var imgData: [UInt8] = [UInt8](repeating: 0, count: outWidth * outHeight * channels)
 
+        var failedTiles = 0
         await withTaskGroup(of: Void.self) { group in
             for await (i, prediction) in predictionStream {
+                guard let prediction else {
+                    failedTiles += 1
+                    continue
+                }
                 group.addTask {
                     let rect = rects[i]
                     let originX = Int(rect.origin.x) * outScale
@@ -207,6 +221,11 @@ extension MultiArrayModel {
             }
         }
 
+        if failedTiles > 0 {
+            UpscaleLog.error("\(failedTiles)/\(rects.count) 块推理失败，放弃放大")
+            return nil
+        }
+
         applyGrayscaleMask(
             expandedImage.grayscaleMask,
             to: &imgData,
@@ -214,6 +233,12 @@ extension MultiArrayModel {
             height: outHeight,
             sourceWidth: width
         )
+
+        // 兜底：模型没吐出内容时整张会是一片黑，宁可保持原图也不要给用户一张黑图。
+        if MultiArrayModel.isDegenerateBlack(imgData) {
+            UpscaleLog.error("超分输出全黑，保持原图")
+            return nil
+        }
 
         // create final cgimage from imgData buffer
         guard
@@ -237,6 +262,26 @@ extension MultiArrayModel {
             shouldInterpolate: true,
             intent: CGColorRenderingIntent.defaultIntent
         )
+    }
+
+    /// 输出是否退化成「整张几乎全黑」（等距抽样 4096 个点）。
+    static func isDegenerateBlack(_ data: [UInt8]) -> Bool {
+        let pixelCount = data.count / 4
+        guard pixelCount > 0 else { return true }
+        let step = max(1, pixelCount / 4096)
+        var brightest = 0
+        var sum = 0
+        var count = 0
+        var index = 0
+        while index < pixelCount {
+            let offset = index * 4
+            let value = max(Int(data[offset]), max(Int(data[offset + 1]), Int(data[offset + 2])))
+            brightest = max(brightest, value)
+            sum += value
+            count += 1
+            index += step
+        }
+        return brightest < 8 && Double(sum) / Double(max(count, 1)) < 4
     }
 
     // calculate the rects for the image blocks

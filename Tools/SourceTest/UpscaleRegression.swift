@@ -32,6 +32,15 @@ enum UpscaleRegression {
               "超分：超宽图跳过（宽度上限）")
         check(!UpscaleSettings.shouldUpscale(pixelWidth: 1100, pixelHeight: 2000, targetWidth: 1400),
               "超分：像素总量超限跳过")
+        check(UpscaleSettings.shouldUpscale(pixelWidth: 800, pixelHeight: 1200, targetWidth: 1170,
+                                            quality: .best)
+              && !UpscaleSettings.shouldUpscale(pixelWidth: 800, pixelHeight: 1600, targetWidth: 1170,
+                                                quality: .best)
+              && UpscaleSettings.shouldUpscale(pixelWidth: 800, pixelHeight: 1600, targetWidth: 1170,
+                                               quality: .fast),
+              "超分：高质量档（Real-ESRGAN）输入上限更严")
+        check(UpscaleQuality.fast.maxInputPixels > UpscaleQuality.best.maxInputPixels,
+              "超分：快速档允许更大的输入")
         check(!UpscaleSettings.shouldUpscale(pixelWidth: 0, pixelHeight: 100, targetWidth: 600)
               && !UpscaleSettings.shouldUpscale(pixelWidth: 100, pixelHeight: 100, targetWidth: 0),
               "超分：非法尺寸不放大")

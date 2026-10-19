@@ -12,6 +12,8 @@ struct UpscaleSettingsView: View {
     @State private var installed: [String] = []
     @State private var progressByFile: [String: Double] = [:]
     @State private var notice: String?
+    @State private var selfTesting = false
+    @State private var selfTestResult: String?
 
     private var quality: Binding<UpscaleQuality> {
         Binding(get: { UpscaleQuality(rawValue: qualityRaw) ?? .fast },
@@ -47,6 +49,46 @@ struct UpscaleSettingsView: View {
                 ForEach(modelRows, id: \.file) { row in
                     modelRow(row)
                 }
+
+                // 试跑：用一张测试图跑通整条链路，确认模型在这台机器上真能用。
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("试跑一次").appFont(.body).foregroundStyle(palette.primary)
+                        Text(selfTestResult ?? "用一张测试图跑一遍推理，确认模型在本机可用")
+                            .appFont(.caption).foregroundStyle(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    if selfTesting {
+                        ProgressView().tint(palette.accent)
+                    } else {
+                        Button {
+                            runSelfTest()
+                        } label: {
+                            Text("开始").appFont(.caption).padding(.horizontal, 6)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("upscale.selftest")
+                    }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SettingsGlassSurface())
+
+                HStack(spacing: 12) {
+                    Text("清除超分缓存").appFont(.body).foregroundStyle(palette.primary)
+                    Spacer(minLength: 0)
+                    Button {
+                        UpscaleImageCache.clearAll()
+                        notice = "已清除超分缓存，封面会重新推理"
+                    } label: {
+                        Text("清除").appFont(.caption).padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SettingsGlassSurface())
 
                 if let notice {
                     Text(notice)
@@ -168,6 +210,17 @@ struct UpscaleSettingsView: View {
     }
 
     // MARK: 动作
+
+    private func runSelfTest() {
+        guard !selfTesting else { return }
+        selfTesting = true
+        selfTestResult = nil
+        Task {
+            let result = await UpscaleEngine.shared.selfTest()
+            selfTestResult = result
+            selfTesting = false
+        }
+    }
 
     private func refresh() async {
         let store = UpscaleModelStore.shared

@@ -39,7 +39,8 @@ final class LocalCoverImageLoader: ObservableObject {
            let cgImage = decoded?.cgImage,
            UpscaleSettings.shouldUpscale(pixelWidth: cgImage.width,
                                          pixelHeight: cgImage.height,
-                                         targetWidth: pixelBudget) {
+                                         targetWidth: pixelBudget,
+                                         quality: UpscaleSettings.quality) {
             let cacheKey = "\(url.absoluteString)|\(pixelBudget)|\(UpscaleSettings.quality.rawValue)"
             if let upscaled = await UpscaleRuntime.coverUpscaler?(cgImage, pixelBudget, cacheKey) {
                 result = UIImage(cgImage: upscaled)

@@ -40,13 +40,24 @@ enum UpscaleImageCache {
         for file in files { try? fm.removeItem(at: file) }
     }
 
+    /// 清空缓存（内存 + 磁盘）。模型换过、或旧版本存过坏图（比如全黑的封面）时用。
+    static func clearAll() {
+        memory.removeAllObjects()
+        guard let base = try? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: true) else { return }
+        try? FileManager.default.removeItem(at: base.appendingPathComponent("LegadoReading/upscaled", isDirectory: true))
+        try? FileManager.default.removeItem(at: base.appendingPathComponent("LegadoReading/upscaled-v2", isDirectory: true))
+    }
+
     // MARK: 内部
 
+    /// 目录带版本号：早期版本（v1）在推理失败时会把整张黑图缓存下来，
+    /// 换目录名可以直接让那些坏缓存失效。
     private static func directory() -> URL? {
         let base = try? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
                                                 appropriateFor: nil, create: true)
         guard let base else { return nil }
-        let dir = base.appendingPathComponent("LegadoReading/upscaled", isDirectory: true)
+        let dir = base.appendingPathComponent("LegadoReading/upscaled-v2", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
