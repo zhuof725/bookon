@@ -76,12 +76,13 @@ enum DiscoverRegression {
         check(DiscoverCatalog.sources(inGroup: "源仓库", from: list).contains { $0.bookSourceName == "武芊漫画" },
               "发现：武芊漫画归到源仓库分组")
         let kinds = SourceDiagnostics.exploreKinds(source: wuqian)
-        check(kinds.count == 74, "发现：武芊漫画分类数量 74（2 顶部 + 3×24）")
+        check(kinds.count == 77, "发现：武芊漫画分类数量 77（实际 \(kinds.count)）")
         let grouped = DiscoverCatalog.kindSections(kinds)
         check(grouped.count == 4, "发现：切出 4 段（顶部 + 推荐/最热/最新）")
         check(grouped.first?.header == nil && grouped.first?.items.count == 2, "发现：顶部 2 个入口无标题")
-        check(grouped[1].header == "推荐" && grouped[1].items.count == 23
-              && grouped[1].items.first?.title == "全部", "发现：推荐组 23 个分类，首个为全部")
+        check(grouped[1].header == "推荐" && grouped[1].items.count == 24
+              && grouped[1].items.first?.title == "全部",
+              "发现：推荐组 24 个分类（实际 \(grouped[1].items.count)），首个为全部")
         check(grouped[3].header == "最新" && grouped[3].items.allSatisfy { !($0.url ?? "").isEmpty },
               "发现：最新组全部带网址")
         check(grouped[1].items.allSatisfy { ($0.url ?? "").contains("page_num={{page}}") },

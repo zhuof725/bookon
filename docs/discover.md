@@ -22,4 +22,4 @@
 
 - 整理逻辑：`Sources/Engine/DiscoverCatalog.swift`（过滤、分组、域名、分类切节、头像色）
 - 界面：`Sources/App/DiscoverView.swift`（发现 → 分组 → 书源 → 分类 → 书单）
-- 回归：`Tools/SourceTest/DiscoverRegression.swift`（离线夹具：武芊漫画的 74 项发现分类与 4 段切节）
+- 回归：`Tools/SourceTest/DiscoverRegression.swift`（离线夹具：武芊漫画的 77 项发现分类与 4 段切节）
