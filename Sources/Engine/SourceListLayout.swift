@@ -1,13 +1,13 @@
 import Foundation
 
-/// 发现页书源列表的展示方式：宫格卡片或列表行。
+/// 发现页书源列表的展示方式：网格卡片或列表行。
 enum SourceListLayout: String, CaseIterable {
     case grid
     case list
 
     var title: String {
         switch self {
-        case .grid: return "宫格"
+        case .grid: return "网格"
         case .list: return "列表"
         }
     }

@@ -59,7 +59,7 @@ enum DiscoverRegression {
         check(SourceListLayout(rawValue: "grid") == SourceListLayout.grid
               && SourceListLayout(rawValue: "list") == SourceListLayout.list
               && SourceListLayout(rawValue: "wat") == nil, "排列方式：存储值")
-        check(SourceListLayout.grid.title == "宫格" && SourceListLayout.list.title == "列表", "排列方式：显示名")
+        check(SourceListLayout.grid.title == "网格" && SourceListLayout.list.title == "列表", "排列方式：显示名")
 
         // 4. 类型标签
         var manga = g1

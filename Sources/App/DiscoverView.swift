@@ -5,10 +5,12 @@ import SwiftUI
 struct DiscoverView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
+    @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
 
     private var sections: [(name: String, sources: [BookSource])] {
         DiscoverCatalog.sections(store.sources)
     }
+    private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,8 +20,8 @@ struct DiscoverView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
-            List {
-                if sections.isEmpty {
+            if sections.isEmpty {
+                List {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("没有可以浏览的书源").appFont(.headline)
                         Text("在「我的 → 书库管理 → 书源」里给书源填写「发现地址」并保持启用，带发现规则的书源会按分组出现在这里。")
@@ -27,7 +29,25 @@ struct DiscoverView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .independentGlassRow()
-                } else {
+                }
+                .scrollContentBackground(.hidden)
+            } else if layout == .grid {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                        ForEach(sections, id: \.name) { section in
+                            NavigationLink {
+                                DiscoverGroupView(groupName: section.name)
+                            } label: {
+                                DiscoverGroupGridCard(name: section.name, count: section.sources.count)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("discover.group.\(section.name)")
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 24)
+                }
+            } else {
+                List {
                     ForEach(sections, id: \.name) { section in
                         NavigationLink {
                             DiscoverGroupView(groupName: section.name)
@@ -38,8 +58,8 @@ struct DiscoverView: View {
                         .accessibilityIdentifier("discover.group.\(section.name)")
                     }
                 }
+                .scrollContentBackground(.hidden)
             }
-            .scrollContentBackground(.hidden)
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -63,40 +83,45 @@ struct DiscoverGroupView: View {
     private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
 
     var body: some View {
-        List {
+        Group {
             if sources.isEmpty {
-                Text("这个分组暂时没有可以浏览的书源")
-                    .appFont(.footnote).foregroundStyle(palette.secondary)
-                    .independentGlassRow()
+                List {
+                    Text("这个分组暂时没有可以浏览的书源")
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
+                        .independentGlassRow()
+                }
+                .scrollContentBackground(.hidden)
             } else if layout == .grid {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                        ForEach(sources) { source in
+                            NavigationLink {
+                                DiscoverSourceView(source: source)
+                            } label: {
+                                SourceGridCard(source: source,
+                                               subtitle: DiscoverCatalog.displayDomain(source.bookSourceUrl))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 24)
+                }
+            } else {
+                List {
                     ForEach(sources) { source in
                         NavigationLink {
                             DiscoverSourceView(source: source)
                         } label: {
-                            SourceGridCard(source: source,
-                                           subtitle: DiscoverCatalog.displayDomain(source.bookSourceUrl))
+                            DiscoverSourceCard(source: source)
                         }
-                        .buttonStyle(.plain)
+                        .independentGlassRow()
                         .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
                     }
                 }
-                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-            } else {
-                ForEach(sources) { source in
-                    NavigationLink {
-                        DiscoverSourceView(source: source)
-                    } label: {
-                        DiscoverSourceCard(source: source)
-                    }
-                    .independentGlassRow()
-                    .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
-                }
+                .scrollContentBackground(.hidden)
             }
         }
-        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(groupName)
@@ -362,6 +387,37 @@ private struct DiscoverGroupCard: View {
     }
 }
 
+/// 分组网格卡：与书源网格卡同视觉，显示组名与书源数。
+private struct DiscoverGroupGridCard: View {
+    @ThemePalette private var palette
+    let name: String
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 11) {
+            SourceAvatarView(name: name, size: 62)
+            VStack(spacing: 3) {
+                Text(name)
+                    .appFont(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(1)
+                Text(count == 1 ? "1 个书源" : "\(count) 个书源")
+                    .appFont(.system(size: 12))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .background {
+            ThemeSurface(shape: RoundedRectangle(cornerRadius: 20, style: .continuous), isCard: true)
+        }
+    }
+}
+
 private struct DiscoverSourceCard: View {
     @ThemePalette private var palette
     let source: BookSource
@@ -402,28 +458,17 @@ private struct DiscoverSourceHeader: View {
     }
 }
 
-/// 发现页右上角「…」：切换书源排列方式（宫格 / 列表）。
-/// 切换后分组里的书源列表立即按所选方式显示。
+/// 发现页右上角「…」：切换排列方式（网格 / 列表），系统勾选在选项右侧。
+/// 首页分组与分组里的书源都按所选方式排列。
 struct DiscoverLayoutMenu: View {
     @ThemePalette private var palette
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
 
-    private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
-
     var body: some View {
         Menu {
-            Section("排列方式") {
+            Picker("排列方式", selection: $layoutRaw) {
                 ForEach(SourceListLayout.allCases, id: \.rawValue) { value in
-                    Button {
-                        layoutRaw = value.rawValue
-                    } label: {
-                        if value == layout {
-                            Label(value.title, systemImage: "checkmark")
-                        } else {
-                            Text(value.title)
-                        }
-                    }
-                    .accessibilityIdentifier("discover.layout.\(value.rawValue)")
+                    Text(value.title).tag(value.rawValue)
                 }
             }
         } label: {

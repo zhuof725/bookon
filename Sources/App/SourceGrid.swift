@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 竖版书源卡片（宫格视图）：圆角渐变头像 + 名称 + 副标题。
-/// 用于发现页分组里的书源（两列宫格）。
+/// 竖版书源卡片（网格视图）：圆角渐变头像 + 名称 + 副标题。
+/// 用于发现页分组里的书源（两列网格）。
 struct SourceGridCard: View {
     @ThemePalette private var palette
     let source: BookSource
