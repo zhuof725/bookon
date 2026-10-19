@@ -229,7 +229,7 @@ enum RuleRegression {
               "章节地址脚本报错时退回文本部分")
         check(brokenAR.getString("<js>\n`unterminated ${result}\n</js>", from: brokenItem).isEmpty,
               "纯脚本规则报错时仍为空（没有文本可退）")
-        check(brokenAR.getString("/plain/{{$.id}}\n<js>result + '!'\n</js>", from: brokenItem) == "abc!",
+        check(brokenAR.getString("/plain/{{$.id}}\n<js>result + '!'\n</js>", from: brokenItem) == "/plain/abc!",
               "脚本正常时仍以脚本结果为准")
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
