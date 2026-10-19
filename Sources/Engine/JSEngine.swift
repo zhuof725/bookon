@@ -340,6 +340,19 @@ final class JSEngine {
     }
     private static let lastErrorKey = "io.legado.js.lastError"
 
+    /// 规则被截断时结尾的模板字符串常少一个反引号（复制/编辑书源时容易丢），
+    /// JSC 只会报 “Unexpected EOF”。反引号总数为奇数时补一个再试。
+    static func repairUnterminatedTemplate(_ text: String) -> String? {
+        var count = 0
+        var escaped = false
+        for ch in text {
+            if escaped { escaped = false; continue }
+            if ch == "\\" { escaped = true; continue }
+            if ch == "`" { count += 1 }
+        }
+        return count % 2 == 1 ? text + "`" : nil
+    }
+
     private static let prelude = """
     (function(){var __jp=JSON.parse;JSON.parse=function(s,r){if(s!==null&&typeof s==='object'){return s;}return __jp(String(s),r);};})();
     var cookie={
@@ -969,14 +982,28 @@ final class JSEngine {
         // 裸块不允许顶层 return，而 Legado 书源脚本（发现规则、登录脚本等）普遍用 return 结尾。
         // 顶层 return 是解析期就能判定的语法形态，按它选择包裹方式：函数体只在真需要时使用，
         // 不靠「先失败再重试」，避免任何语句被执行两次。
-        let wrapped = RuleScanner.firstTopLevel(script, ["return"]) != nil
-            ? "(function(){\n" + script + "\n})()"
-            : "{\n" + script + "\n}"
+        func wrapScript(_ body: String) -> String {
+            RuleScanner.firstTopLevel(body, ["return"]) != nil
+                ? "(function(){\n" + body + "\n})()"
+                : "{\n" + body + "\n}"
+        }
         JSEngine.lastError = nil
-        guard let v = ctx.evaluateScript(wrapped), !v.isUndefined, !v.isNull else {
-            if let message = JSEngine.lastError {
+        var evaluated = ctx.evaluateScript(wrapScript(script))
+        if evaluated == nil || evaluated!.isUndefined || evaluated!.isNull {
+            // 有些书源规则被截断（结尾的模板字符串少了反引号），JSC 只会报 Unexpected EOF。
+            // 这是可以确定补齐的语法缺口：未闭合的模板字符串补一个反引号再重新包一层求值。
+            if let message = JSEngine.lastError, message.contains("Unexpected EOF"),
+               let repaired = JSEngine.repairUnterminatedTemplate(script) {
+                JSEngine.lastError = nil
+                evaluated = ctx.evaluateScript(wrapScript(repaired))
+                if evaluated != nil, evaluated!.isUndefined == false, evaluated!.isNull == false {
+                    DebugLog.add("≡脚本结尾的反引号缺失，已自动补齐")
+                }
+            }
+        }
+        guard let v = evaluated, !v.isUndefined, !v.isNull else {
+            if JSEngine.lastError != nil {
                 DebugLog.add("JS 脚本失败：\(String(script.prefix(240)))")
-                _ = message
             }
             return nil
         }

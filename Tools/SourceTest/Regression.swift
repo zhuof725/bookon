@@ -220,17 +220,19 @@ enum RuleRegression {
         check(WebBook.nestedChapterNodes(in: ["data": ["list": ["甲", "乙"]]]) == nil,
               "兜底不把非章节数组当章节")
         // 脚本报错时退回规则的文本部分（魔丸书源：文本给真实地址、脚本只包一层 data: 协议）
-        let brokenJsRule = "/api/chapter/content?source={{$.source}}&chapter_id={{$.id}}&type=novel\n"
-            + "<js>\n`data:;base64,${java.base64Encode(result)}\n</js>"
         let brokenAR = AnalyzeRule(content: "{}", baseUrl: "https://example.invalid/")
         let brokenItem: [String: Any] = ["source": "fanqie", "id": "abc"]
-        check(brokenAR.getString(brokenJsRule, from: brokenItem)
+        check(brokenAR.getString("/api/chapter/content?source={{$.source}}&chapter_id={{$.id}}&type=novel\n<js>noSuchFunction(result)</js>", from: brokenItem)
                 == "/api/chapter/content?source=fanqie&chapter_id=abc&type=novel",
               "章节地址脚本报错时退回文本部分")
-        check(brokenAR.getString("<js>\n`unterminated ${result}\n</js>", from: brokenItem).isEmpty,
+        check(brokenAR.getString("<js>noSuchFunction(result)</js>", from: brokenItem).isEmpty,
               "纯脚本规则报错时仍为空（没有文本可退）")
-        check(brokenAR.getString("/plain/{{$.id}}\n<js>result + '!'\n</js>", from: brokenItem) == "/plain/abc!",
+        check(brokenAR.getString("/plain/{{$.id}}\n<js>result + '!'</js>", from: brokenItem) == "/plain/abc!",
               "脚本正常时仍以脚本结果为准")
+        // 结尾反引号缺失（复制书源常见）：自动补齐后按原脚本求值
+        let truncatedRule = "/api/x\n<js>\n`data:;base64,${java.base64Encode(result)},{\"type\":\"mw\"}\n</js>"
+        check(brokenAR.getString(truncatedRule, from: brokenItem) == "data:;base64,L2FwaS94,{\"type\":\"mw\"}",
+              "结尾反引号缺失的脚本自动补齐")
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
 }
