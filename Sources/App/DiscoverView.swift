@@ -152,15 +152,6 @@ struct DiscoverSourceView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                DiscoverSourceHeader(source: source)
-                    .padding(14)
-                    .background {
-                        ThemeSurface(shape: RoundedRectangle(cornerRadius: 20, style: .continuous), isCard: true)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .accessibilityIdentifier("discover.source.header")
-
                 if !controls.isEmpty {
                     DiscoverFilterBar(controls: controls, values: controlValues) { control, value in
                         applyControl(control, value: value)
@@ -210,6 +201,7 @@ struct DiscoverSourceView: View {
                     }
                 }
             }
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .foregroundStyle(palette.primary)
@@ -486,26 +478,6 @@ private struct DiscoverSourceCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(source.bookSourceName).appFont(.headline).lineLimit(1)
-                    if let tag = source.discoverTypeLabel { SourceTagPill(text: tag) }
-                }
-                Text(DiscoverCatalog.displayDomain(source.bookSourceUrl))
-                    .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-        }
-    }
-}
-
-private struct DiscoverSourceHeader: View {
-    @ThemePalette private var palette
-    let source: BookSource
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SourceAvatarView(name: source.bookSourceName, size: 52)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(source.bookSourceName).appFont(.title3.weight(.semibold)).lineLimit(1)
                     if let tag = source.discoverTypeLabel { SourceTagPill(text: tag) }
                 }
                 Text(DiscoverCatalog.displayDomain(source.bookSourceUrl))
