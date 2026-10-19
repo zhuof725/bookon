@@ -6,17 +6,20 @@ struct DiscoverView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
+    @AppStorage(DiscoverSettings.gridColumnsKey) private var gridColumnsValue = 2
+    @State private var showSettings = false
 
     private var sections: [(name: String, sources: [BookSource])] {
         DiscoverCatalog.sections(store.sources)
     }
     private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
+    private var gridColumns: Int { DiscoverSettings.clampedColumns(gridColumnsValue) }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Spacer(minLength: 0)
-                DiscoverLayoutMenu()
+                DiscoverLayoutMenu(onSettings: { showSettings = true })
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
@@ -33,7 +36,7 @@ struct DiscoverView: View {
                 .scrollContentBackground(.hidden)
             } else if layout == .grid {
                 ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: gridColumns), spacing: 12) {
                         ForEach(sections, id: \.name) { section in
                             NavigationLink {
                                 DiscoverGroupView(groupName: section.name)
@@ -65,6 +68,7 @@ struct DiscoverView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("发现")
         .toolbar(.visible, for: .navigationBar)
+        .sheet(isPresented: $showSettings) { DiscoverSettingsView() }
         .accessibilityIdentifier("discover.page")
     }
 }
@@ -76,11 +80,13 @@ struct DiscoverGroupView: View {
     @EnvironmentObject var store: AppStore
     let groupName: String
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
+    @AppStorage(DiscoverSettings.gridColumnsKey) private var gridColumnsValue = 2
 
     private var sources: [BookSource] {
         DiscoverCatalog.sources(inGroup: groupName, from: store.sources)
     }
     private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
+    private var gridColumns: Int { DiscoverSettings.clampedColumns(gridColumnsValue) }
 
     var body: some View {
         Group {
@@ -93,7 +99,7 @@ struct DiscoverGroupView: View {
                 .scrollContentBackground(.hidden)
             } else if layout == .grid {
                 ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: gridColumns), spacing: 12) {
                         ForEach(sources) { source in
                             NavigationLink {
                                 DiscoverSourceView(source: source)
@@ -134,59 +140,59 @@ struct DiscoverGroupView: View {
 struct DiscoverSourceView: View {
     @ThemePalette private var palette
     let source: BookSource
+    @StateObject private var loader: DiscoverBlockLoader
     @State private var kinds: [SourceDiagnostics.ExploreKind] = []
     @State private var loading = true
     @State private var reloadToken = UUID()
-    @State private var controlValues: [String: String] = [:]
-    @State private var applyingControl = false
+    @State private var selectedKindURL: String?
+    @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.magazine.rawValue
+    @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.keyword.rawValue
+    @AppStorage(DiscoverSettings.rankingKeywordsKey) private var keywordsRaw = ""
+    @AppStorage(DiscoverSettings.verticalCountKey) private var verticalCount = DiscoverSettings.defaultVerticalCount
+    @AppStorage(DiscoverSettings.horizontalCountKey) private var horizontalCount = DiscoverSettings.defaultHorizontalCount
+    @AppStorage(DiscoverSettings.preloadCountKey) private var preloadCount = DiscoverSettings.defaultPreloadCount
+
+    init(source: BookSource) {
+        self.source = source
+        _loader = StateObject(wrappedValue: DiscoverBlockLoader(source: source))
+    }
 
     private var errorText: String? { DiscoverCatalog.kindError(kinds) }
-    /// 顶部筛选行：只显示有选项的 select 控件（书山聚合扩展）。
-    private var controls: [SourceDiagnostics.ExploreKind] {
-        kinds.filter { ($0.type ?? "") == "select" && !($0.chars ?? []).isEmpty }
-    }
     private var sections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
         DiscoverCatalog.kindSections(kinds)
     }
+    private var flatItems: [SourceDiagnostics.ExploreKind] { sections.flatMap(\.items) }
+    private var pageLayout: DiscoverSettings.PageLayout {
+        DiscoverSettings.PageLayout(rawValue: pageLayoutRaw) ?? .magazine
+    }
+    private var rankingMode: DiscoverSettings.RankingMode {
+        DiscoverSettings.RankingMode(rawValue: rankingModeRaw) ?? .keyword
+    }
+    private var keywords: [String] { DiscoverSettings.keywords(from: keywordsRaw) }
 
     var body: some View {
+        Group {
+            if pageLayout == .list {
+                listLayout
+            } else {
+                magazineLayout
+            }
+        }
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .navigationTitle(source.bookSourceName)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: reloadToken) { await load() }
+        .accessibilityIdentifier("discover.source.page")
+    }
+
+    // MARK: 杂志布局（榜单平铺）
+
+    private var magazineLayout: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                if !controls.isEmpty {
-                    DiscoverFilterBar(controls: controls, values: controlValues) { control, value in
-                        applyControl(control, value: value)
-                    }
-                    .padding(.horizontal, 16)
-                }
-
-                if applyingControl {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("正在切换…").appFont(.footnote).foregroundStyle(palette.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                }
-
-                if loading {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text("正在读取发现分类…").appFont(.footnote).foregroundStyle(palette.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                } else if let errorText = errorText {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(errorText).appFont(.footnote).foregroundStyle(palette.secondary)
-                        Button("重试") { reloadToken = UUID() }
-                            .appFont(.footnote.weight(.semibold))
-                            .accessibilityIdentifier("discover.retry")
-                    }
-                    .padding(.horizontal, 16)
-                } else if sections.isEmpty {
-                    Text("这个书源暂时没有发现分类；可以在书源编辑里检查「发现地址」。")
-                        .appFont(.footnote).foregroundStyle(palette.secondary)
-                        .padding(.horizontal, 16)
-                } else {
+                stateRows
+                if !loading, errorText == nil, !sections.isEmpty {
                     ForEach(Array(sections.enumerated()), id: \.offset) { pair in
                         if let header = pair.element.header {
                             Text(header)
@@ -195,8 +201,15 @@ struct DiscoverSourceView: View {
                                 .padding(.horizontal, 16)
                         }
                         ForEach(pair.element.items, id: \.self) { kind in
-                            DiscoverSectionBlock(source: source, kind: kind)
-                                .padding(.horizontal, 16)
+                            let vertical = usesVertical(kind.title)
+                            DiscoverSectionBlock(
+                                loader: loader,
+                                kind: kind,
+                                vertical: vertical,
+                                itemCount: vertical ? verticalCount : horizontalCount,
+                                onAppear: { preload(after: kind) }
+                            )
+                            .padding(.horizontal, 16)
                         }
                     }
                 }
@@ -204,13 +217,118 @@ struct DiscoverSourceView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
-        .foregroundStyle(palette.primary)
-        .background { AppThemeCanvas().ignoresSafeArea() }
-        .navigationTitle(source.bookSourceName)
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: reloadToken) { await load() }
-        .refreshable { await load() }
-        .accessibilityIdentifier("discover.source.page")
+        .refreshable { await refreshAll() }
+    }
+
+    // MARK: 列表布局（分类筛选 + 书卡列表）
+
+    private var listLayout: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(flatItems, id: \.self) { kind in
+                        kindChip(kind)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            Divider().opacity(0.15)
+            ScrollView {
+                LazyVStack(spacing: 14) {
+                    stateRows
+                    if let url = selectedKindURL {
+                        let books = loader.books(for: url) ?? []
+                        if books.isEmpty {
+                            if loader.isLoading(url) {
+                                HStack(spacing: 8) {
+                                    ProgressView().controlSize(.small)
+                                    Text("加载中…").appFont(.footnote).foregroundStyle(palette.secondary)
+                                }
+                            } else if loader.hasFailed(url) {
+                                HStack(spacing: 10) {
+                                    Text("加载失败").appFont(.footnote).foregroundStyle(palette.secondary)
+                                    Button("重试") { Task { await loader.load(url, force: true) } }
+                                        .appFont(.footnote.weight(.semibold))
+                                }
+                            } else {
+                                Text("暂无内容").appFont(.footnote).foregroundStyle(palette.secondary)
+                            }
+                        } else {
+                            ForEach(books) { book in
+                                NavigationLink {
+                                    BookDetailView(book: book)
+                                } label: {
+                                    DiscoverBookListRow(book: book)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 12)
+            }
+            .refreshable { await refreshAll() }
+        }
+    }
+
+    private func kindChip(_ kind: SourceDiagnostics.ExploreKind) -> some View {
+        let selected = selectedKindURL == (kind.url ?? "")
+        return Button {
+            selectedKindURL = kind.url
+            if let url = kind.url { Task { await loader.load(url) } }
+        } label: {
+            Text(kind.title)
+                .appFont(.system(size: 13, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? palette.onAccent : palette.primary)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background {
+                    if selected {
+                        Capsule().fill(palette.accent)
+                    } else {
+                        ThemeSurface(shape: Capsule())
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("discover.kind.\(kind.title)")
+    }
+
+    @ViewBuilder private var stateRows: some View {
+        if loading {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("正在读取发现分类…").appFont(.footnote).foregroundStyle(palette.secondary)
+            }
+            .padding(.horizontal, 16)
+        } else if let errorText = errorText {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(errorText).appFont(.footnote).foregroundStyle(palette.secondary)
+                Button("重试") { reloadToken = UUID() }
+                    .appFont(.footnote.weight(.semibold))
+                    .accessibilityIdentifier("discover.retry")
+            }
+            .padding(.horizontal, 16)
+        } else if sections.isEmpty {
+            Text("这个书源暂时没有发现分类；可以在书源编辑里检查「发现地址」。")
+                .appFont(.footnote).foregroundStyle(palette.secondary)
+                .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: 数据
+
+    private func usesVertical(_ title: String) -> Bool {
+        DiscoverSettings.usesVerticalStyle(title: title, mode: rankingMode, keywords: keywords)
+    }
+
+    private func preload(after kind: SourceDiagnostics.ExploreKind) {
+        guard preloadCount > 0, let index = flatItems.firstIndex(of: kind) else { return }
+        let end = min(index + preloadCount, flatItems.count - 1)
+        guard end > index else { return }
+        loader.preload(flatItems[(index + 1)...end].compactMap { $0.url })
     }
 
     private func load() async {
@@ -220,43 +338,27 @@ struct DiscoverSourceView: View {
             SourceDiagnostics.exploreKinds(source: src)
         }.value
         kinds = result
-        controlValues = Self.controlValues(from: result)
         loading = false
-    }
-
-    /// 切换筛选控件：执行控件 action（写书源配置），然后重新读取分类列表。
-    private func applyControl(_ control: SourceDiagnostics.ExploreKind, value: String) {
-        guard let action = control.action, !action.isEmpty else { return }
-        var info = controlValues
-        info[control.title] = value
-        controlValues = info
-        applyingControl = true
-        let src = source
-        Task {
-            _ = await Task.detached(priority: .userInitiated) {
-                SourceDiagnostics.applyExploreControl(source: src, action: action, info: info)
-            }.value
-            let result = await Task.detached(priority: .userInitiated) {
-                SourceDiagnostics.exploreKinds(source: src)
-            }.value
-            kinds = result
-            var values = Self.controlValues(from: result)
-            if values[control.title] == nil { values[control.title] = value }
-            controlValues = values
-            applyingControl = false
-        }
-    }
-
-    private static func controlValues(from kinds: [SourceDiagnostics.ExploreKind]) -> [String: String] {
-        var values: [String: String] = [:]
-        for kind in kinds where (kind.type ?? "") == "select" {
-            if let def = kind.defaultValue, !def.isEmpty {
-                values[kind.title] = def
-            } else if let first = kind.chars?.first {
-                values[kind.title] = first
+        let items = DiscoverCatalog.kindSections(result).flatMap(\.items)
+        if selectedKindURL == nil, let first = items.first?.url {
+            selectedKindURL = first
+            if pageLayout == .list {
+                await loader.load(first)
             }
         }
-        return values
+    }
+
+    /// 下拉刷新：清缓存并重新拉取已加载的板块。
+    private func refreshAll() async {
+        DiscoverBlockCache.clear()
+        let loaded = Array(loader.books.keys)
+        await load()
+        for url in loaded {
+            await loader.load(url, force: true)
+        }
+        if pageLayout == .list, let url = selectedKindURL {
+            await loader.load(url, force: true)
+        }
     }
 }
 
@@ -437,29 +539,43 @@ private struct DiscoverGroupCard: View {
     }
 }
 
-/// 分组网格卡：与书源网格卡同视觉，显示组名与书源数。
+/// 分组网格卡：与书源网格卡同视觉，显示组名与书源数，尺寸随列数自适应。
 private struct DiscoverGroupGridCard: View {
     @ThemePalette private var palette
+    @AppStorage(DiscoverSettings.gridColumnsKey) private var gridColumnsValue = 2
     let name: String
     let count: Int
 
+    private var columns: Int { DiscoverSettings.clampedColumns(gridColumnsValue) }
+    private var avatarSize: CGFloat {
+        switch columns {
+        case 2: return 62
+        case 3: return 48
+        case 4: return 40
+        default: return 34
+        }
+    }
+    private var titleSize: CGFloat { columns >= 4 ? 12 : (columns == 3 ? 13.5 : 16) }
+    private var captionSize: CGFloat { columns >= 4 ? 10 : (columns == 3 ? 11 : 12) }
+    private var verticalPadding: CGFloat { columns >= 4 ? 12 : (columns == 3 ? 16 : 20) }
+
     var body: some View {
-        VStack(spacing: 11) {
-            SourceAvatarView(name: name, size: 62)
+        VStack(spacing: columns >= 4 ? 7 : 11) {
+            SourceAvatarView(name: name, size: avatarSize)
             VStack(spacing: 3) {
                 Text(name)
-                    .appFont(.system(size: 16, weight: .semibold))
+                    .appFont(.system(size: titleSize, weight: .semibold))
                     .foregroundStyle(palette.primary)
                     .lineLimit(1)
                 Text(count == 1 ? "1 个书源" : "\(count) 个书源")
-                    .appFont(.system(size: 12))
+                    .appFont(.system(size: captionSize))
                     .foregroundStyle(palette.secondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
         }
-        .padding(.top, 20)
-        .padding(.bottom, 16)
+        .padding(.top, verticalPadding)
+        .padding(.bottom, verticalPadding - 4)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity)
         .background {
@@ -488,11 +604,12 @@ private struct DiscoverSourceCard: View {
     }
 }
 
-/// 发现页右上角「…」：切换排列方式（网格 / 列表），系统勾选在选项右侧。
+/// 发现页右上角「…」：切换排列方式（网格 / 列表），系统勾选在选项右侧；下方可进入设置。
 /// 首页分组与分组里的书源都按所选方式排列。
 struct DiscoverLayoutMenu: View {
     @ThemePalette private var palette
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
+    var onSettings: () -> Void = {}
 
     var body: some View {
         Menu {
@@ -501,6 +618,13 @@ struct DiscoverLayoutMenu: View {
                     Text(value.title).tag(value.rawValue)
                 }
             }
+            Divider()
+            Button {
+                onSettings()
+            } label: {
+                Label("设置", systemImage: "gearshape")
+            }
+            .accessibilityIdentifier("discover.settings")
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 20, weight: .bold))

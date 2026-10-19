@@ -83,6 +83,19 @@ enum DiscoverRegression {
         check(!DiscoverCatalog.isRankingTitle("猜你喜欢") && !DiscoverCatalog.isRankingTitle("西方奇幻"),
               "发现：普通分类识别")
 
+        // 3e. 发现设置：关键词解析、样式判定、列数钳制
+        check(DiscoverSettings.keywords(from: nil) == DiscoverSettings.defaultKeywords, "设置：默认关键词")
+        check(DiscoverSettings.keywords(from: " ,榜, 排行 ") == ["榜", "排行"], "设置：关键词解析去空")
+        check(DiscoverSettings.keywords(from: "玄幻") == ["玄幻"], "设置：自定义关键词")
+        check(DiscoverSettings.usesVerticalStyle(title: "巅峰榜单", mode: .keyword, keywords: ["榜"]), "设置：关键词命中竖排")
+        check(!DiscoverSettings.usesVerticalStyle(title: "猜你喜欢", mode: .keyword, keywords: ["榜"]), "设置：未命中横滑")
+        check(DiscoverSettings.usesVerticalStyle(title: "猜你喜欢", mode: .vertical, keywords: []), "设置：全部竖排")
+        check(!DiscoverSettings.usesVerticalStyle(title: "巅峰榜单", mode: .horizontal, keywords: ["榜"]), "设置：全部横滑")
+        check(DiscoverSettings.clampedColumns(1) == 2 && DiscoverSettings.clampedColumns(9) == 5
+              && DiscoverSettings.clampedColumns(3) == 3, "设置：列数钳制 2...5")
+        check(DiscoverSettings.RankingMode(rawValue: "keyword") == DiscoverSettings.RankingMode.keyword
+              && DiscoverSettings.PageLayout(rawValue: "list") == DiscoverSettings.PageLayout.list, "设置：枚举存储值")
+
         // 4. 类型标签
         var manga = g1
         manga.bookSourceType = 2
