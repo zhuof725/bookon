@@ -332,6 +332,14 @@ final class JSEngine {
     /// 当前正在执行的书源（供 JS 里的 `source` 对象使用）
     static var currentSource: BookSource?
 
+    /// 最近一次脚本异常（按线程保存）。调用方据此区分「脚本抛错」与「脚本返回空」：
+    /// 抛错时可以退回规则的文本部分，而不是把整条规则判成空。
+    static var lastError: String? {
+        get { Thread.current.threadDictionary[lastErrorKey] as? String }
+        set { Thread.current.threadDictionary[lastErrorKey] = newValue }
+    }
+    private static let lastErrorKey = "io.legado.js.lastError"
+
     private static let prelude = """
     (function(){var __jp=JSON.parse;JSON.parse=function(s,r){if(s!==null&&typeof s==='object'){return s;}return __jp(String(s),r);};})();
     var cookie={
@@ -839,6 +847,7 @@ final class JSEngine {
         ctx.exceptionHandler = { _, e in
             let message = e?.toString() ?? "未知脚本异常"
             print("[JS error] \(message)")
+            JSEngine.lastError = message
             DebugLog.add("JS 错误：\(String(message.prefix(240)))")
         }
         ctx.setObject(JavaBridge(context: context, session: session,
@@ -963,7 +972,14 @@ final class JSEngine {
         let wrapped = RuleScanner.firstTopLevel(script, ["return"]) != nil
             ? "(function(){\n" + script + "\n})()"
             : "{\n" + script + "\n}"
-        guard let v = ctx.evaluateScript(wrapped), !v.isUndefined, !v.isNull else { return nil }
+        JSEngine.lastError = nil
+        guard let v = ctx.evaluateScript(wrapped), !v.isUndefined, !v.isNull else {
+            if let message = JSEngine.lastError {
+                DebugLog.add("JS 脚本失败：\(String(script.prefix(240)))")
+                _ = message
+            }
+            return nil
+        }
         if v.isString || v.isNumber || v.isBoolean { return v.toString() }
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }

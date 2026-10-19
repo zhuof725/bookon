@@ -319,6 +319,9 @@ enum WebBook {
             let link = ar.getString(rule.chapterUrl, from: first)
             DebugLog.add("⚠️目录列表 \(nodes.count) 项未解析出章节（首项 \(typeName)，字段 \(keys)，"
                          + "标题规则\(title.isEmpty ? "为空" : "有值")，地址规则\(link.isEmpty ? "为空" : "有值")）")
+            if link.isEmpty {
+                DebugLog.add("⚠️章节地址规则原文：\(String((rule.chapterUrl ?? "").prefix(200)))")
+            }
         }
         DebugLog.add("└目录列表解析完成")
         let urls = splitNextUrls(ar.getString(rule.nextTocUrl), base: url)

@@ -82,6 +82,12 @@ final class AnalyzeRule {
         return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: input, context: context) ?? ""
     }
 
+    /// 与 runJS 相同，但脚本抛错时返回 nil（错误信息在 JSEngine.lastError）。
+    private func runJSOptional(_ js: String, _ input: Any) -> Any? {
+        let expanded = expandEmbeddedTemplates(js, input: input)
+        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: input, context: context)
+    }
+
     /// Legado 会在执行 @js:/<js> 前先展开其中的 {{规则}}。
     /// 例如 `{{$.bid}}` 必须从当前 JSON 节点取值，而不能直接交给 JSCore 解析。
     private func expandEmbeddedTemplates(_ script: String, input: Any) -> String {
@@ -146,11 +152,23 @@ final class AnalyzeRule {
             }
         }
         var cur: Any = obj ?? content
+        var seenJS = false
+        var textBeforeJS: String? = nil
         for (isJs, s) in splitJS(rule) {
-            if isJs { cur = runJS(s, cur) }
-            else {
+            if isJs {
+                seenJS = true
+                let value = runJSOptional(s, cur)
+                if value == nil, JSEngine.lastError != nil {
+                    // 脚本报错：文本部分通常就是真实地址（脚本只做一层包装，如 data: 协议），
+                    // 退回文本部分，别把整条规则判成空。
+                    if let t = textBeforeJS, !t.isEmpty { return t }
+                    return ""
+                }
+                cur = value ?? ""
+            } else {
                 if let str = cur as? String, cur as AnyObject !== content as AnyObject { cur = AnalyzeRule.parse(str, baseUrl: baseUrl) }
                 cur = stringValue(cur, s)
+                if !seenJS, textBeforeJS == nil { textBeforeJS = AnalyzeRule.asString(cur) }
             }
         }
         return AnalyzeRule.asString(cur).trimmingCharacters(in: .whitespacesAndNewlines)
