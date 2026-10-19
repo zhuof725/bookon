@@ -36,7 +36,7 @@ let perSourceTimeout = Double(args.count > 3 ? args[3] : "60") ?? 60
 
 guard let data = FileManager.default.contents(atPath: path) else { print("无法读取 \(path)"); exit(1) }
 let sources: [BookSource]
-do { sources = try JSONDecoder().decode([BookSource].self, from: data).filter { !$0.bookSourceName.contains("魔丸") } }
+do { sources = try JSONDecoder().decode([BookSource].self, from: data) }
 catch { print("书源解析失败: \(error)"); exit(1) }
 print("共 \(sources.count) 个书源，关键词：\(key)\n")
 

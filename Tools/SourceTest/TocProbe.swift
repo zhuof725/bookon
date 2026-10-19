@@ -48,5 +48,14 @@ enum TocProbe {
         let chapters = WebBook.parseChapterNodes(nodes, rule: toc, ar: ar, baseUrl: finalURL)
         print("parseChapterNodes = \(chapters.count) 章")
         for c in chapters.prefix(3) { print("  \(c.title) -> \(String(c.url.prefix(120)))") }
+
+        // 走真实链路（WebBook.chapters 内部含旧版书源兜底），确认目录真的能取到。
+        let real = try await WebBook.chapters(source: s, book: info)
+        print("WebBook.chapters = \(real.count) 章")
+        for c in real.prefix(3) { print("  \(c.title) -> \(String(c.url.prefix(120)))") }
+        if let first = real.first {
+            let text = try await WebBook.content(source: s, chapter: first, nextChapterUrl: nil, book: info)
+            print("正文 \(text.count) 字符，开头: \(String(text.prefix(80)))")
+        }
     }
 }
