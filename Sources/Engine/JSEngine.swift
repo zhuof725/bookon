@@ -340,17 +340,34 @@ final class JSEngine {
     }
     private static let lastErrorKey = "io.legado.js.lastError"
 
-    /// 规则被截断时结尾的模板字符串常少一个反引号（复制/编辑书源时容易丢），
-    /// JSC 只会报 “Unexpected EOF”。反引号总数为奇数时补一个再试。
-    static func repairUnterminatedTemplate(_ text: String) -> String? {
-        var count = 0
+    /// 书源规则被截断时（复制/编辑书源常丢字符），结尾的字符串/模板字符串会少一个引号，
+    /// JSC 只报 “Unexpected EOF”。扫描到结尾仍未闭合的引号补一个再求值。
+    static func repairUnterminatedString(_ text: String) -> String? {
+        enum Quote { case none, single, double, template }
+        var quote: Quote = .none
         var escaped = false
         for ch in text {
             if escaped { escaped = false; continue }
             if ch == "\\" { escaped = true; continue }
-            if ch == "`" { count += 1 }
+            switch quote {
+            case .none:
+                if ch == "'" { quote = .single }
+                else if ch == "\"" { quote = .double }
+                else if ch == "`" { quote = .template }
+            case .single:
+                if ch == "'" { quote = .none }
+            case .double:
+                if ch == "\"" { quote = .none }
+            case .template:
+                if ch == "`" { quote = .none }
+            }
         }
-        return count % 2 == 1 ? text + "`" : nil
+        switch quote {
+        case .single: return text + "'"
+        case .double: return text + "\""
+        case .template: return text + "`"
+        case .none: return nil
+        }
     }
 
     private static let prelude = """
@@ -993,11 +1010,11 @@ final class JSEngine {
             // 有些书源规则被截断（结尾的模板字符串少了反引号），JSC 只会报 Unexpected EOF。
             // 这是可以确定补齐的语法缺口：未闭合的模板字符串补一个反引号再重新包一层求值。
             if let message = JSEngine.lastError, message.contains("Unexpected EOF"),
-               let repaired = JSEngine.repairUnterminatedTemplate(script) {
+               let repaired = JSEngine.repairUnterminatedString(script) {
                 JSEngine.lastError = nil
                 evaluated = ctx.evaluateScript(wrapScript(repaired))
                 if evaluated != nil, evaluated!.isUndefined == false, evaluated!.isNull == false {
-                    DebugLog.add("≡脚本结尾的反引号缺失，已自动补齐")
+                    DebugLog.add("≡脚本结尾的引号缺失，已自动补齐")
                 }
             }
         }
