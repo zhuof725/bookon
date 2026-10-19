@@ -207,6 +207,18 @@ enum RuleRegression {
         CookieDomainRegression.run(check)
         SourceCryptoRegression.run(check)
         CryptoBridgeRegression.run(check)
+        // 旧版书源兼容：目录脚本只返回整个响应 JSON（没有后续 `$.data.chapters`）时，
+        // getElements 得到 1 个字典，必须能从常见字段里找回章节数组。
+        let legacyTocRule = "<js>JSON.stringify({code:0,data:{chapters:[{name:'第一章',id:'abc'}]}})</js>"
+        let legacyAR = AnalyzeRule(content: "{}", baseUrl: "https://example.invalid/")
+        let legacyNodes = legacyAR.getElements(legacyTocRule)
+        check(legacyNodes.count == 1, "旧版目录脚本：无后续选择器时得到 1 个字典")
+        check(WebBook.nestedChapterNodes(in: (legacyNodes.first as? [String: Any]) ?? [:])?.count == 1,
+              "旧版目录脚本：兜底找到 data.chapters")
+        check(WebBook.nestedChapterNodes(in: ["data": ["items": [["title": "甲"]]]])?.count == 1,
+              "兜底兼容 data.items + title")
+        check(WebBook.nestedChapterNodes(in: ["data": ["list": ["甲", "乙"]]]) == nil,
+              "兜底不把非章节数组当章节")
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
 }

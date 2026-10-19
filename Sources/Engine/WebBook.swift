@@ -298,10 +298,28 @@ enum WebBook {
         DebugLog.recordSource(body, stage: 30)
         let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
         DebugLog.add("┌获取目录列表")
-        let nodes = ar.getElements(listRule)
+        var nodes = ar.getElements(listRule)
         DebugLog.add("└列表大小:\(nodes.count)")
         DebugLog.add("┌解析目录列表")
-        let parsed = parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url)
+        var parsed = parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url)
+        // 兼容旧版书源：目录脚本只返回整个响应 JSON、后面没有 `$.data.chapters` 这类选择器时，
+        // getElements 只能拿到 1 个字典，章节全被跳过。这里从常见的章节数组字段里再取一次。
+        if parsed.isEmpty, nodes.count == 1, let object = nodes[0] as? [String: Any],
+           let nested = nestedChapterNodes(in: object) {
+            nodes = nested
+            parsed = parseChapterNodes(nested, rule: rule, ar: ar, baseUrl: url)
+            if !parsed.isEmpty {
+                DebugLog.add("≡目录列表改从响应 JSON 的嵌套数组解析（\(nested.count) 项）")
+            }
+        }
+        if parsed.isEmpty, let first = nodes.first {
+            let typeName = String(describing: type(of: first))
+            let keys = (first as? [String: Any])?.keys.sorted().joined(separator: ",") ?? "-"
+            let title = ar.getString(rule.chapterName, from: first)
+            let link = ar.getString(rule.chapterUrl, from: first)
+            DebugLog.add("⚠️目录列表 \(nodes.count) 项未解析出章节（首项 \(typeName)，字段 \(keys)，"
+                         + "标题规则\(title.isEmpty ? "为空" : "有值")，地址规则\(link.isEmpty ? "为空" : "有值")）")
+        }
         DebugLog.add("└目录列表解析完成")
         let urls = splitNextUrls(ar.getString(rule.nextTocUrl), base: url)
         return TocPageResult(chapters: parsed, nextURLs: urls)
@@ -341,6 +359,30 @@ enum WebBook {
             out.append(chapter)
         }
         return out
+    }
+
+    /// 旧版书源的目录脚本会把整个响应 JSON 当结果返回（没有再跟 `$.data.chapters`），
+    /// 这里在常见字段里找「看起来像章节」的数组，作为兼容兜底；找不到就返回 nil。
+    static func nestedChapterNodes(in object: [String: Any]) -> [Any]? {
+        let paths = ["data.chapters", "chapters", "data.list", "list",
+                     "data.items", "items", "data.data", "result", "rows", "data"]
+        for path in paths {
+            var current: Any = object
+            var matched = true
+            for key in path.split(separator: ".") {
+                guard let dict = current as? [String: Any], let next = dict[String(key)] else {
+                    matched = false
+                    break
+                }
+                current = next
+            }
+            guard matched, let array = current as? [Any], !array.isEmpty,
+                  let first = array.first as? [String: Any],
+                  ["name", "title", "chapterName", "chapter_name"].contains(where: { first[$0] != nil })
+            else { continue }
+            return array
+        }
+        return nil
     }
 
     /// 与 Legado 对 isVip/isPay/isVolume 的判定一致：空、false、0、null 为假，其余为真。
