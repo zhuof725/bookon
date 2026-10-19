@@ -301,13 +301,15 @@ enum WebBook {
         var nodes = ar.getElements(listRule)
         DebugLog.add("└列表大小:\(nodes.count)")
         DebugLog.add("┌解析目录列表")
-        var parsed = parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: url)
+        // 目录页可能是 data: 伪协议（不能作为相对地址基准），相对章节地址改用书源地址解析。
+        let chapterBase = (url.hasPrefix("http://") || url.hasPrefix("https://")) ? url : source.bookSourceUrl
+        var parsed = parseChapterNodes(nodes, rule: rule, ar: ar, baseUrl: chapterBase)
         // 兼容旧版书源：目录脚本只返回整个响应 JSON、后面没有 `$.data.chapters` 这类选择器时，
         // getElements 只能拿到 1 个字典，章节全被跳过。这里从常见的章节数组字段里再取一次。
         if parsed.isEmpty, nodes.count == 1, let object = nodes[0] as? [String: Any],
            let nested = nestedChapterNodes(in: object) {
             nodes = nested
-            parsed = parseChapterNodes(nested, rule: rule, ar: ar, baseUrl: url)
+            parsed = parseChapterNodes(nested, rule: rule, ar: ar, baseUrl: chapterBase)
             if !parsed.isEmpty {
                 DebugLog.add("≡目录列表改从响应 JSON 的嵌套数组解析（\(nested.count) 项）")
             }
