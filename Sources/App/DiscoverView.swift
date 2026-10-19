@@ -7,7 +7,10 @@ struct DiscoverView: View {
     @EnvironmentObject var store: AppStore
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
     @AppStorage(DiscoverSettings.gridColumnsKey) private var gridColumnsValue = 2
+    @AppStorage(DiscoverSettings.homeGroupKey) private var homeGroup = ""
     @State private var showSettings = false
+    @State private var autoOpenGroup: String?
+    @State private var didAutoOpen = false
 
     private var sections: [(name: String, sources: [BookSource])] {
         DiscoverCatalog.sections(store.sources)
@@ -68,7 +71,25 @@ struct DiscoverView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("发现")
         .toolbar(.visible, for: .navigationBar)
-        .sheet(isPresented: $showSettings) { DiscoverSettingsView() }
+        .sheet(isPresented: $showSettings) {
+            DiscoverSettingsView()
+                .environmentObject(store)
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { autoOpenGroup != nil },
+            set: { if !$0 { autoOpenGroup = nil } }
+        )) {
+            if let group = autoOpenGroup {
+                DiscoverGroupView(groupName: group)
+            }
+        }
+        .onAppear {
+            guard !didAutoOpen else { return }
+            didAutoOpen = true
+            let group = homeGroup.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !group.isEmpty, sections.contains(where: { $0.name == group }) else { return }
+            autoOpenGroup = group
+        }
         .accessibilityIdentifier("discover.page")
     }
 }
@@ -146,10 +167,12 @@ struct DiscoverSourceView: View {
     @State private var reloadToken = UUID()
     @State private var selectedKindURL: String?
     @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.magazine.rawValue
-    @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.keyword.rawValue
+    @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.cycle.rawValue
     @AppStorage(DiscoverSettings.rankingKeywordsKey) private var keywordsRaw = ""
     @AppStorage(DiscoverSettings.verticalCountKey) private var verticalCount = DiscoverSettings.defaultVerticalCount
     @AppStorage(DiscoverSettings.horizontalCountKey) private var horizontalCount = DiscoverSettings.defaultHorizontalCount
+    @AppStorage(DiscoverSettings.cycleVerticalKey) private var cycleVertical = DiscoverSettings.defaultCycleVertical
+    @AppStorage(DiscoverSettings.cycleHorizontalKey) private var cycleHorizontal = DiscoverSettings.defaultCycleHorizontal
     @AppStorage(DiscoverSettings.preloadCountKey) private var preloadCount = DiscoverSettings.defaultPreloadCount
 
     init(source: BookSource) {
@@ -166,7 +189,7 @@ struct DiscoverSourceView: View {
         DiscoverSettings.PageLayout(rawValue: pageLayoutRaw) ?? .magazine
     }
     private var rankingMode: DiscoverSettings.RankingMode {
-        DiscoverSettings.RankingMode(rawValue: rankingModeRaw) ?? .keyword
+        DiscoverSettings.RankingMode(rawValue: rankingModeRaw) ?? .cycle
     }
     private var keywords: [String] { DiscoverSettings.keywords(from: keywordsRaw) }
 
@@ -201,7 +224,7 @@ struct DiscoverSourceView: View {
                                 .padding(.horizontal, 16)
                         }
                         ForEach(pair.element.items, id: \.self) { kind in
-                            let vertical = usesVertical(kind.title)
+                            let vertical = verticalFlag(for: kind)
                             DiscoverSectionBlock(
                                 loader: loader,
                                 kind: kind,
@@ -320,8 +343,16 @@ struct DiscoverSourceView: View {
 
     // MARK: 数据
 
-    private func usesVertical(_ title: String) -> Bool {
-        DiscoverSettings.usesVerticalStyle(title: title, mode: rankingMode, keywords: keywords)
+    private func verticalFlag(for kind: SourceDiagnostics.ExploreKind) -> Bool {
+        let index = flatItems.firstIndex(of: kind) ?? 0
+        return DiscoverSettings.usesVerticalStyle(
+            index: index,
+            title: kind.title,
+            mode: rankingMode,
+            keywords: keywords,
+            cycleVertical: cycleVertical,
+            cycleHorizontal: cycleHorizontal
+        )
     }
 
     private func preload(after kind: SourceDiagnostics.ExploreKind) {

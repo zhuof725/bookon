@@ -87,13 +87,24 @@ enum DiscoverRegression {
         check(DiscoverSettings.keywords(from: nil) == DiscoverSettings.defaultKeywords, "设置：默认关键词")
         check(DiscoverSettings.keywords(from: " ,榜, 排行 ") == ["榜", "排行"], "设置：关键词解析去空")
         check(DiscoverSettings.keywords(from: "玄幻") == ["玄幻"], "设置：自定义关键词")
-        check(DiscoverSettings.usesVerticalStyle(title: "巅峰榜单", mode: .keyword, keywords: ["榜"]), "设置：关键词命中竖排")
-        check(!DiscoverSettings.usesVerticalStyle(title: "猜你喜欢", mode: .keyword, keywords: ["榜"]), "设置：未命中横滑")
-        check(DiscoverSettings.usesVerticalStyle(title: "猜你喜欢", mode: .vertical, keywords: []), "设置：全部竖排")
-        check(!DiscoverSettings.usesVerticalStyle(title: "巅峰榜单", mode: .horizontal, keywords: ["榜"]), "设置：全部横滑")
+        check(DiscoverSettings.usesVerticalStyle(index: 0, title: "巅峰榜单", mode: .keyword, keywords: ["榜"]), "设置：关键词命中竖排")
+        check(!DiscoverSettings.usesVerticalStyle(index: 0, title: "猜你喜欢", mode: .keyword, keywords: ["榜"]), "设置：未命中横滑")
+        check(DiscoverSettings.usesVerticalStyle(index: 0, title: "猜你喜欢", mode: .vertical, keywords: []), "设置：全部竖排")
+        check(!DiscoverSettings.usesVerticalStyle(index: 0, title: "巅峰榜单", mode: .horizontal, keywords: ["榜"]), "设置：全部横滑")
+        check(DiscoverSettings.usesVerticalStyle(index: 0, title: "任意", mode: .cycle, keywords: [], cycleVertical: 1, cycleHorizontal: 1)
+              && !DiscoverSettings.usesVerticalStyle(index: 1, title: "任意", mode: .cycle, keywords: [], cycleVertical: 1, cycleHorizontal: 1)
+              && DiscoverSettings.usesVerticalStyle(index: 2, title: "任意", mode: .cycle, keywords: [], cycleVertical: 1, cycleHorizontal: 1), "设置：循环顺序 1+1")
+        check(DiscoverSettings.usesVerticalStyle(index: 0, title: "任意", mode: .cycle, keywords: [], cycleVertical: 2, cycleHorizontal: 1)
+              && DiscoverSettings.usesVerticalStyle(index: 1, title: "任意", mode: .cycle, keywords: [], cycleVertical: 2, cycleHorizontal: 1)
+              && !DiscoverSettings.usesVerticalStyle(index: 2, title: "任意", mode: .cycle, keywords: [], cycleVertical: 2, cycleHorizontal: 1), "设置：循环顺序 2+1")
+        check(!DiscoverSettings.usesVerticalStyle(index: 5, title: "任意", mode: .cycle, keywords: [], cycleVertical: 0, cycleHorizontal: 2),
+              "设置：循环全横滑")
+        check(DiscoverSettings.usesVerticalStyle(index: 5, title: "任意", mode: .cycle, keywords: [], cycleVertical: 3, cycleHorizontal: 0),
+              "设置：循环全竖排")
         check(DiscoverSettings.clampedColumns(1) == 2 && DiscoverSettings.clampedColumns(9) == 5
               && DiscoverSettings.clampedColumns(3) == 3, "设置：列数钳制 2...5")
-        check(DiscoverSettings.RankingMode(rawValue: "keyword") == DiscoverSettings.RankingMode.keyword
+        check(DiscoverSettings.RankingMode(rawValue: "cycle") == DiscoverSettings.RankingMode.cycle
+              && DiscoverSettings.RankingMode(rawValue: "keyword") == DiscoverSettings.RankingMode.keyword
               && DiscoverSettings.PageLayout(rawValue: "list") == DiscoverSettings.PageLayout.list, "设置：枚举存储值")
 
         // 3f. 缓存往返：板块书单与发现分类（真实文件读写）

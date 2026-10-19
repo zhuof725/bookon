@@ -7,11 +7,14 @@ struct DiscoverSettingsView: View {
     @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
     @AppStorage(DiscoverSettings.gridColumnsKey) private var gridColumns = 2
     @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.magazine.rawValue
-    @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.keyword.rawValue
+    @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.cycle.rawValue
     @AppStorage(DiscoverSettings.rankingKeywordsKey) private var keywordsRaw = ""
     @AppStorage(DiscoverSettings.verticalCountKey) private var verticalCount = DiscoverSettings.defaultVerticalCount
     @AppStorage(DiscoverSettings.horizontalCountKey) private var horizontalCount = DiscoverSettings.defaultHorizontalCount
+    @AppStorage(DiscoverSettings.cycleVerticalKey) private var cycleVertical = DiscoverSettings.defaultCycleVertical
+    @AppStorage(DiscoverSettings.cycleHorizontalKey) private var cycleHorizontal = DiscoverSettings.defaultCycleHorizontal
     @AppStorage(DiscoverSettings.preloadCountKey) private var preloadCount = DiscoverSettings.defaultPreloadCount
+    @AppStorage(DiscoverSettings.homeGroupKey) private var homeGroup = ""
     @AppStorage(DiscoverSettings.coverConcurrencyKey) private var coverConcurrency = DiscoverSettings.defaultCoverConcurrency
     @AppStorage(DiscoverSettings.cacheDaysKey) private var cacheDays = DiscoverSettings.defaultCacheDays
     @State private var showAddKeyword = false
@@ -27,6 +30,9 @@ struct DiscoverSettingsView: View {
     private var pageLayout: DiscoverSettings.PageLayout {
         DiscoverSettings.PageLayout(rawValue: pageLayoutRaw) ?? .magazine
     }
+    private var rankingMode: DiscoverSettings.RankingMode {
+        DiscoverSettings.RankingMode(rawValue: rankingModeRaw) ?? .cycle
+    }
     private var keywords: [String] { DiscoverSettings.keywords(from: keywordsRaw) }
 
     var body: some View {
@@ -35,13 +41,14 @@ struct DiscoverSettingsView: View {
                 Section {
                     Toggle("书签页网格布局", isOn: gridBinding)
                         .accessibilityIdentifier("discover.settings.grid")
-                    Picker("网格列数", selection: $gridColumns) {
-                        ForEach(DiscoverSettings.columnChoices, id: \.self) { value in
-                            Text("\(value)").tag(value)
+                    if gridEnabled {
+                        Picker("网格列数", selection: $gridColumns) {
+                            ForEach(DiscoverSettings.columnChoices, id: \.self) { value in
+                                Text("\(value)").tag(value)
+                            }
                         }
+                        .accessibilityIdentifier("discover.settings.columns")
                     }
-                    .disabled(!gridEnabled)
-                    .accessibilityIdentifier("discover.settings.columns")
                 } header: {
                     Text("书签页")
                 } footer: {
@@ -63,6 +70,23 @@ struct DiscoverSettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        DiscoverHomeGroupPicker()
+                    } label: {
+                        HStack {
+                            Label("首屏配置", systemImage: "arrow.right.circle")
+                            Spacer()
+                            Text(homeGroup.isEmpty ? "不启用" : homeGroup)
+                                .foregroundStyle(palette.secondary)
+                        }
+                    }
+                } header: {
+                    Text("首屏配置")
+                } footer: {
+                    Text("设置后，打开书签时会直接进入该配置。")
+                }
+
+                Section {
                     Picker("排列方式", selection: $rankingModeRaw) {
                         ForEach(DiscoverSettings.RankingMode.allCases, id: \.rawValue) { mode in
                             Text(mode.title).tag(mode.rawValue)
@@ -75,33 +99,54 @@ struct DiscoverSettingsView: View {
                     Text("标题命中关键词的用竖排榜单，其余横滑。")
                 }
 
-                Section {
-                    ForEach(keywords, id: \.self) { keyword in
-                        HStack(spacing: 10) {
-                            Image(systemName: "number")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(palette.accent)
-                                .frame(width: 22)
-                            Text(keyword).appFont(.body)
+                if rankingMode == .cycle {
+                    Section {
+                        Picker("竖排数量", selection: $cycleVertical) {
+                            ForEach(0...10, id: \.self) { value in
+                                Text("\(value)").tag(value)
+                            }
                         }
-                        .accessibilityIdentifier("discover.keyword.\(keyword)")
+                        Picker("横滑数量", selection: $cycleHorizontal) {
+                            ForEach(0...10, id: \.self) { value in
+                                Text("\(value)").tag(value)
+                            }
+                        }
+                    } header: {
+                        Text("循环数量")
+                    } footer: {
+                        Text("每个周期先 \(cycleVertical) 个竖排榜单、再 \(cycleHorizontal) 个横滑榜单，如此循环。")
                     }
-                    .onDelete(perform: deleteKeywords)
-                    Button {
-                        newKeyword = ""
-                        showAddKeyword = true
-                    } label: {
-                        Label("添加关键词", systemImage: "plus.circle")
+                }
+
+                if rankingMode == .keyword {
+                    Section {
+                        ForEach(keywords, id: \.self) { keyword in
+                            HStack(spacing: 10) {
+                                Image(systemName: "number")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(palette.accent)
+                                    .frame(width: 22)
+                                Text(keyword).appFont(.body)
+                            }
+                            .accessibilityIdentifier("discover.keyword.\(keyword)")
+                        }
+                        .onDelete(perform: deleteKeywords)
+                        Button {
+                            newKeyword = ""
+                            showAddKeyword = true
+                        } label: {
+                            Label("添加关键词", systemImage: "plus.circle")
+                        }
+                        Button {
+                            keywordsRaw = ""
+                        } label: {
+                            Label("恢复默认关键词", systemImage: "arrow.counterclockwise")
+                        }
+                    } header: {
+                        Text("竖排榜单关键词")
+                    } footer: {
+                        Text("标题包含任一关键词的榜单用竖排序号样式，其余用横滑封面。左滑可删除。")
                     }
-                    Button {
-                        keywordsRaw = ""
-                    } label: {
-                        Label("恢复默认关键词", systemImage: "arrow.counterclockwise")
-                    }
-                } header: {
-                    Text("竖排榜单关键词")
-                } footer: {
-                    Text("标题包含任一关键词的榜单用竖排序号样式，其余用横滑封面。左滑可删除。")
                 }
 
                 Section {
@@ -188,5 +233,49 @@ struct DiscoverSettingsView: View {
         var list = keywords
         list.remove(atOffsets: offsets)
         keywordsRaw = DiscoverSettings.keywordsText(list)
+    }
+}
+
+/// 首屏配置：选择打开发现时直接进入的分组（或「不启用」）。
+private struct DiscoverHomeGroupPicker: View {
+    @ThemePalette private var palette
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(DiscoverSettings.homeGroupKey) private var homeGroup = ""
+
+    private var groups: [String] {
+        DiscoverCatalog.sections(store.sources).map(\.name)
+    }
+
+    var body: some View {
+        List {
+            row(title: "不启用", selected: homeGroup.isEmpty) {
+                homeGroup = ""
+                dismiss()
+            }
+            ForEach(groups, id: \.self) { group in
+                row(title: group, selected: homeGroup == group) {
+                    homeGroup = group
+                    dismiss()
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .navigationTitle("首屏配置")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark").foregroundStyle(palette.accent)
+                }
+            }
+        }
     }
 }

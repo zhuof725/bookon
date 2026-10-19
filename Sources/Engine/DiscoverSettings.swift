@@ -13,10 +13,15 @@ enum DiscoverSettings {
     static let preloadCountKey = "discover.preload.count"
     static let coverConcurrencyKey = "discover.cover.concurrency"
     static let cacheDaysKey = "discover.cache.days"
+    static let cycleVerticalKey = "discover.cycle.vertical"
+    static let cycleHorizontalKey = "discover.cycle.horizontal"
+    static let homeGroupKey = "discover.home.group"
 
     static let defaultKeywords = ["榜", "排行", "热门", "推荐", "最热", "畅销"]
-    static let defaultVerticalCount = 3
+    static let defaultVerticalCount = 4
     static let defaultHorizontalCount = 8
+    static let defaultCycleVertical = 1
+    static let defaultCycleHorizontal = 1
     static let defaultPreloadCount = 5
     static let defaultCoverConcurrency = 6
     static let defaultCacheDays = 3
@@ -39,13 +44,15 @@ enum DiscoverSettings {
         var title: String { self == .magazine ? "杂志" : "列表" }
     }
 
-    /// 榜单排列方式：关键词排列 / 全部竖排 / 全部横滑。
+    /// 榜单排列方式：循环顺序 / 关键词排列 / 全部竖排 / 全部横滑。
     enum RankingMode: String, CaseIterable {
+        case cycle
         case keyword
         case vertical
         case horizontal
         var title: String {
             switch self {
+            case .cycle: return "循环顺序"
             case .keyword: return "关键词排列"
             case .vertical: return "全部竖排"
             case .horizontal: return "全部横滑"
@@ -67,11 +74,20 @@ enum DiscoverSettings {
     }
 
     /// 板块是否用竖排（排名序号）样式。
-    static func usesVerticalStyle(title: String, mode: RankingMode, keywords: [String]) -> Bool {
+    /// 循环顺序：按板块顺序，每个周期「竖排 cycleVertical 个、横滑 cycleHorizontal 个」。
+    static func usesVerticalStyle(index: Int, title: String, mode: RankingMode, keywords: [String],
+                                  cycleVertical: Int = defaultCycleVertical,
+                                  cycleHorizontal: Int = defaultCycleHorizontal) -> Bool {
         switch mode {
         case .vertical: return true
         case .horizontal: return false
         case .keyword: return keywords.contains { title.contains($0) }
+        case .cycle:
+            let vertical = max(cycleVertical, 0)
+            let horizontal = max(cycleHorizontal, 0)
+            let period = vertical + horizontal
+            guard period > 0 else { return false }
+            return (max(index, 0) % period) < vertical
         }
     }
 }
