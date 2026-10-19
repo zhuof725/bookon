@@ -97,6 +97,14 @@ struct UpscaleSettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                if let lastError = UpscaleLog.lastError {
+                    Text("最近一次失败：\(lastError)")
+                        .appFont(.caption).foregroundStyle(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("upscale.lasterror")
+                }
+
                 Text("超分用 Core ML 模型在本机推理，不上传图片。放大只在原图小于显示尺寸时进行：长条漫与高清单图会跳过，避免内存和耗时失控。模型文件下载后保存在本机，可随时删除。")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)

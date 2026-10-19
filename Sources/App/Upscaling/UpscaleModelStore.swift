@@ -3,11 +3,19 @@ import CoreML
 
 /// 超分运行时的日志（移植代码里替换了 Aidoku 的 LogManager）。
 enum UpscaleLog {
+    /// 最近一次失败原因（设置页展示，方便反馈问题）。
+    private(set) static var lastError: String?
+
     static func error(_ message: String) {
+        lastError = message
         #if DEBUG
         print("[upscale] \(message)")
         #endif
         CrashReporter.note("图片超分 \(message)")
+    }
+
+    static func clearLastError() {
+        lastError = nil
     }
 }
 
