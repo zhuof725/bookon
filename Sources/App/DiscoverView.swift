@@ -47,30 +47,36 @@ struct DiscoverGroupView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     let groupName: String
+    @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
 
     private var sources: [BookSource] {
         DiscoverCatalog.sources(inGroup: groupName, from: store.sources)
     }
+    private var columns: Int { SourceListLayout.clampedColumns(columnsValue) }
 
     var body: some View {
-        List {
+        ScrollView {
             if sources.isEmpty {
                 Text("这个分组暂时没有可以浏览的书源")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
-                    .independentGlassRow()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.top, 12)
             } else {
-                ForEach(sources) { source in
-                    NavigationLink {
-                        DiscoverSourceView(source: source)
-                    } label: {
-                        DiscoverSourceCard(source: source)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
+                    ForEach(sources) { source in
+                        NavigationLink {
+                            DiscoverSourceView(source: source)
+                        } label: {
+                            SourceGridCard(source: source,
+                                           subtitle: DiscoverCatalog.displayDomain(source.bookSourceUrl))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
                     }
-                    .independentGlassRow()
-                    .accessibilityIdentifier("discover.source.\(source.bookSourceName)")
                 }
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 24)
             }
         }
-        .scrollContentBackground(.hidden)
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle(groupName)
@@ -330,26 +336,6 @@ private struct DiscoverGroupCard: View {
                 Text(name).appFont(.headline).lineLimit(1)
                 Text(count == 1 ? "1 个书源" : "\(count) 个书源")
                     .appFont(.caption).foregroundStyle(palette.secondary)
-            }
-            Spacer(minLength: 8)
-        }
-    }
-}
-
-private struct DiscoverSourceCard: View {
-    @ThemePalette private var palette
-    let source: BookSource
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SourceAvatarView(name: source.bookSourceName)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(source.bookSourceName).appFont(.headline).lineLimit(1)
-                    if let tag = source.discoverTypeLabel { SourceTagPill(text: tag) }
-                }
-                Text(DiscoverCatalog.displayDomain(source.bookSourceUrl))
-                    .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)
         }

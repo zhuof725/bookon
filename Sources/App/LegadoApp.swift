@@ -216,6 +216,11 @@ struct SourcesView: View {
     @State private var exportItem: SourceExportItem?
     @State private var editTarget: SourceEditTarget?
     @State private var collapsedGroups: Set<String> = []
+    @AppStorage(SourceListLayout.layoutKey) private var layoutRaw = SourceListLayout.grid.rawValue
+    @AppStorage(SourceListLayout.columnsKey) private var columnsValue = SourceListLayout.defaultColumns
+
+    private var layout: SourceListLayout { SourceListLayout(rawValue: layoutRaw) ?? .grid }
+    private var gridColumns: Int { SourceListLayout.clampedColumns(columnsValue) }
 
     var body: some View {
         List {
@@ -227,8 +232,12 @@ struct SourcesView: View {
             ForEach(BookSource.groupedSections(store.sources), id: \.name) { section in
                 Section {
                     if !collapsedGroups.contains(section.name) {
-                        ForEach(section.sources) { s in sourceRow(s) }
-                            .independentGlassRow()
+                        if layout == .grid {
+                            sourceGrid(section.sources)
+                        } else {
+                            ForEach(section.sources) { s in sourceRow(s) }
+                                .independentGlassRow()
+                        }
                     }
                 } header: { groupHeader(section.name, count: section.sources.count) }
             }
@@ -252,6 +261,7 @@ struct SourcesView: View {
         .sheet(isPresented: $showCheck) { SourceCheckView(sources: checkList, store: store) }
         .overlay { if busy { ProgressView() } }
         .toolbar {
+            layoutMenu
             Button { editTarget = SourceEditTarget(source: nil) } label: { Image(systemName: "square.and.pencil") }
                 .accessibilityLabel("新建书源")
                 .accessibilityIdentifier("sources.new")
@@ -340,19 +350,81 @@ struct SourcesView: View {
             Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
         }
         .contentShape(Rectangle())
-        .contextMenu {
-            // 只有配置了登录（loginUi 或可用的 loginUrl）的书源才显示「登录」。
-            if SourceLoginForm.hasLogin(s) {
-                Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
+        .contextMenu { sourceMenu(s) }
+    }
+
+    /// 网格视图：每个分组一行卡片网格；轻点卡片切换启用，长按打开操作菜单。
+    private func sourceGrid(_ list: [BookSource]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: gridColumns), spacing: 12) {
+            ForEach(list) { s in
+                Button {
+                    store.toggleSource(s)
+                } label: {
+                    SourceGridCard(source: s, dimmed: !s.isEnabled)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(s.bookSourceName)，\(s.isEnabled ? "已启用，轻点停用" : "已停用，轻点启用")")
+                .accessibilityIdentifier("sources.card.\(s.bookSourceName)")
+                .contextMenu { sourceMenu(s) }
             }
-            Button { editTarget = SourceEditTarget(source: s) } label: { Label("编辑书源", systemImage: "square.and.pencil") }
-            Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
-            Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
-            Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
-            Button { exportSource(s) } label: { Label("导出配置文件", systemImage: "square.and.arrow.up") }
-            Button { copySource(s) } label: { Label("复制配置", systemImage: "doc.on.doc") }
-            Button(role: .destructive) { deleteSource = s } label: { Label("删除配置", systemImage: "trash") }
         }
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
+    /// 布局菜单：网格 / 列表切换，以及网格列数（2 / 3 / 4）。
+    private var layoutMenu: some View {
+        Menu {
+            Section("布局") {
+                ForEach(SourceListLayout.allCases, id: \.rawValue) { value in
+                    Button {
+                        layoutRaw = value.rawValue
+                    } label: {
+                        if value == layout {
+                            Label(value.title, systemImage: "checkmark")
+                        } else {
+                            Text(value.title)
+                        }
+                    }
+                    .accessibilityIdentifier("sources.layout.\(value.rawValue)")
+                }
+            }
+            Section("网格列数") {
+                ForEach(SourceListLayout.columnChoices, id: \.self) { count in
+                    Button {
+                        columnsValue = count
+                    } label: {
+                        if count == gridColumns {
+                            Label("\(count) 列", systemImage: "checkmark")
+                        } else {
+                            Text("\(count) 列")
+                        }
+                    }
+                    .accessibilityIdentifier("sources.columns.\(count)")
+                }
+            }
+        } label: {
+            Image(systemName: layout.symbol)
+        }
+        .accessibilityLabel("视图")
+        .accessibilityIdentifier("sources.layout.menu")
+    }
+
+    /// 书源操作菜单：列表行与网格卡片共用。
+    @ViewBuilder
+    private func sourceMenu(_ s: BookSource) -> some View {
+        // 只有配置了登录（loginUi 或可用的 loginUrl）的书源才显示「登录」。
+        if SourceLoginForm.hasLogin(s) {
+            Button { loginSource = s } label: { Label("登录", systemImage: "person.crop.circle") }
+        }
+        Button { editTarget = SourceEditTarget(source: s) } label: { Label("编辑书源", systemImage: "square.and.pencil") }
+        Button { debugSource = s } label: { Label("调试", systemImage: "ladybug") }
+        Button { checkList = [s]; showCheck = true } label: { Label("校验此书源", systemImage: "checkmark.circle") }
+        Button { groupText = s.bookSourceGroup ?? ""; groupSource = s } label: { Label("移动到分组", systemImage: "folder") }
+        Button { exportSource(s) } label: { Label("导出配置文件", systemImage: "square.and.arrow.up") }
+        Button { copySource(s) } label: { Label("复制配置", systemImage: "doc.on.doc") }
+        Button(role: .destructive) { deleteSource = s } label: { Label("删除配置", systemImage: "trash") }
     }
 
     /// 导出配置文件：写成临时 JSON 文件后弹系统分享面板（可存到文件、发送给其它 App）。

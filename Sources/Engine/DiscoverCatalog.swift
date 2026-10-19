@@ -36,6 +36,12 @@ enum DiscoverCatalog {
         return text
     }
 
+    /// 书源卡片副标题：优先显示分组（原样，多个分组用逗号分隔），没有分组时显示域名。
+    static func cardSubtitle(_ source: BookSource) -> String {
+        let group = (source.bookSourceGroup ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return group.isEmpty ? displayDomain(source.bookSourceUrl) : group
+    }
+
     /// 发现分类切节：原版发现规则里没有网址的项是分组标题（如「推荐」「最热」），
     /// 其余按出现顺序归入当前小节；空小节（只有标题没有分类）被丢弃。
     static func kindSections(_ kinds: [SourceDiagnostics.ExploreKind])

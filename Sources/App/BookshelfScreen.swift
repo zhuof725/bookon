@@ -59,6 +59,8 @@ struct BookshelfScreen: View {
     var onRefresh: () async -> String? = { nil }
     @AppStorage("shelf.layout.v1") private var layoutValue = ShelfLayout.grid.rawValue
     @AppStorage("shelf.sort.v1") private var sortValue = ShelfSort.recent.rawValue
+    /// 网格列数：0 = 自动（按屏宽计算），2...5 = 手动指定。
+    @AppStorage("shelf.gridColumns.v1") private var gridColumnsValue = 0
     @State private var filter: ShelfFilter = .all
     @State private var selecting = false
     @State private var selection: Set<String> = []
@@ -79,7 +81,8 @@ struct BookshelfScreen: View {
             let metrics = theme.customization.map {
                 ThemeShelfMetrics(width: geometry.size.width, customization: $0, accessibility: typeSize.isAccessibilitySize)
             }
-            let columns = metrics?.columns ?? (typeSize.isAccessibilitySize ? 2 : max(3, Int((geometry.size.width - 48) / 124)))
+            let autoColumns = metrics?.columns ?? (typeSize.isAccessibilitySize ? 2 : max(3, Int((geometry.size.width - 48) / 124)))
+            let columns = (2...5).contains(gridColumnsValue) ? gridColumnsValue : autoColumns
             VStack(spacing: 14) {
                 header
                 if selecting { selectionBar }
@@ -236,6 +239,13 @@ struct BookshelfScreen: View {
                 if page == "layout" {
                     ForEach(ShelfLayout.allCases, id: \.rawValue) { value in
                         choiceRow(value.rawValue, selected: value == layout, id: "shelf.layout." + (value == .grid ? "grid" : "list")) { layoutValue = value.rawValue; menu = nil }
+                    }
+                    Divider().padding(.horizontal, 9).padding(.vertical, 4)
+                    Text("网格列数").appFont(.system(size: 13)).foregroundStyle(palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.bottom, 2)
+                    choiceRow("自动", selected: !(2...5).contains(gridColumnsValue), id: "shelf.gridColumns.auto") { gridColumnsValue = 0; menu = nil }
+                    ForEach([2, 3, 4, 5], id: \.self) { count in
+                        choiceRow("\(count) 列", selected: gridColumnsValue == count, id: "shelf.gridColumns.\(count)") { gridColumnsValue = count; menu = nil }
                     }
                 } else if page == "sort" {
                     ForEach(ShelfSort.allCases, id: \.rawValue) { value in
