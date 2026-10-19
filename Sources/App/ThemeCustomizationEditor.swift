@@ -391,7 +391,7 @@ struct ThemeCustomizationEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("自定义标签图标").appFont(.headline)
             VStack(spacing: 8) {
-                ForEach(LibraryTab.allCases, id: \.rawValue) { tab in
+                ForEach(LibraryTab.displayOrder, id: \.rawValue) { tab in
                     tabIconRow(tab)
                 }
             }

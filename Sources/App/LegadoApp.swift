@@ -72,6 +72,8 @@ struct RootView: View {
         NavigationStack {
             LibraryTabContainer(selection: $selection) {
                 BookshelfView()
+            } discover: {
+                DiscoverView()
             } statistics: {
                 LibraryStatisticsView()
             } profile: {

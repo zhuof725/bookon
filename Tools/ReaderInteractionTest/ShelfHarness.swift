@@ -109,6 +109,9 @@ struct ShelfHarnessView: View {
                 case .search:
                     Text("搜索占位页").accessibilityIdentifier("shelf.searchPage")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .discover:
+                    Text("发现占位页").accessibilityIdentifier("shelf.discover")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {

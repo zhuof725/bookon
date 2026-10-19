@@ -14,6 +14,9 @@ struct NativeTabsGlassHarness: View {
                     Button("星形图标") { theme.customization?.tabIcons = ["shelf": "star.fill"] }
                         .accessibilityIdentifier("native.icon")
                 }
+            } discover: {
+                Text("发现测试页").accessibilityIdentifier("native.page.discover")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } statistics: {
                 Text("统计测试页").accessibilityIdentifier("native.page.statistics")
             } profile: {

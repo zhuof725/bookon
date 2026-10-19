@@ -79,11 +79,11 @@ enum SourceDiagnostics {
         return parseExploreKinds(ruleStr)
     }
 
-    /// 发现页书籍列表：ruleExplore 优先，缺省时用搜索规则。
-    static func explore(source: BookSource, url: String) async throws -> [Book] {
+    /// 发现页书籍列表：ruleExplore 优先，缺省时用搜索规则。page 供分类地址里的 {{page}}（加载更多）。
+    static func explore(source: BookSource, url: String, page: Int = 1) async throws -> [Book] {
         guard let rule = source.ruleExplore ?? source.ruleSearch else { return [] }
         let context = RuleContext(source: source)
-        let au = AnalyzeUrl(rawUrl: url, page: 1, baseUrl: source.bookSourceUrl, sourceHeader: source.header,
+        let au = AnalyzeUrl(rawUrl: url, page: page, baseUrl: source.bookSourceUrl, sourceHeader: source.header,
                             context: context, jsLib: source.jsLib)
         let (body, finalURL) = try await au.fetch()
         DebugLog.recordSource(body, stage: 10)
