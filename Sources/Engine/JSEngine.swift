@@ -948,18 +948,13 @@ final class JSEngine {
         // A rule's let/const bindings must not collide with bridge globals or
         // change the lexical scope captured by jsLib helpers. A block preserves
         // JavaScript completion values (unlike an IIFE without an explicit return).
-        let previousHandler = ctx.exceptionHandler
-        var thrown: String?
-        ctx.exceptionHandler = { _, value in thrown = value?.toString() }
-        defer { ctx.exceptionHandler = previousHandler }
-        var value = ctx.evaluateScript("{\n" + script + "\n}")
-        // Legado 书源脚本普遍用顶层 return 结尾（发现规则、登录脚本等）。裸块与顶层脚本都
-        // 不允许 return，属解析期失败（尚未执行任何语句），因此可以安全地改用函数体重试。
-        if let message = thrown, message.contains("Illegal return statement") {
-            thrown = nil
-            value = ctx.evaluateScript("(function(){\n" + script + "\n})()")
-        }
-        guard let v = value, !v.isUndefined, !v.isNull else { return nil }
+        // 裸块不允许顶层 return，而 Legado 书源脚本（发现规则、登录脚本等）普遍用 return 结尾。
+        // 顶层 return 是解析期就能判定的语法形态，按它选择包裹方式：函数体只在真需要时使用，
+        // 不靠「先失败再重试」，避免任何语句被执行两次。
+        let wrapped = RuleScanner.firstTopLevel(script, ["return"]) != nil
+            ? "(function(){\n" + script + "\n})()"
+            : "{\n" + script + "\n}"
+        guard let v = ctx.evaluateScript(wrapped), !v.isUndefined, !v.isNull else { return nil }
         if v.isString || v.isNumber || v.isBoolean { return v.toString() }
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }

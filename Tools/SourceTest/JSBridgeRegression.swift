@@ -122,6 +122,11 @@ enum JSBridgeRegression {
         // Legado 书源脚本常用顶层 return 结束（发现/登录脚本）；求值必须能执行并拿到返回值。
         check(engine.evalString("var a = 2;\nreturn 'r' + a;", jsLib: library, context: context) == "r2",
               "顶层 return 脚本可执行并返回结果")
+        // 括号/字符串/属性里的 return 不是顶层 return，不能改变包裹方式。
+        check(engine.evalString("var f = function(){ return 'x' }; f()", jsLib: library, context: context) == "x",
+              "函数体内的 return 不触发函数体包裹")
+        check(engine.evalString("var s = 'a return b'; s", jsLib: library, context: context) == "a return b",
+              "字符串里的 return 不触发函数体包裹")
         check(engine.evalString("var list = [1,2,3];\nreturn list;", jsLib: library, context: context) == "1\n2\n3",
               "顶层 return 数组按多值返回")
         // 顶层 return 脚本的副作用仍要落在同一脚本上下文的变量上。
