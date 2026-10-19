@@ -362,10 +362,12 @@ final class JSEngine {
                 if ch == "`" { quote = .none }
             }
         }
+        // 单/双引号字符串不能跨行：补引号前先去掉尾随换行，否则仍是语法错误。
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch quote {
-        case .single: return text + "'"
-        case .double: return text + "\""
-        case .template: return text + "`"
+        case .single: return body + "'"
+        case .double: return body + "\""
+        case .template: return body + "`"
         case .none: return nil
         }
     }
