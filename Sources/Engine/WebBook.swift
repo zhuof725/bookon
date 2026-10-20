@@ -200,7 +200,7 @@ enum WebBook {
         func s(_ r: String?) -> String { ar.getString(r, from: root) }
         let n = s(rule.name); if !n.isEmpty { b.name = n }
         let a = s(rule.author); if !a.isEmpty { b.author = a }
-        if let v = nilIfEmpty(s(rule.intro)) { b.intro = displayIntro(v) }
+        if let v = BookIntro.normalized(s(rule.intro)) { b.intro = v }
         if let v = nilIfEmpty(ar.getStringList(rule.kind, from: root).joined(separator: ",")) { b.kind = v }
         if let v = nilIfEmpty(s(rule.lastChapter)) { b.lastChapter = v }
         if let v = nilIfEmpty(s(rule.wordCount)) { b.wordCount = v }
@@ -530,17 +530,6 @@ enum WebBook {
             }
         }
         return boundaries >= 2 ? output : line
-    }
-
-    static func displayIntro(_ text: String) -> String {
-        var value = text
-            .replacingOccurrences(of: "<br\\s*/?>|</p>", with: "\n", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-        for (entity, decoded) in [("&nbsp;", " "), ("&shy;", ""), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\"")] {
-            value = value.replacingOccurrences(of: entity, with: decoded)
-        }
-        return value.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     static func cleanText(_ s: String) -> String {

@@ -21,6 +21,8 @@ struct BookDetailScreen: View {
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .caption2) private var actionDiameter: CGFloat = 52
+    /// `<useweb>` 简介：WebView 内容高度（由网页回调更新）。
+    @State private var richIntroHeight: CGFloat = 0
 
     init(book: Book, onShelf: Bool, category: String, chapters: [BookChapter],
          loading: Bool, message: String?, onBack: @escaping () -> Void,
@@ -251,17 +253,12 @@ struct BookDetailScreen: View {
     }
 
     private var introCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let intro = BookIntro.parse(book.intro)
+        return VStack(alignment: .leading, spacing: 14) {
             Text("简介")
                 .appFont(.title2.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
-            Text(nonempty(book.intro) ?? "暂无简介")
-                .appFont(.body)
-                .foregroundStyle(nonempty(book.intro) == nil ? palette.secondary : palette.primary)
-                .lineSpacing(7)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("detail.intro")
+            introBody(intro)
             // Book.origin == "local" is the persisted imported-book marker.
             // Source books remain read-only, including after joining the shelf.
             if book.origin == "local" {
@@ -280,6 +277,30 @@ struct BookDetailScreen: View {
             }
         }
         .modifier(DetailCardSurface())
+    }
+
+    /// 书源简介可以是 `<useweb>`／`<usehtml>` 包裹的 HTML（原版用 WebView 渲染，支持 CSS），
+    /// 其余按纯文本显示。
+    @ViewBuilder
+    private func introBody(_ intro: BookIntro?) -> some View {
+        if let intro, intro.kind.isRich {
+            RichIntroWebView(html: intro.renderBody,
+                             textColor: palette.primary,
+                             secondaryColor: palette.secondary,
+                             height: $richIntroHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: max(richIntroHeight, 1))
+                .accessibilityIdentifier("detail.intro")
+        } else {
+            let text = intro?.plainText ?? ""
+            Text(text.isEmpty ? "暂无简介" : text)
+                .appFont(.body)
+                .foregroundStyle(text.isEmpty ? palette.secondary : palette.primary)
+                .lineSpacing(7)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("detail.intro")
+        }
     }
 
     private var tocCard: some View {

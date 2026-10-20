@@ -69,6 +69,8 @@ targets:
       - path: ../../Sources/Engine/ReaderBookmarks.swift
       - path: DetailHarness.swift
       - path: ../../Sources/App/BookDetailScreen.swift
+      - path: ../../Sources/App/RichIntroView.swift
+      - path: ../../Sources/Engine/BookIntro.swift
       - path: ../../Sources/App/BookshelfScreen.swift
       - path: ../../Sources/App/LibraryDock.swift
       - path: ChromeHarness.swift

@@ -235,7 +235,8 @@ struct DiscoverRankRow: View {
     }
 
     static func intro(_ book: Book) -> String? {
-        let value = book.intro?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // `<useweb>` 等富简介在列表里只取纯文本，不能把 HTML 标签露出来。
+        let value = BookIntro.parse(book.intro)?.plainText.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return value.isEmpty ? nil : value
     }
 }
