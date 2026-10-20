@@ -16,9 +16,13 @@ on:
         type: boolean
         default: false
       probe:
-        description: 目录诊断（打印目录页原始内容、节点类型与标题/地址规则输出）
-        type: boolean
-        default: false
+        description: 诊断：true=目录探针，search=搜索探针
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+          - search
+        default: 'false'
 
 jobs:
   test:
