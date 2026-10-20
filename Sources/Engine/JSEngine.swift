@@ -598,12 +598,13 @@ final class JSEngine {
             if(typeof opt==='string'){
                 var t=String(opt).replace(/^\\s+|\\s+$/g,'');
                 if(t.charAt(0)==='{'){
-                    try{return String(java.connect(String(u)+','+t).body());}catch(e){return '';}
+                    return String(java.connect(String(u)+','+t).body());
                 }
-                try{var h=JSON.parse(t);if(h&&typeof h==='object'){
-                    return String(java.httpGetNative(String(u),t).body());}}catch(e2){}
+                var parsed=null;
+                try{parsed=JSON.parse(t);}catch(e2){parsed=null;}
+                if(parsed&&typeof parsed==='object'){return String(java.httpGetNative(String(u),t).body());}
             } else if(typeof opt==='object'){
-                try{return String(java.httpGetNative(String(u),JSON.stringify(opt)).body());}catch(e3){}
+                return String(java.httpGetNative(String(u),JSON.stringify(opt)).body());
             }
         }
         return String(__ajaxNative(String(u)));
