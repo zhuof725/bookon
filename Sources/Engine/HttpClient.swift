@@ -288,7 +288,7 @@ struct AnalyzeUrl {
         if req.value(forHTTPHeaderField: "Referer") == nil, let host = u.host {
             req.setValue("\(u.scheme ?? "https")://\(host)/", forHTTPHeaderField: "Referer")
         }
-        if let requestBody = resolvedRequestBody() {
+        if let requestBody = resolvedRequestBody(), !(method == "GET" && requestBody.count <= 2) {
             req.httpBody = requestBody
             if req.value(forHTTPHeaderField: "Content-Type") == nil {
                 let isJson = (body ?? "").trimmingCharacters(in: .whitespaces).hasPrefix("{")
@@ -358,10 +358,17 @@ struct AnalyzeUrl {
             req.setValue("\(u.scheme ?? "https")://\(host)/", forHTTPHeaderField: "Referer")
         }
         if let requestBody = resolvedRequestBody() {
-            req.httpBody = requestBody
-            if req.value(forHTTPHeaderField: "Content-Type") == nil {
-                let isJson = (body ?? "").trimmingCharacters(in: .whitespaces).hasPrefix("{")
-                req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            // URLSession 对 GET+body 的支持在 Apple 平台上不可靠（部分系统版本直接抛
+            // NSURLErrorUnknown："Request has a body but no content length" 之类）。
+            // 书源脚本普遍把空 body 序列化成 "{}" 挂在 GET 上（服务器不读它），这里剥掉。
+            if method == "GET", requestBody.count <= 2 {
+                DebugLog.add("≡GET 请求的空 body 已忽略")
+            } else {
+                req.httpBody = requestBody
+                if req.value(forHTTPHeaderField: "Content-Type") == nil {
+                    let isJson = (body ?? "").trimmingCharacters(in: .whitespaces).hasPrefix("{")
+                    req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+                }
             }
         }
         let (data, resp) = try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
