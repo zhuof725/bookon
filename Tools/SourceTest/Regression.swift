@@ -141,7 +141,7 @@ enum RuleRegression {
         try TocParseRegression.run(check)
         try LoginFormRegression.run(check)
         try ServerPanelLoginRegression.run(check)
-        try XiaoliuSourceRegression.run(check)
+        try await XiaoliuSourceRegression.run(check)
         try QimoSourceRegression.run(check)
         try await AudioChapterRegression.run(check)
         try MangaBookRegression.run(check)
