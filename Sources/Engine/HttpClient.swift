@@ -81,7 +81,6 @@ struct AnalyzeUrl {
         if options == nil, s.hasSuffix(",") {
             s = String(s.dropLast()).trimmingCharacters(in: .whitespaces)
         }
-        url = AnalyzeUrl.absolute(s, base: baseUrl)
         for (k, v) in AnalyzeUrl.headerFields(sourceHeader, key: key, page: page,
                                               baseUrl: baseUrl, context: context, jsLib: jsLib,
                                               extraVars: extraVars) {
@@ -99,6 +98,14 @@ struct AnalyzeUrl {
                 else { webView = !(w is NSNull) }
             }
         }
+        // GBK/Big5 站点（第一版主 wd=…）：查询参数必须按对应字符集百分号编码后再提交。
+        // Foundation 的 URL(string:).absoluteString 只会按 UTF-8 编码非 ASCII 字符，
+        // 迟一步会把 GBK 关键词encode成 UTF-8 字节（如 wd=%E6%88%91%E7%9A%84），站点搜不到。
+        // POST 表单体走 percentEncodedBody（已按 charset 编码），GET 参数在这里统一处理。
+        if let c = charset, !c.lowercased().contains("utf-8"), !c.lowercased().contains("utf8") {
+            s = percentEncoded(s)
+        }
+        url = AnalyzeUrl.absolute(s, base: baseUrl)
     }
 
     /// Legado 的书源 header 同样是规则：支持 `@js:`、`<js></js>` 与 `{{key}}/{{page}}`。
@@ -251,7 +258,8 @@ struct AnalyzeUrl {
         guard let d = s.data(using: enc) else { return s }
         return d.map { b -> String in
             let c = Character(UnicodeScalar(b))
-            if b < 0x80 && (c.isLetter || c.isNumber || "-_.~=&/:?".contains(c)) { return String(c) }
+            // '%' 保留：书源可能已带百分号转义（%XX），不能二次编码
+            if b < 0x80 && (c.isLetter || c.isNumber || "-_.~=&/:?%".contains(c)) { return String(c) }
             return String(format: "%%%02X", b)
         }.joined()
     }

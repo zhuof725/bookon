@@ -86,5 +86,12 @@ enum ThirteenSourcesRegression {
         check(!WebViewSupport.isSessionCookieErrorPage("<html><body>搜索结果 共 20 本</body></html>", status: 200),
               "正常页面不触发 Cookie 重试")
         check(!WebViewSupport.isSessionCookieErrorPage("错误提示", status: 500), "非 2xx 不走 Cookie 重试")
+
+        // 5) GBK 站点 GET 查询参数按 charset 编码（第一版主：wd=我的 必须按 GBK 字节提交）
+        let gbkURL = AnalyzeUrl(rawUrl: "/wap.php?action=search&type=top&wd={{key}}&pageno={{page}},{\"charset\":\"gbk\"}",
+                                key: "我的", page: 1, baseUrl: "https://www.diyibanzhu.me")
+        check(gbkURL.url.contains("%CE%D2%B5%C4"), "GBK charset：查询参数按 GBK 编码（第一版主 wd=我的）")
+        check(!gbkURL.url.contains("%E6%88%91%E7%9A%84"), "GBK charset：关键词不再按 UTF-8 编码")
+        check(gbkURL.charset == "gbk", "GBK charset：选项解析保留 charset")
     }
 }
