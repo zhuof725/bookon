@@ -435,7 +435,11 @@ final class JSEngine {
         return m;
     }
     var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))}};
-    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},put:function(k,v){return java.storePut(k,String(v))},get:function(k){return java.storeGet(k)},
+    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},
+    // Legado BaseSource.putVariable 与 setVariable 写的是同一份存储（sourceVariable_<key>）。
+    putVariable:function(v){return this.setVariable(v)},
+    // Legado 的 source.put/get 按书源隔离：v_<书源 URL>_<key>，避免不同书源同名键串值。
+    put:function(k,v){return java.storePut('v_'+this.bookSourceUrl+'_'+String(k),String(v))},get:function(k){return java.storeGet('v_'+this.bookSourceUrl+'_'+String(k))},
         getLoginInfoMap:function(){var s=String(__loginInfoMap());var m=__javaMap();try{var o=JSON.parse(s);Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){}return m;},
         getLoginInfo:function(){var v=__loginGet();return v==null||v===''?null:String(v);},
         putLoginInfo:function(v){return __loginPut(String(v));},
@@ -730,6 +734,29 @@ final class JSEngine {
     java.openUrl=function(u){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'');}return '';};
     """
 
+    /// 书源传给 `cookie.*` 的“地址”经常不是 URL：真实书源会写
+    /// `cookie.removeCookie(source.getKey())`（书源 URL 字段填的是中文名），
+    /// 登录脚本也会写 `cookie.getKey('fanqienovel.com', 'sessionid')`（裸域名）。
+    /// Legado 的 CookieStore 以子域名为键、从不校验，所以这里做同样的兼容：
+    /// 裸主机名补 https:// 前缀（与网页登录同步下来的 Cookie 对得上），
+    /// 完全解析不了的字符串按原版语义当“无事发生”——读取返回空、写入/删除静默忽略，
+    /// 绝不抛异常把整段脚本打断。
+    static func cookieTarget(_ raw: String) -> String? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return nil }
+        if s.contains("://") { return s }
+        // 只把 ASCII 主机名（可带端口、路径）当作裸域名，中文书源名不会被当成主机。
+        let head = s.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? s
+        let host = head.split(separator: ":", maxSplits: 1).first.map(String.init) ?? head
+        let allowed = CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+        guard !host.isEmpty, host.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+        return "https://" + s
+    }
+
     /// Use the injected session's storage; never fall back to the global jar.
     private func installCookieBindings(_ ctx: JSContext) {
         let store = SourceCookieStore(storage: session.configuration.httpCookieStorage)
@@ -749,25 +776,31 @@ final class JSEngine {
             current.exception = exception
         }
         let get: @convention(block) (String) -> String = { url in
-            store.getCookie(url)
+            guard let target = JSEngine.cookieTarget(url) else { return "" }
+            return store.getCookie(target)
         }
         let getKey: @convention(block) (String, String) -> String = { url, key in
-            store.getKey(url, key)
+            guard let target = JSEngine.cookieTarget(url) else { return "" }
+            return store.getKey(target, key)
         }
         let set: @convention(block) (String, String) -> Bool = { url, value in
-            do { try store.setCookie(url, value); return true }
+            guard let target = JSEngine.cookieTarget(url) else { return false }
+            do { try store.setCookie(target, value); return true }
             catch { report(error); return false }
         }
         let replace: @convention(block) (String, String) -> Bool = { url, value in
-            do { try store.replaceCookie(url, value); return true }
+            guard let target = JSEngine.cookieTarget(url) else { return false }
+            do { try store.replaceCookie(target, value); return true }
             catch { report(error); return false }
         }
         let remove: @convention(block) (String) -> Bool = { url in
-            do { try store.removeCookie(url); return true }
+            guard let target = JSEngine.cookieTarget(url) else { return true }
+            do { try store.removeCookie(target); return true }
             catch { report(error); return false }
         }
         let removeNamed: @convention(block) (String, String) -> Bool = { url, name in
-            do { try store.removeCookie(url, name: name); return true }
+            guard let target = JSEngine.cookieTarget(url) else { return true }
+            do { try store.removeCookie(target, name: name); return true }
             catch { report(error); return false }
         }
         let toMap: @convention(block) (String) -> String = { value in

@@ -15,11 +15,17 @@ struct SourceEditView: View {
     @State private var tab: Tab = .base
     @State private var error: String?
     @State private var confirmDiscard = false
+    /// 源变量：脚本里 source.getVariable() 的内容，存在持久变量库而不是书源 JSON。
+    @State private var variableText: String
+    @State private var loadedVariable: String
 
     init(original: BookSource?, store: AppStore) {
         self.original = original
         self.store = store
         _draft = State(initialValue: original ?? BookSource(bookSourceUrl: "", bookSourceName: ""))
+        let variable = SourceVariable.get(original?.bookSourceUrl ?? "")
+        _variableText = State(initialValue: variable)
+        _loadedVariable = State(initialValue: variable)
     }
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -49,6 +55,7 @@ struct SourceEditView: View {
                     .accessibilityIdentifier("sourceEdit.tabs")
                     VStack(spacing: 10) {
                         ForEach(Self.fields(for: tab)) { fieldRow($0) }
+                        if tab == .base { variableCard }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -122,6 +129,39 @@ struct SourceEditView: View {
     }
 
     // MARK: 字段
+
+    /// 源变量：脚本 `source.getVariable()/setVariable()` 读写的那份字符串。
+    /// Legado 把它存在应用数据里（不在书源 JSON），这里同样落到持久变量库，键按书源 URL 区分。
+    private var variableCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("源变量").foregroundStyle(palette.primary)
+                Spacer()
+                if !variableText.isEmpty {
+                    Button("清空") { variableText = "" }
+                        .appFont(.caption)
+                        .foregroundStyle(palette.accent)
+                        .accessibilityIdentifier("sourceEdit.variable.clear")
+                }
+            }
+            TextEditor(text: $variableText)
+                .appFont(.system(.footnote, design: .monospaced))
+                .foregroundStyle(palette.primary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 108)
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+                .accessibilityIdentifier("sourceEdit.variable")
+            Text("脚本里用 source.getVariable() 读取、setVariable() 写入；保存后立即生效。留空表示没有变量。")
+                .appFont(.caption2)
+                .foregroundStyle(palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .appFont(.subheadline)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+    }
 
     private func fieldRow(_ f: Field) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -268,6 +308,12 @@ struct SourceEditView: View {
         }
         s.lastUpdateTime = Int64(Date().timeIntervalSince1970 * 1000)
         store.saveEditedSource(s, replacing: original?.bookSourceUrl)
+        // 源变量按书源 URL 存放：URL 改名时把旧变量搬过去，再把输入框里的内容写回。
+        let oldURL = original?.bookSourceUrl ?? ""
+        if oldURL != s.bookSourceUrl { SourceVariable.move(from: oldURL, to: s.bookSourceUrl) }
+        if variableText != loadedVariable || oldURL != s.bookSourceUrl {
+            SourceVariable.set(variableText, for: s.bookSourceUrl)
+        }
         dismiss()
     }
 }

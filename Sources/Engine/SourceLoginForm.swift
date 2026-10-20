@@ -55,13 +55,14 @@ enum SourceLoginForm {
             }
             let name = text("name")
             if name.isEmpty { continue }
+            // type 可能带后缀（真实书源里有「button文字关闭」「text文字关闭」这类写法），
+            // 按前缀归类即可；未知类型仍按文本框处理，避免整项不显示。
+            let type = text("type").lowercased()
             let kind: LoginField.Kind
-            switch text("type").lowercased() {
-            case "button": kind = .button
-            case "password": kind = .password
-            case "select": kind = .select
-            default: kind = .text
-            }
+            if type.hasPrefix("button") { kind = .button }
+            else if type.hasPrefix("password") { kind = .password }
+            else if type.hasPrefix("select") { kind = .select }
+            else { kind = .text }
             // loginUi 的 viewName 是 JS 表达式（如 `'✅ 塔读小说'`）：去掉引号后作为显示名。
             let display = RuleScanner.unquote(text("viewName")) ?? ""
             // select 的选项数组：chars: ["A","B"]；宽松 JSON 下也可能是字符串数组以外的形式。
