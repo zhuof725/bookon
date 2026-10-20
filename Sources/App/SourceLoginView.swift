@@ -217,7 +217,11 @@ struct SourceLoginView: View {
             open(action, title: f.title)
             return
         }
-        runScript(action) { [weak self] in await self?.reloadFields() }
+        pressAction(action)
+    }
+
+    private func pressAction(_ action: String) {
+        runScript(action, reloadAfter: true)
     }
 
     /// 脚本（按钮 action）执行完重新求值 loginUi：面板按钮的文字/状态会随脚本写入的变量变化
@@ -252,7 +256,7 @@ struct SourceLoginView: View {
         browser = BrowserTarget(url: target, title: title)
     }
 
-    private func runScript(_ call: String, completion: (@MainActor () async -> Void)? = nil) {
+    private func runScript(_ call: String, reloadAfter: Bool = false) {
         guard let lib = script else { message = "loginUrl 里没有可执行的脚本"; return }
         busy = true
         message = ""
@@ -261,7 +265,7 @@ struct SourceLoginView: View {
         Task {
             let result = await Task.detached { JSEngine.shared.runLoginScript(source: src, library: lib, call: call, formValues: vals) }.value
             // 脚本可能用 java.postDelayed 延迟写入：等一轮再重绘面板，避免读到旧状态。
-            if let completion { await completion() }
+            if reloadAfter { await reloadFields() }
             busy = false
             switch result {
             case .failure(let e):
