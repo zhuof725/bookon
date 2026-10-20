@@ -42,26 +42,11 @@ enum ThirteenSourcesRegression {
         check(opts.count == 2, "耽美小说：//option 返回 2 个节点")
         let frag = AnalyzeRule(content: "<div></div>", baseUrl: "https://e.invalid/")
         if opts.count == 2 {
-            print("DEBUG option1=\(opts[1])")
-            print("DEBUG text0=[\(bl.getString("/text()", from: opts[0]))]")
-            print("DEBUG value1=[\(bl.getString("/@value", from: opts[1]))]")
-        }
-        print("DEBUG attrA=[\(frag.getString("/@href", from: "<a href=\"/x\">t</a>"))]")
-        print("DEBUG attrB=[\(frag.getString("/@value", from: "<option value=\"/v\">t</option>"))]")
-        print("DEBUG attrC=[\(frag.getString("/a/@href", from: "<div><a href=\"/y\">t</a></div>"))]")
-        if let doc = try? SwiftSoup.parse("<div id=\"__legado_fragment__\"><option value=\"/v\">第二章 任务</option></div>"),
-           let holder = try? doc.getElementById("__legado_fragment__") {
-            print("DEBUG holderHtml=\((try? holder.html()) ?? "nil")")
-            if let child = holder.children().first() {
-                print("DEBUG childTag=\(child.tagName()) attr=[\((try? child.attr("value")) ?? "nil")]")
-            } else {
-                print("DEBUG child=nil")
-            }
-        }
-        if opts.count == 2 {
             check(bl.getString("/text()", from: opts[0]) == "第一章 系统", "耽美小说：相对 XPath /text()")
             check(bl.getString("/@value", from: opts[1]) == "/chuanyuechongsheng/36457_1.html", "耽美小说：相对 XPath /@value")
         }
+        // 内容字符串先被解析成 Document：相对路径要落到文档的内容节点，而不是 <html> 根
+        check(frag.getString("/@href", from: "<a href=\"/x\">t</a>") == "/x", "相对 XPath 单属性规则作用于内容节点")
         check(frag.getString("/a/@href", from: "<div><a href=\"/a/1\">甲</a><a href=\"/a/2\">乙</a></div>") == "/a/1\n/a/2",
               "相对 XPath /a/@href 返回全部属性")
         check(frag.getString("/a[2]/text()", from: "<div><a>甲</a><a>乙</a></div>") == "乙", "相对 XPath [n] 索引")

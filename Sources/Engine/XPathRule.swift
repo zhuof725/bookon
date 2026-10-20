@@ -93,8 +93,18 @@ enum XPathRule {
     }
 
     /// 当前对象对应的节点：元素直接返回；字符串片段（如 `<option value="…">`）包一层 div 后取首个元素。
+    /// 内容字符串在进入规则前已被解析成 Document，相对路径要作用在文档的实际内容节点上，
+    /// 否则 `/@value` 会去读 `<html>` 的属性（耽美小说目录）。
     private static func fragmentRoot(_ obj: Any) -> Element? {
-        if let e = obj as? Element { return e }
+        if let e = obj as? Element {
+            if let doc = e as? Document {
+                if let body = doc.body(), body.children().size() == 1, let only = body.children().first() {
+                    return only
+                }
+                return doc.body() ?? doc
+            }
+            return e
+        }
         guard let s = obj as? String else { return nil }
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
