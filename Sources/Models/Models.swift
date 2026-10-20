@@ -137,7 +137,7 @@ struct BookSource: Codable, Hashable, Identifiable {
     var eventListener: Bool?
     var customButton: Bool?
     /// 未在 CodingKeys 中建模的字段，导入时原样保存、导出时原样写回。
-    var unknownFields: [String: JSONValue] = [:]
+    var unknownFields: [String: AnyJSONValue] = [:]
 
     var isEnabled: Bool { enabled ?? true }
     var cookieJarEnabled: Bool { enabledCookieJar ?? true }
@@ -196,10 +196,10 @@ struct BookSource: Codable, Hashable, Identifiable {
         eventListener = try? c.decodeIfPresent(Bool.self, forKey: .eventListener)
         customButton = try? c.decodeIfPresent(Bool.self, forKey: .customButton)
         // CodingKeys 容器的 allKeys 只会给出已声明的键，必须另开一个动态键容器才能看到未知字段。
-        var unknown: [String: JSONValue] = [:]
+        var unknown: [String: AnyJSONValue] = [:]
         if let raw = try? decoder.container(keyedBy: AnyCodingKey.self) {
             for key in raw.allKeys where !BookSource.knownKeys.contains(key.stringValue) {
-                if let value = try? raw.decode(JSONValue.self, forKey: key) {
+                if let value = try? raw.decode(AnyJSONValue.self, forKey: key) {
                     unknown[key.stringValue] = value
                 }
             }

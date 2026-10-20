@@ -3,14 +3,14 @@ import Foundation
 /// 未建模字段的原样保留容器。
 /// Legado 的书源 JSON 字段很多，而且不同分支会加新字段；只认识 CodingKeys 里的字段时，
 /// 导入 → 编辑 → 导出会把其余字段全部丢掉。这个类型让 BookSource 能原样存取未知字段。
-enum JSONValue: Codable, Hashable, Sendable {
+enum AnyJSONValue: Codable, Hashable, Sendable {
     case null
     case bool(Bool)
     case int(Int)
     case double(Double)
     case string(String)
-    case array([JSONValue])
-    case object([String: JSONValue])
+    case array([AnyJSONValue])
+    case object([String: AnyJSONValue])
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
@@ -24,9 +24,9 @@ enum JSONValue: Codable, Hashable, Sendable {
             self = .double(d)
         } else if let s = try? c.decode(String.self) {
             self = .string(s)
-        } else if let a = try? c.decode([JSONValue].self) {
+        } else if let a = try? c.decode([AnyJSONValue].self) {
             self = .array(a)
-        } else if let o = try? c.decode([String: JSONValue].self) {
+        } else if let o = try? c.decode([String: AnyJSONValue].self) {
             self = .object(o)
         } else {
             throw DecodingError.dataCorruptedError(in: c, debugDescription: "不支持的 JSON 值")
@@ -77,9 +77,9 @@ enum JSONValue: Codable, Hashable, Sendable {
         case let s as String:
             self = .string(s)
         case let a as [Any]:
-            self = .array(a.map { JSONValue(rawValue: $0) })
+            self = .array(a.map { AnyJSONValue(rawValue: $0) })
         case let o as [String: Any]:
-            self = .object(o.mapValues { JSONValue(rawValue: $0) })
+            self = .object(o.mapValues { AnyJSONValue(rawValue: $0) })
         default:
             self = .string(String(describing: rawValue))
         }
