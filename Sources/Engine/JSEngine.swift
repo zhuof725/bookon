@@ -124,8 +124,9 @@ final class TTSResponse: NSObject, TTSResponseExports {
 
 /// Bridge object exposed to book-source JS as `java`.
 @objc protocol JavaBridgeExports: JSExport {
-    /// Legado 约定：ajax 直接返回响应正文。
-    func ajax(_ url: String) -> String
+    /// Legado 约定：ajax 直接返回响应正文。导出名用 ajaxNative，
+    /// JS 侧再把 java.ajax 定义成带第二参数（请求选项/超时）的包装，见 prelude。
+    func ajaxNative(_ url: String) -> String
     /// 原生响应对象入口，由 JS 包装为 java.connect。
     func connectNative(_ url: String) -> StrResponse?
     /// ajax 的第二个参数：Legado AjaxWebView 里的超时（毫秒）。iOS 端按请求超时使用，
@@ -167,7 +168,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
         super.init()
     }
 
-    func ajax(_ url: String) -> String {
+    func ajaxNative(_ url: String) -> String {
         // AnalyzeUrl owns the existing verification path. Do not load the same
         // challenge again here; failures set the current JavaScript exception.
         return connectNative(url)?.body ?? ""
@@ -177,11 +178,11 @@ final class TTSResponse: NSObject, TTSResponseExports {
     /// 只在显式给出正数时生效，且不短于 1 秒，避免把请求卡成必然超时。
     func ajaxWithTimeout(_ url: String, _ timeoutMs: Double) -> String {
         let seconds = timeoutMs / 1000.0
-        guard seconds >= 1 else { return ajax(url) }
+        guard seconds >= 1 else { return ajaxNative(url) }
         let previous = responseTimeout
         responseTimeout = min(seconds, 120)
         defer { responseTimeout = previous }
-        return ajax(url)
+        return ajaxNative(url)
     }
 
     func connectNative(_ url: String) -> StrResponse? {
@@ -584,17 +585,15 @@ final class JSEngine {
         };
     }
     java.connect=function(u){return __response(java.connectNative(String(u)))};
-    // java.ajax 的原生实现先存一份：下面要把它替换成带第二参数的版本，
-    // 否则默认分支会递归回 JS 函数自身。
-    var __ajaxNative=java.ajax;
-    var __ajaxTimeoutNative=java.ajaxWithTimeout;
+    // java.ajax 的原生实现是 java.ajaxNative（见 JavaBridge）；下面只在 JS 侧
+    // 加一层第二参数（请求选项 / 毫秒超时）的包装，不再改写任何原生方法。
     // java.ajax(url, second?)：Legado 的 ajax 只取第一个参数，但服务器聚合书源（重生聚合等）
     // 会把请求选项 JSON 或毫秒超时作为第二个参数传进来。这里按第二个参数的类型分流：
     // 字符串/对象形式的请求选项（method/body/headers）走 Legado 的 `地址,{...}` 写法，
     // 纯对象按 header 映射处理，数字按毫秒超时处理；都没有时与原版一致。
     java.ajax=function(u,opt){
         if(opt!=null&&opt!==undefined){
-            if(typeof opt==='number'){return String(__ajaxTimeoutNative(String(u),Number(opt)));}
+            if(typeof opt==='number'){return String(java.ajaxWithTimeout(String(u),Number(opt)));}
             if(typeof opt==='string'){
                 var t=String(opt).replace(/^\\s+|\\s+$/g,'');
                 if(t.charAt(0)==='{'){
@@ -607,7 +606,7 @@ final class JSEngine {
                 return String(java.httpGetNative(String(u),JSON.stringify(opt)).body());
             }
         }
-        return String(__ajaxNative(String(u)));
+        return String(java.ajaxNative(String(u)));
     };
     java.ajaxAll=function(arr){var o=[];for(var i=0;i<arr.length;i++){o.push(__response(java.connectNative(String(arr[i]))));}return o;};
     java.startBrowserAwait=function(u,t){var s=String(u||'');if(typeof __openBrowser==='function'&&/^https?:/i.test(s)){__openBrowser(s,String(t||''));return '';}return java.connect(s)};
