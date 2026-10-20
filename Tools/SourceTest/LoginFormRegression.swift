@@ -95,5 +95,28 @@ enum LoginFormRegression {
             library: "function uc2(){java.startBrowserAwait('data:text/html;base64,PGgxPjQ8L2gxPg==','本地页',false);}",
             call: "uc2()")
         check(opened.isEmpty, "登录脚本：startBrowserAwait 的 data 页仍走请求通道，不当作网页跳转")
+
+        // 含遇見书源登录脚本用到的桥：java.upLoginData / java.reLoginView / java.webViewCookieManager
+        var savedJSON: String?
+        ToastCenter.setHandler { _ in }
+        JSEngine.loginStore.putLoginInfo(s.bookSourceUrl, SourceLoginForm.encode(["old": "1"]))
+        defer { JSEngine.loginStore.removeLoginInfo(s.bookSourceUrl) }
+        let bridgeLib = """
+        function saveMap(){java.upLoginData({username:'u',readerToken:'t',n:3});java.reLoginView();return source.getLoginInfoMap().username;}
+        function saveHashMap(){var m=new Packages.java.util.HashMap();m.put('k','v');java.upLoginData(m);return source.getLoginInfoMap().k;}
+        function cookieWrite(){var cm=java.webViewCookieManager();cm.setCookie('https://login-run.invalid/','reader.token=abc; path=/; max-age=2592000');
+            cm.getInstance().setCookie('https://login-run.invalid/','tmp=1; Max-Age=0');return java.webViewCookieManager().getInstance().getCookie('https://login-run.invalid/');}
+        """
+        if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: bridgeLib, call: "saveMap()") {
+            savedJSON = JSEngine.loginStore.getLoginInfo(s.bookSourceUrl)
+            check(r == "u" && savedJSON?.contains("\"username\":\"u\"") == true && savedJSON?.contains("\"old\":\"1\"") == true,
+                  "登录桥：upLoginData 合并进登录信息且不覆盖已有键、reLoginView 可调用")
+        } else { check(false, "登录桥：upLoginData + reLoginView 执行成功") }
+        if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: bridgeLib, call: "saveHashMap()") {
+            check(r == "v", "登录桥：upLoginData 接受 java.util.HashMap 写法")
+        } else { check(false, "登录桥：HashMap 写法执行成功") }
+        if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: bridgeLib, call: "cookieWrite()") {
+            check(r.contains("reader.token=abc") && !r.contains("tmp=1"), "登录桥：webViewCookieManager 写入/过期删除 Cookie")
+        } else { check(false, "登录桥：webViewCookieManager 执行成功") }
     }
 }

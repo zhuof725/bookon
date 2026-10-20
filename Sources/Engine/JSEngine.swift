@@ -426,8 +426,29 @@ final class JSEngine {
         getLoginHeader:function(){var v=__loginHeaderGet();return v==null||v===''?null:String(v);},
         getLoginHeaderMap:function(){var v=__loginHeaderGet();if(v==null||v==='')return null;var m=Object.create(null);try{var o=JSON.parse(String(v));Object.keys(o).forEach(function(k){m[k]=o[k];});}catch(e){return null;}return m;},
         putLoginHeader:function(v){__loginHeaderPut(String(v));},
-        removeLoginHeader:function(){__loginHeaderRemove();}};
-    var book={name:'',author:'',bookUrl:'',tocUrl:'',type:0,durChapterIndex:0,durChapterTitle:'',
+        removeLoginHeader:function(){__loginHeaderRemove();},
+        upLoginData:function(o){
+            // Legado BaseSource.upLoginData(map)：把登录表单/登录脚本的键值写进登录信息并刷新界面。
+            if(o==null){return null;}
+            if(typeof __loginDataPut==='function'){__loginDataPut(JSON.stringify(o));return o;}
+            return o;},
+        reLoginView:function(){
+            if(typeof __loginViewRefresh==='function'){__loginViewRefresh();}
+            return '';},
+        // Android WebView CookieManager 子集：书源用它直接写/读网页 Cookie
+        // （iOS 端走统一 Cookie 存储，与 java.get/cookie.* 同一后端）。
+        webViewCookieManager:function(){
+            var set=function(u,v){
+                try{var parts=String(v||'').split(';');var nv=parts[0]||'';var eq=nv.indexOf('=');if(eq<=0){return '';}
+                var name=nv.slice(0,eq);var value=nv.slice(eq+1);
+                var expired=/max-age\s*=\s*0/i.test(String(v));
+                if(expired||!value){cookie.removeCookie(String(u),name);}
+                else{cookie.setCookie(String(u),name+'='+value);}
+                }catch(e){}
+                return '';};
+            return {setCookie:set,getInstance:function(){return {setCookie:set,flush:function(){return '';},getCookie:function(u){return cookie.getCookie(String(u));}};},
+                    getCookie:function(u){return cookie.getCookie(String(u));},flush:function(){return '';},removeAllCookies:function(){return '';},removeAllCookie:function(){return '';}}}};
+    var book={name:'',bookUrl:'',tocUrl:'',type:0,durChapterIndex:0,durChapterTitle:'',
         getVariable:function(k){return (typeof __bookVarGet==='function')?String(__bookVarGet(String(k))):'';},
         putVariable:function(k,v){var s=(v==null?'':String(v));return (typeof __bookVarPut==='function')?String(__bookVarPut(String(k),s)):s;},
         setVariable:function(k,v){return this.putVariable(k,v);},
@@ -637,6 +658,11 @@ final class JSEngine {
     java.utf8ToGbk=function(s){return s};
     java.t2s=function(s){return s};java.s2t=function(s){return s};
     java.randomUUID=function(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c=='x'?r:(r&3|8)).toString(16)})};
+    // 登录脚本常用：java.upLoginData / java.reLoginView / java.webViewCookieManager
+    // （Legado JsExtensions 与 android.webkit.CookieManager 的桥接；实现挂在 source 上，这里转发）。
+    java.upLoginData=function(o){return source.upLoginData(o)};
+    java.reLoginView=function(){return source.reLoginView()};
+    java.webViewCookieManager=function(){return source.webViewCookieManager()};
     """
 
     /// Use the injected session's storage; never fall back to the global jar.
@@ -735,6 +761,26 @@ final class JSEngine {
         ctx.setObject(hGet, forKeyedSubscript: "__loginHeaderGet" as NSString)
         ctx.setObject(hPut, forKeyedSubscript: "__loginHeaderPut" as NSString)
         ctx.setObject(hRemove, forKeyedSubscript: "__loginHeaderRemove" as NSString)
+        // upLoginData：登录脚本把键值合并进登录信息（Legado upLoginData(map)）。
+        let dataPut: @convention(block) (String) -> Void = { raw in
+            guard usable, let data = raw.data(using: .utf8),
+                  let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+            var map = store.getLoginInfoMap(key, loginUiJSON: nil)
+            for (k, v) in obj {
+                if let s = v as? String { map[k] = s }
+                else if let d = try? JSONSerialization.data(withJSONObject: v), let s = String(data: d, encoding: .utf8) { map[k] = s }
+                else { map[k] = String(describing: v) }
+            }
+            if let d = try? JSONSerialization.data(withJSONObject: map, options: [.sortedKeys]),
+               let s = String(data: d, encoding: .utf8) {
+                _ = store.putLoginInfo(key, s)
+            }
+        }
+        ctx.setObject(dataPut, forKeyedSubscript: "__loginDataPut" as NSString)
+        let viewRefresh: @convention(block) () -> Void = {
+            // Legado reLoginView()：刷新登录界面（重新渲染按钮状态），这里无界面需要重建。
+        }
+        ctx.setObject(viewRefresh, forKeyedSubscript: "__loginViewRefresh" as NSString)
     }
 
     /// Crypto errors are thrown as CryptoError with a fixed message; inputs never appear in them.
