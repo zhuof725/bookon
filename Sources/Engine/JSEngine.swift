@@ -461,7 +461,7 @@ final class JSEngine {
             var set=function(u,v){
                 try{var parts=String(v||'').split(';');var nv=parts[0]||'';var eq=nv.indexOf('=');if(eq<=0){return '';}
                 var name=nv.slice(0,eq);var value=nv.slice(eq+1);
-                var expired=/max-age\s*=\s*0/i.test(String(v));
+                var expired=/max-age\\s*=\\s*0/i.test(String(v));
                 if(expired||!value){cookie.removeCookieByName(String(u),name);}
                 else{cookie.setCookie(String(u),name+'='+value);}
                 }catch(e){}
@@ -596,7 +596,7 @@ final class JSEngine {
         if(opt!=null&&opt!==undefined){
             if(typeof opt==='number'){return String(__ajaxTimeoutNative(String(u),Number(opt)));}
             if(typeof opt==='string'){
-                var t=String(opt).replace(/^\s+|\s+$/g,'');
+                var t=String(opt).replace(/^\\s+|\\s+$/g,'');
                 if(t.charAt(0)==='{'){
                     return String(java.connect(String(u)+','+t).body());
                 }
@@ -866,10 +866,10 @@ final class JSEngine {
         ctx.setObject(sourceRefreshExplore, forKeyedSubscript: "__sourceRefreshExplore" as NSString)
         // java.postDelayed(fn, ms)：登录脚本延迟刷新（面板「点此刷新」等）。
         // JSContext 只能在创建它的线程上使用，把回调交给别的队列会崩；
-        // 书源用它刷新的只是发现页/面板状态（配置已落盘），这里立即在同一次调用里执行。
-        let postDelayed: @convention(block) (JSValue, Double) -> Int = { fn, _ in
-            guard fn.isObject, JSContext.current() != nil else { return 0 }
-            fn.call(withArguments: [])
+        // 书源用它刷新的只是发现页/面板状态（配置已落盘），这里立即执行。
+        let postDelayed: @convention(block) (Any, Double) -> Int = { fn, _ in
+            guard let value = fn as? JSValue, value.isObject, JSContext.current() != nil else { return 0 }
+            value.call(withArguments: [])
             return 0
         }
         ctx.setObject(postDelayed, forKeyedSubscript: "__postDelayed" as NSString)
