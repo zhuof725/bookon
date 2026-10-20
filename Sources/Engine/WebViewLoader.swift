@@ -22,6 +22,16 @@ enum WebViewSupport {
                      "TCaptcha.js", "__captcha", "WafCaptcha", "captcha.qq.com"]
         return marks.contains { head.contains($0) }
     }
+
+    /// 站点首个请求只下发会话/WAF Cookie、正文却是「找不到内容」时，带着 Cookie 重发一次即可。
+    /// 三八小说（waf_sc + server_name_session）就是这种形态：第一次 POST 返回错误页，
+    /// 第二次带 Cookie 才跳到真实搜索结果。只在小体积错误页上触发，正常页面不受影响。
+    static func isSessionCookieErrorPage(_ html: String, status: Int) -> Bool {
+        guard (200..<300).contains(status), html.count < 8000 else { return false }
+        let marks = ["错误提示", "找不到您要搜索的内容", "访问验证", "安全验证", "请稍候",
+                     "您的访问出错了", "访问过于频繁", "请开启JavaScript", "Just a moment"]
+        return marks.contains { html.contains($0) }
+    }
 }
 
 #if canImport(UIKit) && canImport(WebKit)

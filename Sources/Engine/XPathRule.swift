@@ -7,7 +7,14 @@ import SwiftSoup
 enum XPathRule {
     static func isXPath(_ rule: String) -> Bool {
         let t = rule.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.lowercased().hasPrefix("@xpath:") || t.hasPrefix("//")
+        if t.lowercased().hasPrefix("@xpath:") { return true }
+        // 与原版一致：以 `/` 开头就是 XPath（`/text()`、`/@value` 是相对当前节点的路径）。
+        return t.hasPrefix("/")
+    }
+
+    /// 单个 `/` 开头：相对当前节点的 XPath（JsoupXpath 的 JXDocument 把节点当成文档根）。
+    static func isRelative(_ path: String) -> Bool {
+        path.hasPrefix("/") && !path.hasPrefix("//")
     }
 
     static func strip(_ rule: String) -> String {
@@ -46,9 +53,73 @@ enum XPathRule {
         return doc.xpath(path)
     }
 
+    /// 相对路径求值：以当前节点为根，支持 `/tag[n]`、`[@attr='v']`、`/text()`、`/@attr`。
+    /// 原版用 JXDocument(节点) 把节点当成文档根，所以 `/text()` 取的是本节点的文本，
+    /// `/@value` 取的是本节点的属性（耽美小说目录规则 chapterName/chapterUrl）。
+    private static func relativeSelection(_ obj: Any, _ path: String)
+        -> (elements: [Element], output: Output, attribute: String?) {
+        guard let root = fragmentRoot(obj) else { return ([], .node, nil) }
+        var current = [root]
+        var output: Output = .node
+        var attribute: String?
+        let parts = path.dropFirst().split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        for part in parts {
+            if part.hasPrefix("@") { attribute = String(part.dropFirst()); break }
+            if part == "text()" || part == "allText()" || part == "textNodes()" || part == "ownText()" {
+                output = .text; break
+            }
+            if part == "html()" { output = .html; break }
+            if part == "." { continue }
+            var css = part
+            var index: Int?
+            if let m = part.range(of: "\\[\\s*(-?\\d+)\\s*\\]$", options: .regularExpression) {
+                index = Int(part[m].trimmingCharacters(in: CharacterSet(charactersIn: "[] ")))
+                css = String(part[..<m.lowerBound])
+            }
+            // [@class='x'] 是 XPath 写法，转成 CSS 的 [class="x"]
+            css = css.replacingOccurrences(of: "\\[@([\\w:-]+)=(['\"])(.*?)\\2\\]",
+                                          with: "[$1=\"$3\"]", options: .regularExpression)
+            if css.isEmpty || css == "*" { css = "*" }
+            let found = current.flatMap { (try? $0.select(css).array()) ?? [] }
+            if let index {
+                if index > 0, found.indices.contains(index - 1) { current = [found[index - 1]] }
+                else if index < 0, found.count + index >= 0 { current = [found[found.count + index]] }
+                else { current = [] }
+            } else {
+                current = found
+            }
+        }
+        return (current, output, attribute)
+    }
+
+    /// 当前对象对应的节点：元素直接返回；字符串片段（如 `<option value="…">`）包一层 div 后取首个元素。
+    private static func fragmentRoot(_ obj: Any) -> Element? {
+        if let e = obj as? Element { return e }
+        guard let s = obj as? String else { return nil }
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        let head = t.prefix(9).lowercased()
+        if head.hasPrefix("<!doctype") || head.hasPrefix("<html") {
+            return (try? SwiftSoup.parse(t))?.body()
+        }
+        guard let doc = try? SwiftSoup.parse("<div id=\"__legado_fragment__\">" + t + "</div>"),
+              let holder = try? doc.getElementById("__legado_fragment__") else { return nil }
+        return holder.children().first()
+    }
+
     /// 列表规则：返回每个匹配节点的 HTML（属性/文本节点返回文本）
     static func elements(_ obj: Any, _ rule: String) -> [Any] {
         let (path, _) = split(rule)
+        if isRelative(path) {
+            let sel = relativeSelection(obj, path)
+            if let attr = sel.attribute {
+                return sel.elements.compactMap { try? $0.attr(attr) }.filter { !$0.isEmpty }
+            }
+            return sel.elements.compactMap { e -> String? in
+                let value = sel.output == .html ? (try? e.html()) : (try? e.text())
+                return value?.isEmpty == false ? value : nil
+            }
+        }
         guard let res = query(obj, path) else { return [] }
         switch res {
         case .String(let value): return value.isEmpty ? [] : [value]
@@ -107,6 +178,19 @@ enum XPathRule {
     /// 文本规则：多个结果用换行连接
     static func string(_ obj: Any, _ rule: String) -> String {
         let (path, output) = split(rule)
+        if isRelative(path) {
+            let sel = relativeSelection(obj, path)
+            if let attr = sel.attribute {
+                return sel.elements.compactMap { try? $0.attr(attr) }
+                    .filter { !$0.isEmpty }.joined(separator: "\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let values = sel.elements.compactMap { e -> String? in
+                let value = sel.output == .html ? (try? e.html()) : (try? e.text())
+                return value?.isEmpty == false ? value : nil
+            }
+            return values.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         guard let res = query(obj, path) else { return fallbackString(obj, path) }
         switch res {
         case .none: return fallbackString(obj, path)

@@ -17,6 +17,12 @@ if let i = args.firstIndex(of: "--probe-search") {
     do { try await SearchProbe.run(file: file, key: probeKey); exit(0) }
     catch { print("PROBE ERROR: \(error)"); exit(1) }
 }
+if let i = args.firstIndex(of: "--probe-explore") {
+    let file = args.count > i + 1 ? args[i + 1] : "sources.json"
+    let probeKey = args.count > i + 2 ? args[i + 2] : "我的"
+    do { try await ExploreProbe.run(file: file, key: probeKey); exit(0) }
+    catch { print("PROBE ERROR: \(error)"); exit(1) }
+}
 if args.contains("--regression") {
     do { try await RuleRegression.run(); exit(0) }
     catch { print("REGRESSION ERROR: \(error)"); exit(1) }

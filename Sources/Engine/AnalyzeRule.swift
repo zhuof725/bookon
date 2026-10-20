@@ -576,6 +576,19 @@ final class AnalyzeRule {
         return reverse ? Array(res.reversed()) : res
     }
 
+    /// `class.a b` 表示同时带 a、b 两个类名的元素（po18 目录规则 `class.lb fk@tag.li!-1`）。
+    /// jsoup 的 getElementsByClass 只认单个类名，这里按空白拆分后取交集。
+    static func classElements(_ el: Element, _ names: String) -> [Element] {
+        let tokens = names.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard let first = tokens.first, !first.isEmpty else { return [] }
+        var result = (try? el.getElementsByClass(first).array()) ?? []
+        for token in tokens.dropFirst() where !result.isEmpty {
+            let allowed = Set(((try? el.getElementsByClass(token).array()) ?? []).map { ObjectIdentifier($0) })
+            result = result.filter { allowed.contains(ObjectIdentifier($0)) }
+        }
+        return result
+    }
+
     private func defaultElements(_ obj: Any, _ rule: String) -> [Element] {
         let segments = RuleScanner.split(rule, by: ["@"])
         guard segments.valid, let root = AnalyzeRule.element(obj) else { return [] }
@@ -606,7 +619,7 @@ final class AnalyzeRule {
         let type = parts.removeFirst()
         var list: [Element]
         switch type {
-        case "class": list = (try? el.getElementsByClass(parts.first ?? "").array()) ?? []
+        case "class": list = AnalyzeRule.classElements(el, parts.first ?? "")
         case "tag": list = (try? el.getElementsByTag(parts.first ?? "").array()) ?? []
         case "id":
             if let found = ((try? el.getElementById(parts.first ?? "")) ?? nil) { list = [found] } else { list = [] }

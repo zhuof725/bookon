@@ -20,6 +20,7 @@ import SwiftSoup
     func size() -> Int
     func get(_ index: Int) -> JSNodeBridge?
     func toArray() -> [Any]
+    func select(_ selector: String) -> JSNodeListBridge
     func attr(_ name: String) -> String
     func text() -> String
     func ownText() -> String
@@ -67,6 +68,15 @@ import SwiftSoup
         return JSNodeBridge(elements[index])
     }
     func toArray() -> [Any] { elements.map(JSNodeBridge.init) }
+    /// Jsoup Elements.select：在每个元素内部再查一次（群小说 searchUrl 依赖
+    /// `Jsoup.parse(html).select('form').select('[name=_token]')`）。
+    func select(_ selector: String) -> JSNodeListBridge {
+        var found: [Element] = []
+        for element in elements {
+            found.append(contentsOf: (try? element.select(selector).array()) ?? [])
+        }
+        return JSNodeListBridge(found)
+    }
     private var first: Element? { elements.first }
     func attr(_ name: String) -> String { first.map { (try? $0.attr(name)) ?? "" } ?? "" }
     func text() -> String { first.map { (try? $0.text()) ?? "" } ?? "" }

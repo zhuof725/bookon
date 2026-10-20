@@ -371,6 +371,7 @@ struct AnalyzeUrl {
                 }
             }
         }
+        let cookiesBefore = (HTTPCookieStorage.shared.cookies(for: u) ?? []).count
         let (data, resp) = try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
         try Task.checkCancellation()
         var enc = AnalyzeUrl.encoding(charset)
@@ -384,6 +385,24 @@ struct AnalyzeUrl {
         let rawData: Data? = data
         DebugLog.add("≡获取成功:\(DebugLog.url(finalUrl))")
         if !(200..<300).contains(status) { DebugLog.add("◇HTTP 状态:\(status)") }
+        // 首次访问只下发 WAF/会话 Cookie 的站点（三八小说）：第一份响应是「错误提示」页，
+        // 带着刚拿到的 Cookie 重发一次才会跳到真实结果。
+        if cookieJarEnabled, cookiesBefore == 0, let t = text,
+           WebViewSupport.isSessionCookieErrorPage(t, status: status),
+           !(HTTPCookieStorage.shared.cookies(for: u) ?? []).isEmpty,
+           let retry = try? await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate) {
+            try Task.checkCancellation()
+            let retryStatus = (retry.1 as? HTTPURLResponse)?.statusCode ?? 0
+            var retryEnc = AnalyzeUrl.encoding(charset)
+            if charset == nil, let n = (retry.1 as? HTTPURLResponse)?.textEncodingName { retryEnc = AnalyzeUrl.encoding(n) }
+            let retryText = String(data: retry.0, encoding: retryEnc)
+                ?? String(data: retry.0, encoding: AnalyzeUrl.encoding("gbk")) ?? ""
+            if (200..<300).contains(retryStatus), !retryText.isEmpty,
+               !WebViewSupport.isSessionCookieErrorPage(retryText, status: retryStatus) {
+                DebugLog.add("≡首次请求只拿到会话 Cookie，已带 Cookie 重试：\(retryText.count) 字符")
+                return HTTPResponseData(body: retryText, response: retry.1, fallbackURL: finalUrl, rawData: retry.0)
+            }
+        }
         #if canImport(UIKit) && canImport(WebKit)
         let blocked = [403, 429, 503].contains(status) && (text ?? "").count < 200
         let deferredAuthorization = deferAuthorizationChallenge && [401, 403].contains(status)

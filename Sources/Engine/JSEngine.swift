@@ -435,7 +435,10 @@ final class JSEngine {
         return m;
     }
     var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))}};
-    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},
+    var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},
+    // Rhino 把 Java 的 getKey() 暴露成属性：书源脚本里普遍写 source.key / source.name（群小说 searchUrl）。
+    get key(){return this.bookSourceUrl},
+    getVariable:function(){return java.storeGet('__var_'+this.bookSourceUrl)},setVariable:function(v){java.storePut('__var_'+this.bookSourceUrl,String(v))},
     // Legado BaseSource.putVariable 与 setVariable 写的是同一份存储（sourceVariable_<key>）。
     putVariable:function(v){return this.setVariable(v)},
     // Legado 的 source.put/get 按书源隔离：v_<书源 URL>_<key>，避免不同书源同名键串值。

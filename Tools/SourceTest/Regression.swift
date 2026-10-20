@@ -144,6 +144,7 @@ enum RuleRegression {
         try await XiaoliuSourceRegression.run(check)
         try await MufanSourceRegression.run(check)
         try await BookIntroRegression.run(check)
+        try ThirteenSourcesRegression.run(check)
         try QimoSourceRegression.run(check)
         try await AudioChapterRegression.run(check)
         try MangaBookRegression.run(check)
