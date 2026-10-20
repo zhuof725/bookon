@@ -441,7 +441,7 @@ final class JSEngine {
             var set=function(u,v){
                 try{var parts=String(v||'').split(';');var nv=parts[0]||'';var eq=nv.indexOf('=');if(eq<=0){return '';}
                 var name=nv.slice(0,eq);var value=nv.slice(eq+1);
-                var expired=/max-age\s*=\s*0/i.test(String(v));
+                var expired=/max-age\\s*=\\s*0/i.test(String(v));
                 if(expired||!value){cookie.removeCookie(String(u),name);}
                 else{cookie.setCookie(String(u),name+'='+value);}
                 }catch(e){}
