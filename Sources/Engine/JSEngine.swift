@@ -596,7 +596,7 @@ final class JSEngine {
         if(opt!=null&&opt!==undefined){
             if(typeof opt==='number'){return String(__ajaxTimeoutNative(String(u),Number(opt)));}
             if(typeof opt==='string'){
-                var t=String(opt).replace(/^\s+|\s+$/g,'');
+                var t=String(opt).replace(/^\\s+|\\s+$/g,'');
                 if(t.charAt(0)==='{'){
                     try{return String(java.connect(String(u)+','+t).body());}catch(e){return '';}
                 }

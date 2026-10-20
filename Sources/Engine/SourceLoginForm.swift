@@ -15,7 +15,8 @@ struct LoginField: Equatable, Identifiable {
     var options: [String] = []
     /// 显示名：viewName（去掉 JS 引号）优先，其次是 name。表单取值仍按 name。
     var title: String { displayName.isEmpty ? name : displayName }
-    private var displayName: String = ""
+    /// 内部存储：viewName 解出的显示名（空表示用 name）。
+    var displayName: String = ""
     /// 书源 style.layout_flexBasisPercent：0.45 表示与下一个同类按钮并排，1 表示整行。
     var basisPercent: Double = 1
 }
@@ -62,7 +63,7 @@ enum SourceLoginForm {
             default: kind = .text
             }
             // loginUi 的 viewName 是 JS 表达式（如 `'✅ 塔读小说'`）：去掉引号后作为显示名。
-            let display = SourceLoginJSON.unquote(text("viewName")) ?? ""
+            let display = RuleScanner.unquote(text("viewName")) ?? ""
             // select 的选项数组：chars: ["A","B"]；宽松 JSON 下也可能是字符串数组以外的形式。
             let options: [String] = {
                 for m in members.reversed() where m.key == "chars" {
@@ -94,8 +95,7 @@ enum SourceLoginForm {
             }
             out.append(LoginField(id: out.count, name: name, kind: kind,
                                   defaultValue: text("default"), action: text("action"),
-                                  options: options,
-                                  displayName: display.isEmpty ? name : display,
+                                  options: options, displayName: display,
                                   basisPercent: basis))
         }
         return out
