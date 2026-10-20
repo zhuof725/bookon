@@ -3,13 +3,19 @@ import Foundation
 /// 书源登录表单：把 loginUi（JSON 数组，可能是 <js>/@js: 脚本）解析成有序字段，
 /// 并负责按 Legado 约定执行登录：保存表单 -> 运行 loginUrl 里的 login()；按钮 action 调用 loginUrl 里的函数。
 struct LoginField: Equatable, Identifiable {
-    enum Kind: Equatable { case text, password, button }
+    /// text/password：输入框；button：可点按钮；select：下拉选择（chars 为选项）。
+    enum Kind: Equatable { case text, password, button, select }
     var id: Int
     var name: String
     var kind: Kind
     var defaultValue: String
-    /// 按钮的 action：JS 函数调用，例如 `checkSite()`；也可能是网址。
+    /// 按钮/下拉的 action：JS 函数调用，例如 `checkSite()`；也可能是网址。
     var action: String
+    /// select 的选项数组（loginUi 的 chars）。
+    var options: [String] = []
+    /// 显示名：viewName（去掉 JS 引号）优先，其次是 name。表单取值仍按 name。
+    var title: String { displayName.isEmpty ? name : displayName }
+    private var displayName: String = ""
     /// 书源 style.layout_flexBasisPercent：0.45 表示与下一个同类按钮并排，1 表示整行。
     var basisPercent: Double = 1
 }
@@ -52,8 +58,26 @@ enum SourceLoginForm {
             switch text("type").lowercased() {
             case "button": kind = .button
             case "password": kind = .password
+            case "select": kind = .select
             default: kind = .text
             }
+            // loginUi 的 viewName 是 JS 表达式（如 `'✅ 塔读小说'`）：去掉引号后作为显示名。
+            let display = SourceLoginJSON.unquote(text("viewName")) ?? ""
+            // select 的选项数组：chars: ["A","B"]；宽松 JSON 下也可能是字符串数组以外的形式。
+            let options: [String] = {
+                for m in members.reversed() where m.key == "chars" {
+                    guard case .array(let items) = m.value else { return [] }
+                    return items.map { item in
+                        switch item {
+                        case .string(let s): return s
+                        case .number(let n): return n
+                        case .bool(let b): return b ? "true" : "false"
+                        default: return ""
+                        }
+                    }.filter { !$0.isEmpty }
+                }
+                return []
+            }()
             // style.layout_flexBasisPercent：0.45 左右表示与相邻项并排；缺省或 1 为整行。
             var basis = 1.0
             for m in members.reversed() where m.key == "style" {
@@ -70,6 +94,8 @@ enum SourceLoginForm {
             }
             out.append(LoginField(id: out.count, name: name, kind: kind,
                                   defaultValue: text("default"), action: text("action"),
+                                  options: options,
+                                  displayName: display.isEmpty ? name : display,
                                   basisPercent: basis))
         }
         return out
@@ -105,10 +131,13 @@ enum SourceLoginForm {
         return rows
     }
 
-    /// 已保存的值优先，其次是 default。按钮不参与取值。
+    /// 已保存的值优先，其次是 default；再其次回落到第一个选项。按钮不参与取值。
     static func initialValues(fields: [LoginField], saved: [String: String]) -> [String: String] {
         var v: [String: String] = [:]
-        for f in fields where f.kind != .button { v[f.name] = saved[f.name] ?? f.defaultValue }
+        for f in fields where f.kind != .button {
+            let stored = saved[f.name] ?? f.defaultValue
+            v[f.name] = !stored.isEmpty ? stored : (f.options.first ?? "")
+        }
         return v
     }
 

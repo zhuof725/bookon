@@ -128,6 +128,9 @@ final class TTSResponse: NSObject, TTSResponseExports {
     func ajax(_ url: String) -> String
     /// 原生响应对象入口，由 JS 包装为 java.connect。
     func connectNative(_ url: String) -> StrResponse?
+    /// ajax 的第二个参数：Legado AjaxWebView 里的超时（毫秒）。iOS 端按请求超时使用，
+    /// 缺省沿用桥的默认超时；服务器聚合书源会传 15000 之类的显式值。
+    func ajaxWithTimeout(_ url: String, _ timeoutMs: Double) -> String
     func base64Decode(_ s: String) -> String
     func base64Encode(_ s: String) -> String
     func md5Encode(_ s: String) -> String
@@ -153,7 +156,8 @@ final class TTSResponse: NSObject, TTSResponseExports {
     static let store = PersistentVariableStore(fileURL: PersistentVariableStore.defaultFileURL())
     let context: RuleContext?
     private let session: URLSession
-    private let responseTimeout: TimeInterval
+    /// java.ajax(url, timeout) 会在单次调用里改写它，用完恢复。
+    private var responseTimeout: TimeInterval
 
     init(context: RuleContext? = nil, session: URLSession = .shared,
          responseTimeout: TimeInterval = 25) {
@@ -167,6 +171,17 @@ final class TTSResponse: NSObject, TTSResponseExports {
         // AnalyzeUrl owns the existing verification path. Do not load the same
         // challenge again here; failures set the current JavaScript exception.
         return connectNative(url)?.body ?? ""
+    }
+
+    /// java.ajax(url, timeout)：超时以毫秒给出（聚合书源常用 15000）。
+    /// 只在显式给出正数时生效，且不短于 1 秒，避免把请求卡成必然超时。
+    func ajaxWithTimeout(_ url: String, _ timeoutMs: Double) -> String {
+        let seconds = timeoutMs / 1000.0
+        guard seconds >= 1 else { return ajax(url) }
+        let previous = responseTimeout
+        responseTimeout = min(seconds, 120)
+        defer { responseTimeout = previous }
+        return ajax(url)
     }
 
     func connectNative(_ url: String) -> StrResponse? {
@@ -436,6 +451,10 @@ final class JSEngine {
         reLoginView:function(){
             if(typeof __loginViewRefresh==='function'){__loginViewRefresh();}
             return '';},
+        // Legado BaseSource.refreshExplore()：书源在登录脚本里刷新发现页（重生聚合等服务器聚合源）。
+        refreshExplore:function(){
+            if(typeof __sourceRefreshExplore==='function'){__sourceRefreshExplore();}
+            return '';},
         // Android WebView CookieManager 子集：书源用它直接写/读网页 Cookie
         // （iOS 端走统一 Cookie 存储，与 java.get/cookie.* 同一后端）。
         webViewCookieManager:function(){
@@ -565,9 +584,33 @@ final class JSEngine {
         };
     }
     java.connect=function(u){return __response(java.connectNative(String(u)))};
+    // java.ajax 的原生实现先存一份：下面要把它替换成带第二参数的版本，
+    // 否则默认分支会递归回 JS 函数自身。
+    var __ajaxNative=java.ajax;
+    var __ajaxTimeoutNative=java.ajaxWithTimeout;
+    // java.ajax(url, second?)：Legado 的 ajax 只取第一个参数，但服务器聚合书源（重生聚合等）
+    // 会把请求选项 JSON 或毫秒超时作为第二个参数传进来。这里按第二个参数的类型分流：
+    // 字符串/对象形式的请求选项（method/body/headers）走 Legado 的 `地址,{...}` 写法，
+    // 纯对象按 header 映射处理，数字按毫秒超时处理；都没有时与原版一致。
+    java.ajax=function(u,opt){
+        if(opt!=null&&opt!==undefined){
+            if(typeof opt==='number'){return String(__ajaxTimeoutNative(String(u),Number(opt)));}
+            if(typeof opt==='string'){
+                var t=String(opt).replace(/^\s+|\s+$/g,'');
+                if(t.charAt(0)==='{'){
+                    try{return String(java.connect(String(u)+','+t).body());}catch(e){return '';}
+                }
+                try{var h=JSON.parse(t);if(h&&typeof h==='object'){
+                    return String(java.httpGetNative(String(u),t).body());}}catch(e2){}
+            } else if(typeof opt==='object'){
+                try{return String(java.httpGetNative(String(u),JSON.stringify(opt)).body());}catch(e3){}
+            }
+        }
+        return String(__ajaxNative(String(u)));
+    };
     java.ajaxAll=function(arr){var o=[];for(var i=0;i<arr.length;i++){o.push(__response(java.connectNative(String(arr[i]))));}return o;};
     java.startBrowserAwait=function(u,t){var s=String(u||'');if(typeof __openBrowser==='function'&&/^https?:/i.test(s)){__openBrowser(s,String(t||''));return '';}return java.connect(s)};
-    java.showBrowser=function(u,h,js,cfg){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'');}return '';};
+    java.showBrowser=function(u,h,js,cfg){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(h||''));}return '';};
     java.sleep=function(ms){return '';};
     java.getWebViewUA=function(){return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';};
     java.showReadingBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''));}return '';};
@@ -664,6 +707,20 @@ final class JSEngine {
     java.upLoginData=function(o){return source.upLoginData(o)};
     java.reLoginView=function(){return source.reLoginView()};
     java.webViewCookieManager=function(){return source.webViewCookieManager()};
+    // 服务器聚合书源（重生聚合等）用 java.postDelayed(fn,ms) 延迟刷新发现页/登录面板。
+    // iOS 端没有 Android Handler：延迟由原生线程调度后回调 JS，脚本语义与原版一致。
+    java.postDelayed=function(fn,ms){
+        if(typeof fn!=='function'){return 0;}
+        if(typeof __postDelayed==='function'){
+            var wait=Number(ms);if(!isFinite(wait)||wait<0){wait=0;}
+            return __postDelayed(fn,wait);
+        }
+        try{fn();}catch(e){}
+        return 0;};
+    // java.getSource()：Legado JsExtensions 取当前书源对象（聚合源登录脚本会用它兜底取 source）。
+    java.getSource=function(){return source;};
+    // java.openUrl(u)：登录脚本里打开网址的旧式兜底（用户中心 / 帮助页）。
+    java.openUrl=function(u){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'');}return '';};
     """
 
     /// Use the injected session's storage; never fall back to the global jar.
@@ -802,6 +859,19 @@ final class JSEngine {
             // Legado reLoginView()：刷新登录界面（重新渲染按钮状态），这里无界面需要重建。
         }
         ctx.setObject(viewRefresh, forKeyedSubscript: "__loginViewRefresh" as NSString)
+        // source.refreshExplore()：书源登录脚本刷新发现页。iOS 端没有可立即重建的发现页，
+        // 这里只做无副作用的回调（书源脚本本身已把配置落盘，下次进入发现页即可生效）。
+        let sourceRefreshExplore: @convention(block) () -> Void = {}
+        ctx.setObject(sourceRefreshExplore, forKeyedSubscript: "__sourceRefreshExplore" as NSString)
+        // java.postDelayed(fn, ms)：登录脚本延迟刷新（面板「点此刷新」等）。
+        // JSContext 只能在创建它的线程上使用，把回调交给别的队列会崩；
+        // 书源用它刷新的只是发现页/面板状态（配置已落盘），这里立即在同一次调用里执行。
+        let postDelayed: @convention(block) (JSValue, Double) -> Int = { fn, _ in
+            guard fn.isObject, JSContext.current() != nil else { return 0 }
+            fn.call(withArguments: [])
+            return 0
+        }
+        ctx.setObject(postDelayed, forKeyedSubscript: "__postDelayed" as NSString)
     }
 
     /// Crypto errors are thrown as CryptoError with a fixed message; inputs never appear in them.

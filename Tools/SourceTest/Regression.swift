@@ -140,6 +140,7 @@ enum RuleRegression {
         try CookieJarSwitchRegression.run(check)
         try TocParseRegression.run(check)
         try LoginFormRegression.run(check)
+        try ServerPanelLoginRegression.run(check)
         try QimoSourceRegression.run(check)
         try await AudioChapterRegression.run(check)
         try MangaBookRegression.run(check)

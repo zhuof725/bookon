@@ -109,7 +109,7 @@ struct SourceLoginView: View {
     private func loginCell(_ f: LoginField) -> some View {
         if f.kind == .button {
             Button { press(f) } label: {
-                Text(f.name)
+                Text(f.title)
                     .appFont(.subheadline)
                     .foregroundStyle(palette.accent)
                     .lineLimit(2)
@@ -120,14 +120,35 @@ struct SourceLoginView: View {
             .disabled(busy)
             .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
             .accessibilityIdentifier("login.item.\(f.name)")
+        } else if f.kind == .select {
+            // 下拉（loginUi 的 type:'select'）：显示名 + 选项菜单，选中即写入表单值。
+            Menu {
+                ForEach(f.options, id: \.self) { option in
+                    Button { values[f.name] = option } label: { Text(option) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(f.title).foregroundStyle(palette.secondary)
+                    Spacer(minLength: 0)
+                    Text(values[f.name] ?? "").foregroundStyle(palette.primary).lineLimit(1)
+                    Image(systemName: "chevron.down").appFont(.caption2)
+                        .foregroundStyle(palette.secondary)
+                }
+                .appFont(.subheadline)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            }
+            .disabled(busy || f.options.isEmpty)
+            .accessibilityIdentifier("login.item.\(f.name)")
         } else {
             Group {
                 if f.kind == .password {
                     SecureField("", text: binding(f.name),
-                                prompt: Text(f.name).foregroundColor(palette.secondary))
+                                prompt: Text(f.title).foregroundColor(palette.secondary))
                 } else {
                     TextField("", text: binding(f.name),
-                              prompt: Text(f.name).foregroundColor(palette.secondary))
+                              prompt: Text(f.title).foregroundColor(palette.secondary))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -190,12 +211,36 @@ struct SourceLoginView: View {
         // 先保存当前输入，脚本里的 getLoginInfoMap() 才能读到最新值。
         JSEngine.loginStore.putLoginInfo(sourceKey, SourceLoginForm.encode(values))
         let action = f.action.trimmingCharacters(in: .whitespacesAndNewlines)
-        if action.isEmpty { message = "按钮没有配置动作"; return }
+        // 纯展示项（分组标题等）没有 action：点一下不报错，也不做网络请求。
+        if action.isEmpty { message = f.title; return }
         if SourceLoginForm.isURL(action) {
-            open(action, title: f.name)
+            open(action, title: f.title)
             return
         }
-        runScript(action)
+        runScript(action) { [weak self] in await self?.reloadFields() }
+    }
+
+    /// 脚本（按钮 action）执行完重新求值 loginUi：面板按钮的文字/状态会随脚本写入的变量变化
+    /// （重生聚合这类面板书源正是靠重绘来反映「已登录」「✅ 已选中」）。
+    private func reloadFields() async {
+        let src = source
+        let text = await Task.detached {
+            SourceLoginForm.resolveUiText(src.loginUi) { js in
+                JSEngine.shared.evalString(js, jsLib: src.jsLib,
+                                           loginLib: SourceLoginForm.loginScript(src.loginUrl),
+                                           context: RuleContext(source: src))
+            }
+        }.value
+        let parsed = SourceLoginForm.parseFields(text)
+        let saved = JSEngine.loginStore.getLoginInfo(sourceKey)
+            .flatMap { SourceLoginJSON.parseStringMap($0, nested: .compactJSON) } ?? [:]
+        // 保留用户还没保存的输入，表单项按新面板补齐（按钮不参与取值）。
+        var merged = values
+        for (k, v) in SourceLoginForm.initialValues(fields: parsed, saved: saved) {
+            if (merged[k] ?? "").isEmpty { merged[k] = v }
+        }
+        fields = parsed
+        values = merged
     }
 
     /// 只有需要跳转的登录网址才用内置浏览器打开，不跳出到系统浏览器。
@@ -207,7 +252,7 @@ struct SourceLoginView: View {
         browser = BrowserTarget(url: target, title: title)
     }
 
-    private func runScript(_ call: String) {
+    private func runScript(_ call: String, completion: (@MainActor () async -> Void)? = nil) {
         guard let lib = script else { message = "loginUrl 里没有可执行的脚本"; return }
         busy = true
         message = ""
@@ -215,6 +260,8 @@ struct SourceLoginView: View {
         let vals = values
         Task {
             let result = await Task.detached { JSEngine.shared.runLoginScript(source: src, library: lib, call: call, formValues: vals) }.value
+            // 脚本可能用 java.postDelayed 延迟写入：等一轮再重绘面板，避免读到旧状态。
+            if let completion { await completion() }
             busy = false
             switch result {
             case .failure(let e):
