@@ -23,7 +23,7 @@ enum SearchProbe {
             let probe = "globalThis.__probeUrl=function(u){return request(u)};"
             _ = JSEngine.shared.eval(probe, baseUrl: s.bookSourceUrl, jsLib: lib, context: context)
             let out = JSEngine.shared.eval("__probeUrl('/search?title=${encodeURIComponent(key)}&tab=${encodeURIComponent('小说')}&source=${encodeURIComponent('全部')}&page=1&disabled_sources=0')",
-                                           vars: ["key": key], baseUrl: s.bookSourceUrl, jsLib: lib, context: context)
+                                           baseUrl: s.bookSourceUrl, vars: ["key": key], jsLib: lib, context: context)
             let str = (out as? String) ?? ""
             print("C) request(): len=\(str.count) 开头=\(String(str.prefix(120)))")
         }
