@@ -56,11 +56,18 @@ struct BookCoverImage: View {
     @ThemePalette private var palette
     let url: URL?
     var pixelSize: Int = 600
+    /// 书源地址（Book.origin）；有 coverDecodeJs 时改走解密加载。
+    var origin: String? = nil
     @StateObject private var loader = LocalCoverImageLoader()
+    @StateObject private var remoteLoader = RemoteCoverLoader()
     @Environment(\.scenePhase) private var scenePhase
     @State private var retry = 0
 
     private var resolvedURL: URL? { url.flatMap { BookCoverLocation.resolve($0) } }
+    private var needsDecode: Bool {
+        guard let origin, let source = AppStore.shared.source(for: origin) else { return false }
+        return !(source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
     private var requestID: String { "\(resolvedURL?.absoluteString ?? "nil")|\(retry)" }
 
     var body: some View {
@@ -73,18 +80,30 @@ struct BookCoverImage: View {
                         fallback
                     } else { placeholder }
                 } else if let resolvedURL, ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") {
-                    AsyncImage(url: resolvedURL) { phase in
-                        switch phase {
-                        case .success(let image): image.resizable().scaledToFill()
-                        case .failure: fallback
-                        default: placeholder
+                    if needsDecode {
+                        if let image = remoteLoader.image {
+                            Image(uiImage: image).resizable().scaledToFill()
+                        } else if remoteLoader.didFail { fallback } else { placeholder }
+                    } else {
+                        AsyncImage(url: resolvedURL) { phase in
+                            switch phase {
+                            case .success(let image): image.resizable().scaledToFill()
+                            case .failure: fallback
+                            default: placeholder
+                            }
                         }
                     }
                 } else { fallback }
             }
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
-        .task(id: requestID) { await loader.load(resolvedURL, pixelSize: pixelSize) }
+        .task(id: requestID) {
+            if needsDecode {
+                await remoteLoader.load(resolvedURL, sourceKey: origin, pixelSize: pixelSize)
+            } else {
+                await loader.load(resolvedURL, pixelSize: pixelSize)
+            }
+        }
         .onChange(of: scenePhase) { phase in if phase == .active { retry += 1 } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in retry += 1 }
         .accessibilityHidden(true)

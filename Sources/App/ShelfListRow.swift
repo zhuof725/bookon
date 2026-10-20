@@ -74,7 +74,7 @@ struct ShelfListRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            BookCoverImage(url: BookCoverLocation.url(for: book))
+            BookCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
                 .frame(width: large ? 52 : 58, height: large ? 76 : 84)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .overlay(alignment: .topTrailing) {

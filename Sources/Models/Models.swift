@@ -59,6 +59,40 @@ struct ContentRule: Codable, Hashable {
     var callBackJs: String?
 }
 
+/// 段评规则（原版 ReviewRule）。字段全部保留；引擎目前只读 reviewUrl 等常用项。
+struct ReviewRule: Codable, Hashable {
+    var reviewUrl: String?
+    var avatarRule: String?
+    var contentRule: String?
+    var postTimeRule: String?
+    var reviewQuoteUrl: String?
+    var voteUpUrl: String?
+    var voteDownUrl: String?
+    var postReviewUrl: String?
+    var postQuoteUrl: String?
+    var deleteUrl: String?
+    var enabled: Bool?
+    var reviewSummaryUrl: String?
+    var summaryListRule: String?
+    var summaryParagraphIndexRule: String?
+    var summaryParagraphDataRule: String?
+    var summaryCountRule: String?
+    var reviewDetailUrl: String?
+    var reviewDetailNextPageUrl: String?
+    var detailListRule: String?
+    var detailIdRule: String?
+    var detailAvatarRule: String?
+    var detailNameRule: String?
+    var detailBadgeRule: String?
+    var detailContentRule: String?
+    var replyListRule: String?
+    var replyIdRule: String?
+    var replyAvatarRule: String?
+    var replyNameRule: String?
+    var replyBadgeRule: String?
+    var replyContentRule: String?
+}
+
 struct BookSource: Codable, Hashable, Identifiable {
     var id: String { bookSourceUrl }
     var bookSourceUrl: String
@@ -85,6 +119,14 @@ struct BookSource: Codable, Hashable, Identifiable {
     var lastUpdateTime: Int64?
     /// 校验书源（批量测试）测得的耗时毫秒，与原版 BookSource.respondTime 一致。
     var respondTime: Int?
+    /// 智能排序权重（原版 BookSource.weight）。
+    var weight: Int?
+    /// 阅读 Sigma 等分支的存储类型字段（实测是整数，0 表示默认）。
+    var storageKind: Int?
+    /// 段评规则（原版 BookSource.ruleReview）。
+    var ruleReview: ReviewRule?
+    /// 纯 JS 单文件书源主脚本（原版 BookSource.mainJs）。
+    var mainJs: String?
     // 以下字段本应用暂未使用，但必须保留，编辑/导出时才不会丢失原书源内容（与原版字段同名）。
     var loginCheckJs: String?
     var coverDecodeJs: String?
@@ -94,18 +136,22 @@ struct BookSource: Codable, Hashable, Identifiable {
     var enabledExplore: Bool?
     var eventListener: Bool?
     var customButton: Bool?
+    /// 未在 CodingKeys 中建模的字段，导入时原样保存、导出时原样写回。
+    var unknownFields: [String: JSONValue] = [:]
 
     var isEnabled: Bool { enabled ?? true }
     var cookieJarEnabled: Bool { enabledCookieJar ?? true }
 
-    enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case bookSourceUrl, bookSourceName, bookSourceGroup, bookSourceType, bookSourceComment
         case enabled, header, jsLib, loginUrl, loginUi, searchUrl, exploreUrl, bookUrlPattern, enabledCookieJar
         case ruleSearch, ruleExplore, ruleBookInfo, ruleToc, ruleContent, customOrder, lastUpdateTime
-        case respondTime
+        case respondTime, weight, storageKind, ruleReview, mainJs
         case loginCheckJs, coverDecodeJs, variableComment, concurrentRate, exploreScreen
         case enabledExplore, eventListener, customButton
     }
+
+    static let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
 
     /// 新建书源用：其余字段为空，由书源编辑页填写。
     init(bookSourceUrl: String, bookSourceName: String) {
@@ -137,6 +183,10 @@ struct BookSource: Codable, Hashable, Identifiable {
         customOrder = try? c.decodeIfPresent(Int.self, forKey: .customOrder)
         lastUpdateTime = try? c.decodeIfPresent(Int64.self, forKey: .lastUpdateTime)
         respondTime = try? c.decodeIfPresent(Int.self, forKey: .respondTime)
+        weight = try? c.decodeIfPresent(Int.self, forKey: .weight)
+        storageKind = try? c.decodeIfPresent(Int.self, forKey: .storageKind)
+        ruleReview = BookSource.lenient(c, .ruleReview)
+        mainJs = try? c.decodeIfPresent(String.self, forKey: .mainJs)
         loginCheckJs = try? c.decodeIfPresent(String.self, forKey: .loginCheckJs)
         coverDecodeJs = try? c.decodeIfPresent(String.self, forKey: .coverDecodeJs)
         variableComment = try? c.decodeIfPresent(String.self, forKey: .variableComment)
@@ -145,6 +195,59 @@ struct BookSource: Codable, Hashable, Identifiable {
         enabledExplore = try? c.decodeIfPresent(Bool.self, forKey: .enabledExplore)
         eventListener = try? c.decodeIfPresent(Bool.self, forKey: .eventListener)
         customButton = try? c.decodeIfPresent(Bool.self, forKey: .customButton)
+        // CodingKeys 容器的 allKeys 只会给出已声明的键，必须另开一个动态键容器才能看到未知字段。
+        var unknown: [String: JSONValue] = [:]
+        if let raw = try? decoder.container(keyedBy: AnyCodingKey.self) {
+            for key in raw.allKeys where !BookSource.knownKeys.contains(key.stringValue) {
+                if let value = try? raw.decode(JSONValue.self, forKey: key) {
+                    unknown[key.stringValue] = value
+                }
+            }
+        }
+        unknownFields = unknown
+    }
+
+    /// 原样写回已知字段 + 未识别字段；编辑/导出不再丢 weight、storageKind、ruleReview 之外的扩展字段。
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(bookSourceUrl, forKey: .bookSourceUrl)
+        try c.encode(bookSourceName, forKey: .bookSourceName)
+        try c.encodeIfPresent(bookSourceGroup, forKey: .bookSourceGroup)
+        try c.encodeIfPresent(bookSourceType, forKey: .bookSourceType)
+        try c.encodeIfPresent(bookSourceComment, forKey: .bookSourceComment)
+        try c.encodeIfPresent(enabled, forKey: .enabled)
+        try c.encodeIfPresent(header, forKey: .header)
+        try c.encodeIfPresent(jsLib, forKey: .jsLib)
+        try c.encodeIfPresent(loginUrl, forKey: .loginUrl)
+        try c.encodeIfPresent(loginUi, forKey: .loginUi)
+        try c.encodeIfPresent(searchUrl, forKey: .searchUrl)
+        try c.encodeIfPresent(exploreUrl, forKey: .exploreUrl)
+        try c.encodeIfPresent(bookUrlPattern, forKey: .bookUrlPattern)
+        try c.encodeIfPresent(enabledCookieJar, forKey: .enabledCookieJar)
+        try c.encodeIfPresent(ruleSearch, forKey: .ruleSearch)
+        try c.encodeIfPresent(ruleExplore, forKey: .ruleExplore)
+        try c.encodeIfPresent(ruleBookInfo, forKey: .ruleBookInfo)
+        try c.encodeIfPresent(ruleToc, forKey: .ruleToc)
+        try c.encodeIfPresent(ruleContent, forKey: .ruleContent)
+        try c.encodeIfPresent(customOrder, forKey: .customOrder)
+        try c.encodeIfPresent(lastUpdateTime, forKey: .lastUpdateTime)
+        try c.encodeIfPresent(respondTime, forKey: .respondTime)
+        try c.encodeIfPresent(weight, forKey: .weight)
+        try c.encodeIfPresent(storageKind, forKey: .storageKind)
+        try c.encodeIfPresent(ruleReview, forKey: .ruleReview)
+        try c.encodeIfPresent(mainJs, forKey: .mainJs)
+        try c.encodeIfPresent(loginCheckJs, forKey: .loginCheckJs)
+        try c.encodeIfPresent(coverDecodeJs, forKey: .coverDecodeJs)
+        try c.encodeIfPresent(variableComment, forKey: .variableComment)
+        try c.encodeIfPresent(concurrentRate, forKey: .concurrentRate)
+        try c.encodeIfPresent(exploreScreen, forKey: .exploreScreen)
+        try c.encodeIfPresent(enabledExplore, forKey: .enabledExplore)
+        try c.encodeIfPresent(eventListener, forKey: .eventListener)
+        try c.encodeIfPresent(customButton, forKey: .customButton)
+        var dynamic = encoder.container(keyedBy: AnyCodingKey.self)
+        for (key, value) in unknownFields where !BookSource.knownKeys.contains(key) {
+            try dynamic.encode(value, forKey: AnyCodingKey(key))
+        }
     }
 
     /// Some old sources store rule objects as JSON strings.

@@ -12,7 +12,7 @@ extension AnalyzeRule {
         if let e = obj as? Element { src = (try? e.outerHtml()) ?? "" }
         else if let s = obj as? String { src = s }
         else { src = asString(obj) }
-        guard let re = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
+        guard let re = RegexLog.compile(pattern) else { return [] }
         let ns = src as NSString
         return re.matches(in: src, range: NSRange(location: 0, length: ns.length)).map { m -> [String] in
             (0..<m.numberOfRanges).map { i -> String in
@@ -28,7 +28,7 @@ extension AnalyzeRule {
 
     /// 把规则中的 $1、$2 替换成 AllInOne 的分组
     static func fillGroups(_ rule: String, _ groups: [String]) -> String {
-        guard let re = try? NSRegularExpression(pattern: "\\$(\\d+)") else { return rule }
+        guard let re = RegexLog.compile("\\$(\\d+)") else { return rule }
         var out = rule
         let ns = rule as NSString
         for m in re.matches(in: rule, range: NSRange(location: 0, length: ns.length)).reversed() {

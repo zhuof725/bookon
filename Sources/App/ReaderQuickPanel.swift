@@ -12,8 +12,11 @@ struct ReaderQuickPanel: View {
     var enabled: Set<String> = []
     /// 书源已保存登录凭据时，「书源登录」按钮显示为「已登录」。
     var loggedIn = false
+    /// 书源 customButton：由书源脚本控制的按钮，点击触发 callBackJs 的 clickCustomButton。
+    var customButton = false
     let action: (String) -> Void
-    private let items: [(String, String, String)] = [
+    private var items: [(String, String, String)] {
+        var list: [(String, String, String)] = [
         ("refresh", "刷新", "arrow.clockwise"),
         ("toc", "刷新目录", "list.bullet"),
         ("clear", "清缓存并刷新", "trash"),
@@ -22,12 +25,15 @@ struct ReaderQuickPanel: View {
         ("rules", "替换净化", "wand.and.stars"),
         ("bookmarks", "书签列表", "bookmark"),
         ("browser", "浏览器打开", "safari")
-    ]
+        ]
+        if customButton { list.append(("custom", "书源按钮", "hand.tap")) }
+        return list
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top, spacing: 18) {
-                    BookCoverImage(url: BookCoverLocation.url(for: book))
+                    BookCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
                         .frame(width: 76, height: 108)
                         .clipShape(RoundedRectangle(cornerRadius: 6)).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 10) {

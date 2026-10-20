@@ -173,7 +173,7 @@ private struct StatsBookRow: View {
     let book: Book
     var body: some View {
         HStack(spacing: 12) {
-            BookCoverImage(url: BookCoverLocation.url(for: book))
+            BookCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
                 .frame(width: 34, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .accessibilityHidden(true)

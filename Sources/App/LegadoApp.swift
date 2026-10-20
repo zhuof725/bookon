@@ -53,14 +53,14 @@ struct LegadoApp: App {
             let ok = url.startAccessingSecurityScopedResource()
             defer { if ok { url.stopAccessingSecurityScopedResource() } }
             if let t = try? String(contentsOf: url, encoding: .utf8) {
-                let n = (try? store.importSources(json: t)) ?? 0
-                importMessage = "导入了 \(n) 个书源"
+                let report = (try? store.importSources(json: t)) ?? SourceImportReport()
+                importMessage = report.summary
             }
             return
         }
         guard let src = SourceImportLink.sourceURL(url) else { return }
         Task {
-            do { let n = try await store.importSources(from: src); importMessage = "导入了 \(n) 个书源" }
+            do { let report = try await store.importSources(from: src); importMessage = report.summary }
             catch { importMessage = "导入失败：\(error.localizedDescription)" }
         }
     }
@@ -183,7 +183,7 @@ struct BookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ShelfCoverImage(url: BookCoverLocation.url(for: book))
+            ShelfCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
             .frame(width: 48, height: 66)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             VStack(alignment: .leading, spacing: 4) {
@@ -384,13 +384,19 @@ struct SourcesView: View {
 
     private func importFiles(_ urls: [URL]) {        guard !urls.isEmpty else { return }
         var total = 0
+        var badItems = 0
         var failed: [String] = []
         for url in urls {
             guard let t = DocumentPicker.readText(url) else { failed.append(url.lastPathComponent); continue }
-            do { total += try store.importSources(json: t) }
+            do {
+                let report = try store.importSources(json: t)
+                total += report.imported
+                badItems += report.failed
+            }
             catch { failed.append(url.lastPathComponent) }
         }
         var msg = "成功导入 \(total) 个书源"
+        if badItems > 0 { msg += "，跳过 \(badItems) 条坏数据" }
         if !failed.isEmpty { msg += "\n失败文件：" + failed.joined(separator: "、") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { message = msg }
     }
@@ -409,8 +415,8 @@ struct SourcesView: View {
         Task {
             defer { busy = false }
             do {
-                let n = t.hasPrefix("http") ? try await store.importSources(from: t) : try store.importSources(json: t)
-                message = "成功导入 \(n) 个书源"
+                let report = t.hasPrefix("http") ? try await store.importSources(from: t) : try store.importSources(json: t)
+                message = report.summary
             } catch {
                 message = "导入失败：\(error.localizedDescription)"
             }

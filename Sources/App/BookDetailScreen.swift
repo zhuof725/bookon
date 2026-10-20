@@ -141,7 +141,7 @@ struct BookDetailScreen: View {
     }
 
     private var cover: some View {
-        ShelfCoverImage(url: BookCoverLocation.url(for: book))
+        ShelfCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
             .frame(width: 100, height: 145)
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)

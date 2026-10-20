@@ -321,7 +321,7 @@ struct ShelfBookCard: View {
         else { cover.aspectRatio(0.70, contentMode: .fit) }
     }
     private var cover: some View {
-        ShelfCoverImage(url: BookCoverLocation.url(for: book))
+        ShelfCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             .shadow(color: .black.opacity(0.16), radius: 8, x: 0, y: 5)
             .overlay(alignment: .topTrailing) {
@@ -336,5 +336,6 @@ struct ShelfBookCard: View {
 
 struct ShelfCoverImage: View {
     let url: URL?
-    var body: some View { BookCoverImage(url: url) }
+    var origin: String? = nil
+    var body: some View { BookCoverImage(url: url, origin: origin) }
 }

@@ -55,10 +55,8 @@ final class AnalyzeRule {
 
     private func splitJS(_ rule: String) -> [(Bool, String)] {
         // Match Kotlin AppPattern.JS_PATTERN; RuleScanner is not a JS lexer.
-        guard let regex = try? NSRegularExpression(
-            pattern: "<js>([\\s\\S]*?)</js>|@js:([\\s\\S]*)",
-            options: [.caseInsensitive]
-        ) else { return [(false, rule)] }
+        guard let regex = RegexLog.compile("<js>([\\s\\S]*?)</js>|@js:([\\s\\S]*)",
+                                          options: [.caseInsensitive]) else { return [(false, rule)] }
         let source = rule as NSString
         var parts: [(Bool, String)] = []
         var cursor = 0
@@ -334,7 +332,7 @@ final class AnalyzeRule {
     /// ##正则##替换：与 stringValue 尾部同一套语义（支持 ### 只替换第一处）。
     private static func applyRegexReplacement(_ s: String, _ re: String,
                                               _ repl: String, _ firstOnly: Bool) -> String {
-        guard let nre = try? NSRegularExpression(pattern: re) else { return s }
+        guard let nre = RegexLog.compile(re) else { return s }
         let ns = s as NSString
         if firstOnly {
             if let m = nre.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)) {
@@ -406,7 +404,7 @@ final class AnalyzeRule {
                 if let e = obj as? Element { out = (try? e.outerHtml()) ?? "" } else { out = AnalyzeRule.asString(obj) }
             } else { out = singleString(obj, rule) }
         }
-        if let re = regex, !re.isEmpty, let nre = try? NSRegularExpression(pattern: re) {
+        if let re = regex, !re.isEmpty, let nre = RegexLog.compile(re) {
             let ns = out as NSString
             if firstOnly {
                 if let m = nre.firstMatch(in: out, range: NSRange(location: 0, length: ns.length)) {
@@ -471,7 +469,7 @@ final class AnalyzeRule {
     }
 
     private func replaceBraces(_ s: String, pattern: String, _ f: (String) -> String) -> String {
-        guard let re = try? NSRegularExpression(pattern: pattern) else { return s }
+        guard let re = RegexLog.compile(pattern) else { return s }
         var result = s
         let ns = s as NSString
         for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() {

@@ -6,14 +6,59 @@ enum WebBook {
         guard let su = source.searchUrl, !su.isEmpty, let rule = source.ruleSearch else { return [] }
         let context = RuleContext(source: source)
         let au = AnalyzeUrl(rawUrl: su, key: key, page: page, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
-        let (body, url) = try await au.fetch()
-        DebugLog.recordSource(body, stage: 10)
-        return parseBookList(source: source, body: body, baseUrl: url, rule: rule, context: context)
+        let response = try await fetch(au)
+        DebugLog.recordSource(response.body, stage: 10)
+        return parseBookList(source: source, body: response.body, baseUrl: response.url, rule: rule, context: context)
+    }
+
+    /// 书源请求的统一入口：拿到响应后执行 loginCheckJs（原版 WebBook 在每个请求点都做）。
+    static func fetch(_ request: AnalyzeUrl, session: URLSession = .shared) async throws -> HTTPResponseData {
+        let response = try await request.fetchResponse(session: session)
+        return applyLoginCheck(source: request.context?.source, request: request, response: response)
+    }
+
+    /// loginCheckJs 的约定：`result` 是 StrResponse，脚本必须返回一个 StrResponse。
+    /// 脚本抛错时与原版一样，再用一个 500 响应求值一次（很多源用这个分支弹登录/换线路）。
+    static func applyLoginCheck(source: BookSource?, request: AnalyzeUrl? = nil,
+                                response: HTTPResponseData) -> HTTPResponseData {
+        guard let source, let js = source.loginCheckJs?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !js.isEmpty else { return response }
+        let context = request?.context ?? RuleContext(source: source)
+        func evaluate(_ value: Any) -> Any? {
+            JSEngine.shared.eval(js, result: value, baseUrl: response.url,
+                                 jsLib: source.jsLib, context: context)
+        }
+        func converted(_ value: Any?) -> HTTPResponseData? {
+            if let r = value as? StrResponse {
+                return HTTPResponseData(body: r.body, url: r.url, code: r.code,
+                                        headers: r.headers(), rawData: r.bodyBytes)
+            }
+            if let text = value as? String {
+                return HTTPResponseData(body: text, url: response.url, code: response.code,
+                                        headers: response.headers, rawData: nil)
+            }
+            return nil
+        }
+        if let value = evaluate(StrResponse(response)) {
+            if let converted = converted(value) {
+                DebugLog.add("≡loginCheckJs 已重写响应（HTTP \(converted.code)）")
+                return converted
+            }
+        }
+        if let error = JSEngine.lastError {
+            let failed = HTTPResponseData(body: "loginCheckJs 执行失败：\(error)", url: response.url, code: 500)
+            if let second = converted(evaluate(StrResponse(failed))), second.code != 500 {
+                DebugLog.add("≡loginCheckJs 在错误分支切换了响应")
+                return second
+            }
+            DebugLog.add("≡loginCheckJs 执行失败，保留原响应：\(error)")
+        }
+        return response
     }
 
     /// 与 Kotlin 的 `String.matches(Regex)` 一致：必须整串匹配。
     static func matchesWholly(_ text: String, pattern: String) -> Bool {
-        guard let re = try? NSRegularExpression(pattern: "^(?:" + pattern + ")$") else { return false }
+        guard let re = RegexLog.compile("^(?:" + pattern + ")$") else { return false }
         return re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
@@ -91,8 +136,9 @@ enum WebBook {
         let canRefresh = BookInfoRequestRefresh.canRefresh(source: source, book: book, request: request)
         // For this saved signed request, try renewal before opening a browser
         // with the same stale headers. All other request callers keep their policy.
-        let response = try await request.fetchResponse(session: session, deferAuthorizationChallenge: canRefresh)
+        let fetched = try await request.fetchResponse(session: session, deferAuthorizationChallenge: canRefresh)
         try Task.checkCancellation()
+        let response = applyLoginCheck(source: source, request: request, response: fetched)
         if canRefresh && [401, 403].contains(response.code) {
             return try await refreshBookInfo(source: source, book: book, previous: request,
                                              failedStatus: response.code, session: session)
@@ -294,7 +340,8 @@ enum WebBook {
         let context = RuleContext(source: source, book: book)
         let au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header,
                             context: context, jsLib: source.jsLib)
-        let (body, url) = try await au.fetch()
+        let response = try await fetch(au)
+        let body = response.body, url = response.url
         DebugLog.recordSource(body, stage: 30)
         let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
         DebugLog.add("┌获取目录列表")
@@ -444,7 +491,8 @@ enum WebBook {
             let context = RuleContext(source: source, book: book, chapter: chapter)
             var au = AnalyzeUrl(rawUrl: u, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
             if let wj = rule.webJs, !wj.isEmpty { au.webJs = wj }
-            let (body, url) = try await au.fetch()
+            let response = try await fetch(au)
+            let body = response.body, url = response.url
             DebugLog.recordSource(body, stage: 40)
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
             let text = ar.getString(rule.content)

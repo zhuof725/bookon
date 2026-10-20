@@ -23,7 +23,14 @@ final class AppStore: ObservableObject {
     init() { load() }
 
     func load() {
-        if let d = try? Data(contentsOf: sourcesFile), let s = try? JSONDecoder().decode([BookSource].self, from: d) { sources = s }
+        if let d = try? Data(contentsOf: sourcesFile), let text = String(data: d, encoding: .utf8) {
+            // 本机文件也可能被外部编辑/旧版本写坏：逐条解析，坏项不拖垮全部书源。
+            if let outcome = try? SourceImportParser.parse(text), !outcome.sources.isEmpty {
+                sources = outcome.sources
+            } else if let s = try? JSONDecoder().decode([BookSource].self, from: d) {
+                sources = s
+            }
+        }
         if let d = try? Data(contentsOf: booksFile), let b = try? JSONDecoder().decode([Book].self, from: d) {
             // Repair legacy absolute container URLs without reimporting EPUBs or
             // touching chapter contents/progress. Persist only portable references.
@@ -117,23 +124,19 @@ final class AppStore: ObservableObject {
     func deleteLocalFiles(_ b: Book) { try? FileManager.default.removeItem(at: localFolder(b)) }
 
     // MARK: Import
+    /// 宽松导入：逐条解析，坏数据只计入失败数，不影响其余书源（与原版 Gson 行为一致）。
     @discardableResult
-    func importSources(json text: String) throws -> Int {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let d = t.data(using: .utf8) else { return 0 }
-        var list: [BookSource] = []
-        if t.hasPrefix("[") { list = try JSONDecoder().decode([BookSource].self, from: d) }
-        else { list = [try JSONDecoder().decode(BookSource.self, from: d)] }
-        list = list.filter { !$0.bookSourceUrl.isEmpty }
-        for s in list {
+    func importSources(json text: String) throws -> SourceImportReport {
+        let outcome = try SourceImportParser.parse(text)
+        for s in outcome.sources {
             if let i = sources.firstIndex(where: { $0.bookSourceUrl == s.bookSourceUrl }) { sources[i] = s }
             else { sources.append(s) }
         }
-        saveSources()
-        return list.count
+        if !outcome.sources.isEmpty { saveSources() }
+        return outcome.report
     }
 
-    func importSources(from urlString: String) async throws -> Int {
+    func importSources(from urlString: String) async throws -> SourceImportReport {
         let au = AnalyzeUrl(rawUrl: urlString)
         let (body, _) = try await au.fetch()
         return try importSources(json: body)
@@ -212,6 +215,7 @@ final class AppStore: ObservableObject {
     func addToShelf(_ b: Book) {
         if let i = books.firstIndex(where: { $0.bookUrl == b.bookUrl }) { books[i] = b } else { books.insert(b, at: 0) }
         saveBooks()
+        SourceCallBack.fire(SourceCallBack.addBookShelf, source: source(for: b.origin), book: b)
     }
 
     /// 下拉刷新写回：更新书目信息并缓存新目录，保留阅读进度；写盘合并，避免逐本重写书架 JSON。
@@ -225,6 +229,7 @@ final class AppStore: ObservableObject {
     func removeFromShelf(_ b: Book) {
         if isLocal(b) { deleteLocalFiles(b) }
         books.removeAll { $0.bookUrl == b.bookUrl }; saveBooks()
+        SourceCallBack.fire(SourceCallBack.delBookShelf, source: source(for: b.origin), book: b)
     }
 
     func updateProgress(_ b: Book, index: Int, title: String?) {
