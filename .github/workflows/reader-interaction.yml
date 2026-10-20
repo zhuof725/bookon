@@ -15,7 +15,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') && 'macos-26' || 'macos-15' }}
+    # iOS 26 SDK（glassEffect 等 Liquid Glass API）在 Sources/App 里是硬依赖，
+    # 旧镜像的 SDK 编不过（ThemePalette.swift `generic parameter 'R' could not be inferred`）。
+    # 2026-10-21：整个 job 统一跑 macos-26，不再按 suite 分流。
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -66,20 +69,19 @@ jobs:
         with:
           name: cache-management-regression-log
           path: cache-management-regression.log
-      - name: Select iOS 26 SDK for native glass verification
-        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
+      - name: Select iOS 26 SDK
         run: |
           X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
-          test -n "$X"
-          sudo xcode-select -s "$X"
+          [ -n "$X" ] && sudo xcode-select -s "$X"
           xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
       - name: Install XcodeGen and diagnostic tools
         run: brew install xcodegen ripgrep
       - name: Generate focused test project
         run: cd Tools/ReaderInteractionTest && xcodegen generate
       - name: Pick available iPhone simulator
         env:
-          NATIVE_GLASS: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
+          NATIVE_GLASS: true
         run: |
           xcrun simctl list devices available -j > /tmp/devices.json
           python3 - <<'PY' >> "$GITHUB_ENV"
@@ -90,7 +92,6 @@ jobs:
           print('SIMULATOR_ID=' + phones[0]['udid'])
           PY
       - name: Compile native glass harness before simulator boot
-        if: ${{ (inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') }}
         run: |
           set -o pipefail
           xcodebuild -project Tools/ReaderInteractionTest/ReaderInteraction.xcodeproj \
