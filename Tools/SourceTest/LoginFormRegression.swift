@@ -96,7 +96,10 @@ enum LoginFormRegression {
             call: "uc2()")
         // 含遇見书源：loginUi 是 `@js: result = YuJianLoginUi(this)`，而 YuJianLoginUi 定义在
         // loginUrl（登录函数库）里。求值 loginUi 必须同时加载 loginUrl，否则 Can't find variable。
-        let yujian = try source("yujian-source.json")
+        let fixtures = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Tools/SourceTest/Fixtures")
+        let yujianURL = fixtures.appendingPathComponent("yujian-source.json")
+        let yujian = try JSONDecoder().decode(BookSource.self, from: Data(contentsOf: yujianURL))
         let yjUI = SourceLoginForm.resolveUiText(yujian.loginUi) { js in
             JSEngine.shared.evalString(js, jsLib: yujian.jsLib,
                                        loginLib: SourceLoginForm.loginScript(yujian.loginUrl),
