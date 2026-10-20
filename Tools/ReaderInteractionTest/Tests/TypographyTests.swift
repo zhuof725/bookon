@@ -90,7 +90,8 @@ final class TypographyTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["layout-value-font"].waitForExistence(timeout: 5))
         let old = app.staticTexts["layout-value-font"].label
         app.buttons["layout-plus-font"].tap()
-        XCTAssertNotEqual(app.staticTexts["layout-value-font"].label, old)
+        let bumped = app.staticTexts["layout-value-font"].label
+        XCTAssertNotEqual(bumped, old)
         // 边距区在表单下方：iOS 26 的 Form 懒渲染，没滚到的行不在可访问性树里，
         // 直接 tap 会报 "No matches found"。
         let leftPlus = app.buttons["layout-plus-left"]
@@ -102,15 +103,19 @@ final class TypographyTests: XCTestCase {
         let leftValue = app.staticTexts["layout-value-left"]
         reveal(leftValue, in: app)
         XCTAssertEqual(leftValue.label, "21 pt")
-        XCTAssertTrue(app.staticTexts["layout-value-font"].exists)
+        // 字号行在表单顶部，此时已滚出屏幕；滚回去确认字号也持久化了。
+        let fontValue = app.staticTexts["layout-value-font"]
+        reveal(fontValue, in: app, up: true)
+        XCTAssertEqual(fontValue.label, bumped)
     }
 
     /// 滚到元素可点击为止（同一套写法见 AppearanceTests / AppearanceFixTests）。
-    private func reveal(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 8) {
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, up: Bool = false, maxSwipes: Int = 8) {
         let form = app.collectionViews.firstMatch
         var swipes = 0
         while !element.isHittable && swipes < maxSwipes {
-            if form.exists { form.swipeUp(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
+            let target: XCUIElement = form.exists ? form : app
+            if up { target.swipeDown(velocity: .slow) } else { target.swipeUp(velocity: .slow) }
             swipes += 1
         }
     }
