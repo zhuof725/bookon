@@ -381,6 +381,7 @@ final class JSEngine {
         setCookie:function(u,v){__cookieSet(String(u),v==null?'':String(v));},
         replaceCookie:function(u,v){__cookieReplace(String(u),v==null?'':String(v));},
         removeCookie:function(u){__cookieRemove(String(u));},
+        removeCookieByName:function(u,n){__cookieRemoveNamed(String(u),String(n));},
         cookieToMap:function(v){
             var parsed=JSON.parse(String(__cookieToMap(v==null?'':String(v))));
             var map=Object.create(null);
@@ -442,7 +443,7 @@ final class JSEngine {
                 try{var parts=String(v||'').split(';');var nv=parts[0]||'';var eq=nv.indexOf('=');if(eq<=0){return '';}
                 var name=nv.slice(0,eq);var value=nv.slice(eq+1);
                 var expired=/max-age\\s*=\\s*0/i.test(String(v));
-                if(expired||!value){cookie.removeCookie(String(u),name);}
+                if(expired||!value){cookie.removeCookieByName(String(u),name);}
                 else{cookie.setCookie(String(u),name+'='+value);}
                 }catch(e){}
                 return '';};
@@ -701,6 +702,10 @@ final class JSEngine {
             do { try store.removeCookie(url); return true }
             catch { report(error); return false }
         }
+        let removeNamed: @convention(block) (String, String) -> Bool = { url, name in
+            do { try store.removeCookie(url, name: name); return true }
+            catch { report(error); return false }
+        }
         let toMap: @convention(block) (String) -> String = { value in
             do {
                 let map = try SourceCookieStore.cookieToMap(value)
@@ -722,6 +727,7 @@ final class JSEngine {
         ctx.setObject(set, forKeyedSubscript: "__cookieSet" as NSString)
         ctx.setObject(replace, forKeyedSubscript: "__cookieReplace" as NSString)
         ctx.setObject(remove, forKeyedSubscript: "__cookieRemove" as NSString)
+        ctx.setObject(removeNamed, forKeyedSubscript: "__cookieRemoveNamed" as NSString)
         ctx.setObject(toMap, forKeyedSubscript: "__cookieToMap" as NSString)
         ctx.setObject(fromMap, forKeyedSubscript: "__cookieFromMap" as NSString)
     }

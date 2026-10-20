@@ -71,6 +71,21 @@ final class SourceCookieStore {
         try write(url, "", replacingAll: true)
     }
 
+    /// 删除某一个 Cookie（Android CookieManager.setCookie(url, "name=; Max-Age=0") 的语义）。
+    /// 只影响同名条目，同域名下的其它 Cookie 保留。无效 URL / 无存储时抛错，与 write 一致。
+    func removeCookie(_ url: String, name: String) throws {
+        let target = try Self.target(url)
+        let host = target.host!.lowercased()
+        let key = name.trimmingCharacters(in: CharacterSet(charactersIn: " \t"))
+        guard !key.isEmpty else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard let storage = storage else { throw StoreError.unavailableStorage }
+        for cookie in (storage.cookies ?? []) where cookie.domain.lowercased() == host && cookie.name == key {
+            storage.deleteCookie(cookie)
+        }
+    }
+
     static func cookieToMap(_ cookie: String) throws -> [String: String] {
         guard !cookie.contains("\r"), !cookie.contains("\n") else {
             throw StoreError.invalidCookie
