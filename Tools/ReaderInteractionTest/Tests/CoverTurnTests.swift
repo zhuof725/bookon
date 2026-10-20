@@ -32,7 +32,10 @@ final class CoverTurnTests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.91, dy: 0.55)).tap()
         expect(app, chapter: 1, page: 0, commits: 3, revision: 1)
         XCTAssertEqual(app.statusBars.count, 0)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        // iOS 26 模拟器上 app.screenshot() 偶发等不到静止（翻页动画刚落定就请求快照），
+        // 先让动画收尾，再取屏幕级截图：附件只是凭据，不该把整条用例判死。
+        Thread.sleep(forTimeInterval: 1)
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "cover-night-settled"
         screenshot.lifetime = .keepAlways
         add(screenshot)
