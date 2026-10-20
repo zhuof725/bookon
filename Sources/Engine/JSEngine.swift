@@ -1216,6 +1216,12 @@ final class JSEngine {
         ctx.setObject(openBrowser, forKeyedSubscript: "__openBrowser" as NSString)
         var thrown: String?
         ctx.exceptionHandler = { _, value in thrown = value?.toString() ?? "脚本错误" }
+        // 与规则求值一致：登录脚本里的 java.put/java.get 写入书源作用域（可持久化），
+        // 面板按钮把状态写进变量后，搜索/详情阶段的脚本才能读到同一份数据。
+        let put: @convention(block) (String, String) -> String = { context.put($0, $1) }
+        let get: @convention(block) (String) -> String = { context.get($0) }
+        ctx.setObject(put, forKeyedSubscript: "__contextPut" as NSString)
+        ctx.setObject(get, forKeyedSubscript: "__contextGet" as NSString)
         if let lib = source.jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
         if let l = library, !l.isEmpty { ctx.evaluateScript(l) }
         let value = ctx.evaluateScript(call)
