@@ -51,7 +51,7 @@ enum ThirteenSourcesRegression {
         print("DEBUG attrC=[\(frag.getString("/a/@href", from: "<div><a href=\"/y\">t</a></div>"))]")
         if let doc = try? SwiftSoup.parse("<div id=\"__legado_fragment__\"><option value=\"/v\">第二章 任务</option></div>"),
            let holder = try? doc.getElementById("__legado_fragment__") {
-            print("DEBUG holderHtml=\(holder.html())")
+            print("DEBUG holderHtml=\((try? holder.html()) ?? "nil")")
             if let child = holder.children().first() {
                 print("DEBUG childTag=\(child.tagName()) attr=[\((try? child.attr("value")) ?? "nil")]")
             } else {
