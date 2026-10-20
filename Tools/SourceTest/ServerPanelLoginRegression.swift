@@ -45,9 +45,14 @@ enum ServerPanelLoginRegression {
         // 否则用户在登录页只会看到「没有可用登录配置」。
         let fixture = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Tools/SourceTest/Fixtures/chongsheng-aggregate-v2.0.2.json")
+        // 导出的书源是数组；也容许单个对象。
+        func decodeSource(_ data: Data) -> BookSource? {
+            if let list = try? JSONDecoder().decode([BookSource].self, from: data) { return list.first }
+            return try? JSONDecoder().decode(BookSource.self, from: data)
+        }
         if FileManager.default.fileExists(atPath: fixture.path),
            let data = try? Data(contentsOf: fixture),
-           let real = try? JSONDecoder().decode(BookSource.self, from: data) {
+           let real = decodeSource(data) {
             let ui = SourceLoginForm.resolveUiText(real.loginUi) { js in
                 JSEngine.shared.evalString(js, jsLib: real.jsLib,
                                            loginLib: SourceLoginForm.loginScript(real.loginUrl),
