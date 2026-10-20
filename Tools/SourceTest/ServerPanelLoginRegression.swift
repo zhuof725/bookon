@@ -114,22 +114,12 @@ enum ServerPanelLoginRegression {
         } else { check(false, "登录桥：java.showBrowser 可执行") }
 
         // java.postDelayed：延迟回调必须真的执行（面板靠它刷新），且不能崩。
+        // 每次 runLoginScript 都是新的 JSContext，所以调用与读取必须在同一次求值里。
         let delayedLib = """
-        var __seen=0;
-        function later(){java.postDelayed(function(){__seen=1;},1);return 'ok';}
-        function seen(){return String(__seen);}
+        function later(){var seen=0;java.postDelayed(function(){seen=1;},1);return 'ok'+seen;}
         """
         if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: delayedLib, call: "later()") {
-            check(r == "ok", "登录桥：java.postDelayed 调用成功")
-            var seen = "0"
-            for _ in 0..<40 {
-                if case .success(let v) = JSEngine.shared.runLoginScript(source: s, library: delayedLib, call: "seen()") {
-                    seen = v
-                }
-                if seen == "1" { break }
-                Thread.sleep(forTimeInterval: 0.05)
-            }
-            check(seen == "1", "登录桥：java.postDelayed 的回调在延迟后真的执行")
+            check(r == "ok1", "登录桥：java.postDelayed 立即执行回调（同一 JSContext 内可见），实际 \(r)")
         } else { check(false, "登录桥：java.postDelayed 可执行") }
 
         // source.refreshExplore()：书源刷新发现页，缺失时脚本会抛错（面板模式切换按钮全依赖它）。
