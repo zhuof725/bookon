@@ -56,26 +56,41 @@ enum XPathRule {
     /// 相对路径求值：以当前节点为根，交给 Kanna（libxml2 XPath 1.0）执行。
     /// 旧实现手写把 `/tag[n]`、`[@class='x']` 转成 CSS，覆盖不了 `[last()]`、`contains()`、
     /// 多谓词、属性轴等写法。这里把节点序列化成带唯一标记的片段，再拼成
-    /// `//*[@data-legado-root='…']` + 原路径，行为与 JsoupXpath 的「节点当文档根」一致。
+    /// `//*[@data-legado-root='…']` + 原路径求值。
+    /// JsoupXpath 对「当前节点」有两种常见写法：`/@attr`、`/span[1]` 把当前节点当根（取它的属性/子节点），
+    /// 而片段只有一个元素时（`<option value="v1">一</option>` + `/option[1]/text()`）又把该元素
+    /// 当成结果集里的一项。先按「节点即根」求值，取不到再把节点包一层容器当根重试。
     private static func relativeValues(_ obj: Any, _ path: String, output: Output) -> [String] {
         guard let root = fragmentRoot(obj) else { return [] }
-        let marker = "r\(abs(path.hashValue))"
         guard var outer = try? root.outerHtml(),
               let gt = outer.firstIndex(of: ">") else { return [] }
+        let marker = "r\(abs(path.hashValue))"
         outer.insert(contentsOf: " data-legado-root=\"\(marker)\"", at: gt)
         let tag = root.tagName().lowercased()
-        let wrapped: String
+        let container = parentTag(for: tag)
+        // ① 节点自己带标记：`/@attr`、`/子元素` 这类写法。
+        let direct = container.map { "<\($0)>" + outer + "</\($0)>" } ?? outer
+        let values = evaluate(html: direct, marker: marker, path: path, output: output)
+        if !values.isEmpty { return values }
+        // ② 标记放在容器上：路径第一步就是该节点本身（`/option[1]`）。
+        let wrapperTag = container ?? "div"
+        guard let plain = try? root.outerHtml() else { return values }
+        let wrapped = "<\(wrapperTag) data-legado-root=\"\(marker)\">" + plain + "</\(wrapperTag)>"
+        return evaluate(html: wrapped, marker: marker, path: path, output: output)
+    }
+
+    /// 片段必须放进合法父元素里，libxml2 才不会把它丢掉（`<option>` 必须在 `<select>` 内等）。
+    private static func parentTag(for tag: String) -> String? {
         switch tag {
-        case "tr", "td", "th", "tbody", "thead", "tfoot":
-            wrapped = "<table>" + outer + "</table>"
-        case "option":
-            wrapped = "<select>" + outer + "</select>"
-        case "li":
-            wrapped = "<ul>" + outer + "</ul>"
-        default:
-            wrapped = outer
+        case "tr", "td", "th", "tbody", "thead", "tfoot": return "table"
+        case "option": return "select"
+        case "li": return "ul"
+        default: return nil
         }
-        guard let doc = try? HTML(html: wrapped, encoding: .utf8) else { return [] }
+    }
+
+    private static func evaluate(html: String, marker: String, path: String, output: Output) -> [String] {
+        guard let doc = try? HTML(html: html, encoding: .utf8) else { return [] }
         let result = doc.xpath("//*[@data-legado-root='\(marker)']" + path)
         let isAttribute = path.contains("/@")
         switch result {
