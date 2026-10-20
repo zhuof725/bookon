@@ -88,15 +88,17 @@ final class AnalyzeRule {
         return context.get("host")
     }
 
-    private func runJS(_ js: String, _ input: Any) -> Any {
+    private func runJS(_ js: String, _ input: Any, node: Any? = nil) -> Any {
         let expanded = expandEmbeddedTemplates(js, input: input)
-        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: input, context: context) ?? ""
+        // ruleInput = java.getString/getElement 等的作用对象：混合规则里它是本条规则的内容节点
+        // （原版 bindings["java"] = this），不是前面各段累计的 result。
+        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: node ?? input, context: context) ?? ""
     }
 
     /// 与 runJS 相同，但脚本抛错时返回 nil（错误信息在 JSEngine.lastError）。
-    private func runJSOptional(_ js: String, _ input: Any) -> Any? {
+    private func runJSOptional(_ js: String, _ input: Any, node: Any? = nil) -> Any? {
         let expanded = expandEmbeddedTemplates(js, input: input)
-        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: input, context: context)
+        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: node ?? input, context: context)
     }
 
     /// Legado 会在执行 @js:/<js> 前先展开其中的 {{规则}}。
@@ -163,12 +165,15 @@ final class AnalyzeRule {
             }
         }
         var cur: Any = obj ?? content
+        // 本条规则作用的内容节点：混合规则的 JS 段里 java.getString(...) 仍查这个节点，
+        // 只有 result 才是前面各段累计的值（原版 bindings["java"] = 本 AnalyzeRule）。
+        let node: Any = obj ?? content
         var seenJS = false
         var textBeforeJS: String? = nil
         for (isJs, s) in splitJS(rule) {
             if isJs {
                 seenJS = true
-                let value = runJSOptional(s, cur)
+                let value = runJSOptional(s, cur, node: node)
                 if value == nil, JSEngine.lastError != nil {
                     // 脚本报错：文本部分通常就是真实地址（脚本只做一层包装，如 data: 协议），
                     // 退回文本部分，别把整条规则判成空。
@@ -177,8 +182,13 @@ final class AnalyzeRule {
                 }
                 cur = value ?? ""
             } else {
-                if let str = cur as? String, cur as AnyObject !== content as AnyObject { cur = parseStage(str) }
-                cur = stringValue(cur, s)
+                if let rg = regexOnlySegment(s), let str = cur as? String {
+                    // 纯正则段：直接改累计结果，不能把它再解析成 HTML（否则会拿到空文档 outerHtml）
+                    cur = AnalyzeRule.applyRegexReplacement(str, rg.regex, rg.repl, rg.firstOnly)
+                } else {
+                    if let str = cur as? String, cur as AnyObject !== content as AnyObject { cur = parseStage(str) }
+                    cur = stringValue(cur, s)
+                }
                 if !seenJS, textBeforeJS == nil { textBeforeJS = AnalyzeRule.asString(cur) }
             }
         }
@@ -194,11 +204,17 @@ final class AnalyzeRule {
         rule = resolvePut(rule, from: obj)
         guard !rule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         var cur: Any = obj ?? content
+        let node: Any = obj ?? content
         let parts = splitJS(rule)
         for (index, part) in parts.enumerated() {
             let (isJs, s) = part
             if isJs {
-                cur = runJS(s, cur)
+                cur = runJS(s, cur, node: node)
+                continue
+            }
+            if let rg = regexOnlySegment(s), let str = cur as? String {
+                // 纯正则段（如 `##·##,`）：替换累计结果，不重新解析
+                cur = AnalyzeRule.applyRegexReplacement(str, rg.regex, rg.repl, rg.firstOnly)
                 continue
             }
             if let str = cur as? String, cur as AnyObject !== content as AnyObject {
@@ -224,7 +240,11 @@ final class AnalyzeRule {
     /// 纯 JSON 规则在当前节点上的求值结果列表；不是 JSON 规则时返回 nil（退回字符串语义）。
     private func jsonStringValues(_ obj: Any, _ rule: String) -> [Any]? {
         let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("@@"), isJsonRule(trimmed, obj) else { return nil }
+        // 混合规则里带 {{模板}} 的文本段不是 JSON 路径：原版把这一段的字符串结果
+        // 累计进 result 再交给后续 JS（result.replace(...)），
+        // 不能因为「内容是 JSON」就把它当 JSON 查询返回数组（会打死 JS 段）。
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("@@"), !trimmed.contains("{{"),
+              isJsonRule(trimmed, obj) else { return nil }
         return JsonPath.query(jsonRoot(obj), stripPrefix(trimmed))
     }
     /// 不能用 getString(_:from:)：那会先把正文当 HTML 解析、再用默认 prettyPrint 序列化，
@@ -247,8 +267,9 @@ final class AnalyzeRule {
         guard let rawRule = rule, !rawRule.isEmpty else { return [] }
         let rule = resolvePut(rawRule, from: obj)
         var cur: Any = obj ?? content
+        let node: Any = obj ?? content
         for (isJs, s) in splitJS(rule) {
-            if isJs { cur = runJS(s, cur) }
+            if isJs { cur = runJS(s, cur, node: node) }
             else {
                 if let str = cur as? String { cur = parseStage(str) }
                 cur = elementsValue(cur, s)
@@ -292,6 +313,37 @@ final class AnalyzeRule {
 
     private func topLevelRegexMarker(in s: String) -> Range<String.Index>? {
         RuleScanner.firstTopLevel(s, ["##"])
+    }
+
+    /// 混合规则里「只有 ##正则」的段（如番茄 kind 规则结尾的 `##·##,`）。
+    /// 原版语义：规则部分为空 + 有替换正则 → 不再求值，直接对前面累计的 result 做替换
+    /// （`if (rule.isNotBlank() || sourceRule.replaceRegex.isEmpty())` 的短路）。
+    private func regexOnlySegment(_ s: String)
+        -> (regex: String, repl: String, firstOnly: Bool)? {
+        guard let r = topLevelRegexMarker(in: s) else { return nil }
+        let base = String(s[..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard base.isEmpty else { return nil }
+        let tail = String(s[r.upperBound...])
+        var segs = tail.components(separatedBy: "##")
+        guard let re = segs.first, !re.isEmpty else { return nil }
+        segs.removeFirst()
+        let repl = segs.first ?? ""
+        return (re, repl, tail.hasSuffix("###"))
+    }
+
+    /// ##正则##替换：与 stringValue 尾部同一套语义（支持 ### 只替换第一处）。
+    private static func applyRegexReplacement(_ s: String, _ re: String,
+                                              _ repl: String, _ firstOnly: Bool) -> String {
+        guard let nre = try? NSRegularExpression(pattern: re) else { return s }
+        let ns = s as NSString
+        if firstOnly {
+            if let m = nre.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)) {
+                return nre.replacementString(for: m, in: s, offset: 0, template: repl)
+            }
+            return ""
+        }
+        return nre.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: ns.length),
+                                            withTemplate: repl)
     }
 
     private func stringValue(_ obj: Any, _ rawRule: String) -> String {
