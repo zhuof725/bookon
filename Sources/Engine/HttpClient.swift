@@ -103,7 +103,8 @@ struct AnalyzeUrl {
         // 迟一步会把 GBK 关键词encode成 UTF-8 字节（如 wd=%E6%88%91%E7%9A%84），站点搜不到。
         // POST 表单体走 percentEncodedBody（已按 charset 编码），GET 参数在这里统一处理。
         if let c = charset, !c.lowercased().contains("utf-8"), !c.lowercased().contains("utf8") {
-            s = percentEncoded(s)
+            // init 内不能调实例方法（此时 url 尚未赋值），用静态版本。
+            s = AnalyzeUrl.percentEncoded(s, charset: charset)
         }
         url = AnalyzeUrl.absolute(s, base: baseUrl)
     }
@@ -251,6 +252,12 @@ struct AnalyzeUrl {
     }
 
     func percentEncoded(_ s: String) -> String {
+        AnalyzeUrl.percentEncoded(s, charset: charset)
+    }
+
+    /// 按书源 charset 百分号编码（GET 查询串）。init 阶段求值时用它，
+    /// 那时实例尚未初始化完成，不能调实例方法。
+    static func percentEncoded(_ s: String, charset: String?) -> String {
         let enc = AnalyzeUrl.encoding(charset)
         if enc == .utf8 {
             return s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "+"))) ?? s
