@@ -14,6 +14,16 @@ enum SearchProbe {
         let bridge = JavaBridge(context: context)
         let r1 = bridge.connectNative(plain + ",{\"method\":\"GET\",\"headers\":{\"cookie\":\"qttoken=;deviceId=test;\",\"Content-Type\":\"application/json\"},\"body\":\"{}\"}")
         print("A) 带options: \(r1.map { "code=\($0.code) len=\($0.body.count)" } ?? "nil")")
+        if r1 == nil {
+            // 逐步拆：只加 method、只加 headers、只加 body
+            for (label, opt) in [("仅method", "{\"method\":\"GET\"}"),
+                                 ("仅headers", "{\"headers\":{\"cookie\":\"qttoken=;deviceId=test;\"}}"),
+                                 ("仅body", "{\"body\":\"{}\"}"),
+                                 ("method+body", "{\"method\":\"GET\",\"body\":\"{}\"}")] {
+                let r = bridge.connectNative(plain + "," + opt)
+                print("A-\(label): \(r.map { "code=\($0.code) len=\($0.body.count)" } ?? "nil")")
+            }
+        }
         let r2 = bridge.connectNative(plain)
         print("B) 纯地址:   \(r2.map { "code=\($0.code) len=\($0.body.count)" } ?? "nil")")
 
