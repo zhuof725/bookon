@@ -10,6 +10,14 @@ final class AnalyzeRule {
     /// 原始响应文本。Legado 中顶层 JS 的 result 是原始字符串（如 data: URL 解出的十六进制），
     /// 不能是 SwiftSoup 重新序列化后的 <html> 文档。
     let rawContent: String?
+    /// 规则中间阶段：字符串结果被解析成的文档节点 → 原字符串。
+    private var stageRaw: (node: AnyObject, raw: String)?
+
+    private func parseStage(_ str: String) -> Any {
+        let parsed = AnalyzeRule.parse(str, baseUrl: baseUrl)
+        if parsed is Element { stageRaw = (parsed as AnyObject, str) }
+        return parsed
+    }
 
     init(content: Any, baseUrl: String, jsLib: String? = nil, context: RuleContext = RuleContext()) {
         self.baseUrl = baseUrl
@@ -27,6 +35,9 @@ final class AnalyzeRule {
     /// 传给 JS 的 result：顶层文档用原始文本，其余节点按原逻辑转换
     private func jsInput(_ input: Any) -> Any {
         if let raw = rawContent, (input as AnyObject) === (content as AnyObject) { return raw }
+        // 上一段 JS 返回的字符串被解析成 HTML 文档后，{{result}} / 后续 JS 仍应拿到原字符串
+        // （原版混合规则 `$.id <js>base64</js> data:;base64,{{result}}` 依赖这一点）。
+        if let stage = stageRaw, (input as AnyObject) === stage.node { return stage.raw }
         return AnalyzeRule.jsValue(input)
     }
 
@@ -166,7 +177,7 @@ final class AnalyzeRule {
                 }
                 cur = value ?? ""
             } else {
-                if let str = cur as? String, cur as AnyObject !== content as AnyObject { cur = AnalyzeRule.parse(str, baseUrl: baseUrl) }
+                if let str = cur as? String, cur as AnyObject !== content as AnyObject { cur = parseStage(str) }
                 cur = stringValue(cur, s)
                 if !seenJS, textBeforeJS == nil { textBeforeJS = AnalyzeRule.asString(cur) }
             }
@@ -191,7 +202,7 @@ final class AnalyzeRule {
                 continue
             }
             if let str = cur as? String, cur as AnyObject !== content as AnyObject {
-                cur = AnalyzeRule.parse(str, baseUrl: baseUrl)
+                cur = parseStage(str)
             }
             let nextIsJS = index + 1 < parts.count && parts[index + 1].0
             if nextIsJS, let list = jsonStringValues(cur, s) {
@@ -239,7 +250,7 @@ final class AnalyzeRule {
         for (isJs, s) in splitJS(rule) {
             if isJs { cur = runJS(s, cur) }
             else {
-                if let str = cur as? String { cur = AnalyzeRule.parse(str, baseUrl: baseUrl) }
+                if let str = cur as? String { cur = parseStage(str) }
                 cur = elementsValue(cur, s)
             }
         }

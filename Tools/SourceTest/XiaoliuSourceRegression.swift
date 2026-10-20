@@ -134,5 +134,20 @@ enum XiaoliuSourceRegression {
         check(custom.url.contains("offset=10"), "第二页 offset 按 10 递增")
         check(custom.url.contains("short=1"), "module=13（短篇）追加 short=1")
         SourceVariable.set("", for: source.bookSourceUrl)
+
+        // MARK: 混合规则 `$.book_id <js>base64</js> data:;base64,{{result}}`
+        // 上一段 JS 返回的字符串不能被当成 HTML 文档再序列化成 <html>…（详情链接曾变成 data:;base64,<html>）。
+        let mixed = "$.book_id\n<js>java.base64Encode(result)</js>\ndata:;base64,{{result}},{\"type\":\"番茄\"}"
+        let item: [String: Any] = ["book_id": "7552067105378536473", "name": "慈航市"]
+        let rule = AnalyzeRule(content: item, baseUrl: source.bookSourceUrl,
+                               jsLib: source.jsLib, context: RuleContext(source: source))
+        let bookUrl = rule.getString(mixed)
+        check(bookUrl == "data:;base64,NzU1MjA2NzEwNTM3ODUzNjQ3Mw==,{\"type\":\"番茄\"}",
+              "混合规则：{{result}} 取上一段 JS 的原字符串（实际 \(bookUrl.prefix(80))）")
+        check(rule.getString(source.ruleSearch?.bookUrl) == bookUrl,
+              "混合规则：书源真实 bookUrl 规则得到 data: 链接")
+        check(rule.getString(source.ruleToc?.chapterUrl, from: ["item_id": "7552070380790219289"])
+              == "data:;base64,NzU1MjA3MDM4MDc5MDIxOTI4OQ==,{\"type\":\"番茄\"}",
+              "混合规则：章节链接同样得到 data: 链接")
     }
 }
