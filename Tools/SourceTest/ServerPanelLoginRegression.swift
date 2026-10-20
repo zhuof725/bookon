@@ -113,14 +113,30 @@ enum ServerPanelLoginRegression {
                   "登录桥：java.showBrowser 打开使用说明页")
         } else { check(false, "登录桥：java.showBrowser 可执行") }
 
-        // java.postDelayed：延迟回调必须真的执行（面板靠它刷新），且不能崩。
+        // java.postDelayed：延迟回调排进 __delayedQueue，由原生在求值结束后 drain；
         // 每次 runLoginScript 都是新的 JSContext，所以调用与读取必须在同一次求值里。
         let delayedLib = """
         function later(){var seen=0;java.postDelayed(function(){seen=1;},1);return 'ok'+seen;}
         """
         if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: delayedLib, call: "later()") {
-            check(r == "ok1", "登录桥：java.postDelayed 立即执行回调（同一 JSContext 内可见），实际 \(r)")
+            check(r == "ok0", "登录桥：java.postDelayed 不阻塞脚本返回（回调延后执行），实际 \(r)")
         } else { check(false, "登录桥：java.postDelayed 可执行") }
+        let drainLib = """
+        function later2(){var seen=0;java.postDelayed(function(){seen=1;},1);
+            java.put('sy_drain','');return used();}
+        function used(){var v='';java.postDelayed(function(){v='done';},1);return v;}
+        """
+        if case .success(let r) = JSEngine.shared.runLoginScript(source: s, library: drainLib, call: "later2()") {
+            check(r == "", "登录桥：延迟回调在脚本返回后才执行，实际 \(r)")
+        } else { check(false, "登录桥：延迟回调可排队") }
+        // 回调真正执行过：回调里写入书源变量，下次求值能读到。
+        let drainRunLib = """
+        function queueIt(){java.postDelayed(function(){java.put('sy_delayed','yes');},1);return 'queued';}
+        """
+        _ = JSEngine.shared.runLoginScript(source: s, library: drainRunLib, call: "queueIt()")
+        let seenValue = JSEngine.shared.evalString("String(java.get('sy_delayed')||'')",
+                                                   jsLib: s.jsLib, context: RuleContext(source: s)) ?? ""
+        check(seenValue == "yes", "登录桥：java.postDelayed 的回调在脚本结束后被执行（面板刷新依赖它）")
 
         // source.refreshExplore()：书源刷新发现页，缺失时脚本会抛错（面板模式切换按钮全依赖它）。
         if case .success = JSEngine.shared.runLoginScript(source: s, library: lib, call: "srvKindPage('audio')") {

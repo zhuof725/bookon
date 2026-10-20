@@ -708,15 +708,22 @@ final class JSEngine {
     java.reLoginView=function(){return source.reLoginView()};
     java.webViewCookieManager=function(){return source.webViewCookieManager()};
     // 服务器聚合书源（重生聚合等）用 java.postDelayed(fn,ms) 延迟刷新发现页/登录面板。
-    // iOS 端没有 Android Handler：延迟由原生线程调度后回调 JS，脚本语义与原版一致。
+    // iOS 端没有 Android Handler：延迟回调排进 __delayed 队列，由原生在一次求值结束后立即执行，
+    // 脚本语义（先返回、随后刷新）保持不变，也不会把 JSContext 用到别的线程上。
+    var __delayedQueue=[];
     java.postDelayed=function(fn,ms){
         if(typeof fn!=='function'){return 0;}
-        if(typeof __postDelayed==='function'){
-            var wait=Number(ms);if(!isFinite(wait)||wait<0){wait=0;}
-            return __postDelayed(fn,wait);
-        }
-        try{fn();}catch(e){}
+        __delayedQueue.push(fn);
         return 0;};
+    // 由原生在脚本求值完成后调用：执行 java.postDelayed 排队的回调（含回调里再排队的，最多 32 轮）。
+    function __drainDelayed(){
+        for(var round=0;round<32;round++){
+            if(!__delayedQueue.length){return;}
+            var queue=__delayedQueue;
+            __delayedQueue=[];
+            for(var i=0;i<queue.length;i++){try{queue[i]();}catch(e){}}
+        }
+    }
     // java.getSource()：Legado JsExtensions 取当前书源对象（聚合源登录脚本会用它兜底取 source）。
     java.getSource=function(){return source;};
     // java.openUrl(u)：登录脚本里打开网址的旧式兜底（用户中心 / 帮助页）。
@@ -863,15 +870,8 @@ final class JSEngine {
         // 这里只做无副作用的回调（书源脚本本身已把配置落盘，下次进入发现页即可生效）。
         let sourceRefreshExplore: @convention(block) () -> Void = {}
         ctx.setObject(sourceRefreshExplore, forKeyedSubscript: "__sourceRefreshExplore" as NSString)
-        // java.postDelayed(fn, ms)：登录脚本延迟刷新（面板「点此刷新」等）。
-        // JSContext 只能在创建它的线程上使用，把回调交给别的队列会崩；
-        // 书源用它刷新的只是发现页/面板状态（配置已落盘），这里立即执行。
-        let postDelayed: @convention(block) (Any, Double) -> Int = { fn, _ in
-            guard let value = fn as? JSValue, value.isObject, JSContext.current() != nil else { return 0 }
-            value.call(withArguments: [])
-            return 0
-        }
-        ctx.setObject(postDelayed, forKeyedSubscript: "__postDelayed" as NSString)
+        // java.postDelayed 由 prelude 排队（__drainDelayed），原生在求值结束后统一执行：
+        // 见 runLoginScript / evalBody 里的 drainDelayed 调用。
     }
 
     /// Crypto errors are thrown as CryptoError with a fixed message; inputs never appear in them.
@@ -1165,6 +1165,8 @@ final class JSEngine {
             }
         }
         guard let v = evaluated, !v.isUndefined, !v.isNull else {
+            // 脚本可能只排了延迟回调（java.postDelayed）而没有返回值：也要执行它们。
+            ctx.evaluateScript("if(typeof __drainDelayed==='function')__drainDelayed()")
             if JSEngine.lastError != nil {
                 DebugLog.add("JS 脚本失败：\(String(script.prefix(240)))")
             }
@@ -1217,6 +1219,8 @@ final class JSEngine {
         if let lib = source.jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
         if let l = library, !l.isEmpty { ctx.evaluateScript(l) }
         let value = ctx.evaluateScript(call)
+        // java.postDelayed 排队的回调在脚本返回后执行（与 Android Handler 语义一致）。
+        ctx.evaluateScript("if(typeof __drainDelayed==='function')__drainDelayed()")
         if let t = thrown { return .failure(LoginScriptError(message: t)) }
         guard let v = value, !v.isUndefined, !v.isNull else { return .success("") }
         return .success(v.toString() ?? "")
