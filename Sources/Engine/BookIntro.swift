@@ -9,7 +9,7 @@ import Foundation
 ///
 /// 详情解析时带标记的简介必须**原样保留**，否则 `displayIntro` 会把 `<div style=…>`、
 /// `<svg>` 一起抹平（番茄系聚合源的「作品简介/作品数据」卡片就是这样丢掉的）。
-enum BookIntro {
+struct BookIntro {
     enum Kind: Equatable {
         case text
         case html

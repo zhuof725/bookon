@@ -28,7 +28,8 @@ enum BookIntroRegression {
         check(BookIntro.parse(action)?.renderBody.contains("点我") == true,
               "usehtml：按钮文字保留")
 
-        let md = "<md># 标题\n正文</md>"        check(BookIntro.parse(md)?.kind == .markdown, "md：识别为 Markdown")
+        let md = "<md># 标题\n正文</md>"
+        check(BookIntro.parse(md)?.kind == .markdown, "md：识别为 Markdown")
         check(BookIntro.normalized(md) == md, "md：详情解析原样保留")
 
         // 普通简介仍按原版归一（换行、实体、去标签）
