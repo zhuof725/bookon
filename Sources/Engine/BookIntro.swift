@@ -46,7 +46,7 @@ struct BookIntro {
 
     /// 列表 / 摘要处使用的纯文本（把 HTML 抹平）。
     var plainText: String {
-        kind == .text ? body : flatten(body)
+        kind == .text ? body : Self.flatten(body)
     }
 
     /// 富文本渲染用的正文。
