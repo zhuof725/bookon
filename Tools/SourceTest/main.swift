@@ -11,6 +11,12 @@ if let i = args.firstIndex(of: "--probe-toc") {
     do { try await TocProbe.run(file: file, key: probeKey); exit(0) }
     catch { print("PROBE ERROR: \(error)"); exit(1) }
 }
+if let i = args.firstIndex(of: "--probe-search") {
+    let file = args.count > i + 1 ? args[i + 1] : "gy.json"
+    let probeKey = args.count > i + 2 ? args[i + 2] : "系统"
+    do { try await SearchProbe.run(file: file, key: probeKey); exit(0) }
+    catch { print("PROBE ERROR: \(error)"); exit(1) }
+}
 if args.contains("--regression") {
     do { try await RuleRegression.run(); exit(0) }
     catch { print("REGRESSION ERROR: \(error)"); exit(1) }
