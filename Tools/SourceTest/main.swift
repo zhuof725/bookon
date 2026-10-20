@@ -81,7 +81,7 @@ for s in sources {
             let books = WebBook.parseBookList(source: s, body: body, baseUrl: finalUrl, rule: s.ruleSearch ?? SearchRule(), context: context)
             print("  搜索结果: \(books.count) 条")
             guard let first = books.first(where: { $0.name.contains(key) }) ?? books.first else { return "搜索0条" }
-            print("  第一本: \(first.name) / \(first.author) / \(short(first.bookUrl, 120))")
+            print("  第一本: \(first.name) / \(first.author) / 分类=\(first.kind ?? "-") / \(short(first.bookUrl, 120))")
             let info = try await WebBook.bookInfo(source: s, book: first)
             print("  详情: tocUrl=\(short(info.tocUrl, 120)) intro=\(short(info.intro, 40))")
             let chapters = try await WebBook.chapters(source: s, book: info)
