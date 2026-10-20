@@ -147,10 +147,13 @@ jobs:
             full) ;;
             *) ARGS=(-only-testing:ReaderInteractionTests/NativeReaderTests -only-testing:ReaderInteractionTests/ContinuousScrollTests -only-testing:ReaderInteractionTests/CoverTurnTests -only-testing:ReaderInteractionTests/TypographyTests -only-testing:ReaderInteractionTests/InteractionTests) ;;
           esac
+          # macos-26 模拟器上这套 UI 用例有偶发抖动（拖拽手势没被采到、等待状态超时，
+          # 同一提交两轮失败的不是同一条），失败后重试一次，避免把整条 pipeline 判红。
           xcodebuild -project Tools/ReaderInteractionTest/ReaderInteraction.xcodeproj \
             -scheme ReaderHarness -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 "${ARGS[@]}" \
-            -resultBundlePath reader-interaction.xcresult CODE_SIGNING_ALLOWED=NO test \
+            -resultBundlePath reader-interaction.xcresult CODE_SIGNING_ALLOWED=NO \
+            -test-iterations 2 -retry-tests-on-failure test \
             2>&1 | tee reader-interaction.log
       - name: Print crash diagnostics on failure
         if: failure()
