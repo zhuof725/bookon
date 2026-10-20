@@ -985,18 +985,24 @@ final class JSEngine {
     /// Evaluate a JS snippet with `result`, `baseUrl`, `book`, `chapter`, `key`, `page` in scope.
     /// 每次求值都会新建 JSContext 并产生大量自动释放对象；在并发任务线程上长时间批量运行时
     /// 这些对象不会及时释放，内存持续上涨。这里用 autoreleasepool 包住整次同步求值。
+    /// loginLib：loginUrl 里的书源函数库。Legado 的 loginUi 常常是
+    /// `@js: result = 某函数()`，而那个函数定义在 loginUrl（登录函数库）里——
+    /// 求值 loginUi / 登录脚本时必须把它一起加载，否则报 Can't find variable。
     func eval(_ script: String, result: Any? = nil, baseUrl: String? = nil,
               vars: [String: Any] = [:], jsLib: String? = nil,
+              loginLib: String? = nil,
               rule: AnalyzeRule? = nil, ruleInput: Any? = nil,
               context: RuleContext? = nil) -> Any? {
         autoreleasepool {
             evalBody(script, result: result, baseUrl: baseUrl, vars: vars, jsLib: jsLib,
+                     loginLib: loginLib,
                      rule: rule, ruleInput: ruleInput, context: context)
         }
     }
 
     private func evalBody(_ script: String, result: Any?, baseUrl: String?,
                           vars: [String: Any], jsLib: String?,
+                          loginLib: String?,
                           rule: AnalyzeRule?, ruleInput: Any?,
                           context: RuleContext?) -> Any? {
         let effectiveContext = context ?? rule?.context
@@ -1062,6 +1068,7 @@ final class JSEngine {
         ctx.setObject(result ?? "", forKeyedSubscript: "src" as NSString)
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }
         if let lib = jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
+        if let login = loginLib, !login.isEmpty, !login.hasPrefix("{") { ctx.evaluateScript(login) }
         // A rule's let/const bindings must not collide with bridge globals or
         // change the lexical scope captured by jsLib helpers. A block preserves
         // JavaScript completion values (unlike an IIFE without an explicit return).
@@ -1101,8 +1108,10 @@ final class JSEngine {
 
     func evalString(_ script: String, result: Any? = nil, baseUrl: String? = nil,
                     vars: [String: Any] = [:], jsLib: String? = nil,
+                    loginLib: String? = nil,
                     context: RuleContext? = nil) -> String? {
-        guard let v = eval(script, result: result, baseUrl: baseUrl, vars: vars, jsLib: jsLib, context: context) else { return nil }
+        guard let v = eval(script, result: result, baseUrl: baseUrl, vars: vars,
+                           jsLib: jsLib, loginLib: loginLib, context: context) else { return nil }
         if let s = v as? String { return s }
         if let a = v as? [Any] { return a.map { "\($0)" }.joined(separator: "\n") }
         if JSONSerialization.isValidJSONObject(v), let d = try? JSONSerialization.data(withJSONObject: v) {

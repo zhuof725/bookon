@@ -427,7 +427,9 @@ enum WebBook {
         primeLock.unlock()
         guard first else { return }
         _ = SourceLoginForm.resolveUiText(ui) { js in
-            JSEngine.shared.evalString(js, jsLib: source.jsLib, context: RuleContext(source: source))
+            JSEngine.shared.evalString(js, jsLib: source.jsLib,
+                                       loginLib: SourceLoginForm.loginScript(source.loginUrl),
+                                       context: RuleContext(source: source))
         }
     }
 

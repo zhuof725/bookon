@@ -160,6 +160,14 @@ enum SourceLoginForm {
         return true
     }
 
+    /// loginUi 是否本身就是脚本（<js> / @js:）。这类 loginUi 需要函数库才能求值，
+    /// 求值失败时要给出提示，而不是显示「没有可用登录配置」。
+    static func isScriptUI(_ raw: String?) -> Bool {
+        guard let t = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return false }
+        let lower = t.lowercased()
+        return lower.hasPrefix("<js>") || lower.hasPrefix("@js:")
+    }
+
     /// 是否显示登录入口：有 loginUi，或 loginUrl 是脚本/网址。
     static func hasLogin(_ source: BookSource) -> Bool {
         if !(source.loginUi ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }

@@ -162,11 +162,18 @@ struct SourceLoginView: View {
         let src = source
         let text = await Task.detached { () -> String? in
             SourceLoginForm.resolveUiText(src.loginUi) { js in
-                JSEngine.shared.evalString(js, context: RuleContext(source: src))
+                // loginUi 常常是 `@js: result = 某函数()`，函数定义在 loginUrl（登录函数库）里
+                // （含遇見书源就是这样），所以求值时要同时带上 jsLib 与 loginUrl 脚本库。
+                JSEngine.shared.evalString(js, jsLib: src.jsLib,
+                                           loginLib: SourceLoginForm.loginScript(src.loginUrl),
+                                           context: RuleContext(source: src))
             }
         }.value
         let parsed = SourceLoginForm.parseFields(text)
         fields = parsed
+        if parsed.isEmpty, SourceLoginForm.isScriptUI(src.loginUi) {
+            message = "登录界面脚本执行失败，请查看「书源调试」里的 JS 错误。"
+        }
         // 读取已保存的登录信息；没有保存时不写入默认值，保存由用户点击触发。
         let saved = JSEngine.loginStore.getLoginInfo(sourceKey)
             .flatMap { SourceLoginJSON.parseStringMap($0, nested: .compactJSON) } ?? [:]

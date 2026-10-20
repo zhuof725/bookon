@@ -94,6 +94,27 @@ enum LoginFormRegression {
         _ = JSEngine.shared.runLoginScript(source: s,
             library: "function uc2(){java.startBrowserAwait('data:text/html;base64,PGgxPjQ8L2gxPg==','本地页',false);}",
             call: "uc2()")
+        // 含遇見书源：loginUi 是 `@js: result = YuJianLoginUi(this)`，而 YuJianLoginUi 定义在
+        // loginUrl（登录函数库）里。求值 loginUi 必须同时加载 loginUrl，否则 Can't find variable。
+        let yujian = try source("yujian-source.json")
+        let yjUI = SourceLoginForm.resolveUiText(yujian.loginUi) { js in
+            JSEngine.shared.evalString(js, jsLib: yujian.jsLib,
+                                       loginLib: SourceLoginForm.loginScript(yujian.loginUrl),
+                                       context: RuleContext(source: yujian))
+        }
+        let yjFields = SourceLoginForm.parseFields(yjUI)
+        check(yjFields.count == 12 && yjFields.allSatisfy { $0.kind == .button },
+              "含遇見登录界面：loginUi 脚本依赖 loginUrl 函数库求值（12 个按钮）")
+        check(yjFields.contains { $0.name.contains("同步登入狀態") }
+              && yjFields.contains { $0.name.contains("開啟網頁登入") },
+              "含遇見登录界面：网页登录/同步按钮被解析出来")
+        // 只加载 jsLib 不加载 loginUrl 时应当失败（这正是这次的真实现象）。
+        let yjBroken = SourceLoginForm.resolveUiText(yujian.loginUi) { js in
+            JSEngine.shared.evalString(js, jsLib: yujian.jsLib, context: RuleContext(source: yujian))
+        }
+        check(SourceLoginForm.parseFields(yjBroken).isEmpty,
+              "含遇見登录界面：缺 loginUrl 函数库时求值失败（与修复前一致）")
+
         check(opened.isEmpty, "登录脚本：startBrowserAwait 的 data 页仍走请求通道，不当作网页跳转")
 
         // 含遇見书源登录脚本用到的桥：java.upLoginData / java.reLoginView / java.webViewCookieManager
