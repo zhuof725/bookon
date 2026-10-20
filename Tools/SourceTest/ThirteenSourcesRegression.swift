@@ -41,6 +41,10 @@ enum ThirteenSourcesRegression {
         let opts = bl.getElements("//option")
         check(opts.count == 2, "耽美小说：//option 返回 2 个节点")
         if opts.count == 2 {
+            print("DEBUG option0=\(opts[0])")
+            print("DEBUG option1=\(opts[1])")
+            print("DEBUG text0=[\(bl.getString("/text()", from: opts[0]))]")
+            print("DEBUG value1=[\(bl.getString("/@value", from: opts[1]))]")
             check(bl.getString("/text()", from: opts[0]) == "第一章 系统", "耽美小说：相对 XPath /text()")
             check(bl.getString("/@value", from: opts[1]) == "/chuanyuechongsheng/36457_1.html", "耽美小说：相对 XPath /@value")
         }
