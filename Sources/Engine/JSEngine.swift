@@ -767,9 +767,24 @@ final class JSEngine {
                   let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
             var map = store.getLoginInfoMap(key, loginUiJSON: nil)
             for (k, v) in obj {
-                if let s = v as? String { map[k] = s }
-                else if let d = try? JSONSerialization.data(withJSONObject: v), let s = String(data: d, encoding: .utf8) { map[k] = s }
-                else { map[k] = String(describing: v) }
+                if let s = v as? String {
+                    map[k] = s
+                } else if let b = v as? Bool {
+                    // login 信息里没有布尔/数字：按 Legado 的字符串语义保存。
+                    map[k] = b ? "true" : "false"
+                } else if let n = v as? NSNumber {
+                    map[k] = n.stringValue
+                } else if let a = v as? [Any], let d = try? JSONSerialization.data(withJSONObject: a),
+                          let s = String(data: d, encoding: .utf8) {
+                    map[k] = s
+                } else if let o = v as? [String: Any], let d = try? JSONSerialization.data(withJSONObject: o),
+                          let s = String(data: d, encoding: .utf8) {
+                    map[k] = s
+                } else if v is NSNull {
+                    continue
+                } else {
+                    map[k] = String(describing: v)
+                }
             }
             if let d = try? JSONSerialization.data(withJSONObject: map, options: [.sortedKeys]),
                let s = String(data: d, encoding: .utf8) {
