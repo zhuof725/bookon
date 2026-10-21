@@ -17,11 +17,11 @@ enum ContentBlocksRegression {
 
         let img = "<img src=\"data:image/svg+xml;base64,PHN2Zy8+\" onClick=\"java.startBrowser('\(url)&x=0')\"/>"
         let withImg = ContentBlocks.parse("第一段\n" + img)
-        check(withImg.last == .image(src: "data:image/svg+xml;base64,PHN2Zy8+", clickURL: url + "&x=0"), "正文块：iOS 版图片块的点击网址")
+        check(withImg.last == .image(src: "data:image/svg+xml;base64,PHN2Zy8+", clickURL: url + "&x=0", rawSrc: nil), "正文块：iOS 版图片块的点击网址")
         let android = "第一段<img src=\"data:image/svg+xml;base64,PHN2Zy8+,{\"style\":\"FULL\",\"type\":\"god\",\"click\":\"java.startBrowser('\(url)')\"}\">"
         let ab = ContentBlocks.parse(android)
         check(ab.count == 2, "正文块：Android 版图片与段落分块")
-        if case .image(let s, let c) = ab.last! { check(s == "data:image/svg+xml;base64,PHN2Zy8+", "正文块：Android 版 src 去掉选项") ; _ = c } else { check(false, "正文块：Android 版应得到图片块") }
+        if case .image(let s, let c, _) = ab.last! { check(s == "data:image/svg+xml;base64,PHN2Zy8+", "正文块：Android 版 src 去掉选项") ; _ = c } else { check(false, "正文块：Android 版应得到图片块") }
 
         let mixed = ContentBlocks.parse("甲<comment count=\"3\"/>乙")
         check(mixed.count == 1, "正文块：同一行里评论标签前后的文字合并为一段")
