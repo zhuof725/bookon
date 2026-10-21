@@ -70,7 +70,15 @@ struct AnalyzeUrl {
         }
         // Split options JSON
         var options: [String: Any]? = nil
-        if let r = s.range(of: ",\\s*\\{", options: .regularExpression) {
+        // data: 伪协议里 `,{...}` 不是请求选项，而是书源脚本要从 baseUrl 里读的元信息
+        // （番茄系 bookUrl：data:;base64,<id>,{"type":"novel"}）。原样保留。
+        var dataMetaSuffix: String? = nil
+        if s.lowercased().hasPrefix("data:"),
+           let r = s.range(of: ",\\s*\\{", options: .regularExpression) {
+            dataMetaSuffix = String(s[r.lowerBound...])
+            s = String(s[..<r.lowerBound])
+        }
+        if dataMetaSuffix == nil, let r = s.range(of: ",\\s*\\{", options: .regularExpression) {
             let jsonPart = String(s[s.index(after: r.lowerBound)...]).trimmingCharacters(in: .whitespaces)
             if let o = AnalyzeUrl.looseJSON(jsonPart) {
                 options = o
@@ -107,6 +115,8 @@ struct AnalyzeUrl {
             s = AnalyzeUrl.percentEncoded(s, charset: charset)
         }
         url = AnalyzeUrl.absolute(s, base: baseUrl)
+        // 把 data: 的元信息后缀拼回去：脚本用 baseUrl.indexOf('{') 取 {"type":"novel"}
+        if let suffix = dataMetaSuffix { url += suffix }
     }
 
     /// Legado 的书源 header 同样是规则：支持 `@js:`、`<js></js>` 与 `{{key}}/{{page}}`。
@@ -346,7 +356,11 @@ struct AnalyzeUrl {
         }
         if url.hasPrefix("data:") {
             var payload = ""
-            if let r = url.range(of: "base64,") { payload = String(url[r.upperBound...]) }
+            if let r = url.range(of: "base64,") {
+                payload = String(url[r.upperBound...])
+                // data:;base64,<payload>,{"type":"novel"}：元信息后缀不算 payload
+                if let comma = payload.firstIndex(of: ",") { payload = String(payload[..<comma]) }
+            }
             payload = payload.trimmingCharacters(in: .whitespacesAndNewlines)
             while payload.count % 4 != 0 { payload += "=" }
             let bytes = Data(base64Encoded: payload) ?? Data()
