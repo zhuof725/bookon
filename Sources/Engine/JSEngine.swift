@@ -1860,20 +1860,11 @@ final class JSEngine {
         let lib = SourceLoginForm.loginScript(source.loginUrl) ?? ""
         var opened: String?
         let lock = NSLock()
-        DebugLog.add("≡段评点击: \(String(click.prefix(120)))")
         ToastCenter.pushBrowserCapture { u in lock.lock(); if opened == nil, !u.isEmpty { opened = u }; lock.unlock() }
         defer { ToastCenter.popBrowserCapture() }
-        let result = runLoginScript(source: source, library: lib, call: click)
-        lock.lock(); let captured = opened; lock.unlock()
-        if let u = captured {
-            DebugLog.add("≡段评地址: \(DebugLog.url(u))")
-        } else {
-            switch result {
-            case .failure(let e): DebugLog.add("≡段评未拿到地址（脚本报错：\(e.message)）")
-            case .success(let v): DebugLog.add("≡段评未拿到地址（脚本返回：\(String(v.prefix(120)))）")
-            }
-        }
-        return captured
+        _ = runLoginScript(source: source, library: lib, call: click)
+        lock.lock(); defer { lock.unlock() }
+        return opened
     }
 
     /// 在书源上下文里执行一段 JS（登录按钮、login() 等），返回字符串结果；脚本抛错时返回 .failure。
