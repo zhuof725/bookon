@@ -35,7 +35,7 @@ enum ElementsJSRulesRegression {
 
         // 集合方法：size / length / 下标 / text / attr
         let probe = """
-        ol > li
+        ol > li > a
         <js>
         JSON.stringify([{n: result.size(), len: result.length, first: result[0].outerHtml(),
                          href: result.attr('href'), text: result.text()}])
