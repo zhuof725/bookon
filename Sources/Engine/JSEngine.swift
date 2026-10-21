@@ -1886,14 +1886,26 @@ final class JSEngine {
         let lock = NSLock()
         ToastCenter.pushBrowserCapture { u in lock.lock(); if opened == nil, !u.isEmpty { opened = u }; lock.unlock() }
         defer { ToastCenter.popBrowserCapture() }
-        let outcome = runLoginScript(source: source, library: lib, call: click)
-        lock.lock(); defer { lock.unlock() }
+        var outcome = runLoginScript(source: source, library: lib, call: click)
+        lock.lock()
+        if opened == nil, case .success = outcome {
+            // 没打开：多半是书源用来防止重复打开的「已渲染」标记没被清掉
+            // （imageDecode 那条路在某些站点不可靠）。清掉标记重试一次。
+            let keys = JSEngine.reviewCacheKeys(in: click)
+            if !keys.isEmpty {
+                let script = keys.map { "cache.deleteMemory('\($0)')" }.joined(separator: ";")
+                _ = runLoginScript(source: source, library: lib, call: script)
+                outcome = runLoginScript(source: source, library: lib, call: click)
+            }
+        }
+        let result = opened
+        lock.unlock(); defer { lock.unlock() }
         // 诊断：点击没反应时，靠这几行能立刻看出是脚本报错、还是脚本没调 showBrowser。
         switch outcome {
         case .failure(let e):
             DebugLog.add("≡段评点击失败：\(e.message)")
         case .success:
-            if opened == nil {
+            if result == nil {
                 // 脚本执行成功但没打开页面：多半是 createSvg 里的守卫
                 // （缓存标记未清 / 共享 Token 为空）走了 toast 分支。
                 let token = (try? JSEngine.shared.evalString("String(source.getVariable())",
@@ -1901,10 +1913,26 @@ final class JSEngine {
                 DebugLog.add("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
                              + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
             } else {
-                DebugLog.add("≡段评地址：\(opened!)")
+                DebugLog.add("≡段评地址：\(result!)")
             }
         }
-        return opened
+        return result
+    }
+
+    /// 从书源的点击表达式里取出「已渲染」标记的键。
+    /// 形如 createSvg('bid','cid',pid,…) → fq-bid-cid-pid（番茄系段评的约定）。
+    static func reviewCacheKeys(in click: String) -> [String] {
+        let pattern = "createSvg[0-9]*\\(\\s*['\"](\\d+)['\"]\\s*,\\s*['\"](-?\\d+)['\"]\\s*,\\s*(-?\\d+)"
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let ns = click as NSString
+        var out: [String] = []
+        for m in re.matches(in: click, range: NSRange(location: 0, length: ns.length)) {
+            let a = ns.substring(with: m.range(at: 1))
+            let b = ns.substring(with: m.range(at: 2))
+            let c = ns.substring(with: m.range(at: 3))
+            out.append("fq-\(a)-\(b)-\(c)")
+        }
+        return out
     }
 
     /// 在书源上下文里执行一段 JS（登录按钮、login() 等），返回字符串结果；脚本抛错时返回 .failure。

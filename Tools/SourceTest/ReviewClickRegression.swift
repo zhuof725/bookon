@@ -103,5 +103,9 @@ enum ReviewClickRegression {
         } else {
             check(false, "点击气泡能拿到评论页地址（实际 nil）")
         }
+
+        // 标记未清时点击打不开：引擎应清掉标记后重试一次
+        let key = JSEngine.reviewCacheKeys(in: "createSvg('7320955143208307774','7322565597089235518',12,42,1)")
+        check(key == ["fq-7320955143208307774-7322565597089235518-12"], "从点击表达式取出「已渲染」标记键")
     }
 }
