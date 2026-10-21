@@ -1564,7 +1564,7 @@ final class JSEngine {
             // 原版 StrResponse.body() 是方法：书源脚本普遍写 `result.body()`。
             // 直接把 Swift 对象丢给 JS 时 body 是只读字符串属性，调用会报
             // “result.body is not a function”，这里包一层与原版同形的 JS 响应对象。
-            let payload = "({url:\(JSEngine.jsLiteral(sr.url)),body:\(JSEngine.jsLiteral(sr.body)),code:\(sr.code),headers:\(JSEngine.jsLiteral(sr.headers()))})"
+            let payload = "({url:\(JSEngine.jsLiteral(sr.url)),body:\(JSEngine.jsLiteral(sr.body)),code:\(sr.code),headers:\(JSEngine.jsLiteralJSON(sr.headers()))})"
             if let wrapper = ctx.evaluateScript("__legadoStrResponse(\(payload))") {
                 ctx.setObject(wrapper, forKeyedSubscript: "result" as NSString)
             } else {
@@ -1617,6 +1617,14 @@ final class JSEngine {
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }
         return v.toString()
+    }
+
+    /// JS 字面量：把 Swift 字符串安全地嵌进脚本源码。
+    /// JS 字面量：JSON 编码任意可序列化值。
+    static func jsLiteralJSON(_ value: Any) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
+              let text = String(data: data, encoding: .utf8) else { return "{}" }
+        return text
     }
 
     /// JS 字面量：把 Swift 字符串安全地嵌进脚本源码。

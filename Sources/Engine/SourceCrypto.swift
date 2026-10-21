@@ -286,7 +286,8 @@ enum SourceCrypto {
             if let s = String(data: plain, encoding: .utf8) { return s }
             // 中文站的正文/接口常常是 GBK/GB18030：UTF-8 解不出来时按国标再试一次，
             // 否则书源会看到「Invalid crypto input」而整条规则失败。
-            if let s = String(data: plain, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030.rawValue)))) { return s }
+            // GB18030（0x80000632）：中文站正文常用
+            if let s = String(data: plain, encoding: String.Encoding(rawValue: 0x8000_0632)) { return s }
             if let s = String(data: plain, encoding: .isoLatin1) { return s }
             throw CryptoError.invalidInput
         }
