@@ -141,6 +141,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
     func log(_ s: String) -> String
     func storePut(_ key: String, _ value: String) -> String
     func storeGet(_ key: String) -> String
+    func storeDelete(_ key: String) -> String
     func httpGetNative(_ url: String, _ headersJSON: String) -> StrResponse?
     func httpPostNative(_ url: String, _ body: String, _ headersJSON: String) -> StrResponse?
     func hexDecodeToString(_ s: String) -> String
@@ -247,6 +248,10 @@ final class TTSResponse: NSObject, TTSResponseExports {
     }
     func storeGet(_ key: String) -> String {
         return JavaBridge.store.get(key) ?? ""
+    }
+    /// cache.deleteMemory：原版 CacheManager 的内存缓存删除（书源用它清「已渲染」标记）。
+    func storeDelete(_ key: String) -> String {
+        JavaBridge.store.remove(key); return ""
     }
 
     func httpGetNative(_ url: String, _ headersJSON: String) -> StrResponse? {
@@ -657,7 +662,9 @@ final class JSEngine {
         def('toString',function(){return JSON.stringify(m);});
         return m;
     }
-    var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))}};
+    // 原版 CacheManager 的 JS 视图：get/put 走磁盘，getFromMemory/putMemory/deleteMemory 走内存缓存。
+    // deleteMemory 少了会导致书源 imageDecode 里的「清标记」失效（点击被跳过）。
+    var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))},deleteMemory:function(k){return java.storeDelete(k)},delete:function(k){return java.storeDelete(k)}};
     var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},
     // Rhino 把 Java 的 getKey() 暴露成属性：书源脚本里普遍写 source.key / source.name（群小说 searchUrl）。
     get key(){return this.bookSourceUrl},
