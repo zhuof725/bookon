@@ -2,7 +2,7 @@ import Foundation
 
 /// 运行时字段（concurrentRate / loginCheckJs / coverDecodeJs）、XPath 相对路径、正则诊断。
 enum SourceRuntimeRegression {
-    static func run(_ check: (Bool, String) -> Void) throws {
+    static func run(_ check: (Bool, String) -> Void) async throws {
         // MARK: concurrentRate 解析
         let rate = SourceRateLimiter.parse
         check(rate("10/1000")?.limit == 10 && rate("10/1000")?.interval == 1_000_000_000,
@@ -49,6 +49,33 @@ enum SourceRuntimeRegression {
         check(AnalyzeUrl.retryableError(URLError(.networkConnectionLost)), "重试：连接被重置可重发")
         check(!AnalyzeUrl.retryableError(URLError(.userAuthenticationRequired)), "重试：鉴权错误不重发")
         check(AnalyzeUrl.idempotentMethods == ["GET", "HEAD"], "重试：只覆盖幂等方法")
+
+        // MARK: 重试的总时长上限（读超时 120 秒 × 3 次 = 6 分钟，不能再拖）
+        check(AnalyzeUrl.retryAttempts(method: "GET", maxAttempts: 3) == 3, "重试：GET 最多 3 次")
+        check(AnalyzeUrl.retryAttempts(method: "POST", maxAttempts: 3) == 1, "重试：POST 不重试")
+        check(AnalyzeUrl.retryWithinBudget(elapsed: 0, delay: 0.4, timeout: 20), "重试：预算内允许重试")
+        check(!AnalyzeUrl.retryWithinBudget(elapsed: 80, delay: 1.2, timeout: 20), "重试：超预算不再重试")
+        check(!AnalyzeUrl.retryWithinBudget(elapsed: 0, delay: 0.4, timeout: 120), "重试：120 秒超时的请求不再重试")
+
+        // MARK: 限流等待必须响应取消
+        let limiter = SourceRateLimiter.shared
+        let key = "cancel-test-\(UUID().uuidString)"
+        // 第一次调用建立窗口（每 5 秒 1 次），第二次必须等窗口结束
+        try await limiter.acquire(key: key, rate: "1/5000")
+        let task = Task {
+            try await limiter.acquire(key: key, rate: "1/5000")
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        task.cancel()
+        var cancelled = false
+        do {
+            try await task.value
+        } catch is CancellationError {
+            cancelled = true
+        } catch {
+            cancelled = false
+        }
+        check(cancelled, "限流：任务取消后立即抛 CancellationError")
 
         // MARK: 正则诊断
         RegexLog.reset()

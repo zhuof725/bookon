@@ -123,7 +123,7 @@ enum RuleRegression {
         check(request.method == "POST" && request.body == "searchkey=测试书籍", "小原 POST options 与关键词替换")
         try SourceImportRegression.run(check)
         try JSExtensionsRegression.run(check)
-        try SourceRuntimeRegression.run(check)
+        try await SourceRuntimeRegression.run(check)
         ParserRegression.run(check)
         JSBridgeRegression.run(check)
         BookContextRegression.run(check)

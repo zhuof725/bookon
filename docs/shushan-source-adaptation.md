@@ -28,6 +28,10 @@
 
 ## 未解决
 - 正文：源内 `decode()` 使用 17 字节 AES 密钥，任何 AES 实现（含 Hutool）都会拒绝；未猜密钥、未把乱码当成功。需账号登录后的返回格式或源作者修正。
-- 发现入口：本应用暂无发现页，`exploreUrl` 已完整保留但无入口。
 - 听书/短剧/下载类型（`book.type`）：未实现（`bookSourceType = 1` 的音频书源已可正常搜索与朗读）。
 - 未登录时 `X-Api-Key` 为空，部分接口会提示登录。
+
+## 发现页
+- 应用已有「发现」页（底栏第 2 个标签，`DiscoverView`）：按分组列出可探索的书源 → 点进书源看它的
+  分类（`exploreUrl`）→ 分类下再取书单。见 `docs/discover.md`。
+- 书山聚合这类源若要出现在发现页，需满足：书源已启用、`enabledExplore` 不为 false、`exploreUrl` 非空。

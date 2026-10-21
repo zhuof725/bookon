@@ -60,9 +60,12 @@ enum SourceJSUtilities {
 
     private static func decodeEntities(_ text: String) -> String {
         var t = text
+        // 顺序要紧：`&amp;` 必须最后解。否则 `&amp;lt;` 会先变成 `&lt;`，
+        // 再被后面的 `&lt;` 规则解成 `<`，等于多解了一层。
         for (entity, value) in [("&nbsp;", " "), ("&ensp;", " "), ("&emsp;", " "), ("&shy;", ""),
-                                ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-                                ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'")] {
+                                ("&lt;", "<"), ("&gt;", ">"),
+                                ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
+                                ("&amp;", "&")] {
             t = t.replacingOccurrences(of: entity, with: value)
         }
         return t

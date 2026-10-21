@@ -349,19 +349,43 @@ final class TTSResponse: NSObject, TTSResponseExports {
         return String(data: data, encoding: enc) ?? String(data: data, encoding: .utf8) ?? ""
     }
 
-    private static func resolveScriptPath(_ path: String) -> URL? {
+    /// 脚本可读的文件必须落在允许的目录内（缓存目录 / 文档目录）。
+    /// 书源脚本不可信：readTxtFile / importScript 都能读文件，路径穿越会读到应用沙盒外的任意文件。
+    /// 这里先把路径标准化（消掉 `..`、`.`、重复分隔符），再做「目录 + 分隔符」的前缀比较——
+    /// 只比较字符串前缀会让 `/…/script-cache/../../etc/passwd` 通过检查，
+    /// 也会让 `/…/script-cache-evil/x` 冒充缓存目录下的文件。
+    static func resolveScriptPath(_ path: String) -> URL? {
         let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return nil }
         if raw.hasPrefix("/") {
-            let url = URL(fileURLWithPath: raw)
-            let allowed = [scriptCacheDirectory.path, documentsDirectory.path]
-            if allowed.contains(where: { url.path.hasPrefix($0) }) { return url }
+            let url = URL(fileURLWithPath: raw).standardizedFileURL
+            // 符号链接同样要挡住：软链指向目录外时，标准化路径看不出来。
+            let resolved = url.resolvingSymlinksInPath()
+            if allowedScriptRoots.contains(where: { isInside(resolved, of: $0) }) { return url }
+            // 越界的绝对路径不放行，但保持原版的宽松兜底：仍按文件名去缓存目录里找。
+            DebugLog.add("≡脚本文件路径越界，已拒绝：\(raw)")
         }
         let name = URL(fileURLWithPath: raw).lastPathComponent
+        guard !name.isEmpty, name != ".", name != ".." else { return nil }
         let candidates = [scriptCacheDirectory.appendingPathComponent(name),
                           documentsDirectory.appendingPathComponent(name),
                           documentsDirectory.appendingPathComponent("LegadoReading/\(name)")]
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// 允许脚本读写的根目录（与原版 JsExtensions.getFile 的「必须在缓存目录内」同口径）。
+    /// 两侧都解析符号链接后再比较，否则 /var → /private/var 之类的软链会让本该放行的路径被误拒。
+    static var allowedScriptRoots: [URL] {
+        [scriptCacheDirectory, documentsDirectory]
+            .map { $0.standardizedFileURL.resolvingSymlinksInPath() }
+    }
+
+    /// 路径是否位于 root 目录内部（含目录本身）：按路径分隔符比较，避免前缀误判。
+    private static func isInside(_ url: URL, of root: URL) -> Bool {
+        let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+        if target == base { return true }
+        return target.hasPrefix(base.hasSuffix("/") ? base : base + "/")
     }
 
     private static var documentsDirectory: URL {
@@ -852,7 +876,12 @@ final class JSEngine {
     }
     java.aesDecodeToString=function(str,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(str)));};
     java.aesBase64DecodeToString=function(str,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(str)));};
-    // 原版 aesEncodeToString 实现就是 decryptStr（上游遗留问题），这里保持一致。
+    // 原版 aesEncodeToString 的实现就是 decryptStr（上游遗留问题，已对着 Legado 的
+    // app/src/main/java/io/legado/app/help/JsEncodeUtils.kt 逐行核对过）：
+    //   fun aesEncodeToString(data, key, transformation, iv) =
+    //       createSymmetricCrypto(transformation, key, iv).decryptStr(data)
+    // 书源若调用它做「加密」，结果必须与原版一致，否则同一书源在两端解析出不同内容，
+    // 所以这里照搬，不按名字的字面意思改成 encrypt。
     java.aesEncodeToString=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(data)));};
     java.aesEncodeToBase64String=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).encryptBase64(String(data)));};
     java.aesEncodeArgsBase64Str=function(data,key,mode,padding,iv){

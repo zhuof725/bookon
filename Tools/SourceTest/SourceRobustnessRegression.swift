@@ -57,6 +57,36 @@ enum SourceImportRegression {
         check((object?["ruleReview"] as? [String: Any])?["reviewUrl"] as? String == "/r", "ruleReview：导出保留")
         let again = try JSONDecoder().decode(BookSource.self, from: encoded)
         check(again.unknownFields["someFutureField"]?.stringValue == "keep-me", "未知字段：再次导入仍在")
+
+        // 类型不匹配的已知键：宽松解码后仍有值，导出时不丢失
+        let loose = """
+        {"bookSourceUrl":"https://loose.example","bookSourceName":"宽松",
+         "weight":"5","storageKind":"2","customOrder":"1","enabled":"false","respondTime":"9"}
+        """
+        let looseDecoded = try JSONDecoder().decode(BookSource.self, from: Data(loose.utf8))
+        check(looseDecoded.weight == 5, "宽松解码：字符串 weight 取到值")
+        check(looseDecoded.storageKind == 2, "宽松解码：字符串 storageKind 取到值")
+        check(looseDecoded.customOrder == 1, "宽松解码：字符串 customOrder 取到值")
+        check(looseDecoded.respondTime == 9, "宽松解码：字符串 respondTime 取到值")
+        check(looseDecoded.enabled == false, "宽松解码：字符串 enabled 取到值")
+        let looseEncoded = try JSONEncoder().encode(looseDecoded)
+        let looseObject = try JSONSerialization.jsonObject(with: looseEncoded) as? [String: Any]
+        check(looseObject?["weight"] as? Int == 5, "宽松解码：weight 导出保留")
+        check(looseObject?["storageKind"] as? Int == 2, "宽松解码：storageKind 导出保留")
+        check(looseObject?["enabled"] as? Bool == false, "宽松解码：enabled 导出保留")
+        let looseAgain = try JSONDecoder().decode(BookSource.self, from: looseEncoded)
+        check(looseAgain.weight == 5 && looseAgain.storageKind == 2, "宽松解码：再次导入仍有值")
+
+        // 类型彻底对不上的已知键（如 weight 是对象）：值单独保留，导出时原样写回
+        let broken = """
+        {"bookSourceUrl":"https://broken.example","bookSourceName":"坏类型","weight":{"a":1}}
+        """
+        let brokenDecoded = try JSONDecoder().decode(BookSource.self, from: Data(broken.utf8))
+        check(brokenDecoded.weight == nil, "坏类型：weight 不强行解码")
+        check(brokenDecoded.mismatchedFields["weight"] != nil, "坏类型：weight 原值保留")
+        let brokenEncoded = try JSONEncoder().encode(brokenDecoded)
+        let brokenObject = try JSONSerialization.jsonObject(with: brokenEncoded) as? [String: Any]
+        check((brokenObject?["weight"] as? [String: Any])?["a"] as? Int == 1, "坏类型：weight 原样导出")
     }
 }
 
@@ -103,6 +133,32 @@ enum JSExtensionsRegression {
         check(JSEngine.shared.evalString("java.readTxtFile('\(file.lastPathComponent)')", context: context) == "var fromFile = 42;",
               "readTxtFile")
         try? FileManager.default.removeItem(at: file)
+
+        // MARK: 脚本文件路径不得穿越到允许目录之外
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("legado-outside-\(UUID().uuidString).js")
+        try "var secret = 1;".write(to: outside, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        // 绝对路径指向允许目录之外 → 不放行（只按文件名回退到缓存目录，找不到就返回 nil）
+        check(JavaBridge.resolveScriptPath(outside.path) == nil, "路径穿越：目录外的绝对路径被拒绝")
+        // 用 `..` 拼出来的路径同样要挡住（标准化后落到允许目录之外）
+        let traversal = dir.path + "/../../../../../../../../../../.." + outside.path
+        check(JavaBridge.resolveScriptPath(traversal) == nil, "路径穿越：`..` 逃逸被拒绝")
+        // 前缀相同的兄弟目录不算放行（script-cache-evil ≠ script-cache）
+        let sibling = dir.deletingLastPathComponent().appendingPathComponent("script-cache-evil").path
+        check(JavaBridge.resolveScriptPath(sibling) == nil, "路径穿越：同前缀兄弟目录被拒绝")
+        // 允许目录内的文件仍然可读
+        let allowed = dir.appendingPathComponent("js-ext-abs-\(UUID().uuidString).js")
+        try "var ok = 1;".write(to: allowed, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: allowed) }
+        check(JavaBridge.resolveScriptPath(allowed.path)?.path == allowed.standardizedFileURL.path,
+              "路径穿越：允许目录内的绝对路径仍放行")
+
+        // MARK: htmlFormat 的实体解码顺序（&amp; 必须最后解）
+        check(SourceJSUtilities.htmlFormat("&amp;lt;b&amp;gt;", baseUrl: nil) == "&lt;b&gt;",
+              "htmlFormat：&amp;lt; 只解一层")
+        check(SourceJSUtilities.htmlFormat("&lt;b&gt;", baseUrl: nil) == "<b>",
+              "htmlFormat：普通实体正常解码")
 
         // 字体：构造两个 cmap 不同、glyf 相同的 TTF
         let fontA = MiniTTF.make(unicode: 0x41)   // 'A' -> gid 1

@@ -291,7 +291,7 @@ struct AnalyzeUrl {
             cfg.httpCookieAcceptPolicy = .never
             session = URLSession(configuration: cfg)
         }
-        await rateLimitIfNeeded()
+        try await rateLimitIfNeeded()
         let (_, u) = try applyRequestURL()
         let finalUrl = u.absoluteString
         var req = URLRequest(url: u, timeoutInterval: readTimeout)
@@ -362,7 +362,7 @@ struct AnalyzeUrl {
             return HTTPResponseData(body: result.0, url: result.1)
         }
         #endif
-        await rateLimitIfNeeded()
+        try await rateLimitIfNeeded()
         let finalUrl = url.contains("%") ? url : percentEncoded(url)
         guard let u = URL(string: finalUrl) else { throw URLError(.badURL) }
         var req = URLRequest(url: u, timeoutInterval: 20)
@@ -459,9 +459,9 @@ struct AnalyzeUrl {
     // MARK: - 限流 / 重试
 
     /// 书源 concurrentRate：请求前按「次数/毫秒」等待，避免被站点限流。
-    private func rateLimitIfNeeded() async {
+    private func rateLimitIfNeeded() async throws {
         guard let source = context?.source else { return }
-        await SourceRateLimiter.shared.acquire(key: source.bookSourceUrl, rate: source.concurrentRate)
+        try await SourceRateLimiter.shared.acquire(key: source.bookSourceUrl, rate: source.concurrentRate)
     }
 
     /// 通用退避重试：只重试「请求根本没拿到响应」的传输错误（超时、连接被重置、DNS 失败）。
@@ -472,19 +472,41 @@ struct AnalyzeUrl {
     private func send(_ req: URLRequest, session: URLSession,
                       maxAttempts: Int = 3) async throws -> (Data, URLResponse) {
         let method = (req.httpMethod ?? "GET").uppercased()
-        let attempts = Self.idempotentMethods.contains(method) ? maxAttempts : 1
+        let attempts = Self.retryAttempts(method: method, maxAttempts: maxAttempts)
         var attempt = 1
+        let started = Date()
         while true {
             do {
                 return try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
             } catch {
                 guard attempt < attempts, Self.retryableError(error), !Task.isCancelled else { throw error }
                 let delay = Self.backoff(attempt)
+                // 总时长上限：一次长超时的请求已经等了很久，再重试只会把「最坏 6 分钟」拉得更长。
+                guard Self.retryWithinBudget(elapsed: Date().timeIntervalSince(started),
+                                            delay: delay, timeout: req.timeoutInterval) else {
+                    DebugLog.add("≡请求失败（\(error.localizedDescription)），已达重试总时长上限，不再重试")
+                    throw error
+                }
                 DebugLog.add("≡请求失败（\(error.localizedDescription)），\(Int(delay * 1000))ms 后重试（第 \(attempt) 次）")
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 attempt += 1
             }
         }
+    }
+
+    /// 一次请求（含全部重试）的总时长上限（秒）。
+    static let retryTotalBudget: TimeInterval = 90
+
+    /// 实际允许的尝试次数：只重试幂等方法（GET/HEAD）。
+    /// POST 等可能是提交动作，重发会造成重复下单/重复登录。
+    static func retryAttempts(method: String, maxAttempts: Int) -> Int {
+        guard idempotentMethods.contains(method.uppercased()) else { return 1 }
+        return max(1, maxAttempts)
+    }
+
+    /// 判断「再来一次」是否还在总时长预算内：退避 + 下一次请求的最坏耗时都要放得下。
+    static func retryWithinBudget(elapsed: TimeInterval, delay: TimeInterval, timeout: TimeInterval) -> Bool {
+        elapsed + delay + max(timeout, 0) <= retryTotalBudget
     }
 
     /// 可安全重发的 HTTP 方法（RFC 9110 幂等方法的常用子集）。
