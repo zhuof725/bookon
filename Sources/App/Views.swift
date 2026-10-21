@@ -1490,7 +1490,7 @@ struct ReaderView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .inlineBubble:
             EmptyView()
-        case .image(let src, let click):
+        case .image(let src, let click, _):
             ContentImageView(src: src)
                 .onTapGesture { commentTapped(click) }
                 .contextMenu {

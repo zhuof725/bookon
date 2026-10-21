@@ -7,8 +7,11 @@ enum ContentBlock: Equatable {
     case paragraph(text: String, commentCount: Int, commentURL: String?)
     /// 行内小图（书源 `style:"text"` 的气泡图）：按文字大小显示在上一段末尾。
     /// src 是 data: 或网址；count 是气泡里的数字（从 SVG 文本里读出，读不到为 nil）。
-    case inlineBubble(src: String, count: Int?, clickURL: String?)
-    case image(src: String, clickURL: String?)
+    /// rawSrc 是书源原始的 src（含 `,{...}` 选项）：imageDecode 脚本要从里面取参数
+    /// （番茄系段评的正则匹配 createSvg(...)），去掉选项就匹配不到了。
+    case inlineBubble(src: String, count: Int?, clickURL: String?, rawSrc: String?)
+    /// rawSrc 同 inlineBubble：书源原始 src（含选项），供 imageDecode 使用。
+    case image(src: String, clickURL: String?, rawSrc: String?)
     /// 书源用 SVG 画的「热评」卡片，改用原生卡片显示：label 为红色标签文字，text 为评论内容。
     case hotComment(label: String, text: String, clickURL: String?)
     /// 章末「本章说」评论汇总：标题、右侧计数文字，以及若干条 用户名/正文/点赞数。
@@ -38,7 +41,7 @@ enum ContentBlocks {
     static func mergeInlineBubbles(_ blocks: [ContentBlock]) -> [ContentBlock] {
         var out: [ContentBlock] = []
         for b in blocks {
-            if case .inlineBubble(_, let count, let click) = b {
+            if case .inlineBubble(_, let count, let click, _) = b {
                 if case .paragraph(let t, let c, let u)? = out.last {
                     out[out.count - 1] = .paragraph(text: t, commentCount: count ?? max(c, 1), commentURL: click ?? u)
                 }
@@ -89,11 +92,12 @@ enum ContentBlocks {
                         let svgCount = svgTexts(svgText(clean) ?? "").compactMap { Int($0) }.first
                         blocks.append(.inlineBubble(src: clean,
                                                     count: svgCount ?? countFromClick(click),
-                                                    clickURL: click))
+                                                    clickURL: click,
+                                                    rawSrc: src))
                     } else if let svg = svgText(clean), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
                     } else {
-                        blocks.append(.image(src: clean, clickURL: click))
+                        blocks.append(.image(src: clean, clickURL: click, rawSrc: src))
                     }
                 }
             }

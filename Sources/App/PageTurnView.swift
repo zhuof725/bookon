@@ -143,7 +143,7 @@ struct PageContentView: View {
                         .background(RoundedRectangle(cornerRadius: 16).fill(fg.opacity(0.07)))
                         .onTapGesture { onTapComment(click) }
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
-                    case .image(let src, let click):
+                    case .image(let src, let click, _):
                         ContentImageView(src: src)
                             .onTapGesture { onTapComment(click) }
                             .contextMenu {

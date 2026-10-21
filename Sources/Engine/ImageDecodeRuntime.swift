@@ -15,11 +15,16 @@ enum ImageDecodeRuntime {
             }
             return src
         }
+        // 原版把书源原始的 src（含 `,{...}` 选项）交给 imageDecode 脚本。
+        // 番茄系段评的脚本要从中正则提取 createSvg(...) 的参数来定位缓存键，
+        // 去掉选项就匹配不到 → 标记没被清掉 → 点击被跳过。
         switch block {
-        case .inlineBubble(let src, let count, let click):
-            return .inlineBubble(src: decode(src), count: count, clickURL: click)
-        case .image(let src, let click):
-            return .image(src: decode(src), clickURL: click)
+        case .inlineBubble(let src, let count, let click, let raw):
+            let target = raw ?? src
+            return .inlineBubble(src: decode(target), count: count, clickURL: click, rawSrc: raw)
+        case .image(let src, let click, let raw):
+            let target = raw ?? src
+            return .image(src: decode(target), clickURL: click, rawSrc: raw)
         default:
             return block
         }
