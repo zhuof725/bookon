@@ -51,16 +51,35 @@ final class LocalCoverImageLoader: ObservableObject {
     }
 }
 
+/// 书源 coverDecodeJs 的封面解密注入点。
+/// 正式 App 在启动时由 RemoteCoverLoader 注入；测试工程不注入，封面走普通加载路径。
+enum CoverDecodeRuntime {
+    /// 该书源是否配置了 coverDecodeJs（实现里会切到主线程读 AppStore）。
+    typealias NeedsDecode = (String) async -> Bool
+    /// 下载 + 解密 + 解码；失败返回 nil。
+    typealias Loader = (URL, String, Int) async -> UIImage?
+    static var needsDecode: NeedsDecode?
+    static var load: Loader?
+}
+
 /// Shared production loader for shelf/detail/list/reader-cover views.
 struct BookCoverImage: View {
     @ThemePalette private var palette
     let url: URL?
     var pixelSize: Int = 600
+    /// 书源地址（Book.origin）；有 coverDecodeJs 时改走解密加载。
+    var origin: String? = nil
     @StateObject private var loader = LocalCoverImageLoader()
+    /// 远程封面的三种状态：未判定 / 普通图片 / 需要解密。
+    private enum RemoteMode { case unknown, plain, decoded }
+    @State private var remoteMode: RemoteMode = .unknown
+    @State private var decodedImage: UIImage?
+    @State private var decodeFailed = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var retry = 0
 
     private var resolvedURL: URL? { url.flatMap { BookCoverLocation.resolve($0) } }
+
     private var requestID: String { "\(resolvedURL?.absoluteString ?? "nil")|\(retry)" }
 
     var body: some View {
@@ -73,18 +92,42 @@ struct BookCoverImage: View {
                         fallback
                     } else { placeholder }
                 } else if let resolvedURL, ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") {
-                    AsyncImage(url: resolvedURL) { phase in
-                        switch phase {
-                        case .success(let image): image.resizable().scaledToFill()
-                        case .failure: fallback
-                        default: placeholder
+                    if remoteMode == .decoded {
+                        if let image = decodedImage {
+                            Image(uiImage: image).resizable().scaledToFill()
+                        } else if decodeFailed { fallback } else { placeholder }
+                    } else if remoteMode == .plain {
+                        AsyncImage(url: resolvedURL) { phase in
+                            switch phase {
+                            case .success(let image): image.resizable().scaledToFill()
+                            case .failure: fallback
+                            default: placeholder
+                            }
                         }
-                    }
+                    } else { placeholder }
                 } else { fallback }
             }
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
-        .task(id: requestID) { await loader.load(resolvedURL, pixelSize: pixelSize) }
+        .task(id: requestID) {
+            guard let resolvedURL else { return }
+            if resolvedURL.isFileURL {
+                await loader.load(resolvedURL, pixelSize: pixelSize)
+                return
+            }
+            // 有 coverDecodeJs 的书源：下载原始字节 → 脚本解密 → 显示；
+            // 其余书源走系统 AsyncImage，行为与改动前一致。
+            if let origin, let needs = CoverDecodeRuntime.needsDecode, await needs(origin),
+               let decode = CoverDecodeRuntime.load {
+                remoteMode = .decoded
+                let image = await decode(resolvedURL, origin, pixelSize)
+                guard !Task.isCancelled else { return }
+                decodedImage = image
+                decodeFailed = image == nil
+            } else {
+                remoteMode = .plain
+            }
+        }
         .onChange(of: scenePhase) { phase in if phase == .active { retry += 1 } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in retry += 1 }
         .accessibilityHidden(true)

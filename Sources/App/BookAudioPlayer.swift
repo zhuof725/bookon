@@ -375,7 +375,7 @@ struct AudioChapterView: View {
             topBar
             titleBlock
             Spacer(minLength: 8)
-            BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900)
+            BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900, origin: book.origin)
                 .frame(width: 240, height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)

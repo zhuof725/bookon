@@ -471,7 +471,9 @@ struct ReaderView: View {
                 ReaderQuickPanel(book: book, sourceName: readerSourceName,
                     position: "\(chapters.isEmpty ? 0 : index + 1)/\(chapters.count)",
                     busy: quickBusy || loading, message: quickMessage,
-                    enabled: quickEnabled, loggedIn: quickLoggedIn, action: quickAction)
+                    enabled: quickEnabled, loggedIn: quickLoggedIn,
+                    customButton: store.source(for: book.origin)?.customButton == true,
+                    action: quickAction)
                 .navigationTitle("书籍操作")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
@@ -664,6 +666,7 @@ struct ReaderView: View {
             if !(source.loginUrl ?? "").isEmpty || !(source.loginUi ?? "").isEmpty { items.insert("login") }
         }
         if quickBrowserURL != nil { items.insert("browser") }
+        if store.source(for: book.origin)?.customButton == true { items.insert("custom") }
         return items
     }
 
@@ -697,6 +700,12 @@ struct ReaderView: View {
         case "source": quickSources = true
         case "browser":
             if let url = quickBrowserURL { quickBrowser = BrowserTarget(url: url, title: book.name) }
+        case "custom":
+            guard let source = store.source(for: book.origin) else { break }
+            let chapter = chapters.indices.contains(index) ? chapters[index] : nil
+            let result = SourceCallBack.fire(SourceCallBack.clickCustomButton, source: source,
+                                             book: book, chapter: chapter)
+            quickMessage = (result?.isEmpty == false) ? result : "已执行书源按钮"
         default: break
         }
     }
@@ -1169,7 +1178,11 @@ struct ReaderView: View {
 
     /// 一次阅读会话从首次成功加载本章开始，到离开页面/退到后台结束。
     private func noteReadingChapter(_ chapter: Int) {
-        if statsStart == nil { statsStart = Date() }
+        if statsStart == nil {
+            statsStart = Date()
+            SourceCallBack.fire(SourceCallBack.startRead, source: store.source(for: book.origin),
+                                book: book, chapter: chapters.indices.contains(chapter) ? chapters[chapter] : nil)
+        }
         statsChapters.insert(chapter)
     }
 
@@ -1179,6 +1192,11 @@ struct ReaderView: View {
         let chapters = statsChapters
         statsChapters = []
         ReadingStatsStore.shared.record(book: book, start: start, end: Date(), chapters: chapters.sorted())
+        let source = store.source(for: book.origin)
+        let chapter = self.chapters.indices.contains(book.durChapterIndex) ? self.chapters[book.durChapterIndex] : nil
+        SourceCallBack.fire(SourceCallBack.saveRead, source: source, book: book,
+                            chapter: chapter, result: "\(book.durChapterIndex)")
+        SourceCallBack.fire(SourceCallBack.endRead, source: source, book: book, chapter: chapter)
     }
 
     // MARK: 翻页模式

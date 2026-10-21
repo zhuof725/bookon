@@ -121,6 +121,9 @@ enum RuleRegression {
         check(xyBooks.count == 1 && xyBooks[0].name == "测试书籍", "小原混淆 class 不影响 .item + dt a@text")
         let request = AnalyzeUrl(rawUrl: xy.searchUrl!, key: "测试书籍", baseUrl: xy.bookSourceUrl)
         check(request.method == "POST" && request.body == "searchkey=测试书籍", "小原 POST options 与关键词替换")
+        try SourceImportRegression.run(check)
+        try JSExtensionsRegression.run(check)
+        try await SourceRuntimeRegression.run(check)
         ParserRegression.run(check)
         JSBridgeRegression.run(check)
         BookContextRegression.run(check)
@@ -213,6 +216,7 @@ enum RuleRegression {
         SourceCryptoRegression.run(check)
         CryptoBridgeRegression.run(check)
         ElementsJSRulesRegression.run(check)
+        EngineCompatRegression.run(check)
         // 旧版书源兼容：目录脚本只返回整个响应 JSON（没有后续 `$.data.chapters`）时，
         // getElements 得到 1 个字典，必须能从常见字段里找回章节数组。
         let legacyTocRule = "<js>JSON.stringify({code:0,data:{chapters:[{name:'第一章',id:'abc'}]}})</js>"

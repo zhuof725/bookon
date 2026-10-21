@@ -222,9 +222,16 @@ struct SourceDebugView: View {
         running = true
         DebugLog.begin()
         report = ""
+        RegexLog.reset()
         runTask = Task {
             await SourceDiagnostics.run(source: source, key: k)
-            report = DebugLog.snapshot()
+            var text = DebugLog.snapshot()
+            let issues = RegexLog.recentIssues()
+            if !issues.isEmpty {
+                // 规则里的正则编译失败：Java/ICU 语法差异会让规则「静默不生效」，这里明确提示。
+                text += (text.isEmpty ? "" : "\n") + "── 规则问题 ──\n" + issues.joined(separator: "\n")
+            }
+            report = text
             running = false
             DebugLog.end()
         }

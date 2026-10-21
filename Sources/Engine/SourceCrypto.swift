@@ -88,10 +88,12 @@ enum SourceCrypto {
     // MARK: - Digests
 
     private static func digestAlgorithm(_ name: String) throws -> (Int, Int) {
-        switch name.uppercased().replacingOccurrences(of: "-", with: "") {
+        // 书源里算法名写法很杂：SHA-256 / sha_256 / SHA 256 / SHA2-256。
+        let key = name.uppercased().filter { $0.isLetter || $0.isNumber }
+        switch key {
         case "MD5": return (0, Int(CC_MD5_DIGEST_LENGTH))
         case "SHA1": return (1, Int(CC_SHA1_DIGEST_LENGTH))
-        case "SHA256": return (2, Int(CC_SHA256_DIGEST_LENGTH))
+        case "SHA256", "SHA2256": return (2, Int(CC_SHA256_DIGEST_LENGTH))
         case "SHA384": return (3, Int(CC_SHA384_DIGEST_LENGTH))
         case "SHA512": return (4, Int(CC_SHA512_DIGEST_LENGTH))
         default: throw CryptoError.unsupportedDigest

@@ -149,6 +149,22 @@ final class TTSResponse: NSObject, TTSResponseExports {
     func longToast(_ s: String) -> String
     func encodeURIComponent(_ s: String) -> String
     func timeFormatUTC(_ t: Double, _ format: String, _ offset: Int) -> String
+    /// java.cacheFile / readTxtFile：脚本缓存目录里的文本文件（相对路径）。
+    func cacheFile(_ url: String, _ saveTime: Double) -> String
+    func readTxtFile(_ path: String, _ charset: String) -> String
+    /// java.htmlFormat(str, redirectUrl)
+    func htmlFormat(_ html: String, _ baseUrl: String) -> String
+    /// java.toNumChapter
+    func toNumChapter(_ text: String) -> String
+    /// java.queryTTF / replaceFont 的字体句柄接口。
+    func fontQuery(_ data: String, _ useCache: Bool) -> Int
+    func fontGlyph(_ id: Int, _ unicode: Int) -> String
+    func fontGlyphID(_ id: Int, _ unicode: Int) -> Int
+    func fontUnicode(_ id: Int, _ glyph: String) -> Int
+    func fontBlank(_ id: Int, _ unicode: Int) -> Bool
+    func fontReplace(_ text: String, _ errorID: Int, _ correctID: Int, _ filter: Bool) -> String
+    /// java.getVerificationCode：界面注入 handler 后弹输入框，否则返回空串。
+    func verificationCode(_ imageUrl: String) -> String
 }
 
 @objc final class JavaBridge: NSObject, JavaBridgeExports {
@@ -297,6 +313,157 @@ final class TTSResponse: NSObject, TTSResponseExports {
         f.timeZone = TimeZone(secondsFromGMT: offset * 3600)
         return f.string(from: Date(timeIntervalSince1970: t > 1e12 ? t / 1000 : t))
     }
+
+    // MARK: - 文件 / HTML / 字体
+
+    /// 脚本缓存目录（Application Support 之外用 Caches，系统可清理）。
+    static var scriptCacheDirectory: URL {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("LegadoReading/script-cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func cacheFile(_ url: String, _ saveTime: Double) -> String {
+        let key = md5Encode16(url)
+        let file = Self.scriptCacheDirectory.appendingPathComponent(key + ".txt")
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+           let modified = attrs[.modificationDate] as? Date {
+            let age = Date().timeIntervalSince(modified)
+            if saveTime <= 0 || age < saveTime,
+               let text = try? String(contentsOf: file, encoding: .utf8) {
+                return text
+            }
+        }
+        let au = AnalyzeUrl(rawUrl: url, baseUrl: context?.source?.bookSourceUrl,
+                            context: context, jsLib: context?.source?.jsLib)
+        guard let response = fetchResponse(au, fallbackURL: url) else { return "" }
+        try? response.body.write(to: file, atomically: true, encoding: .utf8)
+        return response.body
+    }
+
+    func readTxtFile(_ path: String, _ charset: String) -> String {
+        guard let file = Self.resolveScriptPath(path) else { return "" }
+        guard let data = try? Data(contentsOf: file) else { return "" }
+        let enc = charset.isEmpty ? .utf8 : AnalyzeUrl.encoding(charset)
+        return String(data: data, encoding: enc) ?? String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// 脚本可读的文件必须落在允许的目录内（缓存目录 / 文档目录）。
+    /// 书源脚本不可信：readTxtFile / importScript 都能读文件，路径穿越会读到应用沙盒外的任意文件。
+    /// 这里先把路径标准化（消掉 `..`、`.`、重复分隔符），再做「目录 + 分隔符」的前缀比较——
+    /// 只比较字符串前缀会让 `/…/script-cache/../../etc/passwd` 通过检查，
+    /// 也会让 `/…/script-cache-evil/x` 冒充缓存目录下的文件。
+    static func resolveScriptPath(_ path: String) -> URL? {
+        let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+        if raw.hasPrefix("/") {
+            let url = URL(fileURLWithPath: raw).standardizedFileURL
+            // 符号链接同样要挡住：软链指向目录外时，标准化路径看不出来。
+            let resolved = url.resolvingSymlinksInPath()
+            if allowedScriptRoots.contains(where: { isInside(resolved, of: $0) }) { return url }
+            // 越界的绝对路径不放行，但保持原版的宽松兜底：仍按文件名去缓存目录里找。
+            DebugLog.add("≡脚本文件路径越界，已拒绝：\(raw)")
+        }
+        let name = URL(fileURLWithPath: raw).lastPathComponent
+        guard !name.isEmpty, name != ".", name != ".." else { return nil }
+        let candidates = [scriptCacheDirectory.appendingPathComponent(name),
+                          documentsDirectory.appendingPathComponent(name),
+                          documentsDirectory.appendingPathComponent("LegadoReading/\(name)")]
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// 允许脚本读写的根目录（与原版 JsExtensions.getFile 的「必须在缓存目录内」同口径）。
+    /// 两侧都解析符号链接后再比较，否则 /var → /private/var 之类的软链会让本该放行的路径被误拒。
+    static var allowedScriptRoots: [URL] {
+        [scriptCacheDirectory, documentsDirectory]
+            .map { $0.standardizedFileURL.resolvingSymlinksInPath() }
+    }
+
+    /// 路径是否位于 root 目录内部（含目录本身）：按路径分隔符比较，避免前缀误判。
+    private static func isInside(_ url: URL, of root: URL) -> Bool {
+        let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+        if target == base { return true }
+        return target.hasPrefix(base.hasSuffix("/") ? base : base + "/")
+    }
+
+    private static var documentsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    func htmlFormat(_ html: String, _ baseUrl: String) -> String {
+        SourceJSUtilities.htmlFormat(html, baseUrl: baseUrl.isEmpty ? nil : baseUrl)
+    }
+
+    func toNumChapter(_ text: String) -> String {
+        SourceJSUtilities.toNumChapter(text)
+    }
+
+    func fontQuery(_ data: String, _ useCache: Bool) -> Int {
+        guard let bytes = Self.fontBytes(data) else { return 0 }
+        return SourceFontRegistry.register(data: bytes) ?? 0
+    }
+
+    private static func fontBytes(_ raw: String) -> Data? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return nil }
+        if s.hasPrefix("hex:") {
+            return try? SourceCrypto.hexDecode(String(s.dropFirst(4)))
+        }
+        if s.hasPrefix("data:") {
+            guard let r = s.range(of: "base64,") else { return nil }
+            var payload = String(s[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            while payload.count % 4 != 0 { payload += "=" }
+            return Data(base64Encoded: payload)
+        }
+        if s.hasPrefix("http://") || s.hasPrefix("https://") {
+            let url = s
+            guard let response = try? HTTPBridgeWaiter.run(timeout: 25, operation: {
+                try await AnalyzeUrl(rawUrl: url).fetchResponse()
+            }) else { return nil }
+            return response.rawData ?? Data(response.body.utf8)
+        }
+        if let file = resolveScriptPath(s), let data = try? Data(contentsOf: file) { return data }
+        var payload = s
+        while payload.count % 4 != 0 { payload += "=" }
+        return Data(base64Encoded: payload)
+    }
+
+    func fontGlyph(_ id: Int, _ unicode: Int) -> String {
+        SourceFontRegistry.font(id)?.glyphHex(for: unicode) ?? ""
+    }
+
+    func fontGlyphID(_ id: Int, _ unicode: Int) -> Int {
+        SourceFontRegistry.font(id)?.glyphID(for: unicode) ?? 0
+    }
+
+    func fontUnicode(_ id: Int, _ glyph: String) -> Int {
+        SourceFontRegistry.font(id)?.unicode(forGlyph: glyph) ?? 0
+    }
+
+    func fontBlank(_ id: Int, _ unicode: Int) -> Bool {
+        SourceFontRegistry.font(id)?.isBlankUnicode(unicode) ?? false
+    }
+
+    func fontReplace(_ text: String, _ errorID: Int, _ correctID: Int, _ filter: Bool) -> String {
+        guard let error = SourceFontRegistry.font(errorID),
+              let correct = SourceFontRegistry.font(correctID) else { return text }
+        return FontDeobfuscation.replace(text: text, error: error, correct: correct, filter: filter)
+    }
+
+    func verificationCode(_ imageUrl: String) -> String {
+        guard let handler = SourceVerificationBridge.handler else {
+            DebugLog.add("◇getVerificationCode：当前界面没有验证码输入入口，返回空")
+            return ""
+        }
+        return handler(imageUrl)
+    }
+}
+
+/// java.getVerificationCode 的界面注入点：返回用户输入的验证码；没有注入时返回空串。
+enum SourceVerificationBridge {
+    static var handler: ((String) -> String)?
 }
 
 /// JS 里 java.toast / longToast 的消息出口：界面订阅 handler 即可显示；没有订阅者时只丢弃。
@@ -399,6 +566,18 @@ final class JSEngine {
         var def=function(n,f){Object.defineProperty(Array.prototype,n,{value:f,enumerable:false,writable:true,configurable:true});};
         def('toArray',function(){return Array.prototype.slice.call(this);});
         def('size',function(){return this.length;});
+        // Java List 风格：java.getElements(...).isEmpty() / java.getStringList(...).toArray()
+        def('isEmpty',function(){return this.length===0;});
+        def('get',function(i){return (i>=0&&i<this.length)?this[i]:null;});
+        def('first',function(){return this.length?this[0]:null;});
+        def('last',function(){return this.length?this[this.length-1]:null;});
+        def('each',function(f){for(var i=0;i<this.length;i++){if(typeof f==='function')f(this[i],i);}return this;});
+        // jQuery 风格：集合上的 eq/hasClass/parent/next/prev 委托给元素
+        def('eq',function(i){return (i>=0&&i<this.length)?this[i]:null;});
+        def('hasClass',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.hasClass==='function'){return !!e.hasClass(n);}}return false;});
+        def('parent',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.parent==='function'){return e.parent();}}return null;});
+        def('next',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.next==='function'){return e.next();}}return null;});
+        def('prev',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.prev==='function'){return e.prev();}}return null;});
         def('select',function(sel){
             var out=[];
             for(var i=0;i<this.length;i++){
@@ -523,7 +702,9 @@ final class JSEngine {
         getUseReplaceRule:function(){return false;}};
     var chapter={title:'',url:'',index:0};
     var Packages={
-        org:{jsoup:{Jsoup:{parse:function(html){return __jsoupParse(String(html));}}}},
+        org:{jsoup:{Jsoup:{__name:'Jsoup',parse:function(html){return __jsoupParse(String(html));}},
+            // Rhino 里脚本常写 `Packages.org.jsoup.nodes.Document` 做类型判断或取常量。
+            nodes:{Document:function(){},Element:function(){},TextNode:function(){},Entities:{}}}},
         java:{
             util:{
                 HashMap:function(){},
@@ -555,7 +736,7 @@ final class JSEngine {
         if(v!=null&&typeof v==='object'&&typeof v.length==='number'){return java.bytesToStr(v,cs==null?'UTF-8':String(cs));}
         return String(v);
     }};
-    Packages.java.util.Base64={
+    Packages.java.util.Base64={__name:'Base64',
         getDecoder:function(){return {decode:function(s){
             var b=(typeof s==='string')?s:java.bytesToStr(s,'UTF-8');var r=java.base64DecodeToByteArray(b);return r==null?[]:r;}};},
         getEncoder:function(){return {encodeToString:function(b){return String(java.base64Encode(java.bytesToStr(b,'ISO-8859-1')));}};}
@@ -575,16 +756,23 @@ final class JSEngine {
             return c;
         }}
     }};
+    Packages.java.lang.String.__name='String';
+    Packages.java.util.HashMap.__name='HashMap';
+    Packages.javax.crypto.spec.SecretKeySpec.__name='SecretKeySpec';
+    Packages.javax.crypto.spec.IvParameterSpec.__name='IvParameterSpec';
+    Packages.javax.crypto.Cipher.__name='Cipher';
     function JavaImporter(){for(var i=0;i<arguments.length;i++){this.importPackage(arguments[i]);}}
     Object.defineProperty(JavaImporter.prototype,'importPackage',{enumerable:false,value:function(){
         for(var i=0;i<arguments.length;i++){var p=arguments[i];if(!p)continue;
             for(var k in p){if(Object.prototype.hasOwnProperty.call(p,k)){this[k]=p[k];}}}
     }});
     Object.defineProperty(JavaImporter.prototype,'importClass',{enumerable:false,value:function(){
-        for(var i=0;i<arguments.length;i++){var c=arguments[i];if(c&&c.__name){this[c.__name]=c;}}
+        for(var i=0;i<arguments.length;i++){var c=arguments[i];if(!c)continue;
+            if(c.__name){this[c.__name]=c;continue;}
+            for(var k in c){if(Object.prototype.hasOwnProperty.call(c,k)){this[k]=c[k];}}}
     }});
     function importPackage(){JavaImporter.prototype.importPackage.apply(this,arguments);}
-    var org=Packages.org;
+    function importClass(){JavaImporter.prototype.importClass.apply(this,arguments);}
     var org=Packages.org;
     // Preserve primitive code and url: neither can also be a same-named
     // method without breaking strict comparisons. code()/url() remain unsupported.
@@ -731,6 +919,72 @@ final class JSEngine {
         var t='DESede/'+String(mode)+'/'+String(pad);
         var c=java.createSymmetricCrypto(t,String(k),(iv==null||iv==='')?null:String(iv));
         return String(c.decryptStr(String(d)));
+    };
+
+    // ---- JsEncodeUtils：AES/DES 旧接口（书源里仍常见） ----
+    // 语义逐条对照原版 JsEncodeUtils.kt，包括 aesEncodeToString / desEncodeToString
+    // 这两个「名字是加密、实现却不是 Base64」的历史行为，照搬以免书源解析结果不一致。
+    function __sc(transformation,key,iv){
+        return java.createSymmetricCrypto(String(transformation),String(key),(iv==null||iv==='')?null:String(iv));
+    }
+    java.aesDecodeToString=function(str,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(str)));};
+    java.aesBase64DecodeToString=function(str,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(str)));};
+    // 原版 aesEncodeToString 的实现就是 decryptStr（上游遗留问题，已对着 Legado 的
+    // app/src/main/java/io/legado/app/help/JsEncodeUtils.kt 逐行核对过）：
+    //   fun aesEncodeToString(data, key, transformation, iv) =
+    //       createSymmetricCrypto(transformation, key, iv).decryptStr(data)
+    // 书源若调用它做「加密」，结果必须与原版一致，否则同一书源在两端解析出不同内容，
+    // 所以这里照搬，不按名字的字面意思改成 encrypt。
+    java.aesEncodeToString=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(data)));};
+    java.aesEncodeToBase64String=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).encryptBase64(String(data)));};
+    java.aesEncodeArgsBase64Str=function(data,key,mode,padding,iv){
+        return String(java.createSymmetricCrypto('AES/'+String(mode)+'/'+String(padding),String(key),(iv==null||iv==='')?null:String(iv)).encryptBase64(String(data)));
+    };
+    java.aesDecodeArgsBase64Str=function(data,key,mode,padding,iv){
+        var k=java.base64DecodeToByteArray(String(key));var v=java.base64DecodeToByteArray(String(iv));
+        return String(java.createSymmetricCrypto('AES/'+String(mode)+'/'+String(padding),k,(v==null||v.length===0)?null:v).decryptStr(String(data)));
+    };
+    java.desDecodeToString=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(data)));};
+    java.desBase64DecodeToString=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).decryptStr(String(data)));};
+    // 原版 desEncodeToString = String(encrypt(data))，即密文字节按平台默认编码转字符串。
+    java.desEncodeToString=function(data,key,transformation,iv){return java.bytesToStr(__sc(transformation,key,iv).encrypt(String(data)));};
+    java.desEncodeToBase64String=function(data,key,transformation,iv){return String(__sc(transformation,key,iv).encryptBase64(String(data)));};
+
+    // ---- 文件 / HTML / 章节号 / 字体 / 验证码 ----
+    java.evalJS=function(script){return eval(String(script));};
+    java.cacheFile=function(u,t){return String(__cacheFile(String(u),t==null?0:Number(t)));};
+    java.readTxtFile=function(path,cs){return String(__readTxtFile(String(path),cs==null?'':String(cs)));};
+    java.importScript=function(path){
+        var p=String(path);
+        var t=/^https?:/i.test(p)?java.cacheFile(p):java.readTxtFile(p);
+        if(!t){throw new Error(p+' 内容获取失败或者为空');}
+        return t;
+    };
+    java.htmlFormat=function(s,u){return String(__htmlFormat(String(s==null?'':s),u==null?'':String(u)));};
+    java.toNumChapter=function(s){return s==null?null:String(__toNumChapter(String(s)));};
+    java.getVerificationCode=function(url){return String(__verificationCode(String(url)));};
+    function __fontBytes(data){
+        if(typeof data==='string'){return data;}
+        if(data&&typeof data.length==='number'&&typeof data!=='function'){
+            var hex='';for(var i=0;i<data.length;i++){var b=Number(data[i])&255;hex+=('0'+b.toString(16)).slice(-2);}
+            return 'hex:'+hex;
+        }
+        return String(data==null?'':data);
+    }
+    java.queryTTF=function(data,useCache){
+        var id=__fontQuery(__fontBytes(data),useCache!==false);
+        if(!id||id<=0){return null;}
+        return {
+            __id:id,
+            getGlyfByUnicode:function(u){return String(__fontGlyph(id,Number(u)));},
+            getGlyfIdByUnicode:function(u){return Number(__fontGlyphID(id,Number(u)));},
+            getUnicodeByGlyf:function(g){return Number(__fontUnicode(id,String(g)));},
+            isBlankUnicode:function(u){return !!__fontBlank(id,Number(u));}
+        };
+    };
+    java.replaceFont=function(text,errorQueryTTF,correctQueryTTF,filter){
+        if(!errorQueryTTF||!correctQueryTTF||!errorQueryTTF.__id||!correctQueryTTF.__id){return String(text);}
+        return String(__fontReplace(String(text),Number(errorQueryTTF.__id),Number(correctQueryTTF.__id),filter===true));
     };
     java.getThemeMode=function(){return 6;};
     java.refreshContent=function(){return '';};
@@ -1066,6 +1320,32 @@ final class JSEngine {
         ctx.setObject(deviceId, forKeyedSubscript: "__deviceId" as NSString)
     }
 
+    /// java.cacheFile / importScript / htmlFormat / queryTTF 等原生入口。
+    private func installScriptBindings(_ ctx: JSContext, bridge: JavaBridge) {
+        let cacheFile: @convention(block) (String, Double) -> String = { bridge.cacheFile($0, $1) }
+        let readTxt: @convention(block) (String, String) -> String = { bridge.readTxtFile($0, $1) }
+        let htmlFormat: @convention(block) (String, String) -> String = { bridge.htmlFormat($0, $1) }
+        let toNum: @convention(block) (String) -> String = { bridge.toNumChapter($0) }
+        let fontQuery: @convention(block) (String, Bool) -> Int = { bridge.fontQuery($0, $1) }
+        let fontGlyph: @convention(block) (Int, Int) -> String = { bridge.fontGlyph($0, $1) }
+        let fontGlyphID: @convention(block) (Int, Int) -> Int = { bridge.fontGlyphID($0, $1) }
+        let fontUnicode: @convention(block) (Int, String) -> Int = { bridge.fontUnicode($0, $1) }
+        let fontBlank: @convention(block) (Int, Int) -> Bool = { bridge.fontBlank($0, $1) }
+        let fontReplace: @convention(block) (String, Int, Int, Bool) -> String = { bridge.fontReplace($0, $1, $2, $3) }
+        let verification: @convention(block) (String) -> String = { bridge.verificationCode($0) }
+        ctx.setObject(cacheFile, forKeyedSubscript: "__cacheFile" as NSString)
+        ctx.setObject(readTxt, forKeyedSubscript: "__readTxtFile" as NSString)
+        ctx.setObject(htmlFormat, forKeyedSubscript: "__htmlFormat" as NSString)
+        ctx.setObject(toNum, forKeyedSubscript: "__toNumChapter" as NSString)
+        ctx.setObject(fontQuery, forKeyedSubscript: "__fontQuery" as NSString)
+        ctx.setObject(fontGlyph, forKeyedSubscript: "__fontGlyph" as NSString)
+        ctx.setObject(fontGlyphID, forKeyedSubscript: "__fontGlyphID" as NSString)
+        ctx.setObject(fontUnicode, forKeyedSubscript: "__fontUnicode" as NSString)
+        ctx.setObject(fontBlank, forKeyedSubscript: "__fontBlank" as NSString)
+        ctx.setObject(fontReplace, forKeyedSubscript: "__fontReplace" as NSString)
+        ctx.setObject(verification, forKeyedSubscript: "__verificationCode" as NSString)
+    }
+
     /// Stable 16-hex-digit identifier, generated once per app install and kept in UserDefaults.
     /// Same shape as Android's ANDROID_ID; not tied to any hardware or account.
     static var installIdentifier: String {
@@ -1087,15 +1367,21 @@ final class JSEngine {
             JSEngine.lastError = message
             DebugLog.add("JS 错误：\(String(message.prefix(240)))")
         }
-        ctx.setObject(JavaBridge(context: context, session: session,
-                                 responseTimeout: responseTimeout),
-                      forKeyedSubscript: "java" as NSString)
+        let bridge = JavaBridge(context: context, session: session,
+                                responseTimeout: responseTimeout)
+        ctx.setObject(bridge, forKeyedSubscript: "java" as NSString)
+        installScriptBindings(ctx, bridge: bridge)
         ctx.evaluateScript(JSEngine.prelude)
         let source = context?.source ?? JSEngine.currentSource
         if let s = source, let src = ctx.objectForKeyedSubscript("source") {
             src.setObject(s.bookSourceUrl, forKeyedSubscript: "bookSourceUrl" as NSString)
             src.setObject(s.bookSourceName, forKeyedSubscript: "bookSourceName" as NSString)
             src.setObject(s.bookSourceComment ?? "", forKeyedSubscript: "bookSourceComment" as NSString)
+            src.setObject(s.bookSourceType ?? 0, forKeyedSubscript: "bookSourceType" as NSString)
+            src.setObject(s.customButton ?? false, forKeyedSubscript: "customButton" as NSString)
+            src.setObject(s.eventListener ?? false, forKeyedSubscript: "eventListener" as NSString)
+            src.setObject(s.concurrentRate ?? "", forKeyedSubscript: "concurrentRate" as NSString)
+            src.setObject(s.weight ?? 0, forKeyedSubscript: "weight" as NSString)
             src.setObject(s.loginUi ?? "", forKeyedSubscript: "loginUi" as NSString)
             src.setObject(s.loginUrl ?? "", forKeyedSubscript: "loginUrl" as NSString)
         }

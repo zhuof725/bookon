@@ -291,6 +291,7 @@ struct AnalyzeUrl {
             cfg.httpCookieAcceptPolicy = .never
             session = URLSession(configuration: cfg)
         }
+        try await rateLimitIfNeeded()
         let (_, u) = try applyRequestURL()
         let finalUrl = u.absoluteString
         var req = URLRequest(url: u, timeoutInterval: readTimeout)
@@ -310,7 +311,7 @@ struct AnalyzeUrl {
                 req.setValue(isJson ? "application/json" : "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             }
         }
-        let (data, resp) = try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
+        let (data, resp) = try await send(req, session: session)
         try Task.checkCancellation()
         return (data, resp, finalUrl)
     }
@@ -361,6 +362,7 @@ struct AnalyzeUrl {
             return HTTPResponseData(body: result.0, url: result.1)
         }
         #endif
+        try await rateLimitIfNeeded()
         let finalUrl = url.contains("%") ? url : percentEncoded(url)
         guard let u = URL(string: finalUrl) else { throw URLError(.badURL) }
         var req = URLRequest(url: u, timeoutInterval: 20)
@@ -387,7 +389,7 @@ struct AnalyzeUrl {
             }
         }
         let cookiesBefore = (HTTPCookieStorage.shared.cookies(for: u) ?? []).count
-        let (data, resp) = try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
+        let (data, resp) = try await send(req, session: session)
         try Task.checkCancellation()
         var enc = AnalyzeUrl.encoding(charset)
         if charset == nil, let n = (resp as? HTTPURLResponse)?.textEncodingName { enc = AnalyzeUrl.encoding(n) }
@@ -453,6 +455,80 @@ struct AnalyzeUrl {
         try Task.checkCancellation()
         return HTTPResponseData(body: text ?? "", response: resp, fallbackURL: url, rawData: rawData)
     }
+
+    // MARK: - 限流 / 重试
+
+    /// 书源 concurrentRate：请求前按「次数/毫秒」等待，避免被站点限流。
+    private func rateLimitIfNeeded() async throws {
+        guard let source = context?.source else { return }
+        try await SourceRateLimiter.shared.acquire(key: source.bookSourceUrl, rate: source.concurrentRate)
+    }
+
+    /// 通用退避重试：只重试「请求根本没拿到响应」的传输错误（超时、连接被重置、DNS 失败）。
+    /// 不按 HTTP 状态码重试：状态码属于书源自己的业务语义（401 触发登录、429/5xx 由书源脚本
+    /// 换线路），引擎自行重发会让同一次详情请求变成多次，既破坏既有的请求计数契约，
+    /// 也可能把站点的限流拖得更久。
+    /// 只重试 GET/HEAD：POST 等可能是提交动作，重发会造成重复下单/重复登录。
+    private func send(_ req: URLRequest, session: URLSession,
+                      maxAttempts: Int = 3) async throws -> (Data, URLResponse) {
+        let method = (req.httpMethod ?? "GET").uppercased()
+        let attempts = Self.retryAttempts(method: method, maxAttempts: maxAttempts)
+        var attempt = 1
+        let started = Date()
+        while true {
+            do {
+                return try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
+            } catch {
+                guard attempt < attempts, Self.retryableError(error), !Task.isCancelled else { throw error }
+                let delay = Self.backoff(attempt)
+                // 总时长上限：一次长超时的请求已经等了很久，再重试只会把「最坏 6 分钟」拉得更长。
+                guard Self.retryWithinBudget(elapsed: Date().timeIntervalSince(started),
+                                            delay: delay, timeout: req.timeoutInterval) else {
+                    DebugLog.add("≡请求失败（\(error.localizedDescription)），已达重试总时长上限，不再重试")
+                    throw error
+                }
+                DebugLog.add("≡请求失败（\(error.localizedDescription)），\(Int(delay * 1000))ms 后重试（第 \(attempt) 次）")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                attempt += 1
+            }
+        }
+    }
+
+    /// 一次请求（含全部重试）的总时长上限（秒）。
+    static let retryTotalBudget: TimeInterval = 90
+
+    /// 实际允许的尝试次数：只重试幂等方法（GET/HEAD）。
+    /// POST 等可能是提交动作，重发会造成重复下单/重复登录。
+    static func retryAttempts(method: String, maxAttempts: Int) -> Int {
+        guard idempotentMethods.contains(method.uppercased()) else { return 1 }
+        return max(1, maxAttempts)
+    }
+
+    /// 判断「再来一次」是否还在总时长预算内：退避 + 下一次请求的最坏耗时都要放得下。
+    static func retryWithinBudget(elapsed: TimeInterval, delay: TimeInterval, timeout: TimeInterval) -> Bool {
+        elapsed + delay + max(timeout, 0) <= retryTotalBudget
+    }
+
+    /// 可安全重发的 HTTP 方法（RFC 9110 幂等方法的常用子集）。
+    static let idempotentMethods: Set<String> = ["GET", "HEAD"]
+
+    static func retryableError(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .resourceUnavailable:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func backoff(_ attempt: Int) -> TimeInterval {
+        // 0.4s / 1.2s，加少量抖动避免多本书同时重试。
+        let base = attempt == 1 ? 0.4 : 1.2
+        return base + Double.random(in: 0...0.2)
+    }
+
 
     /// 表单 body 按 key=value 逐项做 URL 编码（与 Legado 一致），charset 为 gbk 时按 GBK 字节编码
     private func percentEncodedBody(_ b: String) -> String {

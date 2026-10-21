@@ -53,43 +53,62 @@ enum XPathRule {
         return doc.xpath(path)
     }
 
-    /// 相对路径求值：以当前节点为根，支持 `/tag[n]`、`[@attr='v']`、`/text()`、`/@attr`。
-    /// 原版用 JXDocument(节点) 把节点当成文档根，所以 `/text()` 取的是本节点的文本，
-    /// `/@value` 取的是本节点的属性（耽美小说目录规则 chapterName/chapterUrl）。
-    private static func relativeSelection(_ obj: Any, _ path: String)
-        -> (elements: [Element], output: Output, attribute: String?) {
-        guard let root = fragmentRoot(obj) else { return ([], .node, nil) }
-        var current = [root]
-        var output: Output = .node
-        var attribute: String?
-        let parts = path.dropFirst().split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        for part in parts {
-            if part.hasPrefix("@") { attribute = String(part.dropFirst()); break }
-            if part == "text()" || part == "allText()" || part == "textNodes()" || part == "ownText()" {
-                output = .text; break
-            }
-            if part == "html()" { output = .html; break }
-            if part == "." { continue }
-            var css = part
-            var index: Int?
-            if let m = part.range(of: "\\[\\s*(-?\\d+)\\s*\\]$", options: .regularExpression) {
-                index = Int(part[m].trimmingCharacters(in: CharacterSet(charactersIn: "[] ")))
-                css = String(part[..<m.lowerBound])
-            }
-            // [@class='x'] 是 XPath 写法，转成 CSS 的 [class="x"]
-            css = css.replacingOccurrences(of: "\\[@([\\w:-]+)=(['\"])(.*?)\\2\\]",
-                                          with: "[$1=\"$3\"]", options: .regularExpression)
-            if css.isEmpty || css == "*" { css = "*" }
-            let found = current.flatMap { (try? $0.select(css).array()) ?? [] }
-            if let index {
-                if index > 0, found.indices.contains(index - 1) { current = [found[index - 1]] }
-                else if index < 0, found.count + index >= 0 { current = [found[found.count + index]] }
-                else { current = [] }
-            } else {
-                current = found
-            }
+    /// 相对路径求值：以当前节点为根，交给 Kanna（libxml2 XPath 1.0）执行。
+    /// 旧实现手写把 `/tag[n]`、`[@class='x']` 转成 CSS，覆盖不了 `[last()]`、`contains()`、
+    /// 多谓词、属性轴等写法。这里把节点序列化成带唯一标记的片段，再拼成
+    /// `//*[@data-legado-root='…']` + 原路径求值。
+    /// JsoupXpath 对「当前节点」有两种常见写法：`/@attr`、`/span[1]` 把当前节点当根（取它的属性/子节点），
+    /// 而片段只有一个元素时（`<option value="v1">一</option>` + `/option[1]/text()`）又把该元素
+    /// 当成结果集里的一项。先按「节点即根」求值，取不到再把节点包一层容器当根重试。
+    private static func relativeValues(_ obj: Any, _ path: String, output: Output) -> [String] {
+        guard let root = fragmentRoot(obj) else { return [] }
+        guard var outer = try? root.outerHtml(),
+              let gt = outer.firstIndex(of: ">") else { return [] }
+        let marker = "r\(abs(path.hashValue))"
+        outer.insert(contentsOf: " data-legado-root=\"\(marker)\"", at: gt)
+        let tag = root.tagName().lowercased()
+        let container = parentTag(for: tag)
+        // ① 节点自己带标记：`/@attr`、`/子元素` 这类写法。
+        let direct = container.map { "<\($0)>" + outer + "</\($0)>" } ?? outer
+        let values = evaluate(html: direct, marker: marker, path: path, output: output)
+        if !values.isEmpty { return values }
+        // ② 标记放在容器上：路径第一步就是该节点本身（`/option[1]`）。
+        let wrapperTag = container ?? "div"
+        guard let plain = try? root.outerHtml() else { return values }
+        let wrapped = "<\(wrapperTag) data-legado-root=\"\(marker)\">" + plain + "</\(wrapperTag)>"
+        return evaluate(html: wrapped, marker: marker, path: path, output: output)
+    }
+
+    /// 片段必须放进合法父元素里，libxml2 才不会把它丢掉（`<option>` 必须在 `<select>` 内等）。
+    private static func parentTag(for tag: String) -> String? {
+        switch tag {
+        case "tr", "td", "th", "tbody", "thead", "tfoot": return "table"
+        case "option": return "select"
+        case "li": return "ul"
+        default: return nil
         }
-        return (current, output, attribute)
+    }
+
+    private static func evaluate(html: String, marker: String, path: String, output: Output) -> [String] {
+        guard let doc = try? HTML(html: html, encoding: .utf8) else { return [] }
+        let result = doc.xpath("//*[@data-legado-root='\(marker)']" + path)
+        let isAttribute = path.contains("/@")
+        switch result {
+        case .NodeSet(let nodes):
+            var values: [String] = []
+            for i in 0..<nodes.count {
+                let node = nodes[i]
+                let raw: String? = (output == .html && !isAttribute) ? node.innerHTML : node.text
+                if let v = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { values.append(v) }
+            }
+            return values
+        case .String(let value):
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? [] : [trimmed]
+        case .Number(let value): return ["\(value)"]
+        case .Bool(let value): return [value ? "true" : "false"]
+        default: return []
+        }
     }
 
     /// 当前对象对应的节点：元素直接返回；字符串片段（如 `<option value="…">`）包一层 div 后取首个元素。
@@ -119,16 +138,9 @@ enum XPathRule {
 
     /// 列表规则：返回每个匹配节点的 HTML（属性/文本节点返回文本）
     static func elements(_ obj: Any, _ rule: String) -> [Any] {
-        let (path, _) = split(rule)
+        let (path, output) = split(rule)
         if isRelative(path) {
-            let sel = relativeSelection(obj, path)
-            if let attr = sel.attribute {
-                return sel.elements.compactMap { try? $0.attr(attr) }.filter { !$0.isEmpty }
-            }
-            return sel.elements.compactMap { e -> String? in
-                let value = sel.output == .html ? (try? e.html()) : (try? e.text())
-                return value?.isEmpty == false ? value : nil
-            }
+            return relativeValues(obj, path, output: output)
         }
         guard let res = query(obj, path) else { return [] }
         switch res {
@@ -163,13 +175,13 @@ enum XPathRule {
         }
         selector = selector.replacingOccurrences(of: "//", with: " ")
             .replacingOccurrences(of: "/", with: " ")
-        let classPattern = try? NSRegularExpression(pattern: "(div|ul|li|a|p)\\[@class=['\\\"]([^'\\\"]+)['\\\"]\\]")
+        let classPattern = RegexLog.compile("(div|ul|li|a|p)\\[@class=['\\\"]([^'\\\"]+)['\\\"]\\]")
         if let re = classPattern, let m = re.firstMatch(in: selector, range: NSRange(location: 0, length: (selector as NSString).length)) {
             let tag = (selector as NSString).substring(with: m.range(at: 1))
             let cls = (selector as NSString).substring(with: m.range(at: 2))
             selector = selector.replacingCharacters(in: Range(m.range, in: selector)!, with: "\(tag).\(cls.replacingOccurrences(of: " ", with: "."))")
         }
-        if let re = try? NSRegularExpression(pattern: "\\[contains\\(text\\(\\),\\s*['\"]([^'\"]+)['\"]\\)\\]") {
+        if let re = RegexLog.compile("\\[contains\\(text\\(\\),\\s*['\"]([^'\"]+)['\"]\\)\\]") {
             let ns = selector as NSString
             for m in re.matches(in: selector, range: NSRange(location: 0, length: ns.length)).reversed() {
                 let text = ns.substring(with: m.range(at: 1))
@@ -189,17 +201,8 @@ enum XPathRule {
     static func string(_ obj: Any, _ rule: String) -> String {
         let (path, output) = split(rule)
         if isRelative(path) {
-            let sel = relativeSelection(obj, path)
-            if let attr = sel.attribute {
-                return sel.elements.compactMap { try? $0.attr(attr) }
-                    .filter { !$0.isEmpty }.joined(separator: "\n")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            let values = sel.elements.compactMap { e -> String? in
-                let value = sel.output == .html ? (try? e.html()) : (try? e.text())
-                return value?.isEmpty == false ? value : nil
-            }
-            return values.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return relativeValues(obj, path, output: output).joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
         guard let res = query(obj, path) else { return fallbackString(obj, path) }
         switch res {

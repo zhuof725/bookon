@@ -13,6 +13,15 @@ import SwiftSoup
     func children() -> JSNodeListBridge
     func toArray() -> [Any]
     func toString() -> String
+    // jQuery 风格的常用方法（书源脚本里普遍写 `J.select('.note').eq(0).text()`）。
+    func eq(_ index: Int) -> JSNodeBridge?
+    func first() -> JSNodeBridge?
+    func last() -> JSNodeBridge?
+    func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void)
+    func hasClass(_ name: String) -> Bool
+    func parent() -> JSNodeBridge?
+    func next() -> JSNodeBridge?
+    func prev() -> JSNodeBridge?
 }
 
 @objc protocol JSNodeListExports: JSExport {
@@ -27,6 +36,15 @@ import SwiftSoup
     func html() -> String
     func outerHtml() -> String
     func toString() -> String
+    // jQuery 风格的常用方法。
+    func eq(_ index: Int) -> JSNodeBridge?
+    func first() -> JSNodeBridge?
+    func last() -> JSNodeBridge?
+    func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void)
+    func hasClass(_ name: String) -> Bool
+    func parent() -> JSNodeListBridge
+    func next() -> JSNodeBridge?
+    func prev() -> JSNodeBridge?
 }
 
 @objc final class JSNodeBridge: NSObject, JSNodeExports {
@@ -55,6 +73,24 @@ import SwiftSoup
     func children() -> JSNodeListBridge { JSNodeListBridge(element.children().array()) }
     func toArray() -> [Any] { [self] }
     func toString() -> String { outerHtml() }
+
+    func eq(_ index: Int) -> JSNodeBridge? { nil }
+    func first() -> JSNodeBridge? { self }
+    func last() -> JSNodeBridge? { self }
+    func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) { handler(self, 0) }
+    func hasClass(_ name: String) -> Bool { (try? element.hasClass(name)) ?? false }
+    func parent() -> JSNodeBridge? {
+        guard let p = element.parent() else { return nil }
+        return JSNodeBridge(p)
+    }
+    func next() -> JSNodeBridge? {
+        guard let s = element.nextElementSibling() else { return nil }
+        return JSNodeBridge(s)
+    }
+    func prev() -> JSNodeBridge? {
+        guard let s = element.previousElementSibling() else { return nil }
+        return JSNodeBridge(s)
+    }
 }
 
 @objc final class JSNodeListBridge: NSObject, JSNodeListExports {
@@ -84,4 +120,27 @@ import SwiftSoup
     func html() -> String { first.map { (try? $0.html()) ?? "" } ?? "" }
     func outerHtml() -> String { first.map { (try? $0.outerHtml()) ?? "" } ?? "" }
     func toString() -> String { elements.map { (try? $0.outerHtml()) ?? "" }.joined() }
+
+    func eq(_ index: Int) -> JSNodeBridge? { get(index) }
+    func first() -> JSNodeBridge? { get(0) }
+    func last() -> JSNodeBridge? { get(elements.count - 1) }
+    func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) {
+        for (index, element) in elements.enumerated() { handler(JSNodeBridge(element), index) }
+    }
+    func hasClass(_ name: String) -> Bool { first.map { (try? $0.hasClass(name)) ?? false } ?? false }
+    func parent() -> JSNodeListBridge {
+        var found: [Element] = []
+        for element in elements {
+            if let p = element.parent() { found.append(p) }
+        }
+        return JSNodeListBridge(found)
+    }
+    func next() -> JSNodeBridge? {
+        guard let s = elements.first?.nextElementSibling() else { return nil }
+        return JSNodeBridge(s)
+    }
+    func prev() -> JSNodeBridge? {
+        guard let s = elements.first?.previousElementSibling() else { return nil }
+        return JSNodeBridge(s)
+    }
 }

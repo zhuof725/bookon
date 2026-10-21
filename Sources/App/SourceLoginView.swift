@@ -384,8 +384,8 @@ final class BrowserNavigationModel: ObservableObject {
         importMessage = "正在导入书源…"
         Task { @MainActor in
             do {
-                let n = try await AppStore.shared.importSources(from: src)
-                importMessage = "成功导入 \(n) 个书源"
+                let report = try await AppStore.shared.importSources(from: src)
+                importMessage = report.summary
             } catch {
                 importMessage = "导入失败：\(error.localizedDescription)"
             }

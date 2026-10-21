@@ -121,6 +121,7 @@ targets:
       - path: ../../Sources/App/ReaderTypographyControls.swift
       - path: ../../Sources/Store/ReadSettings.swift
       - path: ../../Sources/Models/Models.swift
+      - path: ../../Sources/Models/AnyJSONValue.swift
       - path: ../../Sources/App/ReaderScrollBoundaryObserver.swift
       - path: ../../Sources/Engine/Paginator.swift
       - path: ../../Sources/Engine/ContentBlocks.swift
