@@ -572,6 +572,11 @@ final class JSEngine {
         def('first',function(){return this.length?this[0]:null;});
         def('last',function(){return this.length?this[this.length-1]:null;});
         def('each',function(f){for(var i=0;i<this.length;i++){if(typeof f==='function')f(this[i],i);}return this;});
+        // java.util.List 的可变方法：书源脚本会 result.add('有声书') 之类地改结果
+        def('add',function(v){this.push(v);return true;});
+        def('addAll',function(v){if(v==null)return false;var a=Array.prototype.slice.call(v);if(a.length===0)return false;this.push.apply(this,a);return true;});
+        def('set',function(i,v){i=Number(i);var prev=(i>=0&&i<this.length)?this[i]:null;this[i]=v;return prev;});
+        def('contains',function(v){return this.indexOf(v)>=0;});
         // jQuery 风格：集合上的 eq/hasClass/parent/next/prev 委托给元素
         def('eq',function(i){return (i>=0&&i<this.length)?this[i]:null;});
         def('hasClass',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.hasClass==='function'){return !!e.hasClass(n);}}return false;});
@@ -954,6 +959,14 @@ final class JSEngine {
     function __cryptoKey(v){return typeof v==='string'?JSON.stringify(__bytes(v)):JSON.stringify(__bytes(v));}
     java.strToBytes=function(s,cs){return JSON.parse(__strToBytes(String(s),cs==null?'UTF-8':String(cs)));};
     java.bytesToStr=function(b,cs){return String(__bytesToStr(JSON.stringify(__bytes(b)),cs==null?'UTF-8':String(cs)));};
+    // 书源里高频用到的 URL/日志工具（对照原版 java.* 命名空间）
+    java.encodeURI=function(s){return encodeURI(String(s));};
+    java.encodeURIComponent=function(s){return encodeURIComponent(String(s));};
+    java.decodeURI=function(s){try{return decodeURI(String(s));}catch(e){return String(s);}};
+    java.decodeURIComponent=function(s){try{return decodeURIComponent(String(s));}catch(e){return String(s);}};
+    java.base64Encode=function(s){return String(__base64Encode(String(s)));};
+    java.base64Decode=function(s){var b=java.base64DecodeToByteArray(String(s));return b==null?'':java.bytesToStr(b,'UTF-8');};
+    java.log=function(){var parts=[];for(var i=0;i<arguments.length;i++){parts.push(String(arguments[i]));}if(typeof console!=='undefined'&&console.log){console.log(parts.join(' '));}return '';};
     java.base64DecodeToByteArray=function(s){
         if(s==null||String(s).trim()===''){return null;}
         var r=__base64ToBytes(String(s));if(r==null){return null;}return JSON.parse(r);
@@ -1322,6 +1335,9 @@ final class JSEngine {
             guard let d = SourceCrypto.base64Decode(s) else { return nil }
             return bytesJSON(d)
         }
+        let base64Encode: @convention(block) (String) -> String = { s in
+            Data(s.utf8).base64EncodedString()
+        }
         let hexToBytes: @convention(block) (String) -> String = { s in
             do { return bytesJSON(try SourceCrypto.hexDecode(s)) }
             catch { fail(describe(error)); return "[]" }
@@ -1379,6 +1395,7 @@ final class JSEngine {
         ctx.setObject(strToBytes, forKeyedSubscript: "__strToBytes" as NSString)
         ctx.setObject(bytesToStr, forKeyedSubscript: "__bytesToStr" as NSString)
         ctx.setObject(base64ToBytes, forKeyedSubscript: "__base64ToBytes" as NSString)
+        ctx.setObject(base64Encode, forKeyedSubscript: "__base64Encode" as NSString)
         ctx.setObject(hexToBytes, forKeyedSubscript: "__hexToBytes" as NSString)
         ctx.setObject(digest, forKeyedSubscript: "__digest" as NSString)
         ctx.setObject(hmac, forKeyedSubscript: "__hmac" as NSString)
@@ -1496,6 +1513,9 @@ final class JSEngine {
                           loginLib: String?,
                           rule: AnalyzeRule?, ruleInput: Any?,
                           context: RuleContext?) -> Any? {
+        // 原版用 Rhino：`let result`、解构箭头参数、形参重声明这三种写法 Rhino 接受、
+        // JavaScriptCore 报 SyntaxError。先归一化再求值。
+        let script = RuleScriptCompat.normalize(script)
         let effectiveContext = context ?? rule?.context
         let ctx = makeContext(effectiveContext)
         if let c = effectiveContext {
@@ -1570,6 +1590,14 @@ final class JSEngine {
             } else {
                 ctx.setObject(sr, forKeyedSubscript: "result" as NSString)
             }
+        } else if let collection = result, JSONSerialization.isValidJSONObject(collection),
+                  let data = try? JSONSerialization.data(withJSONObject: collection),
+                  let text = String(data: data, encoding: .utf8),
+                  let native = ctx.evaluateScript("JSON.parse(\(JSEngine.jsLiteral(text)))") {
+            // Foundation 的数组/字典塞进 JavaScriptCore 会变成 ObjC 集合代理，
+            // 拿不到 Array.prototype 上装的 java.util.List 方法（toArray/add/size…）。
+            // 这里在 JS 侧重新 JSON.parse 成原生值，语义与原版 Rhino 一致。
+            ctx.setObject(native, forKeyedSubscript: "result" as NSString)
         } else {
             ctx.setObject(result ?? "", forKeyedSubscript: "result" as NSString)
         }
