@@ -51,6 +51,15 @@ final class LocalCoverImageLoader: ObservableObject {
     }
 }
 
+/// 书源 coverDecodeJs 的封面解密注入点。
+/// 正式 App 在启动时由 RemoteCoverLoader 注入；测试工程不注入，封面走普通加载路径。
+enum CoverDecodeRuntime {
+    /// 该书源是否配置了 coverDecodeJs。
+    static var needsDecode: ((String) -> Bool)?
+    /// 下载 + 解密 + 解码；失败返回 nil。
+    static var load: ((URL, String, Int) async -> UIImage?)?
+}
+
 /// Shared production loader for shelf/detail/list/reader-cover views.
 struct BookCoverImage: View {
     @ThemePalette private var palette
@@ -59,14 +68,15 @@ struct BookCoverImage: View {
     /// 书源地址（Book.origin）；有 coverDecodeJs 时改走解密加载。
     var origin: String? = nil
     @StateObject private var loader = LocalCoverImageLoader()
-    @StateObject private var remoteLoader = RemoteCoverLoader()
+    @State private var decodedImage: UIImage?
+    @State private var decodeFailed = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var retry = 0
 
     private var resolvedURL: URL? { url.flatMap { BookCoverLocation.resolve($0) } }
     private var needsDecode: Bool {
-        guard let origin, let source = AppStore.shared.source(for: origin) else { return false }
-        return !(source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        guard let origin else { return false }
+        return CoverDecodeRuntime.needsDecode?(origin) ?? false
     }
     private var requestID: String { "\(resolvedURL?.absoluteString ?? "nil")|\(retry)" }
 
@@ -81,9 +91,9 @@ struct BookCoverImage: View {
                     } else { placeholder }
                 } else if let resolvedURL, ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") {
                     if needsDecode {
-                        if let image = remoteLoader.image {
+                        if let image = decodedImage {
                             Image(uiImage: image).resizable().scaledToFill()
-                        } else if remoteLoader.didFail { fallback } else { placeholder }
+                        } else if decodeFailed { fallback } else { placeholder }
                     } else {
                         AsyncImage(url: resolvedURL) { phase in
                             switch phase {
@@ -98,8 +108,11 @@ struct BookCoverImage: View {
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
         .task(id: requestID) {
-            if needsDecode {
-                await remoteLoader.load(resolvedURL, sourceKey: origin, pixelSize: pixelSize)
+            if needsDecode, let resolvedURL, let origin, let decode = CoverDecodeRuntime.load {
+                let image = await decode(resolvedURL, origin, pixelSize)
+                guard !Task.isCancelled else { return }
+                decodedImage = image
+                decodeFailed = image == nil
             } else {
                 await loader.load(resolvedURL, pixelSize: pixelSize)
             }

@@ -28,7 +28,7 @@ struct LegadoApp: App {
                 .modifier(ThemeLaunchHost())
                 .modifier(MonochromeAppStyle())
                 .modifier(AppThemeRoot())
-                .onAppear { VerifyPresenter.install() }
+                .onAppear { VerifyPresenter.install(); RemoteCoverLoader.install() }
                 .environmentObject(store)
                 .environmentObject(settings)
                 .onOpenURL { handle($0) }
