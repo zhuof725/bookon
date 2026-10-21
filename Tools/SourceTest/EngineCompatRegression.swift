@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSoup
 
 /// 引擎兼容面回归：书源脚本常用的 Java/Rhino/jQuery 风格 API 必须存在且可用。
 ///
