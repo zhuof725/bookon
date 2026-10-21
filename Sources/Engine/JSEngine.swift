@@ -1543,9 +1543,7 @@ final class JSEngine {
             let tail = script.isEmpty ? "" : " | 脚本: \(String(script.prefix(160)))"
             print("[JS error] \(message)\(tail)")
             JSEngine.lastError = message
-            // 带上出错脚本的前 200 字：书源调试页与 CI 日志都需要它定位。
-            let script = JSEngine.currentScript
-            let tail = script.isEmpty ? "" : " | 脚本: \(String(script.prefix(200)))"
+            // 带上出错脚本：书源调试页与 CI 日志都需要它定位。
             DebugLog.add("JS 错误：\(String(message.prefix(240)))\(tail)")
         }
         let bridge = JavaBridge(context: context, session: session,
