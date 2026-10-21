@@ -821,10 +821,10 @@ final class JSEngine {
     // Rhino JavaImporter 子集（七猫正文 AES 解密）：with(importer) 里的 String 是 java.lang.String，
     // String(byte[]) 按 UTF-8 解码；"...".getBytes() 取字节；Cipher/SecretKeySpec/IvParameterSpec 走原生加密桥。
     String.prototype.getBytes=function(cs){return java.strToBytes(String(this),cs==null?'UTF-8':String(cs));};
-    Packages.java.lang={String:function(v,cs){
+    Packages.java.lang.String=function(v,cs){
         if(v!=null&&typeof v==='object'&&typeof v.length==='number'){return java.bytesToStr(v,cs==null?'UTF-8':String(cs));}
         return String(v);
-    }};
+    };
     Packages.java.util.Base64={__name:'Base64',
         getDecoder:function(){return {decode:function(s){
             var b=(typeof s==='string')?s:java.bytesToStr(s,'UTF-8');var r=java.base64DecodeToByteArray(b);return r==null?[]:r;}};},
