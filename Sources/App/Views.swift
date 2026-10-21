@@ -297,6 +297,7 @@ struct ReaderView: View {
     @State private var text = ""
     @State private var blocks: [ContentBlock] = []
     @State private var commentURL: URL?
+    @State private var commentNotice: String?
     @State private var commentBusy = false
     @State private var pages: [BookPage] = []
     @State private var pageIndex = 0
@@ -578,6 +579,11 @@ struct ReaderView: View {
             }
         }
         .sheet(item: $commentURL) { link in CommentSheet(url: link) }
+        .alert("段评", isPresented: Binding(get: { commentNotice != nil }, set: { if !$0 { commentNotice = nil } })) {
+            Button("知道了", role: .cancel) { commentNotice = nil }
+        } message: {
+            Text(commentNotice ?? "")
+        }
         .onChange(of: scenePhase) { phase in
             if phase != .active { persistContinuousProgress(); store.flushProgress(); closeReadingSession() }
             else if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
@@ -1464,10 +1470,17 @@ struct ReaderView: View {
             Task {
                 let url = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
                 commentBusy = false
-                if let u = url, let link = URL(string: u) { commentURL = link }
+                if let u = url, let link = URL(string: u) {
+                    commentURL = link
+                } else {
+                    // 书源没给出地址（token 过期 / 脚本报错）：给出可行动的提示，而不是点了没反应。
+                    commentNotice = "段评暂时打不开：书源没有返回评论页地址。\n常见原因：共享 Token 过期、需要先在书源登录页重新获取。"
+                }
             }
         } else if let link = URL(string: t) {
             commentURL = link
+        } else {
+            commentNotice = "段评链接无效：\(String(t.prefix(80)))"
         }
     }
 
