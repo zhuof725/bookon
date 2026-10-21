@@ -26,13 +26,18 @@ struct ChapterCommentItem: Equatable {
 
 enum ContentBlocks {
     /// 把规则输出拆成有序块。普通文本（没有任何评论标签）得到只含 paragraph 的块，与原来的 cleanText 逐行一致。
-    static func parse(_ raw: String) -> [ContentBlock] {
+    ///
+    /// - Parameter imageDecode: 原版 `ruleContent.imageDecode` 的执行入口。必须在**图片级别**、
+    ///   **并入段落之前**执行：原版是对每张图片单独跑一次脚本，脚本里的 `src` 是这张图片的原始地址。
+    ///   番茄系段评的脚本要靠它清掉「已渲染」标记（否则点击气泡会被跳过），
+    ///   而它只从 `src` 里正则提取参数 —— 传整章正文会匹配错，传剥掉选项的 src 会匹配不到。
+    static func parse(_ raw: String, imageDecode: ((String) -> String)? = nil) -> [ContentBlock] {
         var text = raw
         text = text.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</(p|div)>", with: "\n", options: [.regularExpression, .caseInsensitive])
         var blocks: [ContentBlock] = []
         for line in text.components(separatedBy: .newlines) {
-            appendLine(line, into: &blocks)
+            appendLine(line, into: &blocks, imageDecode: imageDecode)
         }
         return mergeInlineBubbles(blocks)
     }
@@ -54,7 +59,8 @@ enum ContentBlocks {
 
     private static let tagPattern = try! NSRegularExpression(pattern: "<(comment|img)\\b[^>]*?/?>", options: [.caseInsensitive])
 
-    private static func appendLine(_ line: String, into blocks: inout [ContentBlock]) {
+    private static func appendLine(_ line: String, into blocks: inout [ContentBlock],
+                                   imageDecode: ((String) -> String)? = nil) {
         let ns = line as NSString
         let matches = tagPattern.matches(in: line, range: NSRange(location: 0, length: ns.length))
         var cursor = 0
@@ -87,17 +93,19 @@ enum ContentBlocks {
                     let clean = stripOptions(src)
                     let opts = srcOptions(src)
                     let click = clickURL(in: tag) ?? optionClick(in: src) ?? clickFromOptions(opts)
+                    // imageDecode 对**原始 src**（含 ,{...} 选项）执行，脚本里的 src 就是它。
+                    let decoded = imageDecode?(src) ?? clean
                     if opts["style"]?.lowercased() == "text" {
                         // 书源要求按文字大小行内显示：接到上一段末尾，而不是单独成大图。
-                        let svgCount = svgTexts(svgText(clean) ?? "").compactMap { Int($0) }.first
-                        blocks.append(.inlineBubble(src: clean,
+                        let svgCount = svgTexts(svgText(decoded) ?? "").compactMap { Int($0) }.first
+                        blocks.append(.inlineBubble(src: decoded,
                                                     count: svgCount ?? countFromClick(click),
                                                     clickURL: click,
                                                     rawSrc: src == clean ? nil : src))
-                    } else if let svg = svgText(clean), let native = nativeBlock(fromSVG: svg, click: click) {
+                    } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
                     } else {
-                        blocks.append(.image(src: clean, clickURL: click, rawSrc: src == clean ? nil : src))
+                        blocks.append(.image(src: decoded, clickURL: click, rawSrc: src == clean ? nil : src))
                     }
                 }
             }

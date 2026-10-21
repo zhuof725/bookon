@@ -664,7 +664,13 @@ final class JSEngine {
     }
     // 原版 CacheManager 的 JS 视图：get/put 走磁盘，getFromMemory/putMemory/deleteMemory 走内存缓存。
     // deleteMemory 少了会导致书源 imageDecode 里的「清标记」失效（点击被跳过）。
-    var cache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))},deleteMemory:function(k){return java.storeDelete(k)},delete:function(k){return java.storeDelete(k)}};
+    // cache / source 必须挂到**全局对象**上，不能只是局部 var：
+    // 书源脚本里的函数常写 `this.cache.getFromMemory(...)` / `this.source.getVariable()`，
+    // 而顶层 this 就是全局对象（Rhino 语义）。只声明成 var 时，函数内的 this 不是全局对象，
+    // 这两行会直接抛 TypeError —— 表现为「段评气泡点了没反应」。
+    var __legadoCache={get:function(k){return java.storeGet(k)},put:function(k,v){return java.storePut(k,String(v))},getFromMemory:function(k){return java.storeGet(k)},putMemory:function(k,v){return java.storePut(k,String(v))},deleteMemory:function(k){return java.storeDelete(k)},delete:function(k){return java.storeDelete(k)}};
+    var cache=__legadoCache;
+    try{ globalThis.cache=__legadoCache; }catch(e){ }
     var source={bookSourceUrl:'',bookSourceName:'',bookSourceComment:'',loginUi:'',loginUrl:'',getKey:function(){return this.bookSourceUrl},
     // Rhino 把 Java 的 getKey() 暴露成属性：书源脚本里普遍写 source.key / source.name（群小说 searchUrl）。
     get key(){return this.bookSourceUrl},
@@ -706,6 +712,8 @@ final class JSEngine {
                 return '';};
             return {setCookie:set,getInstance:function(){return {setCookie:set,flush:function(){return '';},getCookie:function(u){return cookie.getCookie(String(u));}};},
                     getCookie:function(u){return cookie.getCookie(String(u));},flush:function(){return '';},removeAllCookies:function(){return '';},removeAllCookie:function(){return '';}}}};
+    // 同 cache：source 也要挂到全局对象上，脚本里 `this.source.xxx` 才取得到。
+    try{ globalThis.source=source; }catch(e){ }
     var book={name:'',bookUrl:'',tocUrl:'',type:0,durChapterIndex:0,durChapterTitle:'',
         getVariable:function(k){return (typeof __bookVarGet==='function')?String(__bookVarGet(String(k))):'';},
         putVariable:function(k,v){var s=(v==null?'':String(v));return (typeof __bookVarPut==='function')?String(__bookVarPut(String(k),s)):s;},
@@ -1626,15 +1634,17 @@ final class JSEngine {
     /// loginLib：loginUrl 里的书源函数库。Legado 的 loginUi 常常是
     /// `@js: result = 某函数()`，而那个函数定义在 loginUrl（登录函数库）里——
     /// 求值 loginUi / 登录脚本时必须把它一起加载，否则报 Can't find variable。
+    /// - Parameter srcOverride: 覆盖脚本里的 `src` 变量。原版 imageDecode 按图片逐张调用，
+    ///   脚本里的 `src` 是这张图片的地址；其它场景 `src` 是当前内容原文。
     func eval(_ script: String, result: Any? = nil, baseUrl: String? = nil,
               vars: [String: Any] = [:], jsLib: String? = nil,
               loginLib: String? = nil,
               rule: AnalyzeRule? = nil, ruleInput: Any? = nil,
-              context: RuleContext? = nil) -> Any? {
+              context: RuleContext? = nil, srcOverride: String? = nil) -> Any? {
         autoreleasepool {
             evalBody(script, result: result, baseUrl: baseUrl, vars: vars, jsLib: jsLib,
                      loginLib: loginLib,
-                     rule: rule, ruleInput: ruleInput, context: context)
+                     rule: rule, ruleInput: ruleInput, context: context, srcOverride: srcOverride)
         }
     }
 
@@ -1642,7 +1652,7 @@ final class JSEngine {
                           vars: [String: Any], jsLib: String?,
                           loginLib: String?,
                           rule: AnalyzeRule?, ruleInput: Any?,
-                          context: RuleContext?) -> Any? {
+                          context: RuleContext?, srcOverride: String? = nil) -> Any? {
         // 原版用 Rhino：`let result`、解构箭头参数、形参重声明这三种写法 Rhino 接受、
         // JavaScriptCore 报 SyntaxError。先归一化再求值。
         let originalScript = script
@@ -1736,7 +1746,13 @@ final class JSEngine {
         ctx.setObject(baseUrl ?? "", forKeyedSubscript: "baseUrl" as NSString)
         // src 是「当前内容原文」：原版是字符串。元素结果要拼回 HTML 文本，
         // 否则脚本里的 src.match(...) / src.replace(...) 拿不到字符串。
-        ctx.setObject(JSEngine.srcText(result), forKeyedSubscript: "src" as NSString)
+        // 但 imageDecode 规则里 src 是**这张图片的地址**（原版按图片逐张调用），
+        // 番茄系段评的脚本靠它正则提取 createSvg 参数；传整章正文会匹配错。
+        if let srcOverride {
+            ctx.setObject(srcOverride, forKeyedSubscript: "src" as NSString)
+        } else {
+            ctx.setObject(JSEngine.srcText(result), forKeyedSubscript: "src" as NSString)
+        }
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }
         if let lib = jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
         if let login = loginLib, !login.isEmpty, !login.hasPrefix("{") { ctx.evaluateScript(login) }
@@ -1850,9 +1866,10 @@ final class JSEngine {
     func evalString(_ script: String, result: Any? = nil, baseUrl: String? = nil,
                     vars: [String: Any] = [:], jsLib: String? = nil,
                     loginLib: String? = nil,
-                    context: RuleContext? = nil) -> String? {
+                    context: RuleContext? = nil, srcOverride: String? = nil) -> String? {
         guard let v = eval(script, result: result, baseUrl: baseUrl, vars: vars,
-                           jsLib: jsLib, loginLib: loginLib, context: context) else { return nil }
+                           jsLib: jsLib, loginLib: loginLib, context: context,
+                           srcOverride: srcOverride) else { return nil }
         if let s = v as? String { return s }
         if let a = v as? [Any] { return a.map { "\($0)" }.joined(separator: "\n") }
         if JSONSerialization.isValidJSONObject(v), let d = try? JSONSerialization.data(withJSONObject: v) {

@@ -501,15 +501,21 @@ enum WebBook {
     /// 与 content 相同的抓取流程，但保留 <comment>/<img> 标记，供阅读器渲染段评。
     static func contentBlocks(source: BookSource, chapter: BookChapter, nextChapterUrl: String? = nil, book: Book? = nil) async throws -> (raw: String, blocks: [ContentBlock]) {
         let raw = try await rawContent(source: source, chapter: chapter, nextChapterUrl: nextChapterUrl, book: book)
-        var blocks = ContentBlocks.parse(raw)
-        // 原版 ruleContent.imageDecode：对正文里的图片/气泡逐个求值（脚本里 `src` 是图片地址，
-        // 返回值是新地址）。番茄系段评靠它清理「已渲染」的内存标记，否则点击气泡时
-        // createSvg() 会以为已经打开过评论页而直接跳过 → 表现为「段评打不开」。
+        // 原版 ruleContent.imageDecode：对正文里的**每张图片/气泡**单独求值一次，
+        // 脚本里 `src` 是这张图片的原始地址（地址里带 ,{...} 选项），返回值是新地址。
+        // 番茄系段评靠它清理「已渲染」的内存标记，否则点击气泡时 createSvg() 会以为
+        // 已经打开过评论页而直接跳过 → 表现为「段评打不开」。
+        // 注意必须在**图片级别、并入段落之前**执行：脚本从 src 里正则提取参数，
+        // 传整章正文或剥掉选项的地址都匹配不到。
+        var imageDecode: ((String) -> String)? = nil
         if let decode = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines),
            !decode.isEmpty {
             let ctx = RuleContext(source: source, book: book, chapter: chapter)
-            blocks = blocks.map { ImageDecodeRuntime.apply($0, rule: decode, source: source, context: ctx, baseURL: chapter.url) }
+            imageDecode = { src in
+                ImageDecodeRuntime.decode(src, rule: decode, source: source, context: ctx, baseURL: chapter.url)
+            }
         }
+        let blocks = ContentBlocks.parse(raw, imageDecode: imageDecode)
         return (raw, blocks)
     }
 

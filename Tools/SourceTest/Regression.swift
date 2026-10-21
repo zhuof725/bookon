@@ -222,6 +222,7 @@ enum RuleRegression {
         AutoDetectRegression.run(check)
         try await DataURLRegression.run(check)
         ReviewBubbleRegression.run(check)
+        ReviewClickRegression.run(check)
         SourceVariableRegression.run(check)
         // 旧版书源兼容：目录脚本只返回整个响应 JSON（没有后续 `$.data.chapters`）时，
         // getElements 得到 1 个字典，必须能从常见字段里找回章节数组。
