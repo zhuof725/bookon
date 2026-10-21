@@ -711,14 +711,98 @@ final class JSEngine {
             // Rhino 里脚本常写 `Packages.org.jsoup.nodes.Document` 做类型判断或取常量。
             nodes:{Document:function(){},Element:function(){},TextNode:function(){},Entities:{}}}},
         java:{
+            lang:{
+                System:{nanoTime:function(){return Math.round(Date.now()*1e6);},
+                        currentTimeMillis:function(){return Math.round(Date.now());},
+                        getProperty:function(k){return 'java.version'.length?String(k):'';},
+                        getenv:function(){return null;}},
+                Thread:{sleep:function(){return '';},currentThread:function(){return {getName:function(){return 'main';}};}}
+            },
             util:{
-                HashMap:function(){},
-                Arrays:{copyOfRange:function(b,a,e){a=a||0;e=(e==null)?b.length:e;var o=[];for(var i=a;i<e&&i<b.length;i++)o.push(b[i]);return o;}}
+                // Java 集合在脚本里只当容器用：返回带 List/Map 语义的普通对象/数组即可。
+                HashMap:function(){return __javaMap();},
+                LinkedHashMap:function(){return __javaMap();},
+                TreeMap:function(){return __javaMap();},
+                Hashtable:function(){return __javaMap();},
+                Properties:function(){return __javaMap();},
+                ArrayList:function(){var a=[];if(arguments.length===1&&arguments[0]!=null){var src=arguments[0];if(typeof src.length==='number'){for(var i=0;i<src.length;i++)a.push(src[i]);}}return a;},
+                LinkedList:function(){return Packages.java.util.ArrayList.apply(null,arguments)},
+                Vector:function(){return Packages.java.util.ArrayList.apply(null,arguments)},
+                Arrays:{copyOfRange:function(b,a,e){a=a||0;e=(e==null)?b.length:e;var o=[];for(var i=a;i<e&&i<b.length;i++)o.push(b[i]);return o;},
+                        asList:function(){return Array.prototype.slice.call(arguments);}},
+                UUID:{randomUUID:function(){
+                    var hex='0123456789abcdef',s='';
+                    for(var i=0;i<36;i++){
+                        if(i===8||i===13||i===18||i===23){s+='-';continue;}
+                        if(i===14){s+='4';continue;}
+                        var r=Math.floor(Math.random()*16);
+                        if(i===19){r=(r&0x3)|0x8;}
+                        s+=hex.charAt(r);
+                    }
+                    return s;
+                }}
             }
+        },
+        android:{util:{Base64:{DEFAULT:0,NO_PADDING:1,NO_WRAP:2,CRLF:4,URL_SAFE:8,
+            encodeToString:function(b,flags){
+                var text=(b!=null&&typeof b.length==='number'&&typeof b!=='string')?java.bytesToStr(b,'ISO-8859-1'):String(b==null?'':b);
+                var out=String(java.base64Encode(text));
+                if(flags&2){out=out.replace(/[\r\n]/g,'');}
+                if(flags&8){out=out.replace(/\+/g,'-').replace(/\//g,'_');}
+                return out;
+            },
+            decode:function(s,flags){
+                var str=String(s==null?'':s);
+                if(flags&8){str=str.replace(/-/g,'+').replace(/_/g,'/');}
+                var r=java.base64DecodeToByteArray(str);
+                return r==null?[]:r;
+            }}}},
+        cn:{hutool:{
+            crypto:{digest:{DigestUtil:{
+                md5Hex:function(s){return String(java.digestHex(String(s),'MD5'));},
+                sha256Hex:function(s){return String(java.digestHex(String(s),'SHA256'));}}}} ,
+            core:{util:{StrUtil:{
+                reverse:function(s){return String(s==null?'':s).split('').reverse().join('');},
+                isBlank:function(s){return s==null||String(s).replace(/\s/g,'')==='';},
+                emptyToDefault:function(s,d){return (s==null||String(s)==='')?d:s;}}},
+                codec:{Base64:{
+                    encode:function(s){return String(java.base64Encode(String(s)));},
+                    decodeStr:function(s){return String(java.base64Decode(String(s)));}}},
+                ZipUtil:{gzip:function(s){return String(java.base64Encode(String(s)));}}}}
         },
         okio:{Buffer:function(){}},
         okhttp3:{
             MediaType:{parse:function(s){return String(s||'');}},
+            RequestBody:{
+                create:function(mediaType,body){
+                    var text=String(body==null?'':body);
+                    return {contentType:function(){return mediaType;},__body:text,
+                            contentLength:function(){return text.length;},toString:function(){return text;}};
+                }
+            },
+            Request:{
+                Builder:function(){
+                    var o={__url:'',__method:'GET',__headers:{},__body:''};
+                    return {
+                        url:function(u){o.__url=String(u||'');return this;},
+                        method:function(m,b){o.__method=String(m||'GET');if(b!=null)o.__body=String(b&&b.__body!=null?b.__body:b);return this;},
+                        header:function(k,v){o.__headers[String(k)]=String(v);return this;},
+                        addHeader:function(k,v){o.__headers[String(k)]=String(v);return this;},
+                        get:function(){return o;},
+                        build:function(){return {url:function(){return o.__url;},method:function(){return o.__method;},
+                                                headers:function(){return o.__headers;},__body:o.__body,
+                                                toString:function(){return o.__url;}};}
+                    };
+                }
+            },
+            OkHttpClient:function(){
+                var self={};
+                self.newCall=function(req){
+                    var r=(req&&typeof req.url==='function')?{url:req.url(),method:req.method(),headers:req.headers?req.headers():{},body:req.__body}:{url:String(req||''),method:'GET',headers:{},body:''};
+                    return {execute:function(){return java.connect(r.url);},enqueue:function(){return '';}};
+                };
+                return self;
+            },
             ResponseBody:{
                 create:function(mediaType,total,buf){
                     var b=(buf&&buf.__bytes)?buf.__bytes.slice():[];
@@ -966,6 +1050,14 @@ final class JSEngine {
     java.decodeURIComponent=function(s){try{return decodeURIComponent(String(s));}catch(e){return String(s);}};
     java.base64Encode=function(s){return String(__base64Encode(String(s)));};
     java.base64Decode=function(s){var b=java.base64DecodeToByteArray(String(s));return b==null?'':java.bytesToStr(b,'UTF-8');};
+    java.head=function(u){return String(java.ajax(String(u)+',{"method":"HEAD"}'));};
+    java.httpGet=function(u){return String(java.ajax(String(u)));};
+    java.postWithOptions=function(u,opt){return String(java.ajax(String(u)+','+JSON.stringify(opt||{})));};
+    java.connectWithOptions=function(u,opt){return __response(java.connect(String(u)+','+JSON.stringify(opt||{})));};
+    java.refreshBookInfo=function(){return '';};
+    java.refreshBookToc=function(){return '';};
+    java.setResponseBase64=function(data,mime){__legadoResponseBase64={data:String(data==null?'':data),mime:String(mime==null?'':mime)};return '';};
+    var __legadoResponseBase64=null;
     java.log=function(){var parts=[];for(var i=0;i<arguments.length;i++){parts.push(String(arguments[i]));}if(typeof console!=='undefined'&&console.log){console.log(parts.join(' '));}return '';};
     java.base64DecodeToByteArray=function(s){
         if(s==null||String(s).trim()===''){return null;}

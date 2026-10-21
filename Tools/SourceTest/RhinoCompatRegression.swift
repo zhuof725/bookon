@@ -44,7 +44,37 @@ enum RhinoCompatRegression {
         check(JSEngine.shared.evalString("java.base64Decode('5Lit5paH')") == "中文",
               "java.base64Decode 可用")
 
-        // 6) JSON 结果重入 JS：result 要是原生数组（能拿到 List 方法）
+        // 6) Packages.* Java 互操作面（对照原版 LegadoRuntimeCapabilityRegistry）
+        check(JSEngine.shared.evalString("var m=new Packages.java.util.HashMap(); m.put('a','1'); m.get('a') + '|' + m.size()") == "1|1",
+              "Packages.java.util.HashMap 可用")
+        check(JSEngine.shared.evalString("var l=new Packages.java.util.ArrayList(); l.add('x'); l.size()") == "1",
+              "Packages.java.util.ArrayList 可用（带 List 语义）")
+        check(JSEngine.shared.evalString("String(Packages.java.util.UUID.randomUUID()).length") == "36",
+              "Packages.java.util.UUID.randomUUID 可用")
+        check(JSEngine.shared.evalString("typeof Packages.java.lang.System.currentTimeMillis()") == "number",
+              "Packages.java.lang.System.currentTimeMillis 可用")
+        check(JSEngine.shared.evalString("Packages.android.util.Base64.encodeToString('中文',0)") == "5Lit5paH",
+              "Packages.android.util.Base64.encodeToString 可用")
+        check(JSEngine.shared.evalString("Packages.cn.hutool.crypto.digest.DigestUtil.md5Hex('abc')") == "900150983cd24fb0d6963f7d28e17f72",
+              "hutool DigestUtil.md5Hex 可用")
+        check(JSEngine.shared.evalString("Packages.cn.hutool.core.util.StrUtil.reverse('abc')") == "cba",
+              "hutool StrUtil.reverse 可用")
+        check(JSEngine.shared.evalString("typeof java.head") == "function" && JSEngine.shared.evalString("typeof java.refreshBookInfo") == "function",
+              "java.head / java.refreshBookInfo 存在")
+        check(JSEngine.shared.evalString("java.setResponseBase64('abc','image/png')") == "",
+              "java.setResponseBase64 不抛错")
+
+        // 7) JSON 元素里的裸字段名要按 JSON 取（否则数字字段会变空串）
+        let kindJSON = "{\"list\":[{\"bid\":123,\"name\":\"甲\"}]}"
+        let kindAR = AnalyzeRule(content: kindJSON, baseUrl: "https://example.invalid/", context: RuleContext())
+        let kindItems = kindAR.getElements("$.list[*]")
+        check(kindItems.count == 1, "JSON 列表元素解析")
+        if let item = kindItems.first {
+            check(kindAR.getString("bid", from: item) == "123", "JSON 元素裸字段名 bid 取到数字")
+            check(kindAR.getString("name", from: item) == "甲", "JSON 元素裸字段名 name 取到文本")
+        }
+
+        // 8) JSON 结果重入 JS：result 要是原生数组（能拿到 List 方法）
         let json = "{\"list\":[{\"t\":\"甲\"},{\"t\":\"乙\"}]}"
         let ar = AnalyzeRule(content: json, baseUrl: "https://example.invalid/", context: RuleContext())
         check(ar.getStringList("$.list[*].t\n<js>result.toArray().length + '|' + result.size()</js>").first == "2|2",
