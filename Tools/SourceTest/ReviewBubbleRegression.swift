@@ -62,19 +62,20 @@ enum ReviewBubbleRegression {
                                                 context: RuleContext(source: source))
         check(marked == "1", "正文解析后写入「已渲染」标记")
 
-        var rawSeen: String?
-        for block in ContentBlocks.parse(line) {
-            if case .inlineBubble(_, _, _, let raw) = block { rawSeen = raw }
-        }
-        check(rawSeen?.contains("createSvg(") == true, "气泡保留书源原始 src（含 createSvg 参数）")
-
-        if let raw = rawSeen {
-            let out = JSEngine.shared.evalString(decodeRule, result: raw, baseUrl: "https://review-bubble.example",
-                                                 jsLib: source.jsLib, context: ctx)
-            check(out?.contains("createSvg(") == true, "imageDecode 脚本能匹配到 createSvg 参数")
-        }
+        // 端到端：解析出的块 → 执行 imageDecode → 标记应被清掉
+        let blocks2 = ContentBlocks.parse(line)
+        let decoded = blocks2.map { ImageDecodeRuntime.apply($0, rule: decodeRule, source: source,
+                                                             context: ctx, baseURL: "https://review-bubble.example") }
         let after = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
                                                context: RuleContext(source: source)) ?? ""
-        check(after.isEmpty, "imageDecode 清掉「已渲染」标记（点击气泡不再被跳过）")
+        check(after.isEmpty, "imageDecode 清掉「已渲染」标记（点击气泡不再被跳过）（实际 \(after)）")
+        // 气泡本身仍要保留数量与点击动作
+        var count2: Int?
+        var click2: String?
+        for block in decoded {
+            if case .paragraph(_, let c, let u) = block { count2 = c; click2 = u }
+        }
+        check(count2 == 42, "imageDecode 之后段评数量仍是 42（实际 \(count2.map(String.init) ?? "nil")）")
+        check(click2?.hasPrefix("js:createSvg(") == true, "imageDecode 之后点击动作仍是 js:createSvg(...)")
     }
 }
