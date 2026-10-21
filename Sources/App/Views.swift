@@ -1458,13 +1458,22 @@ struct ReaderView: View {
     private func openComment(_ target: String?) {
         guard let t = target, !t.isEmpty else { return }
         if t.hasPrefix("js:") {
-            guard let src = store.source(for: book.origin), !commentBusy else { return }
+            guard !commentBusy else { return }
+            guard let src = store.source(for: book.origin) else {
+                DebugLog.add("≡段评点击失败：找不到书籍对应的书源（origin=\(book.origin)）")
+                return
+            }
             commentBusy = true
             let call = String(t.dropFirst(3))
+            DebugLog.add("≡段评点击：\(String(call.prefix(80)))")
             Task {
                 let url = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
                 commentBusy = false
-                if let u = url, let link = URL(string: u) { commentURL = link }
+                if let u = url, let link = URL(string: u) {
+                    commentURL = link
+                } else {
+                    DebugLog.add("≡段评点击后没有拿到评论页地址")
+                }
             }
         } else if let link = URL(string: t) {
             commentURL = link

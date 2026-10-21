@@ -14,6 +14,7 @@ enum ImageDecodeRuntime {
                                                 jsLib: source.jsLib, context: context,
                                                 srcOverride: src),
            !out.isEmpty {
+            DebugLog.add("≡图片解密已执行：\(String(src.prefix(60)))")
             return out
         }
         return src

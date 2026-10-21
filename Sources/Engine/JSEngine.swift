@@ -1886,8 +1886,24 @@ final class JSEngine {
         let lock = NSLock()
         ToastCenter.pushBrowserCapture { u in lock.lock(); if opened == nil, !u.isEmpty { opened = u }; lock.unlock() }
         defer { ToastCenter.popBrowserCapture() }
-        _ = runLoginScript(source: source, library: lib, call: click)
+        let outcome = runLoginScript(source: source, library: lib, call: click)
         lock.lock(); defer { lock.unlock() }
+        // 诊断：点击没反应时，靠这几行能立刻看出是脚本报错、还是脚本没调 showBrowser。
+        switch outcome {
+        case .failure(let e):
+            DebugLog.add("≡段评点击失败：\(e.message)")
+        case .success:
+            if opened == nil {
+                // 脚本执行成功但没打开页面：多半是 createSvg 里的守卫
+                // （缓存标记未清 / 共享 Token 为空）走了 toast 分支。
+                let token = (try? JSEngine.shared.evalString("String(source.getVariable())",
+                                                            context: RuleContext(source: source))) ?? ""
+                DebugLog.add("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
+                             + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
+            } else {
+                DebugLog.add("≡段评地址：\(opened!)")
+            }
+        }
         return opened
     }
 
