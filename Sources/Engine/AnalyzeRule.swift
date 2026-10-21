@@ -708,11 +708,25 @@ final class AnalyzeRule {
 
     // MARK: - Helpers
 
+    /// 规则分析（对照原版 AnalyzeRule 的 splitSourceRule / modeQualified 思路）：
+    /// 先看**规则写法**（@json:/@xpath:/@css:/$ 前缀），再看**当前节点类型**，
+    /// 最后才落到 Jsoup 默认语法。这样 JSON 元素上的裸字段名（`bid`、`ChapterName`）
+    /// 不会被当成 CSS 选择器（数字字段会因此变成空串）。
     private func isJsonRule(_ rule: String, _ obj: Any) -> Bool {
         let l = rule.lowercased()
         if l.hasPrefix("@json:") || rule.hasPrefix("$.") || rule.hasPrefix("$[") { return true }
         if l.hasPrefix("@css:") || l.hasPrefix("@xpath:") { return false }
-        return obj is [String: Any] || obj is [Any]
+        if obj is [String: Any] || obj is [Any] { return true }
+        // 当前节点是 JSON 文本（JS 规则直接返回 JSON 串、后面没有 $[*] 时）：
+        // 裸字段名按 JSON 字段取，不当 CSS 选择器。
+        if let text = obj as? String {
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard t.hasPrefix("{") || t.hasPrefix("[") else { return false }
+            let r = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+            if r.isEmpty || r.hasPrefix("@") || r.hasPrefix("/") { return false }
+            return r.range(of: "^[A-Za-z_$][A-Za-z0-9_$]*$", options: .regularExpression) != nil
+        }
+        return false
     }
 
     private func stripPrefix(_ r: String) -> String {

@@ -68,6 +68,13 @@ enum EngineCompatRegression {
         if let first = starNodes.first as? [String: Any] { starDict = first }
         check(starDict["n"] as? Bool == true, "纯 JS 目录规则里 result 是内容原文（星星书源形态）")
 
+        // 规则分析：JSON 元素上的裸字段名必须按 JSON 取（原版 modeQualified 的行为）
+        let jsonText = "{\"bid\":123,\"ChapterName\":\"第一章\"}"
+        let jsonTextAR = AnalyzeRule(content: jsonText, baseUrl: "https://example.invalid/", context: RuleContext())
+        check(jsonTextAR.getString("bid") == "123", "JSON 文本上的裸字段名按 JSON 取（数字不变空）")
+        check(jsonTextAR.getString("ChapterName") == "第一章", "JSON 文本上的裸字段名按 JSON 取（文本）")
+        check(jsonTextAR.getString("@css:p") != nil, "@css: 前缀仍按 CSS 处理")
+
         // 规则尾部的 ##正则##替换 跟在 JS 段后面：正则不能留在 JS 脚本里
         // （否则 JavaScriptCore 直接报 “Invalid character: '#'”）
         let tailRule = ".a@text@js:result + '123'##(\\d+)##[$1]"
