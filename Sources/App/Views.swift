@@ -1888,7 +1888,7 @@ struct ReaderView: View {
     /// 番茄系段评靠它清掉「已渲染」标记；少了这一步，点击气泡永远打不开。
     private func imageDecodeHook(for chapter: BookChapter?) -> ((String) -> String)? {
         guard let chapter, let source = store.source(for: book.origin) else { return nil }
-        return WebBook.imageDecodeHook(source: source, book: book, chapter: chapter)
+        return WebBook.contentImageHook(source: source, book: book, chapter: chapter)
     }
 
     /// 前台与预排版使用同一解析流程，保留原始段评标记和续段字符偏移。

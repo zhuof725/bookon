@@ -104,6 +104,10 @@ enum ContentBlocks {
                                                     rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
+                    } else if let svg = svgText(decoded), let badge = countBadge(fromSVG: svg, click: click) {
+                        // 书源用「只画一个数字」的 SVG 表示评论条数（番茄系章评/书评）。
+                        // 渲染成原生卡片，避免直接显示那张 base64 为空的坏图。
+                        blocks.append(badge)
                     } else {
                         blocks.append(.image(src: decoded, clickURL: click, rawSrc: src == clean ? nil : src))
                     }
@@ -274,6 +278,28 @@ enum ContentBlocks {
     private static let hotCommentLabels: Set<String> = ["热评", "神评论", "精选评论", "精彩评论"]
 
     /// 识别书源生成的两类评论 SVG：热评（标签+一行）与「本章说」汇总。其他 SVG 返回 nil，仍按图片显示。
+    /// SVG 里只有一个数字时，表示这是「评论条数」气泡（番茄系的章评/书评）。
+    /// 按点击表达式里的 cid/pid 区分是章评还是书评。
+    static func countBadge(fromSVG svg: String, click: String?) -> ContentBlock? {
+        let texts = svgTexts(svg)
+        guard texts.count == 1, let n = Int(texts[0].trimmingCharacters(in: .whitespaces)), n > 0 else { return nil }
+        return .chapterComments(title: commentKind(click), count: String(n), items: [], clickURL: click)
+    }
+
+    /// 从点击表达式判断评论层级：pid = -1 且 cid = -1 是书评，pid = -1 是章评，其余是段评。
+    static func commentKind(_ click: String?) -> String {
+        guard let click else { return "评论" }
+        let pattern = "createSvg[0-9]*\\(\\s*['\"](\\d+)['\"]\\s*,\\s*['\"](-?\\d+)['\"]\\s*,\\s*(-?\\d+)"
+        guard let re = try? NSRegularExpression(pattern: pattern),
+              let m = re.firstMatch(in: click, range: NSRange(location: 0, length: (click as NSString).length)),
+              let cidRange = Range(m.range(at: 2), in: click),
+              let pidRange = Range(m.range(at: 3), in: click) else { return "评论" }
+        let cid = Int(click[cidRange]) ?? 0
+        let pid = Int(click[pidRange]) ?? 0
+        if pid == -1 { return cid == -1 ? "书评" : "章评" }
+        return "段评"
+    }
+
     static func nativeBlock(fromSVG svg: String, click: String?) -> ContentBlock? {
         let texts = svgTexts(svg)
         if texts.count == 2, Self.hotCommentLabels.contains(texts[0]) {

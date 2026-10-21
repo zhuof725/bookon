@@ -507,20 +507,43 @@ enum WebBook {
         // 已经打开过评论页而直接跳过 → 表现为「段评打不开」。
         // 注意必须在**图片级别、并入段落之前**执行：脚本从 src 里正则提取参数，
         // 传整章正文或剥掉选项的地址都匹配不到。
-        let blocks = ContentBlocks.parse(raw, imageDecode: imageDecodeHook(source: source, book: book, chapter: chapter))
+        let blocks = ContentBlocks.parse(raw, imageDecode: contentImageHook(source: source, book: book, chapter: chapter))
         return (raw, blocks)
     }
 
-    /// 生成 imageDecode 钩子：原版对正文里的每张图片/气泡单独求值一次 imageDecode 规则。
-    /// 阅读器解析正文时也必须走这条钩子，否则书源靠 imageDecode 做的副作用
-    /// （番茄系段评清「已渲染」标记）不会发生，点击气泡就永远打不开。
-    static func imageDecodeHook(source: BookSource, book: Book?, chapter: BookChapter?) -> ((String) -> String)? {
-        guard let rule = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !rule.isEmpty else { return nil }
+    /// 生成正文图片钩子。对正文里的每张图片/气泡依次做两件事：
+    ///
+    /// 1. **图片选项里的 `js`**：书源用它动态生成真实图片地址。
+    ///    番茄系段评/章评的 src 是 `data:image/svg+xml;base64,,{"style":…,"js":"createSvg2(…)"}`，
+    ///    base64 部分是空的（直接渲染就是坏图），真实气泡图要靠执行 `js` 得到。
+    /// 2. **原版 `ruleContent.imageDecode`**：按图片逐张求值，副作用是清掉「已渲染」标记，
+    ///    没有它的话点气泡会被书源自己的守卫跳过（表现为段评打不开）。
+    ///
+    /// 顺序必须是「先 js 后 imageDecode」：js 里调用的 createSvg 会检查「已渲染」标记，
+    /// 此时标记还在（正文规则刚写入），不会误开评论页；imageDecode 随后把标记清掉，
+    /// 用户点击时才会真正打开评论页。
+    static func contentImageHook(source: BookSource, book: Book?, chapter: BookChapter?) -> ((String) -> String)? {
+        let rule = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasDecode = !(rule ?? "").isEmpty
         let ctx = RuleContext(source: source, book: book, chapter: chapter)
         let baseURL = chapter?.url ?? ""
         return { src in
-            ImageDecodeRuntime.decode(src, rule: rule, source: source, context: ctx, baseURL: baseURL)
+            let options = ContentBlocks.srcOptions(src)
+            var out = src
+            if let js = options["js"]?.trimmingCharacters(in: .whitespacesAndNewlines), !js.isEmpty {
+                if let real = JSEngine.shared.evalString(js, result: src, baseUrl: baseURL,
+                                                       jsLib: source.jsLib, context: ctx),
+                   !real.isEmpty {
+                    out = real
+                }
+            }
+            if hasDecode, let rule {
+                let decoded = ImageDecodeRuntime.decode(src, rule: rule, source: source,
+                                                        context: ctx, baseURL: baseURL)
+                // 有 js 选项时，真实图片由 js 生成；否则用 imageDecode 的结果（图片解密类书源）。
+                if options["js"]?.isEmpty != false { out = decoded }
+            }
+            return out
         }
     }
 

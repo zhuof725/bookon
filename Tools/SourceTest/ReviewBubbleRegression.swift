@@ -78,5 +78,18 @@ enum ReviewBubbleRegression {
         }
         check(count2 == 42, "imageDecode 之后段评数量仍是 42（实际 \(count2.map(String.init) ?? "nil")）")
         check(click2?.hasPrefix("js:createSvg(") == true, "imageDecode 之后点击动作仍是 js:createSvg(...)")
+
+        // 章评/书评：只画一个数字的 SVG → 原生评论卡片
+        let badgeSVG = "<svg width=\"1000\" height=\"800\"><rect x=\"150\" y=\"150\" width=\"665\" height=\"525\" rx=\"175\" ry=\"175\" fill=\"none\" stroke=\"#FF0000\"/><text x=\"480\" y=\"535\" font-size=\"297.5\" fill=\"#FF0000\">42</text></svg>"
+        if case .chapterComments(let title, let count, _, let badgeClick)? = ContentBlocks.countBadge(fromSVG: badgeSVG, click: "createSvg2('7320955143208307774','7322565597089235518',-1,42,1)") {
+            check(title == "章评", "章评气泡标题（实际 \(title)）")
+            check(count == "42", "章评气泡条数（实际 \(count)）")
+            check(badgeClick != nil, "章评气泡带点击目标")
+        } else {
+            check(false, "只含一个数字的 SVG 识别为评论卡片")
+        }
+        check(ContentBlocks.commentKind("createSvg2('1','-1',-1,3,1)") == "书评", "cid/pid 均为 -1 判定为书评")
+        check(ContentBlocks.commentKind("createSvg2('1','2',-1,3,1)") == "章评", "pid 为 -1 判定为章评")
+        check(ContentBlocks.commentKind("createSvg('1','2',3,4,1)") == "段评", "其余判定为段评")
     }
 }
