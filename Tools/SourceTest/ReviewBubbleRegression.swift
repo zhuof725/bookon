@@ -8,6 +8,18 @@ import Foundation
 /// base64 是空的，段评数量写在 createSvg 的第 4 个参数里。
 /// 之前只从 SVG 文本取数字 → 读不到 → 一律显示 1（数量不对）。
 enum ReviewBubbleRegression {
+    /// 书源真实的 imageDecode 规则（只匹配 createSvg 的参数，用它算缓存键）。
+    static let decodeRule = """
+    try {
+      let cinfo = src.replaceAll(" ", "").match(/createSvg2?\\('(\\d+)','(-?\\d+)',(-?\\d+),\\d+,\\d+\\)/)
+      let cacheKey = `fq-${cinfo[1]}-${cinfo[2]}-${cinfo[3]}`
+      cache.deleteMemory(cacheKey)
+    } catch (err) {
+      java.log(src + "-" + "Error:" + err)
+    }
+    result
+    """
+
     static func run(_ check: (Bool, String) -> Void) {
         let src = "data:image/svg+xml;base64,,{\"style\":\"TEXT\",\"type\":\"fqpl\","
             + "\"click\":\"createSvg('7320955143208307774','fbd8bb1c82df7',12,42,1700000000123)\","
@@ -35,5 +47,34 @@ enum ReviewBubbleRegression {
 
         check(ContentBlocks.countFromClick("createSvg('a','b',1,999,2)") == 999, "三位数段评数量")
         check(ContentBlocks.countFromClick("showCmt('a')") == nil, "非 createSvg 调用不猜测数量")
+
+        // MARK: imageDecode 必须拿到书源原始的 src（含 ,{...} 选项）
+        //
+        // 书源的 imageDecode 规则要从 src 里正则提取 createSvg(...) 的参数来算缓存键。
+        // 我们此前先把 `,{...}` 选项剥掉再交给脚本 → 正则匹配不到 → 脚本内部 try/catch
+        // 把异常吞掉 → 缓存标记没被清掉 → 点击气泡时被 getFromMemory 判定为已处理而跳过。
+        let source = BookSource(bookSourceUrl: "https://review-bubble.example", bookSourceName: "段评回归")
+        let ctx = RuleContext(source: source)
+        // 正文解析时书源写入「已渲染」标记
+        _ = JSEngine.shared.evalString("cache.putMemory('fq-7320955143208307774-fbd8bb1c82df7-12','1')",
+                                       context: RuleContext(source: source))
+        let marked = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
+                                                context: RuleContext(source: source))
+        check(marked == "1", "正文解析后写入「已渲染」标记")
+
+        var rawSeen: String?
+        for block in ContentBlocks.parse(line) {
+            if case .inlineBubble(_, _, _, let raw) = block { rawSeen = raw }
+        }
+        check(rawSeen?.contains("createSvg(") == true, "气泡保留书源原始 src（含 createSvg 参数）")
+
+        if let raw = rawSeen {
+            let out = JSEngine.shared.evalString(decodeRule, result: raw, baseUrl: "https://review-bubble.example",
+                                                 jsLib: source.jsLib, context: ctx)
+            check(out?.contains("createSvg(") == true, "imageDecode 脚本能匹配到 createSvg 参数")
+        }
+        let after = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
+                                               context: RuleContext(source: source)) ?? ""
+        check(after.isEmpty, "imageDecode 清掉「已渲染」标记（点击气泡不再被跳过）")
     }
 }
