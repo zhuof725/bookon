@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSoup
 
 enum WebBook {
     // MARK: Search
