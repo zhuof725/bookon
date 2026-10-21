@@ -7,9 +7,9 @@ enum AloudHighlightRegression {
     }
 
     static func run(_ check: (Bool, String) -> Void) {
-        let image = ContentBlock.image(src: "https://example.invalid/image", clickURL: nil)
+        let image = ContentBlock.image(src: "https://example.invalid/image", clickURL: nil, rawSrc: nil)
         let ignored: [ContentBlock] = [paragraph(""), image,
-            .inlineBubble(src: "bubble", count: 9, clickURL: nil),
+            .inlineBubble(src: "bubble", count: 9, clickURL: nil, rawSrc: nil),
             .hotComment(label: "热评", text: "不应朗读的评论", clickURL: nil),
             .chapterComments(title: "本章说", count: "123", items: [], clickURL: nil)]
         let blocks = ignored + [paragraph("甲乙"), paragraph("")] + [image, paragraph("丙丁")]
