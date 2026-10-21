@@ -10,7 +10,7 @@ on:
       file:
         description: 书源文件（仓库内路径）
         required: false
-        default: user-sources.json
+        default: screened-sources.json
       check:
         description: 批量校验（校验书源：搜索→详情→目录→正文，失败写回失效分组）
         type: boolean
@@ -24,10 +24,28 @@ on:
           - search
           - explore
         default: 'false'
+      check_keyword:
+        description: 批量校验使用的搜索关键词（check=true 时生效）
+        required: false
+        default: 斗罗大陆
+      shard_size:
+        description: 每个并行 job 校验多少个书源（check=true 时生效）
+        required: false
+        default: '60'
+      concurrency:
+        description: 单个 job 内的并发校验数（check=true 时生效）
+        required: false
+        default: '4'
+      check_timeout:
+        description: 单个书源的校验超时秒数（check=true 时生效）
+        required: false
+        default: '120'
 
 jobs:
+  # ── 单个书源调试 / 回归（原有流程） ────────────────────────────────
   test:
     runs-on: macos-15
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - name: Prepare Swift package
@@ -60,31 +78,28 @@ jobs:
           set -o pipefail
           $RUNNER_TEMP/pkg/.build/release/SourceTest --regression 2>&1 | tee regression.log
       - name: Test uploaded sources
+        # 批量校验模式下跳过（逐个跑 260+ 个书源会超时），改用下面的并行分片 job
+        if: ${{ !inputs.check }}
         env:
           TEST_KEY: ${{ github.event.inputs.key }}
           SOURCES_FILE: ${{ github.event.inputs.file }}
+        timeout-minutes: 120
         run: |
           set -o pipefail
           KEY="$TEST_KEY"
           $RUNNER_TEMP/pkg/.build/release/SourceTest "${SOURCES_FILE:-user-sources.json}" "$KEY" 90 2>&1 | tee user-source-test.log
-      - name: Batch check sources (校验书源)
-        if: ${{ inputs.check }}
-        env:
-          SOURCES_FILE: ${{ github.event.inputs.file }}
-        timeout-minutes: 30
-        run: |
-          set -o pipefail
-          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch "${SOURCES_FILE:-user-sources.json}" 我的 90 2 0 2>&1 | tee batch-check.log
       - name: TOC probe
         if: ${{ inputs.probe == 'true' }}
         env:
           SOURCES_FILE: ${{ github.event.inputs.file }}
           TEST_KEY: ${{ github.event.inputs.key }}
+        timeout-minutes: 60
         run: |
           set -o pipefail
           $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-toc "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee toc-probe.log
       - name: Search probe
         if: ${{ inputs.probe == 'search' }}
+        timeout-minutes: 60
         run: |
           $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-search "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-系统}" 2>&1 | tee search-probe.log
       - name: Explore probe
@@ -92,6 +107,7 @@ jobs:
         env:
           SOURCES_FILE: ${{ github.event.inputs.file }}
           TEST_KEY: ${{ github.event.inputs.key }}
+        timeout-minutes: 60
         run: |
           set -o pipefail
           $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-explore "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee explore-probe.log
@@ -109,3 +125,123 @@ jobs:
             regression.log
             test-build.log
             dumps/
+
+  # ── 批量校验：切分书源 ─────────────────────────────────────────────
+  prepare:
+    if: ${{ inputs.check }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    outputs:
+      shards: ${{ steps.split.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Split sources into shards
+        id: split
+        env:
+          SOURCES_FILE: ${{ inputs.file }}
+          SHARD_SIZE: ${{ inputs.shard_size }}
+        run: |
+          set -o pipefail
+          mkdir -p shards
+          python3 Tools/CICheck/split_sources.py "${SOURCES_FILE:-screened-sources.json}" shards "${SHARD_SIZE:-60}" | tee split.log
+      - name: Upload shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-shards
+          path: shards/
+
+  # ── 批量校验：并行跑（每片一个 job） ────────────────────────────────
+  check:
+    needs: prepare
+    if: ${{ inputs.check }}
+    runs-on: macos-15
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download shards
+        uses: actions/download-artifact@v4
+        with:
+          name: source-shards
+          path: shards
+      - name: Prepare Swift package
+        run: |
+          P=$RUNNER_TEMP/pkg
+          mkdir -p $P/Sources/SourceTest
+          cp Sources/Engine/*.swift Sources/Models/*.swift $P/Sources/SourceTest/
+          cp Tools/SourceTest/*.swift $P/Sources/SourceTest/
+          cat > $P/Package.swift <<'EOF'
+          // swift-tools-version:5.9
+          import PackageDescription
+          let package = Package(
+            name: "SourceTest",
+            platforms: [.macOS(.v13)],
+            dependencies: [
+              .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
+              .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7")
+            ],
+            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])]
+          )
+          EOF
+          sed -i '' 's/^          //' $P/Package.swift
+      - name: Build
+        run: |
+          set -o pipefail
+          cd $RUNNER_TEMP/pkg
+          swift build -c release 2>&1 | tee "$GITHUB_WORKSPACE/test-build.log"
+      - name: Batch check sources (校验书源)
+        env:
+          SOURCES_FILE: shards/shard-${{ matrix.shard }}.json
+          CHECK_KEYWORD: ${{ inputs.check_keyword }}
+          CHECK_TIMEOUT: ${{ inputs.check_timeout }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+        timeout-minutes: 120
+        run: |
+          set -o pipefail
+          mkdir -p results
+          export CHECK_OUT_DIR="$PWD/results"
+          echo "校验 $SOURCES_FILE  关键词=$CHECK_KEYWORD  超时=${CHECK_TIMEOUT}s  并发=$CONCURRENCY"
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --check-batch "$SOURCES_FILE" "$CHECK_KEYWORD" "$CHECK_TIMEOUT" "$CONCURRENCY" 0 2>&1 | tee batch-check.log
+      - name: Upload shard results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-shard-${{ matrix.shard }}
+          path: |
+            results/
+            batch-check.log
+            test-build.log
+
+  # ── 批量校验：合并结果 ─────────────────────────────────────────────
+  aggregate:
+    needs: [prepare, check]
+    if: ${{ always() && inputs.check }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download shard results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: check-shard-*
+          path: shard-results
+      - name: Merge results
+        run: |
+          set -o pipefail
+          mkdir -p results
+          python3 Tools/CICheck/merge_check_results.py shard-results results | tee merge.log
+      - name: Upload final results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-check-results
+          path: |
+            results/passed-sources.json
+            results/failed-sources.json
+            results/check-results.json
+            results/check-summary.md
+            results/batch-check-all.log
+            merge.log
