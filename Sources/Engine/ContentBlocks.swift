@@ -93,11 +93,11 @@ enum ContentBlocks {
                         blocks.append(.inlineBubble(src: clean,
                                                     count: svgCount ?? countFromClick(click),
                                                     clickURL: click,
-                                                    rawSrc: src))
+                                                    rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(clean), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
                     } else {
-                        blocks.append(.image(src: clean, clickURL: click, rawSrc: src))
+                        blocks.append(.image(src: clean, clickURL: click, rawSrc: src == clean ? nil : src))
                     }
                 }
             }
