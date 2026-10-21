@@ -1539,9 +1539,14 @@ final class JSEngine {
         installLoginBindings(ctx, source: context?.source ?? JSEngine.currentSource)
         ctx.exceptionHandler = { _, e in
             let message = e?.toString() ?? "未知脚本异常"
-            print("[JS error] \(message)")
+            let script = JSEngine.currentScript
+            let tail = script.isEmpty ? "" : " | 脚本: \(String(script.prefix(160)))"
+            print("[JS error] \(message)\(tail)")
             JSEngine.lastError = message
-            DebugLog.add("JS 错误：\(String(message.prefix(240)))")
+            // 带上出错脚本的前 200 字：书源调试页与 CI 日志都需要它定位。
+            let script = JSEngine.currentScript
+            let tail = script.isEmpty ? "" : " | 脚本: \(String(script.prefix(200)))"
+            DebugLog.add("JS 错误：\(String(message.prefix(240)))\(tail)")
         }
         let bridge = JavaBridge(context: context, session: session,
                                 responseTimeout: responseTimeout)
@@ -1582,6 +1587,9 @@ final class JSEngine {
         return ctx
     }
 
+    /// 当前正在求值的脚本（异常日志里带出来，便于定位是哪一段规则出错）。
+    static var currentScript: String = ""
+
     /// Evaluate a JS snippet with `result`, `baseUrl`, `book`, `chapter`, `key`, `page` in scope.
     /// 每次求值都会新建 JSContext 并产生大量自动释放对象；在并发任务线程上长时间批量运行时
     /// 这些对象不会及时释放，内存持续上涨。这里用 autoreleasepool 包住整次同步求值。
@@ -1607,7 +1615,9 @@ final class JSEngine {
                           context: RuleContext?) -> Any? {
         // 原版用 Rhino：`let result`、解构箭头参数、形参重声明这三种写法 Rhino 接受、
         // JavaScriptCore 报 SyntaxError。先归一化再求值。
+        let originalScript = script
         let script = RuleScriptCompat.normalize(script)
+        JSEngine.currentScript = script
         let effectiveContext = context ?? rule?.context
         let ctx = makeContext(effectiveContext)
         if let c = effectiveContext {
@@ -1713,6 +1723,14 @@ final class JSEngine {
         }
         JSEngine.lastError = nil
         var evaluated = ctx.evaluateScript(wrapScript(script))
+        if evaluated == nil, script != originalScript,
+           let message = JSEngine.lastError, message.contains("SyntaxError") {
+            // 归一化把脚本改坏了（少见）：退回原文再求值一次，别让书源直接失败。
+            DebugLog.add("≡脚本归一化后无法解析，已回退原文")
+            JSEngine.currentScript = originalScript
+            JSEngine.lastError = nil
+            evaluated = ctx.evaluateScript(wrapScript(originalScript))
+        }
         if evaluated == nil || evaluated!.isUndefined || evaluated!.isNull {
             // 有些书源规则被截断（结尾的模板字符串少了反引号），JSC 只会报 Unexpected EOF。
             // 这是可以确定补齐的语法缺口：未闭合的模板字符串补一个反引号再重新包一层求值。
