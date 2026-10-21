@@ -9,8 +9,10 @@ enum RemoteCoverLoader {
 
     static func install() {
         CoverDecodeRuntime.needsDecode = { origin in
-            guard let source = AppStore.shared.source(for: origin) else { return false }
-            return !(source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            await MainActor.run {
+                guard let source = AppStore.shared.source(for: origin) else { return false }
+                return !(source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            }
         }
         CoverDecodeRuntime.load = { url, origin, pixelSize in
             await load(url: url, origin: origin, pixelSize: pixelSize)
@@ -18,8 +20,9 @@ enum RemoteCoverLoader {
     }
 
     private static func load(url: URL, origin: String, pixelSize: Int) async -> UIImage? {
-        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
-              let source = AppStore.shared.source(for: origin),
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        let source = await MainActor.run { AppStore.shared.source(for: origin) }
+        guard let source,
               let script = source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines),
               !script.isEmpty else { return nil }
         let key = "\(url.absoluteString)|\(script.hashValue)|\(pixelSize)" as NSString
