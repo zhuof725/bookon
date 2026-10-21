@@ -59,11 +59,11 @@ enum SourceImportRegression {
         check(again.unknownFields["someFutureField"]?.stringValue == "keep-me", "未知字段：再次导入仍在")
 
         // 类型不匹配的已知键：宽松解码后仍有值，导出时不丢失
-        let loose = """
+        let looseJSON = """
         {"bookSourceUrl":"https://loose.example","bookSourceName":"宽松",
          "weight":"5","storageKind":"2","customOrder":"1","enabled":"false","respondTime":"9"}
         """
-        let looseDecoded = try JSONDecoder().decode(BookSource.self, from: Data(loose.utf8))
+        let looseDecoded = try JSONDecoder().decode(BookSource.self, from: Data(looseJSON.utf8))
         check(looseDecoded.weight == 5, "宽松解码：字符串 weight 取到值")
         check(looseDecoded.storageKind == 2, "宽松解码：字符串 storageKind 取到值")
         check(looseDecoded.customOrder == 1, "宽松解码：字符串 customOrder 取到值")
@@ -78,10 +78,10 @@ enum SourceImportRegression {
         check(looseAgain.weight == 5 && looseAgain.storageKind == 2, "宽松解码：再次导入仍有值")
 
         // 类型彻底对不上的已知键（如 weight 是对象）：值单独保留，导出时原样写回
-        let broken = """
+        let brokenJSON = """
         {"bookSourceUrl":"https://broken.example","bookSourceName":"坏类型","weight":{"a":1}}
         """
-        let brokenDecoded = try JSONDecoder().decode(BookSource.self, from: Data(broken.utf8))
+        let brokenDecoded = try JSONDecoder().decode(BookSource.self, from: Data(brokenJSON.utf8))
         check(brokenDecoded.weight == nil, "坏类型：weight 不强行解码")
         check(brokenDecoded.mismatchedFields["weight"] != nil, "坏类型：weight 原值保留")
         let brokenEncoded = try JSONEncoder().encode(brokenDecoded)
@@ -142,7 +142,9 @@ enum JSExtensionsRegression {
         // 绝对路径指向允许目录之外 → 不放行（只按文件名回退到缓存目录，找不到就返回 nil）
         check(JavaBridge.resolveScriptPath(outside.path) == nil, "路径穿越：目录外的绝对路径被拒绝")
         // 用 `..` 拼出来的路径同样要挡住（标准化后落到允许目录之外）
-        let traversal = dir.path + "/../../../../../../../../../../.." + outside.path
+        let depth = dir.path.split(separator: "/").count + 2
+        let ups = Array(repeating: "..", count: depth).joined(separator: "/")
+        let traversal = dir.path + "/" + ups + outside.path
         check(JavaBridge.resolveScriptPath(traversal) == nil, "路径穿越：`..` 逃逸被拒绝")
         // 前缀相同的兄弟目录不算放行（script-cache-evil ≠ script-cache）
         let sibling = dir.deletingLastPathComponent().appendingPathComponent("script-cache-evil").path
