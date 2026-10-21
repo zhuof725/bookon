@@ -22,8 +22,8 @@ enum ReviewBubbleRegression {
 
     static func run(_ check: (Bool, String) -> Void) {
         let src = "data:image/svg+xml;base64,,{\"style\":\"TEXT\",\"type\":\"fqpl\","
-            + "\"click\":\"createSvg('7320955143208307774','fbd8bb1c82df7',12,42,1700000000123)\","
-            + "\"js\":\"createSvg('7320955143208307774','fbd8bb1c82df7',12,42,1700000000123)\"}"
+            + "\"click\":\"createSvg('7320955143208307774','7322565597089235518',12,42,1700000000123)\","
+            + "\"js\":\"createSvg('7320955143208307774','7322565597089235518',12,42,1700000000123)\"}"
         let line = "　　正文第一段。"
             + "<img src=\"" + src + "\">"
         let blocks = ContentBlocks.parse(line)
@@ -56,9 +56,9 @@ enum ReviewBubbleRegression {
         let source = BookSource(bookSourceUrl: "https://review-bubble.example", bookSourceName: "段评回归")
         let ctx = RuleContext(source: source)
         // 正文解析时书源写入「已渲染」标记
-        _ = JSEngine.shared.evalString("cache.putMemory('fq-7320955143208307774-fbd8bb1c82df7-12','1')",
+        _ = JSEngine.shared.evalString("cache.putMemory('fq-7320955143208307774-7322565597089235518-12','1')",
                                        context: RuleContext(source: source))
-        let marked = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
+        let marked = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-7322565597089235518-12')",
                                                 context: RuleContext(source: source))
         check(marked == "1", "正文解析后写入「已渲染」标记")
 
@@ -67,7 +67,7 @@ enum ReviewBubbleRegression {
             ImageDecodeRuntime.decode(src, rule: decodeRule, source: source, context: ctx,
                                       baseURL: "https://review-bubble.example")
         }
-        let after = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
+        let after = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-7322565597089235518-12')",
                                                context: RuleContext(source: source)) ?? ""
         check(after.isEmpty, "imageDecode 清掉「已渲染」标记（点击气泡不再被跳过）（实际 \(after)）")
         // 气泡本身仍要保留数量与点击动作
