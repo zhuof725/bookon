@@ -84,11 +84,11 @@ import SwiftSoup
         return JSNodeBridge(p)
     }
     func next() -> JSNodeBridge? {
-        guard let s = element.nextElementSibling() else { return nil }
+        guard let s = try? element.nextElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
     func prev() -> JSNodeBridge? {
-        guard let s = element.previousElementSibling() else { return nil }
+        guard let s = try? element.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
 }
@@ -113,12 +113,12 @@ import SwiftSoup
         }
         return JSNodeListBridge(found)
     }
-    private var first: Element? { elements.first }
-    func attr(_ name: String) -> String { first.map { (try? $0.attr(name)) ?? "" } ?? "" }
-    func text() -> String { first.map { (try? $0.text()) ?? "" } ?? "" }
-    func ownText() -> String { first?.ownText() ?? "" }
-    func html() -> String { first.map { (try? $0.html()) ?? "" } ?? "" }
-    func outerHtml() -> String { first.map { (try? $0.outerHtml()) ?? "" } ?? "" }
+    private var firstElement: Element? { elements.first }
+    func attr(_ name: String) -> String { firstElement.map { (try? $0.attr(name)) ?? "" } ?? "" }
+    func text() -> String { firstElement.map { (try? $0.text()) ?? "" } ?? "" }
+    func ownText() -> String { firstElement?.ownText() ?? "" }
+    func html() -> String { firstElement.map { (try? $0.html()) ?? "" } ?? "" }
+    func outerHtml() -> String { firstElement.map { (try? $0.outerHtml()) ?? "" } ?? "" }
     func toString() -> String { elements.map { (try? $0.outerHtml()) ?? "" }.joined() }
 
     func eq(_ index: Int) -> JSNodeBridge? { get(index) }
@@ -127,7 +127,7 @@ import SwiftSoup
     func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) {
         for (index, element) in elements.enumerated() { handler(JSNodeBridge(element), index) }
     }
-    func hasClass(_ name: String) -> Bool { first.map { (try? $0.hasClass(name)) ?? false } ?? false }
+    func hasClass(_ name: String) -> Bool { firstElement.map { (try? $0.hasClass(name)) ?? false } ?? false }
     func parent() -> JSNodeListBridge {
         var found: [Element] = []
         for element in elements {
@@ -136,11 +136,11 @@ import SwiftSoup
         return JSNodeListBridge(found)
     }
     func next() -> JSNodeBridge? {
-        guard let s = elements.first?.nextElementSibling() else { return nil }
+        guard let s = try? elements.first?.nextElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
     func prev() -> JSNodeBridge? {
-        guard let s = elements.first?.previousElementSibling() else { return nil }
+        guard let s = try? elements.first?.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
 }
