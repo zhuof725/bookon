@@ -32,7 +32,7 @@ enum ReviewClickRegression {
           return 'data:image/svg+xml;base64,SVG'
         }
         """
-        let source = BookSource(bookSourceUrl: "https://review-click.example",
+        var source = BookSource(bookSourceUrl: "https://review-click.example",
                                 bookSourceName: "段评点击回归")
         source.loginUrl = clickLib
         let ctx = RuleContext(source: source)
