@@ -33,13 +33,8 @@ final class AnalyzeRule {
     }
 
     /// 传给 JS 的 result：顶层文档用原始文本，其余节点按原逻辑转换
-    /// - Parameter asElements: 元素规则（list 规则）里 result 应是文档/元素集合，
-    ///   书源脚本会直接 `result.select('img')`；字符串规则仍给原文。
-    private func jsInput(_ input: Any, asElements: Bool = false) -> Any {
-        if let raw = rawContent, (input as AnyObject) === (content as AnyObject) {
-            if asElements, let element = content as? Element { return JSNodeBridge(element) }
-            return raw
-        }
+    private func jsInput(_ input: Any) -> Any {
+        if let raw = rawContent, (input as AnyObject) === (content as AnyObject) { return raw }
         // 上一段 JS 返回的字符串被解析成 HTML 文档后，{{result}} / 后续 JS 仍应拿到原字符串
         // （原版混合规则 `$.id <js>base64</js> data:;base64,{{result}}` 依赖这一点）。
         if let stage = stageRaw, (input as AnyObject) === stage.node { return stage.raw }
@@ -53,7 +48,6 @@ final class AnalyzeRule {
                 return elements.map { JSNodeBridge($0) as Any }
             }
         }
-        if asElements, let element = input as? Element { return JSNodeBridge(element) }
         return AnalyzeRule.jsValue(input)
     }
 
@@ -102,11 +96,11 @@ final class AnalyzeRule {
         return context.get("host")
     }
 
-    private func runJS(_ js: String, _ input: Any, node: Any? = nil, asElements: Bool = false) -> Any {
+    private func runJS(_ js: String, _ input: Any, node: Any? = nil) -> Any {
         let expanded = expandEmbeddedTemplates(js, input: input)
         // ruleInput = java.getString/getElement 等的作用对象：混合规则里它是本条规则的内容节点
         // （原版 bindings["java"] = this），不是前面各段累计的 result。
-        return JSEngine.shared.eval(expanded, result: jsInput(input, asElements: asElements), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: node ?? input, context: context) ?? ""
+        return JSEngine.shared.eval(expanded, result: jsInput(input), baseUrl: baseUrl, jsLib: jsLib, rule: self, ruleInput: node ?? input, context: context) ?? ""
     }
 
     /// 与 runJS 相同，但脚本抛错时返回 nil（错误信息在 JSEngine.lastError）。
@@ -283,8 +277,7 @@ final class AnalyzeRule {
         var cur: Any = obj ?? content
         let node: Any = obj ?? content
         for (isJs, s) in splitJS(rule) {
-            // 元素规则里 result 是文档/元素集合（书源脚本直接 result.select(...)）。
-            if isJs { cur = runJS(s, cur, node: node, asElements: true) }
+            if isJs { cur = runJS(s, cur, node: node) }
             else {
                 if let str = cur as? String { cur = parseStage(str) }
                 cur = elementsValue(cur, s)

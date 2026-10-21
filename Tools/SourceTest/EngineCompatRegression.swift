@@ -47,17 +47,24 @@ enum EngineCompatRegression {
         check(eqDict["l"] as? String == "二", "节点集合 last() 可用")
         check(eqDict["c"] as? Bool == true, "节点集合 hasClass() 可用")
 
-        // 元素规则里 result 是文档：result.select('img') 能取到图片
-        let imgRule = """
+        // 纯 JS 的目录规则（星星书源）：result 是当前内容原文（不是节点对象）
+        let starHTML = """
+        <html><body><div class="bookshelf-list"><a href="/book/9197/abc.html">第一章</a>
+        <a href="/book/9197/def.html">第二章</a><a href="/">首页</a></div></body></html>
+        """
+        let starAR = AnalyzeRule(content: starHTML, baseUrl: "https://example.invalid/", context: RuleContext())
+        let starRule = """
         <js>
-        JSON.stringify([{n: result.select('img').length, src: result.select('img').attr('src')}])
+        var html=result;
+        var start=html.indexOf('bookshelf-list');
+        var section=start>=0?html.substring(start):'';
+        JSON.stringify([{n:section.indexOf('abc')>0}])
         </js>
         $[*]
         """
-        let imgNodes = ar.getElements(imgRule)
-        var imgDict: [String: Any] = [:]
-        if let first = imgNodes.first as? [String: Any] { imgDict = first }
-        check(imgDict["n"] as? Int == 1, "元素规则里 result.select('img') 可用（result 是文档）")
-        check(imgDict["src"] as? String == "/i.png", "元素规则里 result.select('img').attr() 可用")
+        let starNodes = starAR.getElements(starRule)
+        var starDict: [String: Any] = [:]
+        if let first = starNodes.first as? [String: Any] { starDict = first }
+        check(starDict["n"] as? Bool == true, "纯 JS 目录规则里 result 是内容原文（星星书源形态）")
     }
 }
