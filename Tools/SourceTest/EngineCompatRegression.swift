@@ -75,6 +75,25 @@ enum EngineCompatRegression {
         check(jsonTextAR.getString("ChapterName") == "第一章", "JSON 文本上的裸字段名按 JSON 取（文本）")
         check(jsonTextAR.getString("@css:p") != nil, "@css: 前缀仍按 CSS 处理")
 
+        // DOM 变更：正文规则常见的 box.select("script").remove() / .addClass()
+        let domRule = """
+        <js>
+        var doc = org.jsoup.Jsoup.parse('<div class="c"><script>x</script><p>正文</p></div>');
+        var box = doc.select('div.c');
+        box.select('script, style').remove();
+        box.addClass('cleaned');
+        JSON.stringify([{html: box.html(), cls: box.attr('class')}])
+        </js>
+        $[*]
+        """
+        let domNodes = ar.getElements(domRule)
+        var domDict: [String: Any] = [:]
+        if let first = domNodes.first as? [String: Any] { domDict = first }
+        let domHTML = domDict["html"] as? String ?? ""
+        check(!domHTML.contains("<script"), "节点集合 remove() 移除元素")
+        check(domHTML.contains("正文"), "remove() 之后正文仍在")
+        check((domDict["cls"] as? String ?? "").contains("cleaned"), "节点集合 addClass() 生效")
+
         // 规则尾部的 ##正则##替换 跟在 JS 段后面：正则不能留在 JS 脚本里
         // （否则 JavaScriptCore 直接报 “Invalid character: '#'”）
         let tailRule = ".a@text@js:result + '123'##(\\d+)##[$1]"

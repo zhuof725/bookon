@@ -581,6 +581,13 @@ final class JSEngine {
         def('eq',function(i){return (i>=0&&i<this.length)?this[i]:null;});
         def('hasClass',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.hasClass==='function'){return !!e.hasClass(n);}}return false;});
         def('parent',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.parent==='function'){return e.parent();}}return null;});
+        // DOM 变更（书源正文规则常用：box.select("script").remove()）
+        def('remove',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.remove==='function'){e.remove();}}return this;});
+        def('empty',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.empty==='function'){e.empty();}}return this;});
+        def('append',function(h){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.append==='function'){e.append(String(h));}}return this;});
+        def('prepend',function(h){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.prepend==='function'){e.prepend(String(h));}}return this;});
+        def('addClass',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.addClass==='function'){e.addClass(String(n));}}return this;});
+        def('removeClass',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.removeClass==='function'){e.removeClass(String(n));}}return this;});
         def('next',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.next==='function'){return e.next();}}return null;});
         def('prev',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.prev==='function'){return e.prev();}}return null;});
         def('select',function(sel){

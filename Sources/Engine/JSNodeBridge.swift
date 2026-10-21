@@ -22,6 +22,15 @@ import SwiftSoup
     func parent() -> JSNodeBridge?
     func next() -> JSNodeBridge?
     func prev() -> JSNodeBridge?
+    // DOM 变更（书源正文规则常用：`box.select("script").remove()`、`.addClass(...)`）
+    func remove()
+    func empty()
+    func append(_ html: String)
+    func prepend(_ html: String)
+    func before(_ html: String)
+    func after(_ html: String)
+    func addClass(_ name: String)
+    func removeClass(_ name: String)
 }
 
 @objc protocol JSNodeListExports: JSExport {
@@ -45,6 +54,15 @@ import SwiftSoup
     func parent() -> JSNodeListBridge
     func next() -> JSNodeBridge?
     func prev() -> JSNodeBridge?
+    // DOM 变更：对集合里每个元素依次执行
+    func remove()
+    func empty()
+    func append(_ html: String)
+    func prepend(_ html: String)
+    func before(_ html: String)
+    func after(_ html: String)
+    func addClass(_ name: String)
+    func removeClass(_ name: String)
 }
 
 @objc final class JSNodeBridge: NSObject, JSNodeExports {
@@ -91,6 +109,14 @@ import SwiftSoup
         guard let s = try? element.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
+    func remove() { try? element.remove() }
+    func empty() { try? element.empty() }
+    func append(_ html: String) { try? element.append(html) }
+    func prepend(_ html: String) { try? element.prepend(html) }
+    func before(_ html: String) { try? element.before(html) }
+    func after(_ html: String) { try? element.after(html) }
+    func addClass(_ name: String) { try? element.addClass(name) }
+    func removeClass(_ name: String) { try? element.removeClass(name) }
 }
 
 @objc final class JSNodeListBridge: NSObject, JSNodeListExports {
@@ -143,6 +169,14 @@ import SwiftSoup
         guard let s = try? elements.first?.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
+    func remove() { for element in elements { try? element.remove() } }
+    func empty() { for element in elements { try? element.empty() } }
+    func append(_ html: String) { for element in elements { try? element.append(html) } }
+    func prepend(_ html: String) { for element in elements { try? element.prepend(html) } }
+    func before(_ html: String) { for element in elements { try? element.before(html) } }
+    func after(_ html: String) { for element in elements { try? element.after(html) } }
+    func addClass(_ name: String) { for element in elements { try? element.addClass(name) } }
+    func removeClass(_ name: String) { for element in elements { try? element.removeClass(name) } }
 }
 
 /// 元素列表在规则 JS 里的形态：既能当数组用（select/toArray/下标/length），
