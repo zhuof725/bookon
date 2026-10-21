@@ -390,6 +390,38 @@ final class JSEngine {
 
     private static let prelude = """
     (function(){var __jp=JSON.parse;JSON.parse=function(s,r){if(s!==null&&typeof s==='object'){return s;}return __jp(String(s),r);};})();
+    // 原版(Rhino)的规则 JS 里 result 是 Elements 集合，书源普遍写
+    // result.select('a').toArray() / result[0].outerHtml() / result.size() / result.attr('href')。
+    // 我们的规则 JS 传入的是元素数组，这里给 Array.prototype 补上同名方法（非枚举，
+    // 不影响 for-in / Object.keys / JSON.stringify）。
+    (function(){
+        if(Array.prototype.__legadoElements) return;
+        var def=function(n,f){Object.defineProperty(Array.prototype,n,{value:f,enumerable:false,writable:true,configurable:true});};
+        def('toArray',function(){return Array.prototype.slice.call(this);});
+        def('size',function(){return this.length;});
+        def('select',function(sel){
+            var out=[];
+            for(var i=0;i<this.length;i++){
+                var e=this[i];
+                if(e&&typeof e.select==='function'){
+                    var sub=e.select(sel);
+                    if(sub&&typeof sub.length==='number'){
+                        for(var j=0;j<sub.length;j++){
+                            var item=(typeof sub.get==='function')?sub.get(j):null;
+                            if(item) out.push(item);
+                        }
+                    }
+                }
+            }
+            return out;
+        });
+        def('attr',function(n){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.attr==='function'){var v=e.attr(n);if(v)return v;}}return '';});
+        def('text',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.text==='function'){var v=e.text();if(v)return v;}}return '';});
+        def('ownText',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.ownText==='function'){var v=e.ownText();if(v)return v;}}return '';});
+        def('html',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.html==='function'){var v=e.html();if(v)return v;}}return '';});
+        def('outerHtml',function(){for(var i=0;i<this.length;i++){var e=this[i];if(e&&typeof e.outerHtml==='function'){var v=e.outerHtml();if(v)return v;}}return '';});
+        Object.defineProperty(Array.prototype,'__legadoElements',{value:true,enumerable:false,configurable:true});
+    })();
     var cookie={
         getCookie:function(u){return String(__cookieGet(String(u)));},
         getKey:function(u,k){return String(__cookieGetKey(String(u),String(k)));},
@@ -1171,7 +1203,9 @@ final class JSEngine {
             ctx.setObject(result ?? "", forKeyedSubscript: "result" as NSString)
         }
         ctx.setObject(baseUrl ?? "", forKeyedSubscript: "baseUrl" as NSString)
-        ctx.setObject(result ?? "", forKeyedSubscript: "src" as NSString)
+        // src 是「当前内容原文」：原版是字符串。元素结果要拼回 HTML 文本，
+        // 否则脚本里的 src.match(...) / src.replace(...) 拿不到字符串。
+        ctx.setObject(JSEngine.srcText(result), forKeyedSubscript: "src" as NSString)
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }
         if let lib = jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
         if let login = loginLib, !login.isEmpty, !login.hasPrefix("{") { ctx.evaluateScript(login) }
@@ -1212,6 +1246,24 @@ final class JSEngine {
         if v.isArray { return JSNodeBridge.unwrap(v.toArray() ?? []) }
         if let object = v.toObject() { return JSNodeBridge.unwrap(object) }
         return v.toString()
+    }
+
+    /// 规则 JS 里的 src：始终是字符串（元素集合取各元素 outerHtml 拼接）。
+    static func srcText(_ value: Any?) -> String {
+        guard let value else { return "" }
+        if let s = value as? String { return s }
+        if let node = value as? JSNodeBridge { return node.outerHtml() }
+        if let list = value as? JSNodeListBridge {
+            return list.elements.map { (try? $0.outerHtml()) ?? "" }.joined(separator: "\n")
+        }
+        if let array = value as? [Any] {
+            return array.map { item -> String in
+                if let s = item as? String { return s }
+                if let node = item as? JSNodeBridge { return node.outerHtml() }
+                return "\(item)"
+            }.joined(separator: "\n")
+        }
+        return "\(value)"
     }
 
     func evalString(_ script: String, result: Any? = nil, baseUrl: String? = nil,

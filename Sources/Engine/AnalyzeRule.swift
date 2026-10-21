@@ -38,6 +38,16 @@ final class AnalyzeRule {
         // 上一段 JS 返回的字符串被解析成 HTML 文档后，{{result}} / 后续 JS 仍应拿到原字符串
         // （原版混合规则 `$.id <js>base64</js> data:;base64,{{result}}` 依赖这一点）。
         if let stage = stageRaw, (input as AnyObject) === stage.node { return stage.raw }
+        // 元素规则的结果在原版是 Rhino 的 Elements 集合：脚本里普遍写
+        // `result.select('a').toArray()` / `result[0].outerHtml()` / `result.size()`。
+        // 这里把元素数组原样交给 JS（每个元素是带 select/attr/text 的节点对象），
+        // 集合方法由 prelude 给 Array.prototype 补上。
+        if let list = input as? [Any], !list.isEmpty {
+            let elements = list.compactMap { $0 as? Element }
+            if elements.count == list.count {
+                return elements.map { JSNodeBridge($0) as Any }
+            }
+        }
         return AnalyzeRule.jsValue(input)
     }
 
