@@ -265,7 +265,29 @@ enum WebBook {
         if let v = nilIfEmpty(ar.getCoverString(rule.coverUrl, from: root)) {
             b.coverUrl = AnalyzeUrl.absolute(v, base: url)
         }
-        let toc = s(rule.tocUrl)
+        var toc = s(rule.tocUrl)
+        // 规则没命中 → og: meta / 目录链接自动识别兜底（站点改版后常见，不改书源也能用）
+        let needsFallback = b.name.isEmpty || b.author.isEmpty
+            || (b.intro ?? "").isEmpty || (b.coverUrl ?? "").isEmpty
+            || (b.kind ?? "").isEmpty || (b.lastChapter ?? "").isEmpty || toc.isEmpty
+        if needsFallback, let doc = AnalyzeRule.parse(body, baseUrl: url) as? Document {
+            var used: [String] = []
+            if b.name.isEmpty, let v = nilIfEmpty(AutoDetect.metaName(doc)) { b.name = v; used.append("书名") }
+            if b.author.isEmpty, let v = nilIfEmpty(AutoDetect.metaAuthor(doc)) { b.author = v; used.append("作者") }
+            if (b.intro ?? "").isEmpty, let v = nilIfEmpty(AutoDetect.metaIntro(doc)),
+               let intro = BookIntro.normalized(v) { b.intro = intro; used.append("简介") }
+            if (b.coverUrl ?? "").isEmpty, let v = nilIfEmpty(AutoDetect.metaCover(doc)) {
+                b.coverUrl = AnalyzeUrl.absolute(v, base: url); used.append("封面")
+            }
+            if (b.kind ?? "").isEmpty, let v = nilIfEmpty(AutoDetect.metaKind(doc)) { b.kind = v; used.append("分类") }
+            if (b.lastChapter ?? "").isEmpty, let v = nilIfEmpty(AutoDetect.metaLastChapter(doc)) {
+                b.lastChapter = v; used.append("最新章节")
+            }
+            if toc.isEmpty, let v = AutoDetect.tocLink(in: doc, baseUrl: url) { toc = v; used.append("目录链接") }
+            if !used.isEmpty {
+                DebugLog.add("≡规则未命中，已自动识别：\(used.joined(separator: "、"))")
+            }
+        }
         b.tocUrl = toc.isEmpty ? url : AnalyzeUrl.absolute(toc, base: url)
         context.book = b
         return (b, n, a)
@@ -371,6 +393,14 @@ enum WebBook {
             parsed = parseChapterNodes(nested, rule: rule, ar: ar, baseUrl: chapterBase)
             if !parsed.isEmpty {
                 DebugLog.add("≡目录列表改从响应 JSON 的嵌套数组解析（\(nested.count) 项）")
+            }
+        }
+        // 目录规则整段失效（站点改版）：按「一组同构章节链接」自动识别
+        if parsed.isEmpty, let doc = AnalyzeRule.parse(body, baseUrl: url) as? Document {
+            let auto = AutoDetect.chapters(in: doc, baseUrl: chapterBase)
+            if !auto.isEmpty {
+                parsed = auto
+                DebugLog.add("≡目录规则未命中，已自动识别 \(auto.count) 章")
             }
         }
         if parsed.isEmpty, let first = nodes.first {
@@ -507,7 +537,16 @@ enum WebBook {
             let body = response.body, url = response.url
             DebugLog.recordSource(body, stage: 40)
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
-            let text = ar.getString(rule.content)
+            var text = ar.getString(rule.content)
+            // 正文规则整段失效（含依赖 document 的脚本跑不起来）：自动识别正文容器
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let doc = AnalyzeRule.parse(body, baseUrl: url) as? Document {
+                let auto = AutoDetect.content(in: doc)
+                if !auto.isEmpty {
+                    text = auto
+                    DebugLog.add("≡正文规则未命中，已自动识别正文容器（\(auto.count) 字符）")
+                }
+            }
             let urls = splitNextUrls(ar.getString(rule.nextContentUrl), base: url)
             return (text, urls)
         }
