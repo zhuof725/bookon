@@ -104,7 +104,8 @@ enum ContentBlocks {
                                                     rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
-                    } else if let svg = svgText(decoded), let badge = countBadge(fromSVG: svg, click: click) {
+                    } else if let svg = svgText(decoded), !(opts["js"] ?? "").isEmpty,
+                              let badge = countBadge(fromSVG: svg, click: click) {
                         // 书源用「只画一个数字」的 SVG 表示评论条数（番茄系章评/书评）。
                         // 渲染成原生卡片，避免直接显示那张 base64 为空的坏图。
                         blocks.append(badge)
@@ -279,7 +280,8 @@ enum ContentBlocks {
 
     /// 识别书源生成的两类评论 SVG：热评（标签+一行）与「本章说」汇总。其他 SVG 返回 nil，仍按图片显示。
     /// SVG 里只有一个数字时，表示这是「评论条数」气泡（番茄系的章评/书评）。
-    /// 按点击表达式里的 cid/pid 区分是章评还是书评。
+    /// 只对「由书源选项里的 js 动态生成」的气泡生效：这类气泡的 base64 本来是空的，
+    /// 不转成卡片就只能显示坏图。按点击表达式里的 cid/pid 区分章评还是书评。
     static func countBadge(fromSVG svg: String, click: String?) -> ContentBlock? {
         let texts = svgTexts(svg)
         guard texts.count == 1, let n = Int(texts[0].trimmingCharacters(in: .whitespaces)), n > 0 else { return nil }
