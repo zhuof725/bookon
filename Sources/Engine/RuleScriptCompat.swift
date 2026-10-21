@@ -29,6 +29,16 @@ enum RuleScriptCompat {
         // 1) let/const result -> var result
         if let re = try? NSRegularExpression(pattern: "\\b(let|const)(\\s+)result\\b") {
             for m in re.matches(in: masked, range: NSRange(location: 0, length: ns.length)) {
+                // 只在「语句起始位置」改写：前面是 ; { } ( , = : ? 或行首。
+                // 否则可能改到字符串/表达式中间，把脚本改坏。
+                var p = m.range.location - 1
+                while p >= 0, isSpace(ns.character(at: p)) { p -= 1 }
+                if p >= 0 {
+                    let c = ns.character(at: p)
+                    let statementStart = (c == 59 || c == 123 || c == 125 || c == 40 || c == 44
+                                         || c == 61 || c == 58 || c == 63)
+                    guard statementStart else { continue }
+                }
                 let kw = m.range(at: 1)
                 // 关键字之后的部分（空白 + result）原样保留
                 let tailRange = NSRange(location: kw.upperBound, length: m.range.upperBound - kw.upperBound)
@@ -118,7 +128,13 @@ enum RuleScriptCompat {
                 if prevOK, let close = matching(masked, open: 91, close: 93, at: i) {
                     var q = close + 1
                     while q < n, isSpace(ns.character(at: q)) { q += 1 }
-                    if q + 1 < n, ns.character(at: q) == 61, ns.character(at: q + 1) == 62 {   // =>
+                    // 只有内容形如 `a` / `a, b` 的标识符列表才按「解构参数」处理；
+                    // 否则多半是正则字面量里的方括号，补括号会把脚本改坏。
+                    let inner = ns.substring(with: NSRange(location: i + 1, length: max(0, close - i - 1)))
+                    let isIdentifierList = !inner.isEmpty
+                        && inner.range(of: "^[A-Za-z_$][A-Za-z0-9_$]*(\\s*,\\s*[A-Za-z_$][A-Za-z0-9_$]*)*$",
+                                       options: .regularExpression) != nil
+                    if isIdentifierList, q + 1 < n, ns.character(at: q) == 61, ns.character(at: q + 1) == 62 {   // =>
                         edits.append((NSRange(location: i, length: 0), "("))
                         edits.append((NSRange(location: close + 1, length: 0), ")"))
                     }
@@ -155,6 +171,14 @@ enum RuleScriptCompat {
                             let nameRange = m.range(at: 3)
                             let name = ns.substring(with: nameRange)
                             guard params.contains(name) else { continue }
+                            var q = m.range.location - 1
+                            while q >= 0, isSpace(ns.character(at: q)) { q -= 1 }
+                            if q >= 0 {
+                                let c = ns.character(at: q)
+                                let statementStart = (c == 59 || c == 123 || c == 125 || c == 40 || c == 44
+                                                     || c == 61 || c == 58 || c == 63)
+                                guard statementStart else { continue }
+                            }
                             let space = ns.substring(with: m.range(at: 2))
                             edits.append((NSRange(location: m.range.location, length: m.range.length), "var" + space + name))
                         }
