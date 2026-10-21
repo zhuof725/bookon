@@ -507,16 +507,21 @@ enum WebBook {
         // 已经打开过评论页而直接跳过 → 表现为「段评打不开」。
         // 注意必须在**图片级别、并入段落之前**执行：脚本从 src 里正则提取参数，
         // 传整章正文或剥掉选项的地址都匹配不到。
-        var imageDecode: ((String) -> String)? = nil
-        if let decode = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !decode.isEmpty {
-            let ctx = RuleContext(source: source, book: book, chapter: chapter)
-            imageDecode = { src in
-                ImageDecodeRuntime.decode(src, rule: decode, source: source, context: ctx, baseURL: chapter.url)
-            }
-        }
-        let blocks = ContentBlocks.parse(raw, imageDecode: imageDecode)
+        let blocks = ContentBlocks.parse(raw, imageDecode: imageDecodeHook(source: source, book: book, chapter: chapter))
         return (raw, blocks)
+    }
+
+    /// 生成 imageDecode 钩子：原版对正文里的每张图片/气泡单独求值一次 imageDecode 规则。
+    /// 阅读器解析正文时也必须走这条钩子，否则书源靠 imageDecode 做的副作用
+    /// （番茄系段评清「已渲染」标记）不会发生，点击气泡就永远打不开。
+    static func imageDecodeHook(source: BookSource, book: Book?, chapter: BookChapter?) -> ((String) -> String)? {
+        guard let rule = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rule.isEmpty else { return nil }
+        let ctx = RuleContext(source: source, book: book, chapter: chapter)
+        let baseURL = chapter?.url ?? ""
+        return { src in
+            ImageDecodeRuntime.decode(src, rule: rule, source: source, context: ctx, baseURL: baseURL)
+        }
     }
 
     /// 书源 loginUi 是脚本时，里面常有 java.put('dev', …) 之类的初始化（Legado 打开登录页时才执行）。

@@ -235,9 +235,12 @@ private struct PreparedReaderChapter {
 }
 
 private enum ReaderChapterParser {
-    static func content(raw: String, isVolume: Bool, replacement: BodyReplaceEngine) -> (text: String, blocks: [ContentBlock]) {
+    /// imageDecode：对正文里的每张图片/气泡单独求值一次原版 imageDecode 规则。
+    /// 阅读器必须走这条钩子，否则番茄系段评的「已渲染」标记不会被清掉，点击气泡打不开。
+    static func content(raw: String, isVolume: Bool, replacement: BodyReplaceEngine,
+                        imageDecode: ((String) -> String)? = nil) -> (text: String, blocks: [ContentBlock]) {
         if isVolume { return (raw, []) }
-        let parsed = ContentBlocks.parse(raw)
+        let parsed = ContentBlocks.parse(raw, imageDecode: imageDecode)
         let hasRich = parsed.contains { if case .paragraph(_, let c, _) = $0 { return c > 0 }; if case .paragraph = $0 { return false }; return true }
         if hasRich {
             let displayed = parsed.map { block -> ContentBlock in
@@ -1128,8 +1131,10 @@ struct ReaderView: View {
                       scrollNeighbor(direction) == target else { return }
                 let isVolume = chapters[target].isVolume
                 let replacement = bodyReplacement
+                let decode = imageDecodeHook(for: chapters[target])
                 let chapter = await Task.detached(priority: .utility) {
-                    let parsed = ReaderChapterParser.content(raw: raw, isVolume: isVolume, replacement: replacement)
+                    let parsed = ReaderChapterParser.content(raw: raw, isVolume: isVolume, replacement: replacement,
+                                                            imageDecode: decode)
                     return ScrollReaderChapter(id: target, text: parsed.text, blocks: parsed.blocks)
                 }.value
                 try Task.checkCancellation()
@@ -1294,7 +1299,9 @@ struct ReaderView: View {
                         content = (existing.text, existing.blocks)
                     } else {
                         let raw = try await rawContent(at: target, priority: .utility)
-                        content = ReaderChapterParser.content(raw: raw, isVolume: chapters[target].isVolume, replacement: bodyReplacement)
+                        content = ReaderChapterParser.content(raw: raw, isVolume: chapters[target].isVolume,
+                                                            replacement: bodyReplacement,
+                                                            imageDecode: imageDecodeHook(for: chapters[target]))
                     }
                     try Task.checkCancellation()
                     guard preparationID == token, index == center,
@@ -1353,6 +1360,13 @@ struct ReaderView: View {
     private var currentVolume: BookChapter? {
         guard chapters.indices.contains(index), chapters[index].isVolume else { return nil }
         return chapters[index]
+    }
+
+    /// 当前正在读的章节（卷章返回 nil：卷章没有正文块）。
+    private var currentChapterItem: BookChapter? {
+        guard chapters.indices.contains(index) else { return nil }
+        let chapter = chapters[index]
+        return chapter.isVolume ? nil : chapter
     }
 
     private var readingBlocks: [ContentBlock] {
@@ -1870,9 +1884,17 @@ struct ReaderView: View {
                                                        nextChapterURL: next, priority: priority)
     }
 
+    /// imageDecode 钩子：原版对正文里的每张图片/气泡单独求值一次 imageDecode 规则。
+    /// 番茄系段评靠它清掉「已渲染」标记；少了这一步，点击气泡永远打不开。
+    private func imageDecodeHook(for chapter: BookChapter?) -> ((String) -> String)? {
+        guard let chapter, let source = store.source(for: book.origin) else { return nil }
+        return WebBook.imageDecodeHook(source: source, book: book, chapter: chapter)
+    }
+
     /// 前台与预排版使用同一解析流程，保留原始段评标记和续段字符偏移。
     private func show(raw: String, landing: ChapterLanding) {
-        let content = ReaderChapterParser.content(raw: raw, isVolume: currentVolume != nil, replacement: bodyReplacement)
+        let content = ReaderChapterParser.content(raw: raw, isVolume: currentVolume != nil, replacement: bodyReplacement,
+                                                 imageDecode: imageDecodeHook(for: currentChapterItem))
         text = content.text
         blocks = content.blocks
         pages = []
