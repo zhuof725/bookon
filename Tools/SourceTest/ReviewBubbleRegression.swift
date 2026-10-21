@@ -62,10 +62,11 @@ enum ReviewBubbleRegression {
                                                 context: RuleContext(source: source))
         check(marked == "1", "正文解析后写入「已渲染」标记")
 
-        // 端到端：解析出的块 → 执行 imageDecode → 标记应被清掉
-        let blocks2 = ContentBlocks.parse(line)
-        let decoded = blocks2.map { ImageDecodeRuntime.apply($0, rule: decodeRule, source: source,
-                                                             context: ctx, baseURL: "https://review-bubble.example") }
+        // 端到端：解析时按图片级别执行 imageDecode → 标记应被清掉
+        let decoded = ContentBlocks.parse(line) { src in
+            ImageDecodeRuntime.decode(src, rule: decodeRule, source: source, context: ctx,
+                                      baseURL: "https://review-bubble.example")
+        }
         let after = JSEngine.shared.evalString("cache.getFromMemory('fq-7320955143208307774-fbd8bb1c82df7-12')",
                                                context: RuleContext(source: source)) ?? ""
         check(after.isEmpty, "imageDecode 清掉「已渲染」标记（点击气泡不再被跳过）（实际 \(after)）")
