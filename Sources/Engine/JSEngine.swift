@@ -1493,7 +1493,7 @@ final class JSEngine {
         ctx.setObject(strToBytes, forKeyedSubscript: "__strToBytes" as NSString)
         ctx.setObject(bytesToStr, forKeyedSubscript: "__bytesToStr" as NSString)
         let headlessWeb: @convention(block) (String, String, String) -> String = { html, url, js in
-            guard let runner = HeadlessWeb.runner, !Thread.isMainThread else { return "" }
+            guard let runner = HeadlessWeb.runner else { return "" }
             let h = html.isEmpty ? nil : html
             let u = h == nil && !url.isEmpty ? url : nil
             return runner.run(html: h, url: u, js: js, timeout: 15) ?? ""
@@ -1767,6 +1767,10 @@ final class JSEngine {
             DebugLog.add("≡脚本依赖浏览器环境，已用无头 WebView 执行")
             return out
         }
+        if (evaluated == nil || evaluated!.isUndefined || evaluated!.isNull),
+           let message = JSEngine.lastError, HeadlessWeb.needsBrowser(message), !HeadlessWeb.isAvailable {
+            DebugLog.add("≡脚本依赖浏览器环境，但当前环境没有无头 WebView（可用 App 注入后生效）")
+        }
         guard let v = evaluated, !v.isUndefined, !v.isNull else {
             // 脚本可能只排了延迟回调（java.postDelayed）而没有返回值：也要执行它们。
             ctx.evaluateScript("if(typeof __drainDelayed==='function')__drainDelayed()")
@@ -1799,8 +1803,6 @@ final class JSEngine {
     /// 用无头 WebView 执行依赖浏览器环境的脚本；没注入实现（CI/harness）或已在主线程时返回 nil。
     static func runInHeadlessWeb(script: String, content: Any?, baseUrl: String?) -> String? {
         guard let runner = HeadlessWeb.runner else { return nil }
-        // 实现要切主线程跑 WKWebView：主线程上阻塞等待会死锁，直接放弃兜底。
-        guard !Thread.isMainThread else { return nil }
         var html: String?
         if let s = content as? String, s.contains("<") {
             html = s

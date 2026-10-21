@@ -13,9 +13,12 @@ final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning {
         HeadlessWeb.runner = shared
     }
 
-    /// 引擎在后台线程调用；这里阻塞等主线程的 WebView 结果（带硬超时，绝不永久阻塞）。
+    /// 引擎调用；这里等主线程的 WebView 结果（带硬超时，绝不永久阻塞）。
+    ///
+    /// 书源调试页与阅读流程都在主线程上跑规则，所以**不能**简单地 `DispatchSemaphore.wait`
+    /// 阻塞主线程（会死锁、回调永远排不上）。主线程上用「泵主 RunLoop」的方式等待：
+    /// WebView 的回调是派到主队列的，主 RunLoop 一泵就会执行。
     func run(html: String?, url: String?, js: String, timeout: TimeInterval) -> String? {
-        guard !Thread.isMainThread else { return nil }
         let semaphore = DispatchSemaphore(value: 0)
         var output: String?
         DispatchQueue.main.async {
@@ -23,6 +26,14 @@ final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning {
                 output = value
                 semaphore.signal()
             }
+        }
+        if Thread.isMainThread {
+            // 主线程：泵 RunLoop，让 WebView 的导航/求值回调有机会执行。
+            let deadline = Date().addingTimeInterval(timeout + 2)
+            while output == nil, Date() < deadline {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+            }
+            return output
         }
         _ = semaphore.wait(timeout: .now() + timeout + 2)
         return output

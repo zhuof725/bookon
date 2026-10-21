@@ -58,6 +58,15 @@ enum HeadlessWebRegression {
         check(mock2.calls == 1, "java.webView 走无头 WebView")
         check(webOut?.contains("from-webview") == true, "java.webView 返回 WebView 结果")
 
+        // 主线程上也要能兜底（App 的调试页/阅读流程都在主线程跑规则）
+        let mock3 = MockRunner()
+        HeadlessWeb.runner = mock3
+        let mainOut = AnalyzeRule(content: "<html><body><p>main</p></body></html>",
+                                  baseUrl: "https://example.invalid/", context: RuleContext())
+            .getString("<js>document.querySelector('p').textContent</js>")
+        check(mock3.calls == 1, "主线程上同样触发 WebView 兜底")
+        check(mainOut.contains("from-webview"), "主线程兜底结果回传（实际 \(mainOut)）")
+
         HeadlessWeb.runner = nil
     }
 }
