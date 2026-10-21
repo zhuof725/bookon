@@ -33,6 +33,16 @@ enum SourceVariableRegression {
                                                jsLib: nil, context: RuleContext(source: source))
         check(still == "TOKEN-ABC", "put 不会覆盖变量（实际 \(still ?? "nil")）")
 
+        // 3.5) cache.deleteMemory：书源 imageDecode 用它清「已渲染」标记。
+        // 少了这个方法 → 标记不删 → 点击气泡时被 getFromMemory 判定为已处理而跳过。
+        let cacheKey = "fq-test-\(source.bookSourceUrl)"
+        JSEngine.shared.evalString("cache.putMemory('\(cacheKey)','1')", context: RuleContext(source: source))
+        check(JSEngine.shared.evalString("cache.getFromMemory('\(cacheKey)')", context: RuleContext(source: source)) == "1",
+              "cache.putMemory 写入后能读回")
+        JSEngine.shared.evalString("cache.deleteMemory('\(cacheKey)')", context: RuleContext(source: source))
+        check(JSEngine.shared.evalString("cache.getFromMemory('\(cacheKey)')", context: RuleContext(source: source)).isEmpty,
+              "cache.deleteMemory 能清掉标记（段评点击不再被跳过）")
+
         // 4) 登录表单值：按钮 action 里的 result['源作者']
         let form = JSEngine.shared.runLoginScript(source: source,
                                                   library: "function needAuthor(){ return String(result['源作者'] || 'NONE'); }",
