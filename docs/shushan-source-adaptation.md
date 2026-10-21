@@ -16,9 +16,18 @@
 - 只有真正需要跳转的 http(s) 网址进入内置浏览器：`javascript:`、`file:`、`mailto:`、相对路径、缺主机名、含空白或换行、超长输入都会被拒绝并提示。
 - 内置浏览器提供后退/前进/刷新/完成/取消；未登录状态下打开的是书源自己的登录页。
 
+## 书源运行时字段（2026-10-21 接入）
+- `concurrentRate`：请求前按「次数/毫秒」限速（`SourceRateLimiter`），`1500` 表示每 1.5 秒最多 1 次。
+- `loginCheckJs`：每次书源请求拿到响应后执行一次；`result` 是响应对象（`code`/`body`/`headers()`），
+  返回响应对象可改写响应，抛错时按原版语义再求值一次（返回非 500 才采用），否则保留原响应。
+- `coverDecodeJs`：封面下载后执行脚本解密（`result` 是字节数组），解密失败保留原图；由
+  `CoverDecodeRuntime` 注入，未配置该字段的书源仍走系统图片加载。
+- `callBackJs` + `eventListener`：接入 `addBookShelf` / `delBookShelf` / `startRead` / `saveRead` /
+  `endRead` / `clickCustomButton` 六个事件，脚本可用 `event` 变量取事件名。
+- `customButton`：阅读页快捷面板出现「书源按钮」，点击触发 `clickCustomButton` 回调。
+
 ## 未解决
 - 正文：源内 `decode()` 使用 17 字节 AES 密钥，任何 AES 实现（含 Hutool）都会拒绝；未猜密钥、未把乱码当成功。需账号登录后的返回格式或源作者修正。
 - 发现入口：本应用暂无发现页，`exploreUrl` 已完整保留但无入口。
-- 书架同步 `callBackJs`、`customButton`：字段已保留，未接入事件。
-- 听书/短剧/下载类型（`book.type`）：未实现。
+- 听书/短剧/下载类型（`book.type`）：未实现（`bookSourceType = 1` 的音频书源已可正常搜索与朗读）。
 - 未登录时 `X-Api-Key` 为空，部分接口会提示登录。
