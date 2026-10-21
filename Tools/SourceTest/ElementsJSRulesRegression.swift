@@ -37,8 +37,8 @@ enum ElementsJSRulesRegression {
         let probe = """
         ol > li
         <js>
-        JSON.stringify({n: result.size(), len: result.length, first: result[0].outerHtml(),
-                        href: result.attr('href'), text: result.text()})
+        JSON.stringify([{n: result.size(), len: result.length, first: result[0].outerHtml(),
+                         href: result.attr('href'), text: result.text()}])
         </js>
         $[*]
         """
