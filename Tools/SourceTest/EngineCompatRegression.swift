@@ -66,5 +66,15 @@ enum EngineCompatRegression {
         var starDict: [String: Any] = [:]
         if let first = starNodes.first as? [String: Any] { starDict = first }
         check(starDict["n"] as? Bool == true, "纯 JS 目录规则里 result 是内容原文（星星书源形态）")
+
+        // 规则尾部的 ##正则##替换 跟在 JS 段后面：正则不能留在 JS 脚本里
+        // （否则 JavaScriptCore 直接报 “Invalid character: '#'”）
+        let tailRule = ".a@text@js:result + '123'##(\\d+)##[$1]"
+        check(ar.getString(tailRule) == "正文[123]", "JS 段尾部的 ##正则##替换 拆成独立替换步骤")
+        let listTailRule = "ol > li@js:result.map(function(e){return e.text();}).join(',')##\\s##_"
+        let listTailNodes = ar.getElements(listTailRule)
+        var listTailText = ""
+        if let element = listTailNodes.first as? Element { listTailText = (try? element.text()) ?? "" }
+        check(listTailText == "一_二", "列表规则尾部的 ##正则##替换 生效")
     }
 }
