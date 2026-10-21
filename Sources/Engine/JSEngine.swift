@@ -747,8 +747,8 @@ final class JSEngine {
             encodeToString:function(b,flags){
                 var text=(b!=null&&typeof b.length==='number'&&typeof b!=='string')?java.bytesToStr(b,'ISO-8859-1'):String(b==null?'':b);
                 var out=String(java.base64Encode(text));
-                if(flags&2){out=out.replace(/[\r\n]/g,'');}
-                if(flags&8){out=out.replace(/\+/g,'-').replace(/\//g,'_');}
+                if(flags&2){out=out.replace(/[\\r\\n]/g,'');}
+                if(flags&8){out=out.replace(/\\+/g,'-').replace(/\\//g,'_');}
                 return out;
             },
             decode:function(s,flags){
@@ -763,7 +763,7 @@ final class JSEngine {
                 sha256Hex:function(s){return String(java.digestHex(String(s),'SHA256'));}}}} ,
             core:{util:{StrUtil:{
                 reverse:function(s){return String(s==null?'':s).split('').reverse().join('');},
-                isBlank:function(s){return s==null||String(s).replace(/\s/g,'')==='';},
+                isBlank:function(s){return s==null||String(s).replace(/\\s/g,'')==='';},
                 emptyToDefault:function(s,d){return (s==null||String(s)==='')?d:s;}}},
                 codec:{Base64:{
                     encode:function(s){return String(java.base64Encode(String(s)));},
