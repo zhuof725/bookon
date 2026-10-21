@@ -1,0 +1,39 @@
+import Foundation
+
+/// 番茄系「知秋段评」气泡回归。
+///
+/// 书源在段落末尾插入的占位图是：
+///   `<img src="data:image/svg+xml;base64,,{"style":"TEXT","type":"fqpl",
+///          "click":"createSvg('1','2',3,42,1700000000)","js":"..."}">`
+/// base64 是空的，段评数量写在 createSvg 的第 4 个参数里。
+/// 之前只从 SVG 文本取数字 → 读不到 → 一律显示 1（数量不对）。
+enum ReviewBubbleRegression {
+    static func run(_ check: (Bool, String) -> Void) {
+        let src = "data:image/svg+xml;base64,,{\"style\":\"TEXT\",\"type\":\"fqpl\","
+            + "\"click\":\"createSvg('7320955143208307774','fbd8bb1c82df7',12,42,1700000000123)\","
+            + "\"js\":\"createSvg('7320955143208307774','fbd8bb1c82df7',12,42,1700000000123)\"}"
+        let line = "　　正文第一段。"
+            + "<img src=\"" + src + "\">"
+        let blocks = ContentBlocks.parse(line)
+        var count: Int?
+        var click: String?
+        for block in blocks {
+            if case .paragraph(_, let c, let u) = block { count = c; click = u }
+        }
+        check(count == 42, "段评数量从 createSvg(...) 参数解析（实际 \(count.map(String.init) ?? "nil")）")
+        check(click?.hasPrefix("js:createSvg(") == true, "点击动作转成 js: 调用（实际 \(click ?? "nil")）")
+
+        // SVG 里有真实数字时仍以 SVG 为准（普通气泡源）
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>7</text></svg>"
+        let b64 = Data(svg.utf8).base64EncodedString()
+        let normal = "段落。\n<img src=\"data:image/svg+xml;base64,\(b64),{\"style\":\"text\",\"onClick\":\"java.startBrowser('https://x/y')\"}\">"
+        var normalCount: Int?
+        for block in ContentBlocks.parse(normal) {
+            if case .paragraph(_, let c, _) = block { normalCount = c }
+        }
+        check(normalCount == 7, "普通 SVG 气泡仍按 SVG 文本取数（实际 \(normalCount.map(String.init) ?? "nil")）")
+
+        check(ContentBlocks.countFromClick("createSvg('a','b',1,999,2)") == 999, "三位数段评数量")
+        check(ContentBlocks.countFromClick("showCmt('a')") == nil, "非 createSvg 调用不猜测数量")
+    }
+}
