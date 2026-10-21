@@ -44,6 +44,12 @@ enum SourceRuntimeRegression {
         SourceCallBack.fire(SourceCallBack.delBookShelf, source: disabled, book: nil)
         check(RuleContext(source: disabled).get("evt").isEmpty, "callBackJs：eventListener=false 不执行")
 
+        // MARK: 网络重试（只重传输错误，不按状态码重发）
+        check(AnalyzeUrl.retryableError(URLError(.timedOut)), "重试：超时可重发")
+        check(AnalyzeUrl.retryableError(URLError(.networkConnectionLost)), "重试：连接被重置可重发")
+        check(!AnalyzeUrl.retryableError(URLError(.userAuthenticationRequired)), "重试：鉴权错误不重发")
+        check(AnalyzeUrl.idempotentMethods == ["GET", "HEAD"], "重试：只覆盖幂等方法")
+
         // MARK: 正则诊断
         RegexLog.reset()
         check(RegexLog.compile("[") == nil, "正则诊断：非法正则返回 nil")

@@ -464,9 +464,11 @@ struct AnalyzeUrl {
         await SourceRateLimiter.shared.acquire(key: source.bookSourceUrl, rate: source.concurrentRate)
     }
 
-    /// 通用退避重试：超时/连接被重置等传输错误，以及 429/502/503/504。
+    /// 通用退避重试：只重试「请求根本没拿到响应」的传输错误（超时、连接被重置、DNS 失败）。
+    /// 不按 HTTP 状态码重试：状态码属于书源自己的业务语义（401 触发登录、429/5xx 由书源脚本
+    /// 换线路），引擎自行重发会让同一次详情请求变成多次，既破坏既有的请求计数契约，
+    /// 也可能把站点的限流拖得更久。
     /// 只重试 GET/HEAD：POST 等可能是提交动作，重发会造成重复下单/重复登录。
-    /// 4xx（除 429）不重试，避免把「书源规则错」拖成多次请求。
     private func send(_ req: URLRequest, session: URLSession,
                       maxAttempts: Int = 3) async throws -> (Data, URLResponse) {
         let method = (req.httpMethod ?? "GET").uppercased()
@@ -474,16 +476,7 @@ struct AnalyzeUrl {
         var attempt = 1
         while true {
             do {
-                let (data, resp) = try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
-                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                if attempt < attempts, Self.retryableStatus(status) {
-                    let delay = Self.retryDelay(attempt: attempt, response: resp)
-                    DebugLog.add("≡HTTP \(status)，\(Int(delay * 1000))ms 后重试（第 \(attempt) 次）")
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    attempt += 1
-                    continue
-                }
-                return (data, resp)
+                return try await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate)
             } catch {
                 guard attempt < attempts, Self.retryableError(error), !Task.isCancelled else { throw error }
                 let delay = Self.backoff(attempt)
@@ -497,11 +490,7 @@ struct AnalyzeUrl {
     /// 可安全重发的 HTTP 方法（RFC 9110 幂等方法的常用子集）。
     static let idempotentMethods: Set<String> = ["GET", "HEAD"]
 
-    private static func retryableStatus(_ status: Int) -> Bool {
-        status == 429 || status == 502 || status == 503 || status == 504
-    }
-
-    private static func retryableError(_ error: Error) -> Bool {
+    static func retryableError(_ error: Error) -> Bool {
         guard let urlError = error as? URLError else { return false }
         switch urlError.code {
         case .timedOut, .networkConnectionLost, .cannotConnectToHost,
@@ -518,14 +507,6 @@ struct AnalyzeUrl {
         return base + Double.random(in: 0...0.2)
     }
 
-    private static func retryDelay(attempt: Int, response: URLResponse) -> TimeInterval {
-        if let http = response as? HTTPURLResponse,
-           let raw = http.value(forHTTPHeaderField: "Retry-After"),
-           let seconds = Double(raw), seconds > 0 {
-            return min(seconds, 5)
-        }
-        return backoff(attempt)
-    }
 
     /// 表单 body 按 key=value 逐项做 URL 编码（与 Legado 一致），charset 为 gbk 时按 GBK 字节编码
     private func percentEncodedBody(_ b: String) -> String {
