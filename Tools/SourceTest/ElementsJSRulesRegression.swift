@@ -51,6 +51,20 @@ enum ElementsJSRulesRegression {
         check(probeDict["href"] as? String == "/b/1.html", "规则 JS：result.attr('href') 可用")
         check((probeDict["text"] as? String)?.contains("第一章") == true, "规则 JS：result.text() 可用")
 
+        // 元素列表同时能当字符串用：result.match(...) / result.split(...)
+        let textRule = """
+        ol > li
+        <js>
+        JSON.stringify([{m: result.match(/\\/b\\/1\\.html/) ? 1 : 0, n: result.split('a').length}])
+        </js>
+        $[*]
+        """
+        let textNodes = ar.getElements(textRule)
+        var textDict: [String: Any] = [:]
+        if let first = textNodes.first as? [String: Any] { textDict = first }
+        check(textDict["m"] as? Int == 1, "元素列表也能当字符串用：result.match(...)")
+        check((textDict["n"] as? Int ?? 0) > 0, "元素列表也能当字符串用：result.split(...)")
+
         // src 始终是字符串（当前内容原文）
         check(ar.getString("<js>typeof src</js>") == "string", "规则 JS：src 是字符串")
         check(ar.getString("<js>src.indexOf('第二章') > 0</js>") == "true", "规则 JS：src 是当前内容原文")

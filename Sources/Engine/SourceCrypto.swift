@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import CommonCrypto
 
 /// Hutool-compatible symmetric crypto and digests for book-source scripts.
@@ -89,7 +90,9 @@ enum SourceCrypto {
 
     private static func digestAlgorithm(_ name: String) throws -> (Int, Int) {
         // 书源里算法名写法很杂：SHA-256 / sha_256 / SHA 256 / SHA2-256。
-        let key = name.uppercased().filter { $0.isLetter || $0.isNumber }
+        var key = name.uppercased().filter { $0.isLetter || $0.isNumber }
+        // 书源常把 HMAC 的算法名一起写进来：HmacMD5 / HmacSHA256。
+        if key.hasPrefix("HMAC") { key = String(key.dropFirst(4)) }
         switch key {
         case "MD5": return (0, Int(CC_MD5_DIGEST_LENGTH))
         case "SHA1": return (1, Int(CC_SHA1_DIGEST_LENGTH))
@@ -280,8 +283,12 @@ enum SourceCrypto {
 
         func decryptStr(_ text: String) throws -> String {
             let plain = try decryptInput(text)
-            guard let s = String(data: plain, encoding: .utf8) else { throw CryptoError.invalidInput }
-            return s
+            if let s = String(data: plain, encoding: .utf8) { return s }
+            // 中文站的正文/接口常常是 GBK/GB18030：UTF-8 解不出来时按国标再试一次，
+            // 否则书源会看到「Invalid crypto input」而整条规则失败。
+            if let s = String(data: plain, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030.rawValue)))) { return s }
+            if let s = String(data: plain, encoding: .isoLatin1) { return s }
+            throw CryptoError.invalidInput
         }
 
         func encryptBase64(_ text: String) throws -> String {

@@ -45,7 +45,10 @@ final class AnalyzeRule {
         if let list = input as? [Any], !list.isEmpty {
             let elements = list.compactMap { $0 as? Element }
             if elements.count == list.count {
-                return elements.map { JSNodeBridge($0) as Any }
+                let items = elements.map { JSNodeBridge($0) as Any }
+                // 同时给出拼好的 HTML 文本：脚本常写 result.match(...) / result.split(...)。
+                let text = elements.map { (try? $0.outerHtml()) ?? "" }.joined(separator: "\n")
+                return JSNodeListWithText(items: items, text: text)
             }
         }
         return AnalyzeRule.jsValue(input)

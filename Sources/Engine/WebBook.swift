@@ -33,6 +33,18 @@ enum WebBook {
                 return HTTPResponseData(body: r.body, url: r.url, code: r.code,
                                         headers: r.headers(), rawData: r.bodyBytes)
             }
+            // JS 侧包装过的 StrResponse（result.body() 形态）：取回原始负载。
+            if let dict = value as? [String: Any],
+               let payload = dict["__payload"] as? [String: Any] {
+                let body = payload["body"] as? String ?? ""
+                let code = (payload["code"] as? NSNumber)?.intValue ?? 0
+                let url = payload["url"] as? String ?? response.url
+                var headers: [String: String] = [:]
+                if let raw = payload["headers"] as? [String: Any] {
+                    for (k, v) in raw { headers[k] = "\(v)" }
+                }
+                return HTTPResponseData(body: body, url: url, code: code, headers: headers, rawData: nil)
+            }
             if let text = value as? String {
                 return HTTPResponseData(body: text, url: response.url, code: response.code,
                                         headers: response.headers, rawData: nil)

@@ -144,3 +144,11 @@ import SwiftSoup
         return JSNodeBridge(s)
     }
 }
+
+/// 元素列表在规则 JS 里的形态：既能当数组用（select/toArray/下标/length），
+/// 又能当字符串用（match/split/replace）。
+/// 书源里两种写法都有：`result.select('a').toArray()` 与 `result.match(/\\d+/)`。
+struct JSNodeListWithText {
+    let items: [Any]
+    let text: String
+}

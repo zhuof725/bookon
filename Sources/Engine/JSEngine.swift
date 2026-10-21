@@ -778,8 +778,75 @@ final class JSEngine {
     // method without breaking strict comparisons. code()/url() remain unsupported.
     // connect headers model the read-only Kotlin Headers subset; get/post headers
     // are a plain map, not an OkHttp Headers object or a complete Java Map.
-    function __response(r,jsoup){
-        if(!r){throw new Error('HTTP response unavailable');}
+    // 原版 StrResponse：body() / code() / headers() 都是方法。
+    // loginCheckJs 的 result 就是它（书源脚本普遍写 result.body()、result.url()）。
+    // 兼容两种写法：既支持 result.body()，也支持 result.body.includes(...) 这类字符串用法。
+    // 元素列表的混合形态：数组语义（select/toArray/下标/length）+ 字符串语义（match/split）。
+    function __legadoList(items, text){
+        var s=String(text==null?'':text);
+        var strMethods={match:1,replace:1,search:1,split:1,trim:1,substring:1,substr:1,
+                        indexOf:1,lastIndexOf:1,startsWith:1,endsWith:1,charAt:1,charCodeAt:1,
+                        toLowerCase:1,toUpperCase:1,includes:1};
+        try{
+            return new Proxy(items,{get:function(t,k){
+                if(strMethods[String(k)]===1){
+                    var f=s[k];
+                    if(typeof f==='function') return function(){return f.apply(s,arguments);};
+                }
+                var v=t[k];
+                return (typeof v==='function')?v.bind(t):v;
+            }});
+        }catch(e){ return items; }
+    }
+    function __legadoStrResponse(p){
+        var raw=p.headers||{};
+        var copy=Object.create(null);
+        Object.keys(raw).forEach(function(k){copy[k]=raw[k];});
+        var find=function(k){
+            k=String(k).toLowerCase();
+            var names=Object.keys(copy);
+            for(var i=0;i<names.length;i++){if(names[i].toLowerCase()===k)return copy[names[i]];}
+            return null;
+        };
+        // 可调用 + 带字符串方法：result.body() 与 result.body.includes('x') 都能用。
+        var callableString=function(text){
+            var fn=function(){return text;};
+            fn.toString=function(){return text;};
+            try{
+                return new Proxy(fn,{get:function(t,k){
+                    if(k==='length') return text.length;
+                    if(k==='toString') return t.toString;
+                    if(k in t) return t[k];
+                    var v=text[k];
+                    return (typeof v==='function')?v.bind(text):v;
+                }});
+            }catch(e){ return fn; }
+        };
+        var bodyText=String(p.body||'');
+        var urlText=String(p.url||'');
+        var headerObj={
+            get:function(k){var v=find(k);return v==null?null:String(v);},
+            names:function(){return Object.keys(copy);},
+            getOrDefault:function(k,d){var v=find(k);return v==null?d:v;}
+        };
+        var headersFn=function(){return headerObj;};
+        headersFn.get=headerObj.get;
+        headersFn.names=headerObj.names;
+        return {
+            __payload:{url:urlText,body:bodyText,code:Number(p.code||0),headers:copy},
+            url:callableString(urlText),
+            code:p.code,
+            length:bodyText.length,
+            body:callableString(bodyText),
+            bodyAsBytes:function(){return (typeof java.strToBytes==='function')?java.strToBytes(bodyText,'UTF-8'):[];},
+            isSuccessful:function(){var c=Number(p.code||0);return c>=200&&c<300;},
+            header:function(k){var v=find(k);return v==null?'':String(v);},
+            headers:headersFn,
+            toString:function(){return bodyText;},
+            valueOf:function(){return bodyText;}
+        };
+    }
+    function __response(r,jsoup){        if(!r){throw new Error('HTTP response unavailable');}
         return {
             url:r.url,
             code:r.code,
@@ -1485,6 +1552,24 @@ final class JSEngine {
         // TTS loginCheckJs：result 是完整 Response（body().bytes()/newBuilder()），不包成 StrResponse。
         if let t = result as? TTSResponse {
             ctx.setObject(t, forKeyedSubscript: "result" as NSString)
+        } else if let list = result as? JSNodeListWithText {
+            ctx.setObject(list.items, forKeyedSubscript: "__legadoListItems" as NSString)
+            ctx.setObject(list.text, forKeyedSubscript: "__legadoListText" as NSString)
+            if let proxy = ctx.evaluateScript("__legadoList(__legadoListItems, __legadoListText)") {
+                ctx.setObject(proxy, forKeyedSubscript: "result" as NSString)
+            } else {
+                ctx.setObject(list.items, forKeyedSubscript: "result" as NSString)
+            }
+        } else if let sr = result as? StrResponse {
+            // 原版 StrResponse.body() 是方法：书源脚本普遍写 `result.body()`。
+            // 直接把 Swift 对象丢给 JS 时 body 是只读字符串属性，调用会报
+            // “result.body is not a function”，这里包一层与原版同形的 JS 响应对象。
+            let payload = "({url:\(JSEngine.jsLiteral(sr.url)),body:\(JSEngine.jsLiteral(sr.body)),code:\(sr.code),headers:\(JSEngine.jsLiteral(sr.headers()))})"
+            if let wrapper = ctx.evaluateScript("__legadoStrResponse(\(payload))") {
+                ctx.setObject(wrapper, forKeyedSubscript: "result" as NSString)
+            } else {
+                ctx.setObject(sr, forKeyedSubscript: "result" as NSString)
+            }
         } else {
             ctx.setObject(result ?? "", forKeyedSubscript: "result" as NSString)
         }
@@ -1534,10 +1619,18 @@ final class JSEngine {
         return v.toString()
     }
 
+    /// JS 字面量：把 Swift 字符串安全地嵌进脚本源码。
+    static func jsLiteral(_ value: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
+              let text = String(data: data, encoding: .utf8) else { return "\"\"" }
+        return text
+    }
+
     /// 规则 JS 里的 src：始终是字符串（元素集合取各元素 outerHtml 拼接）。
     static func srcText(_ value: Any?) -> String {
         guard let value else { return "" }
         if let s = value as? String { return s }
+        if let list = value as? JSNodeListWithText { return list.text }
         if let node = value as? JSNodeBridge { return node.outerHtml() }
         if let list = value as? JSNodeListBridge {
             return list.elements.map { (try? $0.outerHtml()) ?? "" }.joined(separator: "\n")
