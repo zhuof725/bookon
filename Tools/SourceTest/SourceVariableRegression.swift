@@ -40,8 +40,8 @@ enum SourceVariableRegression {
         check(JSEngine.shared.evalString("cache.getFromMemory('\(cacheKey)')", context: RuleContext(source: source)) == "1",
               "cache.putMemory 写入后能读回")
         JSEngine.shared.evalString("cache.deleteMemory('\(cacheKey)')", context: RuleContext(source: source))
-        check(JSEngine.shared.evalString("cache.getFromMemory('\(cacheKey)')", context: RuleContext(source: source)).isEmpty,
-              "cache.deleteMemory 能清掉标记（段评点击不再被跳过）")
+        let afterDelete = JSEngine.shared.evalString("cache.getFromMemory('\(cacheKey)')", context: RuleContext(source: source)) ?? ""
+        check(afterDelete.isEmpty, "cache.deleteMemory 能清掉标记（段评点击不再被跳过）")
 
         // 4) 登录表单值：按钮 action 里的 result['源作者']
         let form = JSEngine.shared.runLoginScript(source: source,
