@@ -5,34 +5,6 @@ import CoreText
 extension URL: Identifiable { public var id: String { absoluteString } }
 
 /// 段评/章评：默认半屏，上划可展开到全屏；内容区域优先滚动网页。
-/// 段评页本地缓存：书源的评论页通常带 token，token 过期就打不开了。
-/// 打开过一次的页面存到本地，之后再点（token 已失效）也能看上次的内容。
-enum CommentPageCache {
-    private static let memory = NSCache<NSString, NSString>()
-    private static var folder: URL? {
-        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let dir = base.appendingPathComponent("LegadoReading/comment-pages", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
-    private static func file(_ url: URL) -> URL? {
-        var hash: UInt64 = 5381
-        for byte in url.absoluteString.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
-        return folder?.appendingPathComponent(String(hash) + ".html")
-    }
-    static func save(_ html: String, for url: URL) {
-        guard html.count > 800 else { return }
-        memory.setObject(html as NSString, forKey: url.absoluteString as NSString)
-        if let f = file(url) { try? html.write(to: f, atomically: true, encoding: .utf8) }
-    }
-    static func load(_ url: URL) -> String? {
-        if let hit = memory.object(forKey: url.absoluteString as NSString) { return hit as String }
-        guard let f = file(url), let text = try? String(contentsOf: f, encoding: .utf8) else { return nil }
-        memory.setObject(text as NSString, forKey: url.absoluteString as NSString)
-        return text
-    }
-}
-
 struct CommentSheet: View {
     let url: URL
     var heightFraction: CGFloat = 0.6
@@ -62,26 +34,19 @@ private struct SheetCorner: ViewModifier {
 
 struct CommentWebView: UIViewRepresentable {
     let url: URL
-    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero)
         web.customUserAgent = WebViewSupport.userAgent
         web.navigationDelegate = context.coordinator
-        context.coordinator.attach(web)
         web.load(URLRequest(url: url))
         return web
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     /// 段评页在白名单域名上（证书过期已按白名单放行）：WebView 的 TLS 校验必须走同一套规则，
-    /// 否则加载失败只剩一片空白。加载成功后把页面存本地：token 过期后还能看上次的内容。
+    /// 否则加载失败只剩一片空白。
     final class Coordinator: NSObject, WKNavigationDelegate {
-        private let url: URL
-        private weak var webView: WKWebView?
-        private var showingCache = false
-        init(url: URL) { self.url = url; super.init() }
-        func attach(_ web: WKWebView) { webView = web }
-
         func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
                       completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
             guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
@@ -91,38 +56,6 @@ struct CommentWebView: UIViewRepresentable {
                 completionHandler(.performDefaultHandling, nil); return
             }
             completionHandler(.useCredential, credential)
-        }
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard !showingCache else { return }
-            webView.evaluateJavaScript("document.documentElement.outerHTML") { value, _ in
-                guard let html = value as? String, html.count > 800 else { return }
-                CommentPageCache.save(html, for: self.url)
-            }
-        }
-
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            loadCachedOrNotice()
-        }
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            loadCachedOrNotice()
-        }
-
-        /// 网络失败（最常见：token 过期 / 证书过期 / 站点挂了）：先回退本地缓存，没有缓存就给明确提示。
-        private func loadCachedOrNotice() {
-            guard let webView, !showingCache else { return }
-            showingCache = true
-            if let html = CommentPageCache.load(url) {
-                webView.loadHTMLString(html, baseURL: url)
-                return
-            }
-            let tip = """
-            <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-            <style>body{font:-apple-system-body;color:#8a8a8e;text-align:center;padding:28vh 24px;line-height:1.7}</style>
-            </head><body>段评页打不开。<br>常见原因：书源 Token 已过期，或该页需要重新登录。<br>
-            可以下拉关闭后重试，或到书源登录页重新获取 Token。</body></html>
-            """
-            webView.loadHTMLString(tip, baseURL: nil)
         }
     }
 }
