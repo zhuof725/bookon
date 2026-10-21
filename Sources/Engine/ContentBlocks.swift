@@ -105,9 +105,10 @@ enum ContentBlocks {
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
                     } else if let svg = svgText(decoded), !(opts["js"] ?? "").isEmpty,
-                              let badge = countBadge(fromSVG: svg, click: click) {
-                        // 书源用「只画一个数字」的 SVG 表示评论条数（番茄系章评/书评）。
-                        // 渲染成原生卡片，避免直接显示那张 base64 为空的坏图。
+                              let badge = jsBubbleBlock(fromSVG: svg, click: click) {
+                        // 书源用 js 动态生成的评论气泡（番茄系章评/书评/段评）：
+                        // src 的 base64 本来是空的，真实图形要靠 js 生成；认得出来就渲染成原生卡片，
+                        // 认不出来时那张 base64 为空的图就是一片乱码。
                         blocks.append(badge)
                     } else {
                         blocks.append(.image(src: decoded, clickURL: click, rawSrc: src == clean ? nil : src))
@@ -300,6 +301,52 @@ enum ContentBlocks {
         let pid = Int(click[pidRange]) ?? 0
         if pid == -1 { return cid == -1 ? "书评" : "章评" }
         return "段评"
+    }
+
+    // MARK: - 番茄系「本章讨论 / 本书讨论」条
+
+    /// 章评/书评条上的标题文字。
+    private static let discussionTitles: Set<String> = ["本章讨论", "本书讨论", "本章评论", "本书评论"]
+
+    /// 番茄系章评/书评：书源把整条画成一张 SVG ——「本章讨论 | 条数 | 〉」。
+    /// 三个 <text>，既不是「标签+一行」的热评，也不是只画一个数字的气泡，
+    /// 之前认不出来 → 落回图片分支 → 显示成 base64 乱码。
+    static func discussionBlock(fromSVG svg: String, click: String?) -> ContentBlock? {
+        let texts = svgTexts(svg)
+        guard let title = texts.first(where: { discussionTitles.contains($0) }) else { return nil }
+        guard let count = texts.first(where: { Int($0.trimmingCharacters(in: .whitespaces)) != nil }) else { return nil }
+        return .chapterComments(title: title, count: count, items: [], clickURL: click)
+    }
+
+    /// 书源选项里的 js 动态生成的评论气泡 → 原生卡片。
+    /// - 只画一个数字：评论条数气泡（段评/章评）。
+    /// - 「本章讨论 / 本书讨论 + 条数」：章末/书末的讨论条。
+    /// - 都不认得，但点击表达式说明是章评/书评：按参数里的条数兜底。
+    static func jsBubbleBlock(fromSVG svg: String, click: String?) -> ContentBlock? {
+        if let badge = countBadge(fromSVG: svg, click: click) { return badge }
+        if let disc = discussionBlock(fromSVG: svg, click: click) { return disc }
+        let kind = commentKind(click)
+        if kind == "章评" || kind == "书评", let n = countFromClick(click) {
+            return .chapterComments(title: kind, count: String(n), items: [], clickURL: click)
+        }
+        return nil
+    }
+
+    /// SVG 根元素的宽高比（高/宽），用于按原比例显示。取不到返回 nil。
+    static func svgAspectRatio(_ svg: String) -> Double? {
+        guard let re = try? NSRegularExpression(pattern: "<svg\\b[^>]*>", options: [.caseInsensitive]),
+              let m = re.firstMatch(in: svg, range: NSRange(location: 0, length: (svg as NSString).length)) else { return nil }
+        let tag = (svg as NSString).substring(with: m.range)
+        guard let w = svgLength(in: tag, name: "width"),
+              let h = svgLength(in: tag, name: "height"), w > 0, h > 0 else { return nil }
+        return h / w
+    }
+
+    private static func svgLength(in tag: String, name: String) -> Double? {
+        guard let re = try? NSRegularExpression(pattern: "\\b" + name + "\\s*=\\s*\"?([0-9.]+)"),
+              let m = re.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
+              let r = Range(m.range(at: 1), in: tag) else { return nil }
+        return Double(tag[r])
     }
 
     static func nativeBlock(fromSVG svg: String, click: String?) -> ContentBlock? {

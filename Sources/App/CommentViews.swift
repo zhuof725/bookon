@@ -65,13 +65,18 @@ struct ContentImageView: View {
     let src: String
     @State private var image: UIImage?
     @State private var svgHTML: String?
+    @State private var svgRatio: Double?
 
     var body: some View {
         Group {
             if let img = image {
                 Image(uiImage: img).resizable().scaledToFit().frame(maxWidth: .infinity)
             } else if let html = svgHTML {
-                SVGWebView(html: html).frame(height: 120)
+                GeometryReader { geo in
+                    SVGWebView(html: html)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                }
+                .frame(height: svgHeight)
             } else {
                 Color.clear.frame(height: 1)
             }
@@ -79,15 +84,23 @@ struct ContentImageView: View {
         .task { await load() }
     }
 
+    /// SVG 按自身宽高比显示：章评条是 1000x120 的细条，固定 120pt 会留一大片空白。
+    private var svgHeight: CGFloat {
+        guard let ratio = svgRatio else { return 120 }
+        return CGFloat(max(24, min(420, 340 * ratio)))
+    }
+
     private func load() async {
         if src.hasPrefix("data:") {
             guard let comma = src.firstIndex(of: ",") else { return }
             let meta = src[..<comma].lowercased()
-            let payload = String(src[src.index(after: comma)...])
             if meta.contains("svg") {
-                // 段评气泡等 SVG：解码规则与正文数据源一致，但需要用 WebView 渲染。
-                guard let d = DataURIDecode.data(src) ?? payload.removingPercentEncoding?.data(using: .utf8) else { return }
-                svgHTML = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;background:transparent}svg{width:100%;height:auto}</style></head><body>" + (String(data: d, encoding: .utf8) ?? "") + "</body></html>"
+                // SVG 必须先解出真正的 SVG 文本再渲染。
+                // DataURIDecode 对 SVG 一律返回 nil（SVG 不是可导出的位图），
+                // 之前就把 base64 原文当正文丢进 WebView → 满屏乱码（用户截图里的现象）。
+                guard let svg = ContentBlocks.svgText(src), svg.contains("<svg") else { return }
+                svgRatio = ContentBlocks.svgAspectRatio(svg)
+                svgHTML = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;background:transparent}svg{width:100%;height:auto}</style></head><body>" + svg + "</body></html>"
             } else {
                 image = DataURIDecode.data(src).flatMap(UIImage.init(data:))
             }

@@ -91,5 +91,47 @@ enum ReviewBubbleRegression {
         check(ContentBlocks.commentKind("createSvg2('1','-1',-1,3,1)") == "书评", "cid/pid 均为 -1 判定为书评")
         check(ContentBlocks.commentKind("createSvg2('1','2',-1,3,1)") == "章评", "pid 为 -1 判定为章评")
         check(ContentBlocks.commentKind("createSvg('1','2',3,4,1)") == "段评", "其余判定为段评")
+
+        // MARK: 章评/书评条（番茄系 createSvg2）：SVG 是「本章讨论 | 条数 | 〉」
+        //
+        // 书源把整条画成一张 SVG（base64 编码的 data URI）。
+        // 之前认不出这张图 → 落回图片分支 → 渲染时把 base64 原文当正文显示（满屏乱码）。
+        let discussionSVG = "<svg width=\"1000\" height=\"120\" xmlns=\"http://www.w3.org/2000/svg\">"
+            + "<rect width=\"1000\" height=\"120\" fill=\"#A9A9A9\" rx=\"15\" />"
+            + "<text x=\"100\" y=\"75\" font-family=\"Arial\" font-size=\"48\" fill=\"#000000\" text-anchor=\"start\">本章讨论</text>"
+            + "<g transform=\"translate(850, 60)\"><rect x=\"-40\" y=\"-30\" width=\"80\" height=\"60\" rx=\"20\" ry=\"20\" stroke=\"#000000\" stroke-width=\"2\" fill=\"none\" />"
+            + "<text x=\"0\" y=\"12\" font-family=\"Arial\" font-size=\"36\" fill=\"#000000\" text-anchor=\"middle\"\n      dominant-baseline=\"middle\">42</text></g>"
+            + "<text x=\"965\" y=\"75\" font-family=\"Arial\" font-size=\"36\" fill=\"#000000\" text-anchor=\"middle\">〉</text></svg>"
+        if case .chapterComments(let dTitle, let dCount, _, let dClick)? = ContentBlocks.discussionBlock(fromSVG: discussionSVG, click: "js:createSvg2('7320955143208307774','7322565597089235518',-1,42,1)") {
+            check(dTitle == "本章讨论", "章评条标题（实际 \(dTitle)）")
+            check(dCount == "42", "章评条条数（实际 \(dCount)）")
+            check(dClick != nil, "章评条带点击目标")
+        } else {
+            check(false, "「本章讨论」SVG 识别为章评卡片")
+        }
+        let ratio = ContentBlocks.svgAspectRatio(discussionSVG) ?? 0
+        check(abs(ratio - 0.12) < 0.001, "章评条 SVG 宽高比（1000x120）")
+        // base64 的 SVG data URI 必须能解出 SVG 文本；解不出就只剩 base64 原文（乱码）。
+        let b64SVG = Data(discussionSVG.utf8).base64EncodedString()
+        let svgURI = "data:image/svg+xml;base64," + b64SVG
+        check(ContentBlocks.svgText(svgURI) == discussionSVG, "base64 的 SVG data URI 解出 SVG 文本")
+        check(ContentBlocks.svgText(svgURI)?.contains("<svg") == true, "解出的是 SVG 而不是 base64 原文")
+
+        // 端到端：正文末尾的章评条（FULL 样式 + js 选项）→ 原生评论卡片，不能落回图片分支
+        let chapterSrc = "data:image/svg+xml;base64,,{\"style\":\"FULL\",\"type\":\"fqpl\","
+            + "\"click\":\"createSvg2('7320955143208307774','7322565597089235518',-1,42,1700000000123)\","
+            + "\"js\":\"createSvg2('7320955143208307774','7322565597089235518',-1,42,1700000000123)\"}"
+        let chapterLine = "正文最后一段。" + "<img src=\"" + chapterSrc + "\">"
+        let chapterBlocks = ContentBlocks.parse(chapterLine) { _ in svgURI }
+        var cardTitle: String?
+        var cardCount: String?
+        var fellBackToImage = false
+        for block in chapterBlocks {
+            if case .chapterComments(let t, let c, _, _) = block { cardTitle = t; cardCount = c }
+            if case .image(_, _, _) = block { fellBackToImage = true }
+        }
+        check(cardTitle == "本章讨论" && cardCount == "42",
+              "章评条渲染成原生卡片（实际 \(cardTitle ?? "nil")/\(cardCount ?? "nil")）")
+        check(!fellBackToImage, "章评条不再落回图片分支")
     }
 }
