@@ -7,14 +7,13 @@ import Foundation
 /// 段评打不开往往就是这条链路断了。
 enum SourceVariableRegression {
     static func run(_ check: (Bool, String) -> Void) {
-        guard let data = FileManager.default.contents(atPath: fixturePath()),
+        guard let data = try? Data(contentsOf: fixture()),
               let source = try? JSONDecoder().decode([BookSource].self, from: data).first else {
             check(false, "读取番茄书源夹具")
             return
         }
 
-        let key = "regression-token-\(source.bookSourceUrl)"
-        // 1) 登录脚本写入
+
         let write = JSEngine.shared.runLoginScript(source: source, library: "function saveToken(t){ source.setVariable(t); }",
                                                    call: "saveToken('TOKEN-ABC')")
         if case .failure(let e) = write { check(false, "登录脚本写变量失败：\(e.message)") }
@@ -50,10 +49,8 @@ enum SourceVariableRegression {
                                            call: "clearToken()")
     }
 
-    private static func fixturePath() -> String {
-        let dir = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures")
-        return dir.appendingPathComponent("fanqie-comment-source.json").path
+    private static func fixture() -> URL {
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Tools/SourceTest/Fixtures/fanqie-comment-source.json")
     }
 }
