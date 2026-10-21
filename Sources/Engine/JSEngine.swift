@@ -1003,7 +1003,13 @@ final class JSEngine {
     java.qread=function(){return '';};
     java.getThemeConfig=function(){return 'light';};
     java.startBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''));}return ''};
-    java.webView=function(h,u,js){return java.ajax(String(u))};
+    java.webView=function(h,u,js){
+        if(typeof __headlessWeb==='function'){
+            var out=String(__headlessWeb(String(h==null?'':h),String(u==null?'':u),String(js==null?'':js)));
+            if(out!==''){return out;}
+        }
+        return java.ajax(String(u));
+    };
     var __localRuleVars=Object.create(null);
     java.put=function(k,v){
         k=String(k);v=String(v);
@@ -1486,6 +1492,13 @@ final class JSEngine {
         let deviceId: @convention(block) () -> String = { JSEngine.installIdentifier }
         ctx.setObject(strToBytes, forKeyedSubscript: "__strToBytes" as NSString)
         ctx.setObject(bytesToStr, forKeyedSubscript: "__bytesToStr" as NSString)
+        let headlessWeb: @convention(block) (String, String, String) -> String = { html, url, js in
+            guard let runner = HeadlessWeb.runner, !Thread.isMainThread else { return "" }
+            let h = html.isEmpty ? nil : html
+            let u = h == nil && !url.isEmpty ? url : nil
+            return runner.run(html: h, url: u, js: js, timeout: 15) ?? ""
+        }
+        ctx.setObject(headlessWeb, forKeyedSubscript: "__headlessWeb" as NSString)
         ctx.setObject(base64ToBytes, forKeyedSubscript: "__base64ToBytes" as NSString)
         ctx.setObject(base64Encode, forKeyedSubscript: "__base64Encode" as NSString)
         ctx.setObject(hexToBytes, forKeyedSubscript: "__hexToBytes" as NSString)
@@ -1746,6 +1759,14 @@ final class JSEngine {
                 }
             }
         }
+        // 依赖浏览器环境（document/window/fetch/DOMParser…）的脚本在 JavaScriptCore 里必然失败，
+        // 交给 App 注入的无头 WKWebView 再跑一次（CI/harness 没注入 → 自动跳过）。
+        if (evaluated == nil || evaluated!.isUndefined || evaluated!.isNull),
+           let message = JSEngine.lastError, HeadlessWeb.needsBrowser(message),
+           let out = JSEngine.runInHeadlessWeb(script: script, content: result, baseUrl: baseUrl) {
+            DebugLog.add("≡脚本依赖浏览器环境，已用无头 WebView 执行")
+            return out
+        }
         guard let v = evaluated, !v.isUndefined, !v.isNull else {
             // 脚本可能只排了延迟回调（java.postDelayed）而没有返回值：也要执行它们。
             ctx.evaluateScript("if(typeof __drainDelayed==='function')__drainDelayed()")
@@ -1773,6 +1794,22 @@ final class JSEngine {
         guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
               let text = String(data: data, encoding: .utf8) else { return "\"\"" }
         return text
+    }
+
+    /// 用无头 WebView 执行依赖浏览器环境的脚本；没注入实现（CI/harness）或已在主线程时返回 nil。
+    static func runInHeadlessWeb(script: String, content: Any?, baseUrl: String?) -> String? {
+        guard let runner = HeadlessWeb.runner else { return nil }
+        // 实现要切主线程跑 WKWebView：主线程上阻塞等待会死锁，直接放弃兜底。
+        guard !Thread.isMainThread else { return nil }
+        var html: String?
+        if let s = content as? String, s.contains("<") {
+            html = s
+        } else if let element = content as? Element, let outer = try? element.outerHtml() {
+            html = outer
+        }
+        let url = html == nil ? baseUrl : nil
+        let value = runner.run(html: html, url: url, js: script, timeout: 15)
+        return (value?.isEmpty ?? true) ? nil : value
     }
 
     /// 规则 JS 里的 src：始终是字符串（元素集合取各元素 outerHtml 拼接）。
