@@ -55,7 +55,7 @@ enum ShushanBubbleRegression {
         let full = "<img src=\"data:image/svg+xml;base64,\(Data("<svg xmlns=\"http://www.w3.org/2000/svg\"><text>7</text></svg>".utf8).base64EncodedString()),{'click':'showCmt(\"b\",\"c\",\"1\",\"2\")','style':'FULL'}\">"
         let fullBlocks = ContentBlocks.parse("正文。" + full)
         check(fullBlocks.count == 2, "FULL 样式气泡单独成块（实际 \(fullBlocks.count)）")
-        if case .image(_, let click)? = fullBlocks.last {
+        if case .image(_, let click, _)? = fullBlocks.last {
             check(click?.hasPrefix("js:showCmt(") == true, "FULL 样式气泡保留点击回调（实际 \(click ?? "nil")）")
         } else {
             check(false, "FULL 样式气泡解析为图片块")
