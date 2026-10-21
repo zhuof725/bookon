@@ -501,7 +501,16 @@ enum WebBook {
     /// 与 content 相同的抓取流程，但保留 <comment>/<img> 标记，供阅读器渲染段评。
     static func contentBlocks(source: BookSource, chapter: BookChapter, nextChapterUrl: String? = nil, book: Book? = nil) async throws -> (raw: String, blocks: [ContentBlock]) {
         let raw = try await rawContent(source: source, chapter: chapter, nextChapterUrl: nextChapterUrl, book: book)
-        return (raw, ContentBlocks.parse(raw))
+        var blocks = ContentBlocks.parse(raw)
+        // 原版 ruleContent.imageDecode：对正文里的图片/气泡逐个求值（脚本里 `src` 是图片地址，
+        // 返回值是新地址）。番茄系段评靠它清理「已渲染」的内存标记，否则点击气泡时
+        // createSvg() 会以为已经打开过评论页而直接跳过 → 表现为「段评打不开」。
+        if let decode = source.ruleContent?.imageDecode?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !decode.isEmpty {
+            let ctx = RuleContext(source: source, book: book, chapter: chapter)
+            blocks = blocks.map { ImageDecodeRuntime.apply($0, rule: decode, source: source, context: ctx, baseURL: chapter.url) }
+        }
+        return (raw, blocks)
     }
 
     /// 书源 loginUi 是脚本时，里面常有 java.put('dev', …) 之类的初始化（Legado 打开登录页时才执行）。

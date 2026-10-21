@@ -86,7 +86,10 @@ enum ContentBlocks {
                     let click = clickURL(in: tag) ?? optionClick(in: src) ?? clickFromOptions(opts)
                     if opts["style"]?.lowercased() == "text" {
                         // 书源要求按文字大小行内显示：接到上一段末尾，而不是单独成大图。
-                        blocks.append(.inlineBubble(src: clean, count: svgTexts(svgText(clean) ?? "").compactMap { Int($0) }.first, clickURL: click))
+                        let svgCount = svgTexts(svgText(clean) ?? "").compactMap { Int($0) }.first
+                        blocks.append(.inlineBubble(src: clean,
+                                                    count: svgCount ?? countFromClick(click),
+                                                    clickURL: click))
                     } else if let svg = svgText(clean), let native = nativeBlock(fromSVG: svg, click: click) {
                         blocks.append(native)
                     } else {
@@ -197,6 +200,19 @@ enum ContentBlocks {
 
     /// click 是 JS 调用（如 showCmt('书','章','段','数')）时，不是网址；留给调用方按书源执行。
     /// 书山把回调键写成 `js`（未改版客户端）或 `click`（改版客户端），两者都认。
+    /// 番茄系「知秋段评」的气泡：`src` 的 base64 部分是空的，真正的段评数量写在点击表达式里：
+    ///   createSvg('bid','cid',pid,count,nanoTime)
+    /// 只从 SVG 文本取数字会拿不到，结果一律显示 1。这里按参数位置取第 4 个。
+    static func countFromClick(_ click: String?) -> Int? {
+        guard let click, !click.isEmpty else { return nil }
+        let pattern = "createSvg[0-9]*\\(\\s*['\"]([^'\"]*)['\"]\\s*,\\s*['\"]([^'\"]*)['\"]\\s*,"
+            + "\\s*(-?\\d+)\\s*,\\s*(\\d+)"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let m = re.firstMatch(in: click, range: NSRange(location: 0, length: (click as NSString).length)),
+              let r = Range(m.range(at: 4), in: click) else { return nil }
+        return Int(click[r])
+    }
+
     static func clickFromOptions(_ opts: [String: String]) -> String? {
         guard let c = opts["click"] ?? opts["js"] ?? opts["onClick"], !c.isEmpty else { return nil }
         if let u = urlInCall(c) { return u }
