@@ -72,7 +72,7 @@ enum EngineCompatRegression {
         // （否则 JavaScriptCore 直接报 “Invalid character: '#'”）
         let tailRule = ".a@text@js:result + '123'##(\\d+)##[$1]"
         check(ar.getString(tailRule) == "一[123]", "JS 段尾部的 ##正则##替换 拆成独立替换步骤")
-        let listTailRule = "ol > li@js:result.map(function(e){return e.text();}).join(',')##\\s##_"
+        let listTailRule = "ol > li@js:result.map(function(e){return e.text();}).join(',')##,##_"
         let listTailNodes = ar.getElements(listTailRule)
         var listTailText = ""
         if let element = listTailNodes.first as? Element { listTailText = (try? element.text()) ?? "" }
