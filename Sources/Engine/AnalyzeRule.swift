@@ -81,7 +81,20 @@ final class AnalyzeRule {
             }
             let block = match.range(at: 1)
             let script = block.location != NSNotFound ? block : match.range(at: 2)
-            parts.append((true, source.substring(with: script)))
+            var body = source.substring(with: script)
+            // 规则尾部还有 `##正则##替换`（如 `a@text@js:xxx##(^|…)##$1<br>`）：
+            // 原版把正则拆成独立的替换步骤，留在 JS 脚本里会直接语法错误
+            // （JavaScriptCore 报 “Invalid character: '#'”）。
+            if let marker = RuleScanner.firstTopLevel(body, ["##"]) {
+                let tail = String(body[marker.lowerBound...])
+                body = String(body[..<marker.lowerBound])
+                parts.append((true, body))
+                if !tail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    parts.append((false, tail))
+                }
+            } else {
+                parts.append((true, body))
+            }
             cursor = NSMaxRange(match.range)
         }
         if cursor < source.length {
@@ -283,7 +296,12 @@ final class AnalyzeRule {
             if isJs { cur = runJS(s, cur, node: node) }
             else {
                 if let str = cur as? String { cur = parseStage(str) }
-                cur = elementsValue(cur, s)
+                if s.hasPrefix("##") {
+                    // 规则尾部的正则替换步骤（配合 JS 段使用）
+                    cur = AnalyzeRule.applyTrailingRegex(cur, s)
+                } else {
+                    cur = elementsValue(cur, s)
+                }
             }
         }
         if let a = cur as? [Any] { return a }
@@ -340,6 +358,26 @@ final class AnalyzeRule {
         segs.removeFirst()
         let repl = segs.first ?? ""
         return (re, repl, tail.hasSuffix("###"))
+    }
+
+    /// 规则尾部的 `##正则##替换`：原版是独立的替换步骤（可跟在 JS 段后面）。
+    static func applyTrailingRegex(_ value: Any, _ raw: String) -> Any {
+        guard let marker = RuleScanner.firstTopLevel(raw, ["##"]) else { return value }
+        let tail = String(raw[marker.upperBound...])
+        var segs = tail.components(separatedBy: "##")
+        let regex = segs.removeFirst()
+        let repl = segs.first ?? ""
+        let firstOnly = tail.hasSuffix("###")
+        let text = AnalyzeRule.asString(value)
+        guard let nre = RegexLog.compile(regex) else { return text }
+        let ns = text as NSString
+        if firstOnly {
+            if let m = nre.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) {
+                return nre.replacementString(for: m, in: text, offset: 0, template: repl)
+            }
+            return ""
+        }
+        return nre.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: repl)
     }
 
     /// ##正则##替换：与 stringValue 尾部同一套语义（支持 ### 只替换第一处）。

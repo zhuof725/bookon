@@ -1586,7 +1586,12 @@ final class JSEngine {
     }
 
     /// 当前正在求值的脚本（异常日志里带出来，便于定位是哪一段规则出错）。
-    static var currentScript: String = ""
+    /// 批量校验是并发的，必须按线程隔离，否则日志里的脚本会串。
+    static var currentScript: String {
+        get { (Thread.current.threadDictionary[__currentScriptKey] as? String) ?? "" }
+        set { Thread.current.threadDictionary[__currentScriptKey] = newValue }
+    }
+    private static let __currentScriptKey = "legado.currentScript"
 
     /// Evaluate a JS snippet with `result`, `baseUrl`, `book`, `chapter`, `key`, `page` in scope.
     /// 每次求值都会新建 JSContext 并产生大量自动释放对象；在并发任务线程上长时间批量运行时
