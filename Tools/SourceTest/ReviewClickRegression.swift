@@ -15,7 +15,26 @@ import Foundation
 /// 三个问题任一存在，点击都会静默失败（书源的 try/catch 把异常吞了）。
 enum ReviewClickRegression {
     static func run(_ check: (Bool, String) -> Void) {
-        let source = BookSource(bookSourceUrl: "https://review-click.example", bookSourceName: "段评点击回归")
+        // createSvg 放在 loginUrl 里：阅读器点击气泡走的正是 resolveClickURL
+        // （内部加载 jsLib + loginUrl 并装 __openBrowser 捕获器）。
+        let clickLib = """
+        function createSvg(bid, cid, pid, count) {
+          let cacheKey = `fq-${bid}-${cid}-${pid}`
+          let load = this.cache.getFromMemory(cacheKey)
+          if (load != '1') {
+            let token = this.source.getVariable()
+            if (token == '') {
+              this.java.longToast('请先在【登录页】获取共享Token后使用本书源')
+            } else {
+              this.java.showBrowser('https://fq.example/comment/page?bid=' + bid + '&cid=' + cid + '&pid=' + pid + '&token=' + token, null, null, '{}')
+            }
+          }
+          return 'data:image/svg+xml;base64,SVG'
+        }
+        """
+        let source = BookSource(bookSourceUrl: "https://review-click.example",
+                                bookSourceName: "段评点击回归")
+        source.loginUrl = clickLib
         let ctx = RuleContext(source: source)
 
         // MARK: 1) this.cache / this.source 必须是全局对象
@@ -78,32 +97,11 @@ enum ReviewClickRegression {
         // 书源的 createSvg 里：标记没被清 → 直接跳过；token 为空 → 只弹提示；
         // 两者都满足才会 java.showBrowser(url)。这里模拟「已有 token」的情况。
         _ = JSEngine.shared.evalString("source.setVariable('TOKEN123')", context: RuleContext(source: source))
-        let jsLib = """
-        function createSvg(bid, cid, pid, count) {
-          let cacheKey = `fq-${bid}-${cid}-${pid}`
-          let load = this.cache.getFromMemory(cacheKey)
-          if (load != '1') {
-            let token = this.source.getVariable()
-            if (token == '') {
-              this.java.longToast('请先在【登录页】获取共享Token后使用本书源')
-            } else {
-              this.java.showBrowser('https://fq.example/comment/page?bid=' + bid + '&cid=' + cid + '&pid=' + pid + '&token=' + token, null, null, '{}')
-            }
-          }
-          return 'data:image/svg+xml;base64,SVG'
+        if let got = JSEngine.shared.resolveClickURL(source: source,
+                                                     click: "createSvg('\(bid)','\(cid)',\(pid),42,1700000000123)") {
+            check(got.contains("comment/page?bid=\(bid)"), "点击气泡能拿到评论页地址（实际 \(got)）")
+        } else {
+            check(false, "点击气泡能拿到评论页地址（实际 nil）")
         }
-        """
-        var opened: String?
-        let lock = NSLock()
-        ToastCenter.pushBrowserCapture { u in
-            lock.lock(); if opened == nil, !u.isEmpty { opened = u }; lock.unlock()
-        }
-        defer { ToastCenter.popBrowserCapture() }
-        _ = JSEngine.shared.evalString(jsLib, context: RuleContext(source: source))
-        _ = JSEngine.shared.evalString("createSvg('\(bid)','\(cid)',\(pid),42,1700000000123)",
-                                       context: RuleContext(source: source))
-        lock.lock(); let got = opened; lock.unlock()
-        check(got?.contains("comment/page?bid=\(bid)") == true,
-              "点击气泡能拿到评论页地址（实际 \(got ?? "nil")）")
     }
 }
