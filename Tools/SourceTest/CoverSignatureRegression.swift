@@ -7,7 +7,7 @@ import Foundation
 /// 缓存有效期一旦超过封面签名，缓存里的书就全是白屏的封面。
 enum CoverSignatureRegression {
     private static func book(_ cover: String) -> Book {
-        Book(bookUrl: "https://b.invalid/1", name: "书", origin: "s", coverUrl: cover)
+        Book(bookUrl: "https://b.invalid/1", name: "书", coverUrl: cover, origin: "s")
     }
 
     static func run(_ check: (Bool, String) -> Void) {
@@ -17,7 +17,7 @@ enum CoverSignatureRegression {
 
         let expiry = CoverSignature.expiry(of: signed)
         check(expiry != nil, "封面签名：解析出 x-expires")
-        check(expiry.map { abs($0.timeIntervalSince1970 - 1793247828) < 1 } == true,
+        check(expiry.map { abs($0.timeIntervalSince1970 - 1793247828.0) < 1 } == true,
               "封面签名：过期时刻与地址里的一致")
         check(CoverSignature.expiry(of: plain) == nil, "封面签名：普通地址没有过期时刻")
         check(CoverSignature.isExpired(signed, now: Date(timeIntervalSince1970: 1793247829)),
@@ -30,8 +30,8 @@ enum CoverSignatureRegression {
         let now = Date(timeIntervalSince1970: 1792643065)
         let books = [book(signed), book(plain)]
         let ttl = DiscoverBlockCache.validInterval(books: books, now: now)
-        let untilExpiry = 1793247828 - 1792643065
-        check(ttl <= untilExpiry, "发现缓存：有效期不超过封面签名（实际 \(Int(ttl))s，签名还有 \(untilExpiry)s）")
+        let untilExpiry: Double = 1793247828 - 1792643065
+        check(ttl <= untilExpiry, "发现缓存：有效期不超过封面签名（实际 \(Int(ttl))s，签名还有 \(Int(untilExpiry))s）")
         check(ttl > 0, "发现缓存：签名还有效时缓存仍然可用")
         // 签名已经过了 → 缓存直接作废（否则就是一堆 403 的封面）
         let after = Date(timeIntervalSince1970: 1793247829)
