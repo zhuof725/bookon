@@ -128,7 +128,6 @@ struct DiscoverTemplateThumbnail: View {
     @ViewBuilder private func content(unit: CGFloat) -> some View {
         // 所有尺寸乘 unit：从 104pt 宽的大预览到 78pt 的小格子都按比例缩
         let gap = 6 * unit
-        let small = 9 * unit
 
         switch kind {
         case .badgeGrid:
@@ -239,7 +238,6 @@ struct DiscoverTemplateThumbnail: View {
                 }
             }
         }
-        _ = small
     }
 
     private func rotation(for index: Int) -> Double {
