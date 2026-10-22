@@ -105,7 +105,7 @@ struct DiscoverTemplate: Identifiable, Hashable {
             ?? DiscoverTemplate(kind: kind,
                                 minCount: countFloor,
                                 maxCount: countCeiling,
-                                defaultCount: 8)
+                                defaultCount: countCeiling)
     }
 
     /// 把外部传入的数量钳制到模板允许的范围（1...20）。
@@ -139,7 +139,7 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
          kindTitle: String,
          kindUrl: String,
          template: DiscoverTemplateKind = .deck,
-         count: Int = 7) {
+         count: Int = DiscoverTemplate.countCeiling) {
         self.sourceUrl = sourceUrl
         self.sourceName = sourceName
         self.kindTitle = kindTitle
@@ -160,7 +160,7 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         kindUrl = (try? c.decodeIfPresent(String.self, forKey: .kindUrl)) ?? ""
         template = DiscoverTemplateKind.normalized(try? c.decodeIfPresent(String.self, forKey: .template))
         count = DiscoverTemplate.template(for: template)
-            .clampedCount((try? c.decodeIfPresent(Int.self, forKey: .count)) ?? 7)
+            .clampedCount((try? c.decodeIfPresent(Int.self, forKey: .count)) ?? DiscoverTemplate.countCeiling)
     }
 
     func encode(to encoder: Encoder) throws {
