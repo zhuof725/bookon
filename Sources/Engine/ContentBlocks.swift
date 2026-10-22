@@ -333,13 +333,27 @@ enum ContentBlocks {
     }
 
     /// SVG 根元素的宽高比（高/宽），用于按原比例显示。取不到返回 nil。
+    /// 优先用 width/height 属性；没有就用 viewBox（番茄聚合的章评条只有 viewBox）。
     static func svgAspectRatio(_ svg: String) -> Double? {
         guard let re = try? NSRegularExpression(pattern: "<svg\\b[^>]*>", options: [.caseInsensitive]),
               let m = re.firstMatch(in: svg, range: NSRange(location: 0, length: (svg as NSString).length)) else { return nil }
         let tag = (svg as NSString).substring(with: m.range)
-        guard let w = svgLength(in: tag, name: "width"),
-              let h = svgLength(in: tag, name: "height"), w > 0, h > 0 else { return nil }
-        return h / w
+        var w = svgLength(in: tag, name: "width")
+        var h = svgLength(in: tag, name: "height")
+        if w == nil || h == nil {
+            // viewBox="0 0 1024 150" → 宽高取后两个数。
+            if let re2 = try? NSRegularExpression(pattern: "\\bviewBox\\s*=\\s*\"([^\"]+)\""),
+               let m2 = re2.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
+               let r = Range(m2.range(at: 1), in: tag) {
+                let parts = tag[r].split(separator: " ").compactMap { Double($0) }
+                if parts.count >= 4 {
+                    w = w ?? parts[2]
+                    h = h ?? parts[3]
+                }
+            }
+        }
+        guard let ww = w, let hh = h, ww > 0, hh > 0 else { return nil }
+        return hh / ww
     }
 
     private static func svgLength(in tag: String, name: String) -> Double? {

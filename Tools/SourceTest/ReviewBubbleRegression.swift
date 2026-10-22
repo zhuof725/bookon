@@ -111,6 +111,10 @@ enum ReviewBubbleRegression {
         }
         let ratio = ContentBlocks.svgAspectRatio(discussionSVG) ?? 0
         check(abs(ratio - 0.12) < 0.001, "章评条 SVG 宽高比（1000x120）")
+        // 只有 viewBox 的 SVG（番茄聚合的章评条）也要能算出比例
+        let viewBoxSVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1024 150\"><rect width=\"1024\" height=\"150\"/></svg>"
+        let vbRatio = ContentBlocks.svgAspectRatio(viewBoxSVG) ?? 0
+        check(abs(vbRatio - 150.0 / 1024.0) < 0.001, "只有 viewBox 的 SVG 也能算出宽高比")
         // base64 的 SVG data URI 必须能解出 SVG 文本；解不出就只剩 base64 原文（乱码）。
         let b64SVG = Data(discussionSVG.utf8).base64EncodedString()
         let svgURI = "data:image/svg+xml;base64," + b64SVG
