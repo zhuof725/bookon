@@ -17,7 +17,7 @@ struct SourceLoginView: View {
 
     private var script: String? { SourceLoginForm.loginScript(source.loginUrl) }
     private var pageURL: String? { SourceLoginForm.loginPageURL(source) }
-    private var hasLoginFunction: Bool { (script ?? "").contains("login") }
+    private var hasLoginFunction: Bool { SourceLoginForm.hasLoginFunction(script) }
 
     var body: some View {
         NavigationStack {
@@ -53,7 +53,7 @@ struct SourceLoginView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("确认") { save(runLogin: false); dismiss() }
+                    Button("确认") { confirm() }
                         .accessibilityIdentifier("login.confirm")
                 }
             }
@@ -103,6 +103,18 @@ struct SourceLoginView: View {
         Binding(get: { values[name] ?? "" }, set: { values[name] = $0 })
     }
 
+    /// 开关的绑定：切换后把 chars 里的「开/关」文字写进表单值，
+    /// 再执行书源给的 action（通常是切换源变量并提示一句）。
+    private func toggleBinding(_ f: LoginField) -> Binding<Bool> {
+        Binding(
+            get: { f.toggleIsOn(value: values[f.name]) },
+            set: { newValue in
+                values[f.name] = f.toggleValue(on: newValue)
+                // press 会先存表单（脚本里的 getLoginInfoMap() 才读得到最新值），再执行 action。
+                press(f)
+            })
+    }
+
     /// 单个登录项：输入框是圆角浅底输入框，按钮是圆角玻璃底色 + 主题色文字。
     /// 布局比例交给 SourceLoginForm.layoutRows，这里只负责外观与回调。
     @ViewBuilder
@@ -140,6 +152,22 @@ struct SourceLoginView: View {
                 .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
             }
             .disabled(busy || f.options.isEmpty)
+            .accessibilityIdentifier("login.item.\(f.name)")
+        } else if f.kind == .toggle {
+            // 开关（loginUi 的 type:'toggle'）：chars[0]=关、chars[1]=开。
+            // 书源的 login() 会读表单值判断开不开（番茄聚合源用 '✅' 表示开），
+            // 所以开关写回的是 chars 里的文字，不是 true/false。
+            Toggle(isOn: toggleBinding(f)) {
+                Text(f.title)
+                    .appFont(.subheadline)
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(2)
+            }
+            .toggleStyle(.switch)
+            .disabled(busy)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
             .accessibilityIdentifier("login.item.\(f.name)")
         } else {
             Group {
@@ -201,10 +229,18 @@ struct SourceLoginView: View {
         values = SourceLoginForm.initialValues(fields: parsed, saved: saved)
     }
 
-    private func save(runLogin: Bool) {
+    private func save() {
         JSEngine.loginStore.putLoginInfo(sourceKey, SourceLoginForm.encode(values))
         message = "已保存"
-        if runLogin { runScript("login()") }
+    }
+
+    /// 「确认」= 登录：先存表单，再执行书源的 login()。
+    /// 书源把表单值写进源变量（网关地址、apikey、段评/章评开关…）全靠这一步 ——
+    /// 只存表单不调 login()，那些改动就永远不生效。
+    private func confirm() {
+        save()
+        guard SourceLoginForm.hasLoginFunction(script) else { dismiss(); return }
+        runScript("login()") { dismiss() }
     }
 
     private func press(_ f: LoginField) {
@@ -256,7 +292,7 @@ struct SourceLoginView: View {
         browser = BrowserTarget(url: target, title: title)
     }
 
-    private func runScript(_ call: String, reloadAfter: Bool = false) {
+    private func runScript(_ call: String, reloadAfter: Bool = false, onSuccess: (() -> Void)? = nil) {
         guard let lib = script else { message = "loginUrl 里没有可执行的脚本"; return }
         busy = true
         message = ""
@@ -282,6 +318,7 @@ struct SourceLoginView: View {
                     message = text
                     toastCard = text
                 }
+                onSuccess?()
             }
         }
     }

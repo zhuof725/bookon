@@ -47,6 +47,31 @@ enum LoginFormRegression {
         check(vals["账号"] == "saved" && vals["密码"] == "" && vals["登录"] == nil, "登录表单：已保存值优先于 default，按钮不取值")
         check(SourceLoginForm.encode(["b": "2", "a": "1"]) == "{\"a\":\"1\",\"b\":\"2\"}", "登录表单：保存 JSON 键有序")
 
+        // 开关（type:'toggle'）：番茄聚合这类面板书源用开关控制段评/章评/播放器等。
+        // 没有 toggle 类型时它会退化成输入框 —— 用户看到的是能敲字的方框，不是开关。
+        let toggleUI = "[{name:'段评开关',type:'toggle',chars:['🔳','✅'],default:'🔳',action:'toggleParaComments()'},"
+            + "{name:'播放器开关',type:'toggle',chars:['🔳','✅'],default:'✅'},{name:'账号',type:'text'}]"
+        let tf = SourceLoginForm.parseFields(toggleUI)
+        check(tf.map(\.kind) == [.toggle, .toggle, .text], "登录表单：toggle 认成开关而不是输入框")
+        check(tf[0].options == ["🔳", "✅"], "登录表单：开关的 chars 作为开/关文字")
+        check(tf[0].toggleValue(on: true) == "✅" && tf[0].toggleValue(on: false) == "🔳",
+              "登录表单：开关写回 chars 里的文字（书源 login() 按 '✅' 判断开）")
+        check(tf[0].toggleIsOn(value: "✅") && !tf[0].toggleIsOn(value: "🔳"), "登录表单：按值判断开关状态")
+        check(tf[1].toggleIsOn(value: nil) && tf[1].toggleIsOn(value: ""),
+              "登录表单：没有已保存值时按 default 判断开关状态")
+        check(!tf[0].toggleIsOn(value: nil), "登录表单：default 为关时开关是关的")
+        let tvals = SourceLoginForm.initialValues(fields: tf, saved: [:])
+        check(tvals["段评开关"] == "🔳" && tvals["播放器开关"] == "✅", "登录表单：开关的默认值进入表单值")
+        check(tvals["账号"] == "", "登录表单：开关与输入框一起进入表单值")
+
+        // 确认按钮要调用书源的 login()（表单值写进源变量全靠这一步），但只在真有该函数时调。
+        check(SourceLoginForm.hasLoginFunction("function login(){return 1}"), "登录表单：识别 login() 函数")
+        check(SourceLoginForm.hasLoginFunction("var login = function(){}"), "登录表单：识别 login = function")
+        check(SourceLoginForm.hasLoginFunction("window.login = function(){}"), "登录表单：识别 window.login")
+        check(!SourceLoginForm.hasLoginFunction("// 这里只是登录页的注释"), "登录表单：注释里提到 login 不算有 login()")
+        check(!SourceLoginForm.hasLoginFunction("function loginPage(){}"), "登录表单：loginPage 不算 login()")
+        check(!SourceLoginForm.hasLoginFunction(nil) && !SourceLoginForm.hasLoginFunction(""), "登录表单：没有脚本时没有 login()")
+
         // <js> 形式的 loginUi 需要先求值
         let jsUi = "<js>JSON.stringify([{name:'检查',type:'button',action:'check()'}])</js>"
         let resolved = SourceLoginForm.resolveUiText(jsUi) { JSEngine.shared.evalString($0) }

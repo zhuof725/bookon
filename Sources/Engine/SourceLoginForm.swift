@@ -3,15 +3,16 @@ import Foundation
 /// 书源登录表单：把 loginUi（JSON 数组，可能是 <js>/@js: 脚本）解析成有序字段，
 /// 并负责按 Legado 约定执行登录：保存表单 -> 运行 loginUrl 里的 login()；按钮 action 调用 loginUrl 里的函数。
 struct LoginField: Equatable, Identifiable {
-    /// text/password：输入框；button：可点按钮；select：下拉选择（chars 为选项）。
-    enum Kind: Equatable { case text, password, button, select }
+    /// text/password：输入框；button：可点按钮；select：下拉选择（chars 为选项）；
+    /// toggle：开关（chars[0] 为关、chars[1] 为开，default 为初始状态）。
+    enum Kind: Equatable { case text, password, button, select, toggle }
     var id: Int
     var name: String
     var kind: Kind
     var defaultValue: String
-    /// 按钮/下拉的 action：JS 函数调用，例如 `checkSite()`；也可能是网址。
+    /// 按钮/下拉/开关的 action：JS 函数调用，例如 `checkSite()`；也可能是网址。
     var action: String
-    /// select 的选项数组（loginUi 的 chars）。
+    /// select 的选项数组（loginUi 的 chars）；toggle 用它表示开/关两种状态文字。
     var options: [String] = []
     /// 显示名：viewName（去掉 JS 引号）优先，其次是 name。表单取值仍按 name。
     var title: String { displayName.isEmpty ? name : displayName }
@@ -19,6 +20,22 @@ struct LoginField: Equatable, Identifiable {
     var displayName: String = ""
     /// 书源 style.layout_flexBasisPercent：0.45 表示与下一个同类按钮并排，1 表示整行。
     var basisPercent: Double = 1
+
+    // MARK: - 开关（type:"toggle"）
+
+    /// 开关「开」时写入表单的值：chars 的第二项（没有第二项时用 "true"）。
+    var toggleOnValue: String { options.count > 1 ? options[1] : "true" }
+    /// 开关「关」时写入表单的值：chars 的第一项（没有时用 "false"）。
+    var toggleOffValue: String { options.first ?? "false" }
+    /// 当前值是否表示「开」。值为空时按 default 判断。
+    func toggleIsOn(value: String?) -> Bool {
+        let v: String
+        if let value, !value.isEmpty { v = value } else { v = defaultValue }
+        if v.isEmpty { return false }
+        return v == toggleOnValue
+    }
+    /// 开关切到某个状态时写入表单的值。
+    func toggleValue(on: Bool) -> String { on ? toggleOnValue : toggleOffValue }
 }
 
 enum SourceLoginForm {
@@ -57,11 +74,14 @@ enum SourceLoginForm {
             if name.isEmpty { continue }
             // type 可能带后缀（真实书源里有「button文字关闭」「text文字关闭」这类写法），
             // 按前缀归类即可；未知类型仍按文本框处理，避免整项不显示。
+            // 「toggle」（开关）必须单独认：认不出来会退化成输入框，
+            // 用户看到的却是可以敲字的方框，而不是开关。
             let type = text("type").lowercased()
             let kind: LoginField.Kind
             if type.hasPrefix("button") { kind = .button }
             else if type.hasPrefix("password") { kind = .password }
             else if type.hasPrefix("select") { kind = .select }
+            else if type.hasPrefix("toggle") { kind = .toggle }
             else { kind = .text }
             // loginUi 的 viewName 是 JS 表达式（如 `'✅ 塔读小说'`）：去掉引号后作为显示名。
             let display = RuleScanner.unquote(text("viewName")) ?? ""
@@ -196,6 +216,18 @@ enum SourceLoginForm {
         guard let t = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return false }
         let lower = t.lowercased()
         return lower.hasPrefix("<js>") || lower.hasPrefix("@js:")
+    }
+
+    /// loginUrl 的脚本里是否定义了 login() 函数。
+    /// 登录面板的「确认」要调用它：书源把表单值写进源变量（网关地址、apikey、各开关）全靠这一步。
+    /// 只认真正的函数定义，避免脚本里出现 "login" 字样就误调。
+    static func hasLoginFunction(_ script: String?) -> Bool {
+        guard let s = script, !s.isEmpty else { return false }
+        let patterns = ["(?m)\\bfunction\\s+login\\s*\\(",
+                        "(?m)\\blogin\\s*=\\s*function",
+                        "(?m)\\blogin\\s*=\\s*\\([^)]*\\)\\s*=>",
+                        "(?m)\\bwindow\\.login\\s*="]
+        return patterns.contains { s.range(of: $0, options: .regularExpression) != nil }
     }
 
     /// 是否显示登录入口：有 loginUi，或 loginUrl 是脚本/网址。
