@@ -1,32 +1,41 @@
 import SwiftUI
 
-/// 渲染一页自定义板块：轮播 + 每条板块按自己的模板画。
-/// 它只做三件事：读 Store、按模板分发、处理点击。排版全在模板里。
+/// 首页：顶部分类（轮播）+ 按配置渲染的板块流。
+///
+/// 三条约束都体现在这里：
+/// 1. 顶部不是书源轮播，而是配置里的「分类」，每个分类一屏板块；
+/// 2. 页面本身就是一个 Tab（底栏的「首页」）；
+/// 3. 每条板块按自己的模板渲染，外观参数由配置决定。
 struct CustomDiscoverView: View {
     @ThemePalette private var palette
     @EnvironmentObject private var store: AppStore
     @ObservedObject private var model = DiscoverBoardStore.shared
+
     @State private var showSettings = false
     @State private var selectedBook: Book?
     @State private var fullPage: CustomDiscoverEntry?
+    @State private var categoryIndex = 0
+
+    private var categories: [String] { model.visibleCategories }
+
+    private var currentCategory: String {
+        categories.indices.contains(categoryIndex) ? categories[categoryIndex] : CustomDiscoverConfig.allCategory
+    }
+
+    private var sections: [DiscoverSectionModel] {
+        model.sections(inCategory: currentCategory)
+    }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if model.isEmpty {
-                    emptyState
-                } else {
-                    carousel
-                    ForEach(model.sections) { section in
-                        sectionBlock(section)
-                    }
-                }
+        VStack(spacing: 0) {
+            if !categories.isEmpty && !model.isEmpty {
+                categoryBar
             }
-            .padding(.bottom, 28)
+            content
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .navigationTitle("发现")
+        .navigationTitle("首页")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -54,24 +63,86 @@ struct CustomDiscoverView: View {
             if model.isEmpty { model.reloadConfig() }
             await model.loadInitial()
         }
-        .refreshable { await model.refresh() }
         .onChange(of: model.revision) { _, _ in
+            // 配置变了，分类可能变少：把索引拉回范围内
+            categoryIndex = min(categoryIndex, max(categories.count - 1, 0))
             Task { await model.loadInitial() }
         }
         .accessibilityIdentifier("customdiscover.page")
     }
 
-    // MARK: 顶部轮播
+    // MARK: 顶部分类（横向可滑动，带指示）
 
-    @ViewBuilder private var carousel: some View {
-        let heroes = model.carouselHeroes
-        if !heroes.isEmpty {
-            CustomDiscoverCarousel(heroes: heroes)
-                .padding(.bottom, 20)
+    private var categoryBar: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(categories.enumerated()), id: \.offset) { pair in
+                            categoryChip(title: pair.element, index: pair.offset)
+                                .id(pair.offset)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+                .onChange(of: categoryIndex) { _, value in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(value, anchor: .center)
+                    }
+                }
+            }
+            Rectangle()
+                .fill(palette.primary.opacity(0.06))
+                .frame(height: 0.5)
         }
     }
 
-    // MARK: 单条板块
+    private func categoryChip(title: String, index: Int) -> some View {
+        let selected = index == categoryIndex
+        return Button {
+            categoryIndex = index
+        } label: {
+            Text(title)
+                .appFont(.system(size: 14, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? palette.onAccent : palette.primary)
+                .padding(.horizontal, 14)
+                .frame(height: 32)
+                .background {
+                    if selected {
+                        Capsule().fill(palette.accent)
+                    } else {
+                        ThemeSurface(shape: Capsule())
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.category.\(title)")
+    }
+
+    // MARK: 内容
+
+    @ViewBuilder private var content: some View {
+        if model.isEmpty {
+            emptyState
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(sections) { section in
+                        sectionBlock(section)
+                    }
+                    if sections.isEmpty {
+                        Text("这个分类下还没有板块")
+                            .appFont(.footnote)
+                            .foregroundStyle(palette.secondary)
+                            .padding(20)
+                    }
+                }
+                .padding(.bottom, 28)
+            }
+            .refreshable { await model.refresh() }
+        }
+    }
 
     @ViewBuilder private func sectionBlock(_ section: DiscoverSectionModel) -> some View {
         if section.kind == .history {
@@ -97,6 +168,9 @@ struct CustomDiscoverView: View {
                 moreTitle: "全部",
                 books: section.books,
                 count: section.count,
+                scale: section.entry.scale,
+                corner: section.entry.corner,
+                showNumber: section.entry.showNumber,
                 onMore: { fullPage = section.entry },
                 onSelectBook: { book in selectedBook = book }
             )
@@ -146,18 +220,20 @@ struct CustomDiscoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("还没有配置板块").appFont(.headline)
-            Text("点右上角，从书源的发现分类里挑几条，各选一个模板，拼成你自己的首页。")
-                .appFont(.footnote)
-                .foregroundStyle(palette.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("开始配置") { showSettings = true }
-                .appFont(.footnote.weight(.semibold))
-                .padding(.top, 3)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 9) {
+                Text("还没有配置首页").appFont(.headline)
+                Text("点右上角，从书源发现分类里挑几条板块，各选一个模板，加上自己的分类标题。")
+                    .appFont(.footnote)
+                    .foregroundStyle(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("开始配置") { showSettings = true }
+                    .appFont(.footnote.weight(.semibold))
+                    .padding(.top, 3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -191,6 +267,9 @@ struct CustomDiscoverFullPage: View {
                 books: loaded,
                 history: model.historyItems,
                 count: DiscoverTemplate.unlimited,
+                scale: entry.scale,
+                corner: entry.corner,
+                showNumber: entry.showNumber,
                 onSelectBook: { selectedBook = $0 }
             )
             .padding(.top, 8)
@@ -237,114 +316,5 @@ struct CustomDiscoverFullPage: View {
         } catch {
             noMore = true
         }
-    }
-}
-
-// MARK: - 顶部轮播
-
-/// 轮播一屏所需的字段，由 Store 组装。
-struct CustomDiscoverHero: Identifiable, Hashable {
-    let id: String
-    var title: String
-    var subtitle: String
-    var detail: String
-    var covers: [URL?]
-}
-
-/// 左文右图，右侧三张封面错开成「一摞」。
-struct CustomDiscoverCarousel: View {
-    @ThemePalette private var palette
-    let heroes: [CustomDiscoverHero]
-    @State private var index = 0
-
-    private let height: CGFloat = 184
-
-    var body: some View {
-        VStack(spacing: 8) {
-            TabView(selection: $index) {
-                ForEach(Array(heroes.enumerated()), id: \.element.id) { pair in
-                    page(pair.element)
-                        .tag(pair.offset)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: height)
-
-            if heroes.count > 1 {
-                HStack(spacing: 6) {
-                    ForEach(0..<heroes.count, id: \.self) { i in
-                        Capsule()
-                            .fill(palette.primary.opacity(i == index ? 0.55 : 0.16))
-                            .frame(width: i == index ? 14 : 5, height: 5)
-                            .animation(.easeInOut(duration: 0.2), value: index)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.top, 6)
-    }
-
-    private func page(_ hero: CustomDiscoverHero) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(hero.title)
-                    .appFont(.system(size: 26, weight: .bold))
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                if !hero.subtitle.isEmpty {
-                    Text(hero.subtitle)
-                        .appFont(.system(size: 13.5))
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                }
-                if !hero.detail.isEmpty {
-                    Text(hero.detail)
-                        .appFont(.system(size: 12.5))
-                        .foregroundStyle(palette.secondary)
-                        .lineSpacing(3)
-                        .lineLimit(3)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            stack(hero.covers)
-                .frame(width: 150, height: 150)
-        }
-        .padding(.horizontal, 20)
-        .frame(height: height, alignment: .top)
-    }
-
-    private func stack(_ covers: [URL?]) -> some View {
-        var slots = covers
-        while slots.count < 3 { slots.append(nil) }
-        let side: CGFloat = 150
-        return ZStack {
-            card(slots[2]).frame(width: side * 0.86, height: side * 0.86)
-                .rotationEffect(.degrees(6))
-                .offset(x: side * 0.03, y: -side * 0.04)
-                .opacity(0.55)
-            card(slots[1]).frame(width: side * 0.92, height: side * 0.92)
-                .rotationEffect(.degrees(3))
-                .offset(x: side * 0.02, y: -side * 0.02)
-                .opacity(0.8)
-            card(slots[0]).frame(width: side, height: side)
-                .shadow(color: .black.opacity(0.16), radius: 11, x: 0, y: 5)
-        }
-    }
-
-    private func card(_ url: URL?) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemFill))
-            .overlay {
-                DeckCoverImage(url: url)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.32), lineWidth: 0.5)
-            }
     }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 自定义发现配置：选书源分类、给每条挑模板、调数量、排序。
+/// 首页（自定义发现）配置：分类标题 + 板块列表。
 struct CustomDiscoverSettingsView: View {
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
@@ -9,18 +9,19 @@ struct CustomDiscoverSettingsView: View {
 
     @State private var draft = CustomDiscoverConfig()
     @State private var showPicker = false
+    @State private var newCategory = ""
     @State private var loaded = false
 
     var body: some View {
         NavigationStack {
             List {
-                carouselSection
+                categorySection
                 entriesSection
             }
             .scrollContentBackground(.hidden)
             .foregroundStyle(palette.primary)
             .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle("自定义发现")
+            .navigationTitle("自定义首页")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -53,29 +54,79 @@ struct CustomDiscoverSettingsView: View {
         }
     }
 
-    // MARK: 轮播
+    // MARK: 顶部分类
 
-    private var carouselSection: some View {
+    private var categorySection: some View {
         Section {
-            NavigationLink {
-                CarouselSourcePicker(config: $draft)
-                    .environmentObject(store)
-            } label: {
-                HStack {
-                    Label("顶部轮播", systemImage: "rectangle.stack")
-                    Spacer()
-                    Text(carouselSummary).foregroundStyle(palette.secondary)
+            // 已有分类：可改名、可删
+            ForEach(Array(draft.categories.enumerated()), id: \.offset) { pair in
+                HStack(spacing: 10) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(width: 20)
+                    TextField("分类标题", text: bindingCategory(pair.offset))
+                        .textInputAutocapitalization(.never)
                 }
             }
+            .onDelete { offsets in
+                let ids = offsets.compactMap { draft.categories.indices.contains($0) ? $0 : nil }
+                for index in ids.sorted(by: >) {
+                    draft.categories.remove(at: index)
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("新增分类标题", text: $newCategory)
+                Button {
+                    addCategory()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(newCategory.trimmingCharacters(in: .whitespaces).isEmpty
+                                         ? palette.secondary.opacity(0.4) : palette.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(newCategory.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         } header: {
-            Text("轮播")
+            HStack {
+                Text("顶部分类")
+                Spacer()
+                if !draft.categories.isEmpty { EditButton().font(.footnote) }
+            }
         } footer: {
-            Text("不选时自动用板块里出现过的书源。封面取该书源第一个板块的前三本。")
+            Text(effectiveHint)
         }
     }
 
-    private var carouselSummary: String {
-        draft.carouselSourceUrls.isEmpty ? "自动" : "\(draft.carouselSourceUrls.count) 个"
+    /// 不填分类时，顶部按板块里出现过的书源名自动生成，并自动加一个「全部」。
+    private var effectiveHint: String {
+        if draft.categories.isEmpty {
+            let auto = draft.effectiveCategories
+            if auto.isEmpty {
+                return "留空则按板块所属书源自动生成分类，并自动加「全部」。"
+            }
+            return "当前自动生成：全部、\(auto.joined(separator: "、"))"
+        }
+        return "分类按书源名筛选板块：点「起点」就只看起点的板块。再加一个「全部」可看全量。"
+    }
+
+    private func bindingCategory(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { draft.categories.indices.contains(index) ? draft.categories[index] : "" },
+            set: { value in
+                guard draft.categories.indices.contains(index) else { return }
+                draft.categories[index] = value
+            }
+        )
+    }
+
+    private func addCategory() {
+        let value = newCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        if !draft.categories.contains(value) { draft.categories.append(value) }
+        newCategory = ""
     }
 
     // MARK: 板块
@@ -90,6 +141,7 @@ struct CustomDiscoverSettingsView: View {
                 ForEach(Array(draft.entries.enumerated()), id: \.element.id) { pair in
                     NavigationLink {
                         EntryEditor(entry: binding(for: pair.offset))
+                            .environmentObject(store)
                     } label: {
                         row(pair.element)
                     }
@@ -102,22 +154,18 @@ struct CustomDiscoverSettingsView: View {
                     let ids = offsets.compactMap { index in
                         draft.entries.indices.contains(index) ? draft.entries[index].id : nil
                     }
-                    for id in ids {
-                        draft.remove(id: id)
-                    }
+                    for id in ids { draft.remove(id: id) }
                 }
             }
         } header: {
             HStack {
                 Text("板块")
                 Spacer()
-                if !draft.entries.isEmpty {
-                    EditButton().font(.footnote)
-                }
+                if !draft.entries.isEmpty { EditButton().font(.footnote) }
             }
         } footer: {
             if !draft.entries.isEmpty {
-                Text("拖动右侧把手排序，左滑删除。顺序即页面从上到下的顺序。")
+                Text("拖动排序，左滑删除。顺序即首页从上到下的顺序。点进去可以换模板、调外观并预览。")
             }
         }
     }
@@ -138,13 +186,13 @@ struct CustomDiscoverSettingsView: View {
 
     private func row(_ entry: CustomDiscoverEntry) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon(entry.template))
+            Image(systemName: DiscoverTemplateIcon.symbol(entry.template))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(palette.accent)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.boardTitle).appFont(.headline).lineLimit(1)
-                Text("\(entry.template.title) · 显示 \(entry.count) 条 · \(entry.sourceName)")
+                Text("\(entry.template.title) · \(entry.count) 条 · \(entry.sourceName)")
                     .appFont(.caption)
                     .foregroundStyle(palette.secondary)
                     .lineLimit(1)
@@ -154,233 +202,12 @@ struct CustomDiscoverSettingsView: View {
         .padding(.vertical, 2)
     }
 
-    private func icon(_ kind: DiscoverTemplateKind) -> String {
-        switch kind {
-        case .badgeGrid: return "square.grid.2x2"
-        case .covers: return "rectangle.split.3x1"
-        case .rankRow: return "list.number"
-        case .waterfall: return "rectangle.grid.2x2"
-        case .curve: return "rectangle.on.rectangle.angled"
-        case .fan: return "fan.fill"
-        case .deck: return "square.stack.3d.down.right"
-        case .history: return "clock.arrow.circlepath"
-        }
-    }
-
     private func save() {
+        // 落盘前把空分类名清掉，避免出现一个点不动的空白标签
+        draft.categories = draft.categories
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         model.save(draft)
         dismiss()
-    }
-}
-
-// MARK: - 单条板块编辑
-
-/// 选模板、调数量、看预览。
-struct EntryEditor: View {
-    @ThemePalette private var palette
-    @Binding var entry: CustomDiscoverEntry
-    @State private var showPreview = false
-
-    var body: some View {
-        List {
-            Section {
-                Text(entry.boardTitle).appFont(.headline)
-                Text("\(entry.sourceName) · \(entry.kindUrl)")
-                    .appFont(.caption2)
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(2)
-            } header: {
-                Text("来源")
-            }
-
-            Section {
-                ForEach(DiscoverTemplate.all) { template in
-                    Button {
-                        entry.applyTemplate(template.kind)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: icon(template.kind))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(palette.accent)
-                                .frame(width: 24)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(template.title).appFont(.body)
-                                Text(template.detail)
-                                    .appFont(.caption2)
-                                    .foregroundStyle(palette.secondary)
-                                    .lineLimit(2)
-                            }
-                            Spacer(minLength: 4)
-                            if entry.template == template.kind {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(palette.accent)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("模板")
-            }
-
-            Section {
-                Stepper(value: bindingCount, in: 1...20) {
-                    HStack {
-                        Text("显示数量")
-                        Spacer()
-                        Text("\(entry.count)").foregroundStyle(palette.secondary)
-                    }
-                }
-                Button("预览这个模板") { showPreview = true }
-            } footer: {
-                Text("数量范围 1–20。「全部」页不受此限，会一直加载。")
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .foregroundStyle(palette.primary)
-        .background { AppThemeCanvas().ignoresSafeArea() }
-        .navigationTitle(entry.boardTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showPreview) {
-            NavigationStack {
-                DiscoverTemplatePreview(kind: entry.template)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("完成") { showPreview = false }
-                        }
-                    }
-                    .navigationTitle("预览")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-    }
-
-    private var bindingCount: Binding<Int> {
-        Binding(
-            get: { entry.count },
-            set: { entry.count = DiscoverTemplate.template(for: entry.template).clampedCount($0) }
-        )
-    }
-
-    private func icon(_ kind: DiscoverTemplateKind) -> String {
-        switch kind {
-        case .badgeGrid: return "square.grid.2x2"
-        case .covers: return "rectangle.split.3x1"
-        case .rankRow: return "list.number"
-        case .waterfall: return "rectangle.grid.2x2"
-        case .curve: return "rectangle.on.rectangle.angled"
-        case .fan: return "fan.fill"
-        case .deck: return "square.stack.3d.down.right"
-        case .history: return "clock.arrow.circlepath"
-        }
-    }
-}
-
-// MARK: - 轮播书源选择
-
-struct CarouselSourcePicker: View {
-    @ThemePalette private var palette
-    @Binding var config: CustomDiscoverConfig
-    @EnvironmentObject private var store: AppStore
-
-    private var candidates: [BookSource] {
-        // 板块里出现过的书源（按出现顺序去重）
-        var seen = Set<String>()
-        var out: [BookSource] = []
-        for entry in config.entries where seen.insert(entry.sourceUrl).inserted {
-            if let source = store.source(for: entry.sourceUrl) { out.append(source) }
-        }
-        return out
-    }
-
-    var body: some View {
-        List {
-            Section {
-                Button {
-                    config.carouselSourceUrls = []
-                } label: {
-                    HStack {
-                        Text("自动（按板块顺序）")
-                        Spacer()
-                        if config.carouselSourceUrls.isEmpty {
-                            Image(systemName: "checkmark").foregroundStyle(palette.accent)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-
-            Section {
-                ForEach(candidates) { source in
-                    Button {
-                        toggle(source.bookSourceUrl)
-                    } label: {
-                        HStack {
-                            Text(source.bookSourceName).lineLimit(1)
-                            Spacer()
-                            if let order = config.carouselSourceUrls.firstIndex(of: source.bookSourceUrl) {
-                                Text("\(order + 1)")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 20, height: 20)
-                                    .background(palette.accent, in: Circle())
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("参与轮播的书源")
-            } footer: {
-                Text("点一下加入，再点取消。数字是轮播顺序。")
-            }
-
-            // 排序单独一段：只操作已选中的书源，索引才对得上
-            if !config.carouselSourceUrls.isEmpty {
-                Section {
-                    ForEach(Array(config.carouselSourceUrls.enumerated()), id: \.element) { pair in
-                        HStack(spacing: 10) {
-                            Text("\(pair.offset + 1)")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 20, height: 20)
-                                .background(palette.accent, in: Circle())
-                            Text(name(for: pair.element)).lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .onMove { source, destination in
-                        config.carouselSourceUrls.move(fromOffsets: source, toOffset: destination)
-                    }
-                } header: {
-                    HStack {
-                        Text("轮播顺序")
-                        Spacer()
-                        EditButton().font(.footnote)
-                    }
-                } footer: {
-                    Text("拖动右侧把手调整顺序。")
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .foregroundStyle(palette.primary)
-        .background { AppThemeCanvas().ignoresSafeArea() }
-        .navigationTitle("顶部轮播")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    /// 用地址取书源名，书源找不到时退回地址本身。
-    private func name(for url: String) -> String {
-        store.source(for: url)?.bookSourceName ?? url
-    }
-
-    private func toggle(_ url: String) {
-        if let index = config.carouselSourceUrls.firstIndex(of: url) {
-            config.carouselSourceUrls.remove(at: index)
-        } else {
-            config.carouselSourceUrls.append(url)
-        }
     }
 }

@@ -119,22 +119,22 @@ final class DiscoverBoardStore: ObservableObject {
         }
     }
 
-    /// 顶部轮播：配置里的书源顺序优先，封面取该源第一个板块的前三本。
-    var carouselHeroes: [CustomDiscoverHero] {
-        let sources = config.carouselSources(from: appStore.sources)
-        return sources.map { source in
-            let section = sections.first { $0.entry.sourceUrl == source.bookSourceUrl }
-            let covers = (section?.books ?? []).prefix(3).map { BookCoverLocation.url(for: $0) }
-            let detail = (source.bookSourceComment ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return CustomDiscoverHero(
-                id: source.bookSourceUrl,
-                title: source.bookSourceName,
-                subtitle: DiscoverCatalog.cardSubtitle(source),
-                detail: detail,
-                covers: Array(covers)
-            )
+    /// 顶部分类：配置里写了就用配置，没写按书源名自动生成，并加「全部」。
+    var visibleCategories: [String] {
+        let names = config.effectiveCategories
+        guard !names.isEmpty else { return [] }
+        // 自动生成时没有「全部」，这里补在最前；手写了就不硬塞
+        if config.categories.isEmpty {
+            return [CustomDiscoverConfig.allCategory] + names
         }
+        return names
+    }
+
+    /// 某个分类下的板块。
+    func sections(inCategory category: String) -> [DiscoverSectionModel] {
+        let allowed = Set(config.entries(inCategory: category).map(\.id))
+        if allowed.isEmpty { return sections }
+        return sections.filter { allowed.contains($0.id) }
     }
 
     private func chapterCount(for book: Book) -> Int? {

@@ -3,7 +3,7 @@ import UIKit
 
 /// NavigationStack stays outside this root so pushed screens replace the bar.
 /// On iOS 26 the system owns the Liquid Glass appearance, sizing and labels.
-struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profile: View, SearchTab: View>: View {
+struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profile: View, SearchTab: View, Home: View>: View {
     @Binding var selection: LibraryTab
     @Environment(\.appTheme) private var theme
     @State private var icons: [String: UIImage] = [:]
@@ -12,24 +12,27 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profil
     let statistics: Statistics
     let profile: Profile
     let search: SearchTab
+    let home: Home
 
     init(selection: Binding<LibraryTab>, @ViewBuilder shelf: () -> Shelf,
          @ViewBuilder discover: () -> Discover,
          @ViewBuilder statistics: () -> Statistics, @ViewBuilder profile: () -> Profile,
-         @ViewBuilder search: () -> SearchTab) {
+         @ViewBuilder search: () -> SearchTab,
+         @ViewBuilder home: () -> Home) {
         _selection = selection
         self.shelf = shelf(); self.discover = discover()
         self.statistics = statistics()
         self.profile = profile(); self.search = search()
+        self.home = home()
     }
 
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
                 TabView(selection: $selection) {
+                    home.tabItem { item(.home) }.tag(LibraryTab.home)
                     shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
                     discover.tabItem { item(.discover) }.tag(LibraryTab.discover)
-                    statistics.tabItem { item(.statistics) }.tag(LibraryTab.statistics)
                     profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
                     search.tabItem { item(.search) }.tag(LibraryTab.search)
                 }
@@ -37,9 +40,10 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profil
             } else {
                 Group {
                     switch selection {
+                    case .home: home
                     case .shelf: shelf
                     case .discover: discover
-                    case .statistics: statistics
+                    case .statistics: statistics   // 已并入「我的」，仅保留入口不影响已存选择
                     case .profile: profile
                     case .search: search
                     }

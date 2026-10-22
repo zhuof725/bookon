@@ -89,15 +89,14 @@ struct DiscoverTemplate: Identifiable, Hashable {
     /// 所有模板的数量上限统一 20，下限 1。
     static let countCeiling = 20
     static let countFloor = 1
-
     /// 「全部」页用的不限数量标记。
     static let unlimited = Int.max
 
     static let all: [DiscoverTemplate] = DiscoverTemplateKind.allCases.map { kind in
-        return DiscoverTemplate(kind: kind,
-                                minCount: countFloor,
-                                maxCount: countCeiling,
-                                defaultCount: countCeiling)
+        DiscoverTemplate(kind: kind,
+                         minCount: countFloor,
+                         maxCount: countCeiling,
+                         defaultCount: countCeiling)
     }
 
     static func template(for kind: DiscoverTemplateKind) -> DiscoverTemplate {
@@ -131,6 +130,12 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
     var template: DiscoverTemplateKind
     /// 这个板块展示多少条
     var count: Int
+    /// 卡片宽度倍率：瀑布流以外的大封面/横滑按这个缩放。1 = 默认
+    var scale: Double
+    /// 卡片圆角
+    var corner: Double
+    /// 大封面序号角标是否显示
+    var showNumber: Bool
 
     var id: String { Self.makeID(sourceUrl: sourceUrl, kindUrl: kindUrl) }
 
@@ -139,17 +144,23 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
          kindTitle: String,
          kindUrl: String,
          template: DiscoverTemplateKind = .deck,
-         count: Int = DiscoverTemplate.countCeiling) {
+         count: Int = DiscoverTemplate.countCeiling,
+         scale: Double = 1,
+         corner: Double = 8,
+         showNumber: Bool = true) {
         self.sourceUrl = sourceUrl
         self.sourceName = sourceName
         self.kindTitle = kindTitle
         self.kindUrl = kindUrl
         self.template = template
         self.count = count
+        self.scale = scale
+        self.corner = corner
+        self.showNumber = showNumber
     }
 
     enum CodingKeys: String, CodingKey {
-        case sourceUrl, sourceName, kindTitle, kindUrl, template, count
+        case sourceUrl, sourceName, kindTitle, kindUrl, template, count, scale, corner, showNumber
     }
 
     init(from decoder: Decoder) throws {
@@ -161,6 +172,11 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         template = DiscoverTemplateKind.normalized(try? c.decodeIfPresent(String.self, forKey: .template))
         count = DiscoverTemplate.template(for: template)
             .clampedCount((try? c.decodeIfPresent(Int.self, forKey: .count)) ?? DiscoverTemplate.countCeiling)
+        let s = (try? c.decodeIfPresent(Double.self, forKey: .scale)) ?? 1
+        scale = s.isFinite ? min(max(s, 0.6), 1.6) : 1
+        let r = (try? c.decodeIfPresent(Double.self, forKey: .corner)) ?? 8
+        corner = r.isFinite ? min(max(r, 0), 20) : 8
+        showNumber = (try? c.decodeIfPresent(Bool.self, forKey: .showNumber)) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -171,6 +187,9 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         try c.encode(kindUrl, forKey: .kindUrl)
         try c.encode(template.rawValue, forKey: .template)
         try c.encode(count, forKey: .count)
+        try c.encode(scale, forKey: .scale)
+        try c.encode(corner, forKey: .corner)
+        try c.encode(showNumber, forKey: .showNumber)
     }
 
     /// 书源 + 分类决定唯一性（同一分类重复添加只保留第一次那条）。
@@ -197,42 +216,59 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
     }
 }
 
-/// 页面配置：顶部轮播的书源 + 板块顺序。
+/// 首页配置：顶部分类（轮播）+ 板块顺序。
 struct CustomDiscoverConfig: Codable, Hashable {
-    /// 顶部轮播的书源地址，顺序即翻页顺序。为空时回落到板块里出现过的书源。
-    var carouselSourceUrls: [String]
+    /// 顶部分类标题。为空时自动用「全部」+ 板块里出现过的书源名。
+    var categories: [String]
     var entries: [CustomDiscoverEntry]
 
-    init(carouselSourceUrls: [String] = [], entries: [CustomDiscoverEntry] = []) {
-        self.carouselSourceUrls = carouselSourceUrls
+    init(categories: [String] = [], entries: [CustomDiscoverEntry] = []) {
+        self.categories = categories
         self.entries = entries
     }
 
-    private enum CodingKeys: String, CodingKey { case carouselSourceUrls, entries }
+    private enum CodingKeys: String, CodingKey { case categories, entries }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        carouselSourceUrls = (try? c.decodeIfPresent([String].self, forKey: .carouselSourceUrls)) ?? []
+        categories = (try? c.decodeIfPresent([String].self, forKey: .categories)) ?? []
         entries = (try? c.decodeIfPresent([CustomDiscoverEntry].self, forKey: .entries)) ?? []
     }
 
     var isEmpty: Bool { entries.isEmpty }
 
-    /// 参与轮播的书源：配置顺序优先；没配置时用板块里第一次出现的书源。
-    func carouselSources(from sources: [BookSource]) -> [BookSource] {
-        let byURL = Dictionary(sources.map { ($0.bookSourceUrl, $0) }, uniquingKeysWith: { first, _ in first })
+    /// 实际要显示的分类标签。
+    ///
+    /// 规则：配置里手动写过的分类优先；没写时按板块里出现过的书源名自动生成，
+    /// 前面永远有「全部」。
+    var effectiveCategories: [String] {
+        let manual = categories
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !manual.isEmpty { return manual }
         var seen = Set<String>()
-        var out: [BookSource] = []
-        for url in carouselSourceUrls {
-            guard let source = byURL[url], seen.insert(url).inserted else { continue }
-            out.append(source)
+        var auto: [String] = []
+        for entry in entries {
+            let name = entry.sourceName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, seen.insert(name).inserted else { continue }
+            auto.append(name)
         }
-        if !out.isEmpty { return out }
-        for entry in entries where seen.insert(entry.sourceUrl).inserted {
-            if let source = byURL[entry.sourceUrl] { out.append(source) }
-        }
-        return out
+        return auto.isEmpty ? [] : auto
     }
+
+    /// 某个分类下要显示的板块。
+    ///
+    /// 「全部」返回所有板块；其余按书源名匹配，匹配不到就返回全部（分类名是手写时）。
+    func entries(inCategory category: String) -> [CustomDiscoverEntry] {
+        let key = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, key != Self.allCategory else { return entries }
+        let matched = entries.filter {
+            $0.sourceName.trimmingCharacters(in: .whitespacesAndNewlines) == key
+        }
+        return matched.isEmpty ? entries : matched
+    }
+
+    static let allCategory = "全部"
 
     /// 仍然可用的板块：书源存在（启用与否不拦，用户明确挑过）且分类地址非空。
     func visibleEntries(from sources: [BookSource]) -> [CustomDiscoverEntry] {
@@ -247,6 +283,9 @@ struct CustomDiscoverConfig: Codable, Hashable {
             entries[index].count = entry.count
             entries[index].kindTitle = entry.kindTitle
             entries[index].sourceName = entry.sourceName
+            entries[index].scale = entry.scale
+            entries[index].corner = entry.corner
+            entries[index].showNumber = entry.showNumber
         } else {
             entries.append(entry)
         }

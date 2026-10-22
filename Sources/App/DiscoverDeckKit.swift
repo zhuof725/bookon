@@ -96,8 +96,6 @@ private struct DeckCard<Content: View>: View {
     }
 }
 
-// MARK: - U2 弧形走廊
-
 // MARK: - 错位瀑布流
 
 /// 双列不等高瀑布流：每本书按序丢进「当前更矮」的那一列，
@@ -107,6 +105,10 @@ struct DiscoverWaterfallSection: View {
     let title: String
     let moreTitle: String
     let items: [DeckItem]
+    /// 卡片宽度倍率 / 圆角 / 是否显示序号
+    var scale: Double = 1
+    var corner: Double = 8
+    var showNumber = true
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
@@ -212,10 +214,23 @@ struct DiscoverBadgeGridSection: View {
     let title: String
     let moreTitle: String
     let items: [DeckItem]
+    /// 卡片宽度倍率 / 圆角 / 是否显示序号
+    var scale: Double = 1
+    var corner: Double = 8
+    var showNumber = true
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
-    private let columns = 2
+    /// 卡片越大列数越少：1.0 → 2 列，0.8 以下 → 3 列，1.3 以上 → 1 列（大图）。
+    private var columns: Int {
+        switch scale {
+        case ..<0.8: return 3
+        case 1.3...: return 1
+        default: return 2
+        }
+    }
+
+    private var radius: CGFloat { CGFloat(max(corner, 0)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -242,15 +257,17 @@ struct DiscoverBadgeGridSection: View {
             Color.clear
                 .aspectRatio(3.0 / 4.0, contentMode: .fit)
                 .overlay { DeckCoverImage(url: item.cover) }
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
-                    Text(String(format: "%02d", max(number, 1)))
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.55), radius: 3, x: 0, y: 1)
-                        .padding(.leading, 8)
-                        .padding(.bottom, 2)
-                        .allowsHitTesting(false)
+                    if showNumber {
+                        Text(String(format: "%02d", max(number, 1)))
+                            .font(.system(size: columns == 1 ? 52 : 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.55), radius: 3, x: 0, y: 1)
+                            .padding(.leading, 8)
+                            .padding(.bottom, 2)
+                            .allowsHitTesting(false)
+                    }
                 }
 
             Text(item.title)
@@ -297,7 +314,15 @@ struct DiscoverCoversSection: View {
     let title: String
     let moreTitle: String
     let items: [DeckItem]
+    /// 卡片宽度倍率 / 圆角 / 是否显示序号
+    var scale: Double = 1
+    var corner: Double = 8
+    var showNumber = true
+    /// 基础宽度，实际宽度 = width * scale
     var width: CGFloat = 108
+
+    private var cardWidth: CGFloat { max(64, width * CGFloat(min(max(scale, 0.6), 1.6))) }
+    private var radius: CGFloat { CGFloat(max(corner, 0)) }
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
@@ -312,7 +337,7 @@ struct DiscoverCoversSection: View {
                                 Color.clear
                                     .aspectRatio(3.0 / 4.0, contentMode: .fit)
                                     .overlay { DeckCoverImage(url: pair.element.cover) }
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                                 Text(pair.element.title)
                                     .appFont(.system(size: 13, weight: .medium))
                                     .foregroundStyle(palette.primary)
@@ -328,7 +353,7 @@ struct DiscoverCoversSection: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
-                            .frame(width: width)
+                            .frame(width: cardWidth)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("covers.item.\(pair.element.id)")
@@ -366,6 +391,14 @@ struct DiscoverRankRowSection: View {
     let title: String
     let moreTitle: String
     let items: [DeckItem]
+    /// 卡片宽度倍率 / 圆角 / 是否显示序号
+    var scale: Double = 1
+    var corner: Double = 8
+    var showNumber = true
+
+    private var coverW: CGFloat { max(40, 52 * CGFloat(min(max(scale, 0.6), 1.6))) }
+    private var coverH: CGFloat { coverW * 1.35 }
+    private var radius: CGFloat { CGFloat(max(corner, 0)) }
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
@@ -982,7 +1015,11 @@ struct DiscoverTemplateView: View {
     var moreTitle: String = "全部"
     var books: [Book] = []
     var history: [HistoryItem] = []
-    var count: Int = 8
+    var count: Int = DiscoverTemplate.countCeiling
+    /// 外观：卡片倍率 / 圆角 / 序号
+    var scale: Double = 1
+    var corner: Double = 8
+    var showNumber = true
     var onMore: (() -> Void)? = nil
     var onSelectBook: (Book) -> Void = { _ in }
     var onSelectHistory: (HistoryItem) -> Void = { _ in }
@@ -1002,6 +1039,9 @@ struct DiscoverTemplateView: View {
                 title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
+                scale: scale,
+                corner: corner,
+                showNumber: showNumber,
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }
@@ -1012,6 +1052,9 @@ struct DiscoverTemplateView: View {
                 title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
+                scale: scale,
+                corner: corner,
+                showNumber: showNumber,
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }
@@ -1022,6 +1065,9 @@ struct DiscoverTemplateView: View {
                 title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
+                scale: scale,
+                corner: corner,
+                showNumber: showNumber,
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }
@@ -1032,6 +1078,9 @@ struct DiscoverTemplateView: View {
                 title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
+                scale: scale,
+                corner: corner,
+                showNumber: showNumber,
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }

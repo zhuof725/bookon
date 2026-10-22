@@ -101,17 +101,37 @@ enum CustomDiscoverRegression {
         emptyKind.kindTitle = "  "
         check(emptyKind.boardTitle == "书源甲", "自定义发现：分类名为空才回落到书源名")
 
-        // 8. 轮播书源：配置顺序优先，未配置时按板块出现顺序
-        var heroConfig = CustomDiscoverConfig(carouselSourceUrls: ["u2", "u1"], entries: [entryA, entryB])
-        let heroes = heroConfig.carouselSources(from: [live, noExplore])
-        check(heroes.map(\.bookSourceUrl) == ["u2", "u1"], "自定义发现：轮播按配置顺序")
-        heroConfig.carouselSourceUrls = []
-        let fallbackHeroes = heroConfig.carouselSources(from: [live, noExplore])
-        check(fallbackHeroes.map(\.bookSourceUrl) == ["u1", "u2"],
-              "自定义发现：未配置轮播时按板块出现顺序")
-        heroConfig.carouselSourceUrls = ["ghost", "u1"]
-        check(heroConfig.carouselSources(from: [live]).map(\.bookSourceUrl) == ["u1"],
-              "自定义发现：轮播跳过不存在的书源")
+        // 8. 顶部分类：手写优先，未写时按书源名自动生成
+        var catConfig = CustomDiscoverConfig(categories: ["起点", "番茄"], entries: [entryA, entryB])
+        check(catConfig.effectiveCategories == ["起点", "番茄"], "分类：手写标题按原顺序")
+        catConfig.categories = []
+        check(catConfig.effectiveCategories == ["书源甲", "书源乙"],
+              "分类：未配置时按板块里出现过的书源名生成")
+        catConfig.categories = ["  ", ""]
+        check(catConfig.effectiveCategories == ["书源甲", "书源乙"],
+              "分类：全空白等于没配置")
+
+        // 分类筛选板块
+        var screen = CustomDiscoverConfig(categories: [], entries: [entryA, entryB, third])
+        check(screen.entries(inCategory: CustomDiscoverConfig.allCategory).count == 3,
+              "分类：「全部」返回所有板块")
+        check(screen.entries(inCategory: "书源甲").map(\.kindTitle) == ["热播周榜"],
+              "分类：按书源名筛出对应板块")
+        check(screen.entries(inCategory: "不存在的源").count == 3,
+              "分类：匹配不到时退回全量，避免空白页")
+        check(screen.entries(inCategory: "  ").count == 3, "分类：空标题当全部处理")
+
+        // 9. 外观参数默认值与钳制
+        check(entryA.scale == 1 && entryA.corner == 8 && entryA.showNumber,
+              "外观：默认 1x / 8 圆角 / 显示序号")
+        let weird = Data(#"{"entries":[{"sourceUrl":"u","kindUrl":"/k","scale":99,"corner":-5}]}"#.utf8)
+        let w = CustomDiscoverStore.decode(weird)
+        check(w.entries[0].scale == 1.6, "外观：过大倍率钳到 1.6")
+        check(w.entries[0].corner == 0, "外观：负圆角钳到 0")
+        let weird2 = Data(#"{"entries":[{"sourceUrl":"u","kindUrl":"/k","scale":0.1,"corner":99}]}"#.utf8)
+        let w2 = CustomDiscoverStore.decode(weird2)
+        check(w2.entries[0].scale == 0.6, "外观：过小倍率钳到 0.6")
+        check(w2.entries[0].corner == 20, "外观：过大圆角钳到 20")
 
         // 9. 落盘往返
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
