@@ -7,10 +7,14 @@ struct CustomDiscoverSettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var model: DiscoverBoardStore
 
-    @State private var draft = CustomDiscoverConfig()
+    @State private var draft: CustomDiscoverConfig
     @State private var showPicker = false
     @State private var newCategory = ""
     @State private var loaded = false
+
+    init(initial: CustomDiscoverConfig? = nil) {
+        _draft = State(initialValue: initial ?? CustomDiscoverConfig())
+    }
 
     var body: some View {
         NavigationStack {
@@ -40,7 +44,7 @@ struct CustomDiscoverSettingsView: View {
                 }
             }
             .sheet(isPresented: $showPicker) {
-                CustomDiscoverPicker { picked in
+                TemplatePickerSheet { picked in
                     for entry in picked { draft.upsert(entry) }
                     showPicker = false
                 }
@@ -49,7 +53,8 @@ struct CustomDiscoverSettingsView: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                draft = model.config
+                // 从编辑页带进来的草稿优先，避免把用户刚加的板块冲掉
+                if draft.entries.isEmpty { draft = model.config }
             }
         }
     }

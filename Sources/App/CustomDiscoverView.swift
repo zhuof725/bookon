@@ -27,7 +27,7 @@ struct CustomDiscoverView: View {
         model.sectionsByCategory[currentCategory] ?? []
     }
 
-    private var heroes: [CustomDiscoverHero] { model.heroes }
+    private var carouselBooks: [Book] { model.carouselBooks }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +47,7 @@ struct CustomDiscoverView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            CustomDiscoverSettingsView()
+            CustomDiscoverEditorPage()
                 .environmentObject(store)
                 .environmentObject(model)
         }
@@ -61,14 +61,17 @@ struct CustomDiscoverView: View {
         }
         .task {
             if model.isEmpty { model.reloadConfig() }
+            await model.loadCarousel()
             await model.loadInitial()
         }
         // 书架变化（读完一本书、加书、删书）才重算进度，不随滚动触发
         .onChange(of: store.books.count) { _, _ in model.refreshHistoryIfNeeded() }
         .onChange(of: model.revision) { _, _ in
-            // 配置变了，分类可能变少：把索引拉回范围内
             categoryIndex = min(categoryIndex, max(categories.count - 1, 0))
-            Task { await model.loadInitial() }
+            Task {
+                await model.loadCarousel(force: true)
+                await model.loadInitial()
+            }
         }
         .accessibilityIdentifier("customdiscover.page")
     }
@@ -128,16 +131,12 @@ struct CustomDiscoverView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // 顶部轮播：每个分类一屏，滑动即切分类
-                    if !heroes.isEmpty {
-                        CustomDiscoverCarousel(pages: heroes, index: $categoryIndex)
-                            .padding(.bottom, 14)
-                            .onChange(of: categoryIndex) { _, newValue in
-                                guard categories.indices.contains(newValue) else { return }
-                                Task { await model.loadCategory(categories[newValue]) }
-                            }
+                    // 顶部轮播：单张大图，内容是配置里选的分类下的书
+                    if !carouselBooks.isEmpty {
+                        CarouselBookBanner(books: carouselBooks)
+                            .padding(.bottom, 16)
                     }
-                    // 分类胶囊条（轮播的辅助指示，点它也能切）
+                    // 分类胶囊条（只在配了多个分类时出现）
                     if categories.count > 1 {
                         categoryBar
                             .padding(.bottom, 4)
@@ -154,7 +153,7 @@ struct CustomDiscoverView: View {
                 }
                 .padding(.bottom, 28)
             }
-            .refreshable { await model.refresh() }
+            .refreshable { await model.refresh(category: currentCategory); await model.loadCarousel(force: true) }
         }
     }
 

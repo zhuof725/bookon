@@ -249,5 +249,56 @@ enum CustomDiscoverRegression {
         }
         // 不存在的分类在分组字典里没有键，调用方靠回退兜底
         check(byCategory["不存在的源"] == nil, "分组：未出现的分类不产生键")
+
+        // 19. 轮播数据源：配置了书源+分类才算启用
+        var carouselConfig = CustomDiscoverConfig()
+        check(!carouselConfig.hasCarousel, "轮播：默认未配置")
+        carouselConfig.carouselSourceUrl = "u1"
+        carouselConfig.carouselKindTitle = "热播周榜"
+        carouselConfig.carouselKindUrl = "/a"
+        check(carouselConfig.hasCarousel, "轮播：书源+分类都填了才启用")
+        carouselConfig.carouselHidden = true
+        check(!carouselConfig.hasCarousel, "轮播：关掉开关即视为未配置")
+        carouselConfig.carouselHidden = false
+        carouselConfig.carouselKindUrl = ""
+        check(!carouselConfig.hasCarousel, "轮播：缺分类地址不启用")
+
+        // 20. 轮播字段能落盘往返
+        let carouselTmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("carousel-\(UUID().uuidString).json")
+        var saveConfig = CustomDiscoverConfig(entries: [entryA])
+        saveConfig.carouselSourceUrl = "u1"
+        saveConfig.carouselKindTitle = "热播周榜"
+        saveConfig.carouselKindUrl = "/a"
+        check(CustomDiscoverStore.save(saveConfig, to: carouselTmp), "轮播：写盘成功")
+        let reloadedCarousel = CustomDiscoverStore.load(from: carouselTmp)
+        check(reloadedCarousel.carouselSourceUrl == "u1"
+              && reloadedCarousel.carouselKindTitle == "热播周榜"
+              && reloadedCarousel.carouselKindUrl == "/a",
+              "轮播：写盘后读回一致")
+        try? FileManager.default.removeItem(at: carouselTmp)
+
+        // 21. 预览素材：书目都是公版，封面配色稳定
+        check(DiscoverPreviewCatalog.samples.count >= 20, "预览：内置至少 20 本示例书")
+        check(Set(DiscoverPreviewCatalog.samples.map(\.title)).count
+              == DiscoverPreviewCatalog.samples.count, "预览：书名不重复")
+        check(DiscoverPreviewCatalog.samples.allSatisfy {
+            !$0.title.isEmpty && !$0.author.isEmpty && !$0.kind.isEmpty
+        }, "预览：每本都有书名/作者/分类")
+        // 同一本书的配色必须每次都一样（用稳定哈希，不用 hashValue）
+        let colorA = DiscoverPreviewCover.colors(for: "西游记")
+        let colorB = DiscoverPreviewCover.colors(for: "西游记")
+        check(colorA.start == colorB.start && colorA.end == colorB.end,
+              "预览：封面配色对同一本书稳定")
+        let colorC = DiscoverPreviewCover.colors(for: "红楼梦")
+        check(colorA.start != colorC.start || colorA.end != colorC.end,
+              "预览：不同书取到不同配色")
+        check(DiscoverPreviewCover.colors(for: "西游记").start.count == 6,
+              "预览：配色是 6 位十六进制")
+        let orbsA = DiscoverPreviewCover.orbs(for: "西游记")
+        check(orbsA.count == 3, "预览：每本书三个装饰圆")
+        check(orbsA.allSatisfy { $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 },
+              "预览：装饰圆坐标在 0...1")
+        check(DiscoverPreviewCover.cards(count: 5).count == 5, "预览：可只取前 N 张卡片")
     }
 }

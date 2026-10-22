@@ -222,17 +222,45 @@ struct CustomDiscoverConfig: Codable, Hashable {
     var categories: [String]
     var entries: [CustomDiscoverEntry]
 
-    init(categories: [String] = [], entries: [CustomDiscoverEntry] = []) {
+    /// 轮播数据源：某个书源的某个发现分类。三者都为空表示没配。
+    var carouselSourceUrl: String
+    var carouselKindTitle: String
+    var carouselKindUrl: String
+    /// 是否隐藏轮播图
+    var carouselHidden: Bool
+
+    init(categories: [String] = [],
+         entries: [CustomDiscoverEntry] = [],
+         carouselSourceUrl: String = "",
+         carouselKindTitle: String = "",
+         carouselKindUrl: String = "",
+         carouselHidden: Bool = false) {
         self.categories = categories
         self.entries = entries
+        self.carouselSourceUrl = carouselSourceUrl
+        self.carouselKindTitle = carouselKindTitle
+        self.carouselKindUrl = carouselKindUrl
+        self.carouselHidden = carouselHidden
     }
 
-    private enum CodingKeys: String, CodingKey { case categories, entries }
+    private enum CodingKeys: String, CodingKey {
+        case categories, entries
+        case carouselSourceUrl, carouselKindTitle, carouselKindUrl, carouselHidden
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         categories = (try? c.decodeIfPresent([String].self, forKey: .categories)) ?? []
         entries = (try? c.decodeIfPresent([CustomDiscoverEntry].self, forKey: .entries)) ?? []
+        carouselSourceUrl = (try? c.decodeIfPresent(String.self, forKey: .carouselSourceUrl)) ?? ""
+        carouselKindTitle = (try? c.decodeIfPresent(String.self, forKey: .carouselKindTitle)) ?? ""
+        carouselKindUrl = (try? c.decodeIfPresent(String.self, forKey: .carouselKindUrl)) ?? ""
+        carouselHidden = (try? c.decodeIfPresent(Bool.self, forKey: .carouselHidden)) ?? false
+    }
+
+    /// 轮播是否已配置且未关闭。
+    var hasCarousel: Bool {
+        !carouselHidden && !carouselSourceUrl.isEmpty && !carouselKindUrl.isEmpty
     }
 
     var isEmpty: Bool { entries.isEmpty }

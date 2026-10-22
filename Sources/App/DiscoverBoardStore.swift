@@ -83,7 +83,6 @@ final class DiscoverBoardStore: ObservableObject {
 
     /// 预计算好，给视图直接用。
     @Published private(set) var categories: [String] = []
-    @Published private(set) var heroes: [CustomDiscoverHero] = []
     /// 分类名 → 该分类下的板块。切分类时不用再过滤。
     @Published private(set) var sectionsByCategory: [String: [DiscoverSectionModel]] = [:]
 
@@ -158,31 +157,41 @@ final class DiscoverBoardStore: ObservableObject {
             index[category] = models.isEmpty ? sections : models
         }
         sectionsByCategory = index
-
-        // 轮播页与分类同序
-        heroes = categories.enumerated().map { offset, category in
-            let list = index[category] ?? []
-            let covers: [URL?] = (list.first?.books ?? []).prefix(3).map { BookCoverLocation.url(for: $0) }
-            let detail = list.prefix(3).map(\.title).joined(separator: " · ")
-            return CustomDiscoverHero(
-                id: "\(category)-\(offset)",
-                title: category,
-                subtitle: list.isEmpty ? "" : "\(list.count) 个板块",
-                detail: detail,
-                covers: covers
-            )
-        }
     }
 
-    /// 轮播封面依赖已加载的书：某个板块加载完要更新对应页的封面。
-    private func refreshHeroCovers() {
-        guard !heroes.isEmpty else { return }
-        heroes = heroes.enumerated().map { offset, hero in
-            let list = sectionsByCategory[hero.title] ?? []
-            var updated = hero
-            updated.covers = (list.first?.books ?? []).prefix(3).map { BookCoverLocation.url(for: $0) }
-            _ = offset
-            return updated
+    // MARK: 轮播
+
+    /// 顶部轮播：内容来自配置里选定的「书源 + 分类」，滑的是这个分类下的书。
+    /// 对应参考图二：先选书源，再选分类。没配或关掉时为空。
+    @Published private(set) var carouselBooks: [Book] = []
+
+    private var carouselLoading = false
+
+    func loadCarousel(force: Bool = false) async {
+        guard config.hasCarousel else {
+            carouselBooks = []
+            return
+        }
+        guard let source = appStore.source(for: config.carouselSourceUrl) else {
+            carouselBooks = []
+            return
+        }
+        if !force, !carouselBooks.isEmpty { return }
+        if !force,
+           let cached = DiscoverBlockCache.cached(source: config.carouselSourceUrl,
+                                                  url: config.carouselKindUrl),
+           !cached.isEmpty {
+            carouselBooks = Array(cached.prefix(12))
+            return
+        }
+        guard !carouselLoading else { return }
+        carouselLoading = true
+        defer { carouselLoading = false }
+        if let list = try? await SourceDiagnostics.explore(source: source, url: config.carouselKindUrl) {
+            carouselBooks = Array(list.prefix(12))
+            DiscoverBlockCache.store(source: config.carouselSourceUrl,
+                                     url: config.carouselKindUrl,
+                                     books: list)
         }
     }
 
@@ -247,7 +256,6 @@ final class DiscoverBoardStore: ObservableObject {
         if !force, let cached = DiscoverBlockCache.cached(source: model.entry.sourceUrl,
                                                           url: model.entry.kindUrl) {
             model.setBooks(cached)
-            refreshHeroCovers()
             // 缓存的目录可能变了，顺手清掉进度缓存
             chapterCountCache.removeAll()
             return
@@ -262,7 +270,6 @@ final class DiscoverBoardStore: ObservableObject {
             DiscoverBlockCache.store(source: model.entry.sourceUrl,
                                      url: model.entry.kindUrl,
                                      books: list)
-            refreshHeroCovers()
         } catch {
             model.setFailed(error.localizedDescription)
         }
