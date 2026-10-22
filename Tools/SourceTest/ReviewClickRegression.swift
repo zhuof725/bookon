@@ -125,7 +125,7 @@ enum ReviewClickRegression {
           this.java.showBrowser('https://c.invalid/viewer?forum_id=' + forum_id, null);
         }
         """
-        let brokenSource = BookSource(bookSourceUrl: "https://review-broken.example", bookSourceName: "接口挂了")
+        var brokenSource = BookSource(bookSourceUrl: "https://review-broken.example", bookSourceName: "接口挂了")
         brokenSource.loginUrl = brokenLib
         let brokenResult = JSEngine.shared.resolveClickURL(source: brokenSource, click: "openComment()")
         check(brokenResult.url?.contains("c.invalid/viewer") == true,
