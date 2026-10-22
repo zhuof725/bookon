@@ -1034,8 +1034,6 @@ struct DiscoverTemplateView: View {
     let title: String
     var moreTitle: String = "全部"
     var books: [Book] = []
-    /// 标题后缀（如「· 懒人听书」）：拼在板块名后面，仿参考图的效果。
-    var titleSuffix: String = ""
     /// 预先转好的卡片；传了就优先用，省掉 body 里的 map/prefix。
     var cards: [DeckItem] = []
     var history: [HistoryItem] = []
@@ -1052,13 +1050,6 @@ struct DiscoverTemplateView: View {
         DiscoverTemplate.template(for: kind).clampedCount(count)
     }
 
-    /// 实际显示的标题：板块名 + 后缀。
-    private var displayTitle: String {
-        let suffix = titleSuffix.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !suffix.isEmpty, !title.isEmpty else { return title }
-        return "\(title) · \(suffix)"
-    }
-
     private var deckItems: [DeckItem] {
         if !cards.isEmpty { return cards }
         return Array(books.prefix(limit)).map { DeckItem(book: $0) }
@@ -1068,7 +1059,7 @@ struct DiscoverTemplateView: View {
         switch kind {
         case .badgeGrid:
             DiscoverBadgeGridSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 scale: scale,
@@ -1081,7 +1072,7 @@ struct DiscoverTemplateView: View {
             )
         case .covers:
             DiscoverCoversSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 scale: scale,
@@ -1094,7 +1085,7 @@ struct DiscoverTemplateView: View {
             )
         case .rankRow:
             DiscoverRankRowSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 scale: scale,
@@ -1107,7 +1098,7 @@ struct DiscoverTemplateView: View {
             )
         case .waterfall:
             DiscoverWaterfallSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 scale: scale,
@@ -1120,7 +1111,7 @@ struct DiscoverTemplateView: View {
             )
         case .curve:
             DiscoverCurveSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 onMore: onMore,
@@ -1130,7 +1121,7 @@ struct DiscoverTemplateView: View {
             )
         case .fan:
             DiscoverFanSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 onMore: onMore,
@@ -1140,7 +1131,7 @@ struct DiscoverTemplateView: View {
             )
         case .deck:
             DiscoverDeckSection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: deckItems,
                 onMore: onMore,
@@ -1150,7 +1141,7 @@ struct DiscoverTemplateView: View {
             )
         case .history:
             DiscoverHistorySection(
-                title: displayTitle,
+                title: title,
                 moreTitle: moreTitle,
                 items: Array(history.prefix(limit)),
                 onMore: onMore,

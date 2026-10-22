@@ -102,32 +102,22 @@ struct CustomDiscoverView: View {
         let selected = index == categoryIndex
         return Button {
             guard categoryIndex != index else { return }
-            withAnimation(.easeInOut(duration: 0.2)) { categoryIndex = index }
+            categoryIndex = index
             // 只加载当前分类的前几个，别一次性把所有分类都拉一遍
             Task { await model.loadCategory(title) }
         } label: {
-            // 复刻参考图：未选中是浅色胶囊，选中是白底胶囊 + 底部短下划线
-            VStack(spacing: 0) {
-                Text(title)
-                    .appFont(.system(size: 14.5, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? palette.primary : palette.secondary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 15)
-                    .frame(height: 34)
-
-                Capsule()
-                    .fill(selected ? palette.accent : .clear)
-                    .frame(width: 22, height: 2.5)
-                    .padding(.bottom, 5)
-            }
-            .background {
-                Capsule()
-                    .fill(selected
-                          ? Color(uiColor: .systemBackground)
-                          : palette.primary.opacity(0.045))
-                    .shadow(color: .black.opacity(selected ? 0.06 : 0), radius: 5, x: 0, y: 2)
-            }
-            .animation(.easeInOut(duration: 0.2), value: selected)
+            Text(title)
+                .appFont(.system(size: 14, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? palette.onAccent : palette.primary)
+                .padding(.horizontal, 14)
+                .frame(height: 32)
+                .background {
+                    if selected {
+                        Capsule().fill(palette.accent)
+                    } else {
+                        ThemeSurface(shape: Capsule())
+                    }
+                }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.category.\(title)")
@@ -190,7 +180,6 @@ struct CustomDiscoverView: View {
                 title: section.title,
                 moreTitle: "全部",
                 books: section.books,
-                titleSuffix: section.entry.sourceName,
                 cards: section.cards,
                 count: section.count,
                 scale: section.entry.scale,
