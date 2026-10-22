@@ -1888,6 +1888,40 @@ final class JSEngine {
         var error: String?
     }
 
+    /// 「宽松 JSON」补丁：JSON.parse 出来的对象，访问不存在的字段时返回空对象而不是抛异常；
+    /// 解析失败时也返回一个空壳。
+    ///
+    /// 为什么需要：书源脚本常在打开评论页之前先调一个自己的接口
+    /// （番茄聚合就是先取 forum_id），那个接口一旦挂了（403），
+    /// `resp.data.forum_data.forum_id` 里的 resp.data 是 undefined → 脚本当场抛错 →
+    /// 评论页一个都没打开。而评论页的内容其实是书源自己给的那份 HTML，与那个接口无关。
+    /// 打了这个补丁，脚本就能继续走到打开页面的那一步（页面照样是白屏，但能打开）。
+    private static let deepJSONPatch = """
+    (function () {
+      if (globalThis.__legadoDeepJSON) return;
+      var origParse = JSON.parse;
+      function wrap(obj) {
+        return new Proxy(obj, {
+          get: function (t, k) {
+            if (k === 'toString' || k === 'valueOf') return function () { return ''; };
+            if (k === 'then') return undefined;
+            if (typeof k === 'symbol') return undefined;
+            if (!(k in t)) t[k] = wrap({});
+            return t[k];
+          },
+          has: function () { return true; }
+        });
+      }
+      JSON.parse = function (text, reviver) {
+        var v;
+        try { v = origParse(text, reviver); } catch (e) { return wrap({}); }
+        if (v && typeof v === 'object' && !Array.isArray(v)) return wrap(v);
+        return v;
+      };
+      globalThis.__legadoDeepJSON = true;
+    })();
+    """
+
     /// 阅读器里点击评论气泡：click 是书源里的函数调用（如 showCmt('书','章','段','数')），
     /// 在书源的 loginUrl 函数库里执行，收集它通过 java.showBrowser/startBrowser 想打开的网址。
     /// content 是书源直接给的页面内容（Legado 的 showBrowser(url, content) 语义）：
@@ -1904,21 +1938,45 @@ final class JSEngine {
             lock.unlock()
         }
         defer { ToastCenter.popBrowserCapture() }
-        var outcome = runLoginScript(source: source, library: lib, call: click)
+
+        /// 跑一次点击脚本。deepJSON=true 时用「宽松 JSON」补丁。
+        func attempt(deepJSON: Bool) -> Result<String, LoginScriptError> {
+            lock.lock(); opened = nil; pageContent = nil; lock.unlock()
+            return runLoginScript(source: source, library: lib, call: click, deepJSON: deepJSON)
+        }
+
+        var outcome = attempt(deepJSON: false)
         lock.lock()
-        if opened == nil, case .success = outcome {
-            // 没打开：多半是书源用来防止重复打开的「已渲染」标记没被清掉
-            // （imageDecode 那条路在某些站点不可靠）。清掉标记重试一次。
+        let needsCacheRetry = opened == nil
+        lock.unlock()
+
+        if needsCacheRetry, case .success = outcome {
+            // 知秋段评：书源用「已渲染」标记防止重复打开；标记没被清 → 直接跳过。
+            // 清掉标记重试一次。
             let keys = JSEngine.reviewCacheKeys(in: click)
             if !keys.isEmpty {
                 let script = keys.map { "cache.deleteMemory('\($0)')" }.joined(separator: ";")
                 _ = runLoginScript(source: source, library: lib, call: script)
-                outcome = runLoginScript(source: source, library: lib, call: click)
+                outcome = attempt(deepJSON: false)
             }
         }
+
+        lock.lock()
+        let stillNothing = opened == nil
+        lock.unlock()
+
+        if stillNothing {
+            // 书源自己的接口挂了（番茄聚合取 forum_id 那个 403）：脚本会当场抛错，
+            // 评论页开不了。再跑一次，这次 JSON 解析出的对象「缺字段也不报错」，
+            // 脚本就能走到打开页面的那一步（页面内容还是书源给的那份）。
+            DebugLog.add("≡段评重试：书源脚本没打开页面，用宽松 JSON 再试一次")
+            outcome = attempt(deepJSON: true)
+        }
+
+        lock.lock()
         let result = opened
         let content = pageContent
-        lock.unlock(); defer { lock.unlock() }
+        lock.unlock()
         // 诊断：点击没反应时，靠这几行能立刻看出是脚本报错、还是脚本没调 showBrowser。
         var error: String?
         switch outcome {
@@ -1960,7 +2018,11 @@ final class JSEngine {
 
     /// 在书源上下文里执行一段 JS（登录按钮、login() 等），返回字符串结果；脚本抛错时返回 .failure。
     /// 脚本 = loginUrl 里的函数库 + 调用语句。toast 通过 ToastCenter 出口。
-    func runLoginScript(source: BookSource, library: String?, call: String, formValues: [String: String] = [:]) -> Result<String, LoginScriptError> {
+    /// deepJSON=true 时打「宽松 JSON」补丁：JSON.parse 出来的对象缺字段也返回空对象，
+    /// 解析失败也返回空壳 —— 书源脚本在打开评论页前调了一个挂掉的接口时，
+    /// 靠它才能走到打开页面的那一步。
+    func runLoginScript(source: BookSource, library: String?, call: String,
+                        formValues: [String: String] = [:], deepJSON: Bool = false) -> Result<String, LoginScriptError> {
         let context = RuleContext(source: source)
         let ctx = makeContext(context)
         // Legado 执行登录按钮时，`result` 是当前表单值（键为字段名）；`book`/`chapter` 在登录页没有，保持默认。
@@ -1977,6 +2039,7 @@ final class JSEngine {
         ctx.setObject(get, forKeyedSubscript: "__contextGet" as NSString)
         if let lib = source.jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
         if let l = library, !l.isEmpty { ctx.evaluateScript(l) }
+        if deepJSON { ctx.evaluateScript(JSEngine.deepJSONPatch) }
         let value = ctx.evaluateScript(call)
         // java.postDelayed 排队的回调在脚本返回后执行（与 Android Handler 语义一致）。
         ctx.evaluateScript("if(typeof __drainDelayed==='function')__drainDelayed()")

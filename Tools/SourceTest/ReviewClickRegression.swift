@@ -108,11 +108,27 @@ enum ReviewClickRegression {
         let key = JSEngine.reviewCacheKeys(in: "createSvg('7320955143208307774','7322565597089235518',12,42,1)")
         check(key == ["fq-7320955143208307774-7322565597089235518-12"], "从点击表达式取出「已渲染」标记键")
 
-        // 书源自己的脚本/接口挂了时，要给出原因，不能点了没反应。
+        // 书源脚本失败时要给出原因，不能点了没反应。
         // （番茄聚合的「本章说」就是这种：它先请求 ms.show 的 forum_id，
         //   那个接口现在对所有人 403，脚本抛错 → 页面根本打不开。）
         let broken = JSEngine.shared.resolveClickURL(source: source, click: "notExistFunction()")
         check(broken.url == nil, "脚本失败时不返回评论页地址")
         check(!(broken.error ?? "").isEmpty, "脚本失败时给出失败原因（实际 \(broken.error ?? "nil")）")
+
+        // 书源自己的接口挂了时（番茄聚合：取 forum_id 那个 403）：
+        // 第一次会因 resp.data 是 undefined 当场抛错，评论页开不了。
+        // 引擎要用「宽松 JSON」重试一次，让脚本走到 showBrowser —— 页面能打开（内容空就白屏）。
+        let brokenLib = """
+        function openComment(){
+          let resp = JSON.parse('{"Code":10010101007,"Message":"当前接口不支持通过SDK Token直接访问","Success":false}');
+          let forum_id = resp['data']['forum_data']['forum_id'];
+          this.java.showBrowser('https://c.invalid/viewer?forum_id=' + forum_id, null);
+        }
+        """
+        let brokenSource = BookSource(bookSourceUrl: "https://review-broken.example", bookSourceName: "接口挂了")
+        brokenSource.loginUrl = brokenLib
+        let brokenResult = JSEngine.shared.resolveClickURL(source: brokenSource, click: "openComment()")
+        check(brokenResult.url?.contains("c.invalid/viewer") == true,
+              "书源接口挂了时用宽松 JSON 重试，评论页仍能打开（实际 \(brokenResult.url ?? "nil")）")
     }
 }
