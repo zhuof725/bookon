@@ -75,8 +75,32 @@ enum DiscoverDeckRegression {
         check(withCount.id == "https://a.invalid/1", "续读：id 用 bookUrl，去重靠它")
 
         // 7. 两种条目的 id 稳定性
-        let deck = DeckItem(book: book)
-        check(deck.id == book.bookUrl && deck.title == "盗墓笔记" && deck.caption == "src",
-              "卡片：bookUrl 作 id，name 作标题，author 作副标题")
+        //    上面的 book 没有设 author（默认空串），所以 caption 是空。
+        //    先显式给个作者，验证 caption 确实取自 author。
+        var authored = book
+        authored.author = "南派三叔"
+        let deck = DeckItem(book: authored)
+        check(deck.id == authored.bookUrl,
+              "卡片：bookUrl 作 id")
+        check(deck.title == "盗墓笔记",
+              "卡片：name 作标题")
+        check(deck.caption == "南派三叔",
+              "卡片：author 作副标题")
+
+        // 8. 作者缺省时不塞占位文字
+        let noAuthor = DeckItem(book: book)
+        check(noAuthor.caption.isEmpty, "卡片：作者为空时副标题也为空")
+
+        // 9. 远端封面只认 http/https
+        var withCover = book
+        withCover.coverUrl = "https://img.example.invalid/c.jpg"
+        check(DeckItem(book: withCover).cover?.scheme == "https",
+              "卡片：远端 https 封面被接受")
+        withCover.coverUrl = "/local/path/cover.jpg"
+        check(DeckItem(book: withCover).cover == nil,
+              "卡片：本地路径不被当成网络地址")
+        withCover.coverUrl = "  "
+        check(DeckItem(book: withCover).cover == nil,
+              "卡片：空白封面地址返回 nil")
     }
 }
