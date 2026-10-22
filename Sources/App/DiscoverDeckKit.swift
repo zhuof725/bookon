@@ -86,33 +86,55 @@ struct DiscoverWaterfallSection: View {
     /// 每 3 本里第 1、3 本是竖版，第 2 本是方形——固定节奏比随机更稳，滚动时不会忽大忽小乱跳。
     private func isSquare(_ index: Int) -> Bool { index % 3 == 1 }
 
-    /// 分列结果缓存：只在 items 或尺寸变化时重算。
-    @State private var split: (left: [(Int, DeckItem)], right: [(Int, DeckItem)]) = ([], [])
+    /// 分列结果：两列各自的 (原始索引, 条目)。
+    ///
+    /// 用 struct 而不是元组 + @State：元组不满足 Equatable，而且
+    /// `ForEach(Array([split.left, split.right].enumerated())...)` 这种写法
+    /// 会让类型检查器在 @State 上打转，Swift 6.2 直接崩在 recordOpenedType。
+    struct WaterfallColumns: Equatable {
+        var left: [Entry] = []
+        var right: [Entry] = []
 
-    /// 首帧与 items 变化时算一次，之后滚动不再重算。
-    private func rebuildSplit() {
-        split = computeSplit()
+        struct Entry: Identifiable, Equatable {
+            let index: Int
+            let item: DeckItem
+            var id: String { item.id }
+        }
+
+        var all: [[Entry]] { [left, right] }
     }
 
-    private func computeSplit() -> (left: [(Int, DeckItem)], right: [(Int, DeckItem)]) {
-        var left: [(Int, DeckItem)] = []
-        var right: [(Int, DeckItem)] = []
+    /// 只在 items 变化时重算一次，滚动时直接用缓存。
+    private func columns(for items: [DeckItem]) -> WaterfallColumns {
+        var result = WaterfallColumns()
         var leftHeight: CGFloat = 0
         var rightHeight: CGFloat = 0
 
         for (index, item) in items.enumerated() {
-            // 估算高度：宽度按屏幕一半算，封面 3:4 或 1:1，加上文字两行
             let coverRatio: CGFloat = isSquare(index) ? 1.0 : 0.75
             let estimated = coverRatio * 100 + 46
+            let entry = WaterfallColumns.Entry(index: index, item: item)
             if leftHeight <= rightHeight {
-                left.append((index, item))
+                result.left.append(entry)
                 leftHeight += estimated
             } else {
-                right.append((index, item))
+                result.right.append(entry)
                 rightHeight += estimated
             }
         }
-        return (left, right)
+        return result
+    }
+
+    /// 以 items 为键缓存分列结果，items 不变就不重算。
+    @State private var cached: WaterfallColumns = WaterfallColumns()
+    /// 用 Optional 而不是 0：0 可能和真实 key 撞上，导致首帧不计算、页面空白。
+    @State private var cachedKey: Int?
+
+    private func refreshColumnsIfNeeded(force: Bool = false) {
+        let key = items.count ^ (items.first?.id.hashValue ?? 0)
+        guard force || key != cachedKey else { return }
+        cachedKey = key
+        cached = columns(for: items)
     }
 
     var body: some View {
@@ -120,9 +142,9 @@ struct DiscoverWaterfallSection: View {
             header
 
             HStack(alignment: .top, spacing: 12) {
-                ForEach(Array([split.left, split.right].enumerated()), id: \.offset) { pair in
+                ForEach(0..<2, id: \.self) { column in
                     LazyVStack(spacing: 14) {
-                        ForEach(pair.element, id: \.item.id) { entry in
+                        ForEach(cached.all[column]) { entry in
                             Button { onSelect(entry.item, entry.index) } label: {
                                 cell(entry.item, index: entry.index)
                             }
@@ -136,8 +158,8 @@ struct DiscoverWaterfallSection: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 18)
-        .onAppear { if split.left.isEmpty && split.right.isEmpty { rebuildSplit() } }
-        .onChange(of: items) { _, _ in rebuildSplit() }
+        .onAppear { refreshColumnsIfNeeded(force: true) }
+        .onChange(of: items) { _, _ in refreshColumnsIfNeeded() }
     }
 
     private func cell(_ item: DeckItem, index: Int) -> some View {
