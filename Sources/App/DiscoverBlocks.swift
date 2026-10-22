@@ -79,14 +79,44 @@ final class DiscoverBlockLoader: ObservableObject {
         }
     }
 
-    /// 封面加载失败（多是签名过期）时重新拉一次这个板块，换新的封面地址。
-    /// 每个板块只自动重试一次，避免一直失败时反复请求。
-    private var coverRetried: Set<String> = []
+    /// 封面加载失败（多是签名过期/链接死掉）时的修复：用**书名在书源里重搜一次**，
+    /// 换成搜索接口给的封面地址（那边签名有效期长得多）。
+    /// 一个板块只修一次：一次搜索的结果可以同时替换该板块里所有同名书的封面。
+    private var coverRepairStarted: Set<String> = []
 
     func coverFailed(_ url: String) {
-        guard !url.isEmpty, !coverRetried.contains(url) else { return }
-        coverRetried.insert(url)
-        Task { await load(url, force: true) }
+        guard !url.isEmpty, !coverRepairStarted.contains(url) else { return }
+        coverRepairStarted.insert(url)
+        Task { await repairCovers(in: url) }
+    }
+
+    /// 重搜一次并替换该板块里能匹配上的封面。
+    private func repairCovers(in url: String) async {
+        let list = books[url] ?? []
+        let wanted = list.filter { !$0.name.isEmpty }
+        guard let first = wanted.first else { return }
+        let source = self.source
+        guard let found = try? await WebBook.search(source: source, key: first.name), !found.isEmpty else {
+            DebugLog.readerAdd("◇发现页封面修复失败：搜索「\(first.name)」没有结果")
+            return
+        }
+        var patched = 0
+        var updated = list
+        for (index, book) in updated.enumerated() {
+            // 先按书名完全一致找（要带封面的优先），再退一步用「互相包含」匹配。
+            let exact = found.first { $0.name == book.name && $0.coverUrl?.isEmpty == false }
+                ?? found.first { $0.name == book.name }
+            let loose = found.first { !$0.name.isEmpty && ($0.name.contains(book.name) || book.name.contains($0.name)) }
+            guard let cover = (exact ?? loose)?.coverUrl, !cover.isEmpty else { continue }
+            updated[index].coverUrl = cover
+            patched += 1
+        }
+        guard patched > 0 else {
+            DebugLog.readerAdd("◇发现页封面修复失败：搜索结果里没有匹配的封面")
+            return
+        }
+        await MainActor.run { books[url] = updated }
+        DebugLog.readerAdd("◇发现页封面已用搜索结果替换：\(patched) 本")
     }
 
     /// 清空（下拉刷新）。
@@ -95,6 +125,7 @@ final class DiscoverBlockLoader: ObservableObject {
         failed.removeAll()
         loading.removeAll()
         pending.removeAll()
+        coverRepairStarted.removeAll()
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 封面下载并发闸门：同时进行的下载数量不超过设置值。
 actor CoverLoadGate {
@@ -42,9 +43,12 @@ final class DiscoverCoverCache {
 struct DiscoverCoverImage: View {
     @AppStorage(DiscoverSettings.coverConcurrencyKey) private var concurrency = DiscoverSettings.defaultCoverConcurrency
     let url: URL?
-    /// 封面下载失败（签名过期、链接失效等）时回调：让板块重新拉一次，换新的封面地址。
+    /// 封面下载失败（签名过期、链接失效等）时回调：让板块用书名重搜一次，换新的封面地址。
     var onFailure: (() -> Void)? = nil
     @State private var image: UIImage?
+
+    /// 封面下载超时（秒）：CDN 偶尔会卡住，占位图一直不换。
+    private static let timeout: TimeInterval = 12
 
     var body: some View {
         GeometryReader { geometry in
@@ -78,7 +82,9 @@ struct DiscoverCoverImage: View {
         await CoverLoadGate.shared.acquire()
         var failed = false
         do {
-            let (data, response) = try await URLSession.shared.data(from: resolved)
+            var request = URLRequest(url: resolved)
+            request.timeoutInterval = Self.timeout
+            let (data, response) = try await URLSession.shared.data(for: request)
             if let decoded = UIImage(data: data) {
                 DiscoverCoverCache.shared.store(decoded, for: resolved)
                 image = decoded
@@ -87,6 +93,8 @@ struct DiscoverCoverImage: View {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 DebugLog.readerAdd("◇发现页封面加载失败（\(status)）：\(resolved.absoluteString)")
             }
+        } catch let error as URLError where error.code == .cancelled {
+            // 视图被销毁 / 任务被取消：不是封面本身的问题，不重试也不上报。
         } catch {
             failed = true
             DebugLog.readerAdd("◇发现页封面加载出错：\(error.localizedDescription)")
