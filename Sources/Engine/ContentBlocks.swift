@@ -280,12 +280,15 @@ enum ContentBlocks {
     // MARK: - SVG 评论卡片 -> 原生块
 
     /// 解出 data:image/svg+xml 的 SVG 文本；不是 SVG 返回 nil。
+    /// base64 的 payload 只取第一个「,」之前的部分：书源常在地址后面接 `,{...}` 选项，
+    /// 混进 base64 里会解不出来（段评气泡的条数就是这么丢的）。
     static func svgText(_ src: String) -> String? {
         guard src.hasPrefix("data:"), let comma = src.firstIndex(of: ",") else { return nil }
         let meta = src[..<comma].lowercased()
         guard meta.contains("svg") else { return nil }
-        let payload = String(src[src.index(after: comma)...])
+        var payload = String(src[src.index(after: comma)...])
         if meta.contains(";base64") {
+            if let cut = payload.firstIndex(of: ",") { payload = String(payload[..<cut]) }
             var p = payload.replacingOccurrences(of: "\\s", with: "", options: .regularExpression)
             while p.count % 4 != 0 { p += "=" }
             guard let d = Data(base64Encoded: p) else { return nil }

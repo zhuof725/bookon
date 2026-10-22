@@ -128,6 +128,13 @@ enum ReviewBubbleRegression {
         let svgURI = "data:image/svg+xml;base64," + b64SVG
         check(ContentBlocks.svgText(svgURI) == discussionSVG, "base64 的 SVG data URI 解出 SVG 文本")
         check(ContentBlocks.svgText(svgURI)?.contains("<svg") == true, "解出的是 SVG 而不是 base64 原文")
+        // 地址后面接 ,{...} 选项时（书源的老规矩），base64 也要能解出来：
+        // 混进选项后长度对不齐，base64 解码会失败 → 「SVG 里画条数」的气泡丢了数字。
+        let svgWithOptions = svgURI + ",{\"style\":\"text\",\"click\":\"showCmt('1','2','3','42')\"}"
+        check(ContentBlocks.svgText(svgWithOptions)?.contains("<svg") == true,
+              "带 ,{...} 选项的 SVG 仍能解出 SVG 文本")
+        check(DataURIDecode.data("data:image/png;base64,QUJD,{\"style\":\"text\"}") == Data("ABC".utf8),
+              "带 ,{...} 选项的位图 data URI 仍能解出数据")
 
         // 端到端：正文末尾的章评条（FULL 样式 + js 选项）→ 原生评论卡片，不能落回图片分支
         let chapterSrc = "data:image/svg+xml;base64,,{\"style\":\"FULL\",\"type\":\"fqpl\","
