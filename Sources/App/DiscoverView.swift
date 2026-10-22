@@ -21,6 +21,17 @@ struct DiscoverView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                NavigationLink {
+                    CustomDiscoverView()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text("自定义").appFont(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(palette.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("discover.custom.entry")
                 Spacer(minLength: 0)
                 DiscoverLayoutMenu(onSettings: { showSettings = true })
             }
