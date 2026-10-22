@@ -1,0 +1,188 @@
+import Foundation
+
+/// 自定义发现配置的离线回归：增删、去重、排序、解码容错、书目可见性。
+/// 全部纯函数，不联网。
+enum CustomDiscoverRegression {
+    static func run(_ check: (Bool, String) -> Void) throws {
+        // 1. 解码容错：坏 JSON / 缺字段一律回落空配置
+        check(CustomDiscoverStore.decode(Data("not json".utf8)).entries.isEmpty,
+              "自定义发现：坏 JSON 回落空配置")
+        check(CustomDiscoverStore.decode(Data("{}".utf8)).entries.isEmpty,
+              "自定义发现：空对象回落空配置")
+        let partial = Data(#"{"entries":[{"sourceUrl":"u1","kindUrl":"/a"}]}"#.utf8)
+        let decoded = CustomDiscoverStore.decode(partial)
+        check(decoded.entries.count == 1
+              && decoded.entries[0].template == .deck
+              && decoded.entries[0].sourceName == "",
+              "自定义发现：缺 template 回落卡片堆叠，缺书名不崩")
+
+        // 2. 增删与去重
+        var config = CustomDiscoverConfig()
+        let entryA = CustomDiscoverEntry(sourceUrl: "u1", sourceName: "书源甲",
+                                         kindTitle: "热播周榜", kindUrl: "/a", template: .deck)
+        config.upsert(entryA)
+        check(config.entries.count == 1, "自定义发现：首次添加写入一条")
+        var entryADup = entryA
+        entryADup.template = .fan
+        config.upsert(entryADup)
+        check(config.entries.count == 1 && config.entries[0].template == .fan,
+              "自定义发现：同一书源同一分类重复添加只更新模板")
+        let entryB = CustomDiscoverEntry(sourceUrl: "u2", sourceName: "书源乙",
+                                         kindTitle: "月票榜", kindUrl: "/b", template: .curve)
+        config.upsert(entryB)
+        check(config.entries.map(\.kindTitle) == ["热播周榜", "月票榜"],
+              "自定义发现：不同分类追加到末尾")
+        check(entryA.id == entryADup.id && entryA.id != entryB.id,
+              "自定义发现：条目 id 由书源 + 分类地址决定")
+
+        // 3. 拖拽排序（onMove 语义）
+        let third = CustomDiscoverEntry(sourceUrl: "u3", sourceName: "书源丙",
+                                        kindTitle: "新书榜", kindUrl: "/c")
+        config.upsert(third)
+        var moving = config
+        moving.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+        check(moving.entries.map(\.kindTitle) == ["新书榜", "热播周榜", "月票榜"],
+              "自定义发现：末项拖到最前")
+        var movingDown = config
+        movingDown.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
+        check(movingDown.entries.map(\.kindTitle) == ["月票榜", "新书榜", "热播周榜"],
+              "自定义发现：首项拖到最后")
+        var movingSame = config
+        movingSame.move(fromOffsets: IndexSet(integer: 1), toOffset: 1)
+        check(movingSame.entries.map(\.kindTitle) == config.entries.map(\.kindTitle),
+              "自定义发现：原地拖动顺序不变")
+
+        // 4. 删除
+        var deleting = config
+        deleting.remove(id: entryB.id)
+        check(deleting.entries.map(\.kindTitle) == ["热播周榜", "新书榜"],
+              "自定义发现：按 id 删除")
+
+        // 5. 可见性：书源被删 / 没有发现地址 / 分类地址为空 都不显示
+        var live = BookSource(bookSourceUrl: "u1", bookSourceName: "书源甲")
+        live.exploreUrl = "/explore"
+        var noExplore = BookSource(bookSourceUrl: "u2", bookSourceName: "书源乙")
+        noExplore.exploreUrl = "  "
+        var hidden = config
+        hidden.upsert(CustomDiscoverEntry(sourceUrl: "ghost", sourceName: "已删除",
+                                          kindTitle: "幽灵", kindUrl: "/g"))
+        hidden.upsert(CustomDiscoverEntry(sourceUrl: "u1", sourceName: "书源甲",
+                                          kindTitle: "空地址", kindUrl: ""))
+        let visible = hidden.visibleEntries(from: [live, noExplore])
+        check(visible.map(\.kindTitle) == ["热播周榜", "月票榜"],
+              "自定义发现：书源不存在、未配发现地址、分类地址为空都不显示")
+
+        // 6. 书源改名后标题跟着变
+        var renamed = config
+        var renamedSource = live
+        renamedSource.bookSourceName = "书源甲（新）"
+        renamed.refreshNames(from: [renamedSource])
+        check(renamed.entries.first?.sourceName == "书源甲（新）",
+              "自定义发现：书源改名后板块标题同步")
+
+        // 7. 板块标题：只显示分类名，不拼书源名
+        check(entryA.boardTitle == "热播周榜", "自定义发现：标题只用分类名")
+        var sameName = entryA
+        sameName.sourceName = "热播周榜"
+        check(sameName.boardTitle == "热播周榜", "自定义发现：书源名与分类同名时仍只显示一个")
+        var emptyKind = entryA
+        emptyKind.kindTitle = "  "
+        check(emptyKind.boardTitle == "书源甲", "自定义发现：分类名为空才回落到书源名")
+
+        // 8. 轮播书源：配置顺序优先，未配置时按板块出现顺序
+        var heroConfig = CustomDiscoverConfig(carouselSourceUrls: ["u2", "u1"], entries: [entryA, entryB])
+        let heroes = heroConfig.carouselSources(from: [live, noExplore])
+        check(heroes.map(\.bookSourceUrl) == ["u2", "u1"], "自定义发现：轮播按配置顺序")
+        heroConfig.carouselSourceUrls = []
+        let fallbackHeroes = heroConfig.carouselSources(from: [live, noExplore])
+        check(fallbackHeroes.map(\.bookSourceUrl) == ["u1", "u2"],
+              "自定义发现：未配置轮播时按板块出现顺序")
+        heroConfig.carouselSourceUrls = ["ghost", "u1"]
+        check(heroConfig.carouselSources(from: [live]).map(\.bookSourceUrl) == ["u1"],
+              "自定义发现：轮播跳过不存在的书源")
+
+        // 9. 落盘往返
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("custom-discover-\(UUID().uuidString).json")
+        check(CustomDiscoverStore.save(config, to: tmp), "自定义发现：写盘成功")
+        let reloaded = CustomDiscoverStore.load(from: tmp)
+        check(reloaded.entries.map(\.id) == config.entries.map(\.id),
+              "自定义发现：写盘后读回条目一致")
+        check(reloaded.entries.map(\.template) == config.entries.map(\.template),
+              "自定义发现：写盘后读回模板一致")
+        try? FileManager.default.removeItem(at: tmp)
+
+        // 10. 数量上限不写死，但空配置要能被识别
+        check(CustomDiscoverConfig().isEmpty, "自定义发现：空配置可识别")
+        check(!config.isEmpty, "自定义发现：有板块不是空配置")
+
+        // 11. 模板表：八个模板都注册了，且数据源归属正确
+        check(DiscoverTemplate.all.count == DiscoverTemplateKind.allCases.count,
+              "模板：列表长度等于枚举数量")
+        check(DiscoverTemplateKind.allCases.map(\.rawValue)
+              == ["badgeGrid", "covers", "rankRow", "waterfall", "curve", "fan", "deck", "history"],
+              "模板：八个模板的稳定键")
+        for kind in DiscoverTemplateKind.allCases {
+            check(DiscoverTemplate.template(for: kind).kind == kind,
+                  "模板：\(kind.title) 能按枚举取回")
+            check(!kind.title.isEmpty && !kind.detail.isEmpty,
+                  "模板：\(kind.rawValue) 有标题和说明")
+        }
+        check(DiscoverTemplateKind.badgeGrid.dataSource == .bookList
+              && DiscoverTemplateKind.covers.dataSource == .bookList
+              && DiscoverTemplateKind.rankRow.dataSource == .bookList
+              && DiscoverTemplateKind.waterfall.dataSource == .bookList
+              && DiscoverTemplateKind.curve.dataSource == .bookList
+              && DiscoverTemplateKind.fan.dataSource == .bookList
+              && DiscoverTemplateKind.deck.dataSource == .bookList,
+              "模板：七种书籍布局都吃书籍列表")
+        check(DiscoverTemplateKind.history.dataSource == .readingProgress,
+              "模板：继续阅读吃阅读进度")
+
+        // 12. 数量钳制：上限统一 20，下限统一 1
+        let curve = DiscoverTemplate.template(for: .curve)
+        check(curve.maxCount == 20 && curve.minCount == 1, "模板：上限 20、下限 1")
+        for template in DiscoverTemplate.all {
+            check(template.maxCount == DiscoverTemplate.countCeiling,
+                  "模板：\(template.title) 上限也是 20")
+        }
+        for template in DiscoverTemplate.all {
+            check(template.defaultCount == 20, "模板：\(template.title) 默认显示 20")
+        }
+        check(curve.clampedCount(0) == 1, "模板：数量低于下限钳到 1")
+        check(curve.clampedCount(999) == 20, "模板：数量高于上限钳到 20")
+        check(curve.clampedCount(20) == 20, "模板：正好 20 不受影响")
+        check(curve.clampedCount(6) == 6, "模板：范围内原样返回")
+        check(curve.clampedCount(DiscoverTemplate.unlimited) == DiscoverTemplate.unlimited,
+              "模板：unlimited 不被钳制（「全部」页不限数量）")
+        check(DiscoverTemplate.isUnlimited(DiscoverTemplate.unlimited),
+              "模板：isUnlimited 能识别不限数量")
+        check(!DiscoverTemplate.isUnlimited(20), "模板：20 不是 unlimited")
+
+        // 13. 换模板：数量不再被强行改（上下限统一 20）
+        var wide = CustomDiscoverEntry(sourceUrl: "u1", sourceName: "甲",
+                                       kindTitle: "榜", kindUrl: "/a",
+                                       template: .curve, count: 20)
+        wide.applyTemplate(.fan)
+        check(wide.template == .fan && wide.count == 20,
+              "模板：统一上限后换模板不改数量")
+        wide.count = 999
+        wide.applyTemplate(.deck)
+        check(wide.count == 20, "模板：越界数量在换模板时被钳回 20")
+
+        // 14. 解码：未知模板回落 + 数量越界被钳制
+        let badTemplate = Data(#"{"entries":[{"sourceUrl":"u","kindUrl":"/k","template":"nope","count":999}]}"#.utf8)
+        let bad = CustomDiscoverStore.decode(badTemplate)
+        check(bad.entries.count == 1
+              && bad.entries[0].template == .deck
+              && bad.entries[0].count == 20,
+              "模板：未知模板回落卡片堆叠，数量越界被钳到 20")
+
+        // 15. 旧配置兼容：之前的 badgeGrid / covers / rankRow 仍能读
+        let legacy = Data(#"{"entries":[{"sourceUrl":"u","kindUrl":"/a","style":"badgeGrid"},{"sourceUrl":"u","kindUrl":"/b","style":"covers"},{"sourceUrl":"u","kindUrl":"/c","style":"rankRow"}]}"#.utf8)
+        let legacyConfig = CustomDiscoverStore.decode(legacy)
+        check(legacyConfig.entries.count == 3, "模板：旧字段 style 不会导致整条丢失")
+        check(legacyConfig.entries.allSatisfy { $0.template == .deck },
+              "模板：旧字段读不出时回落卡片堆叠")
+    }
+}
