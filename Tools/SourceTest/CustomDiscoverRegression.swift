@@ -299,6 +299,6 @@ enum CustomDiscoverRegression {
         check(orbsA.count == 3, "预览：每本书三个装饰圆")
         check(orbsA.allSatisfy { $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 },
               "预览：装饰圆坐标在 0...1")
-        check(DiscoverPreviewCover.cards(count: 5).count == 5, "预览：可只取前 N 张卡片")
+        check(DiscoverPreviewCatalog.cards(count: 5).count == 5, "预览：可只取前 N 张卡片")
     }
 }
