@@ -60,7 +60,9 @@ private struct DeckCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 7)
+            // 阴影半径压到 6：大半径 + 3D 旋转会让 Core Animation 每帧重算离屏层，
+            // 一排卡片滑动时就是明显的掉帧。
+            .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 3)
             .contentShape(Rectangle())
     }
 }
@@ -84,8 +86,15 @@ struct DiscoverWaterfallSection: View {
     /// 每 3 本里第 1、3 本是竖版，第 2 本是方形——固定节奏比随机更稳，滚动时不会忽大忽小乱跳。
     private func isSquare(_ index: Int) -> Bool { index % 3 == 1 }
 
-    /// 预先分列：保持原始索引，点击能对应回书籍。
-    private var columns: [[(index: Int, item: DeckItem)]] {
+    /// 分列结果缓存：只在 items 或尺寸变化时重算。
+    @State private var split: (left: [(Int, DeckItem)], right: [(Int, DeckItem)]) = ([], [])
+
+    /// 首帧与 items 变化时算一次，之后滚动不再重算。
+    private func rebuildSplit() {
+        split = computeSplit()
+    }
+
+    private func computeSplit() -> (left: [(Int, DeckItem)], right: [(Int, DeckItem)]) {
         var left: [(Int, DeckItem)] = []
         var right: [(Int, DeckItem)] = []
         var leftHeight: CGFloat = 0
@@ -103,7 +112,7 @@ struct DiscoverWaterfallSection: View {
                 rightHeight += estimated
             }
         }
-        return [left, right]
+        return (left, right)
     }
 
     var body: some View {
@@ -111,7 +120,7 @@ struct DiscoverWaterfallSection: View {
             header
 
             HStack(alignment: .top, spacing: 12) {
-                ForEach(Array(columns.enumerated()), id: \.offset) { pair in
+                ForEach(Array([split.left, split.right].enumerated()), id: \.offset) { pair in
                     LazyVStack(spacing: 14) {
                         ForEach(pair.element, id: \.item.id) { entry in
                             Button { onSelect(entry.item, entry.index) } label: {
@@ -127,6 +136,8 @@ struct DiscoverWaterfallSection: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 18)
+        .onAppear { if split.left.isEmpty && split.right.isEmpty { rebuildSplit() } }
+        .onChange(of: items) { _, _ in rebuildSplit() }
     }
 
     private func cell(_ item: DeckItem, index: Int) -> some View {
@@ -465,13 +476,23 @@ struct DiscoverCurveSection: View {
         items.indices.contains(index) ? items[index] : nil
     }
 
+    /// 当前卡前后各 5 张的渲染窗口。
+    private var visibleRange: Range<Int> {
+        let lower = max(0, index - 5)
+        let upper = min(items.count, index + 6)
+        return lower..<max(lower, upper)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 20)
 
             ZStack {
-                ForEach(Array(items.enumerated()), id: \.element.id) { pair in
+                // 只渲染当前卡附近的一个窗口：20 本时渲染 20 个 3D 视图会明显掉帧，
+                // 而实际上只有左右各 4 张以内能被看到。
+                ForEach(visibleRange, id: \.self) { itemIndex in
+                    let pair = (offset: itemIndex, element: items[itemIndex])
                     let offset = CGFloat(pair.offset - index) + dragX / step
                     let distance = abs(offset)
 
@@ -587,13 +608,21 @@ struct DiscoverFanSection: View {
         items.indices.contains(index) ? items[index] : nil
     }
 
+    /// 当前卡前后各 5 张的渲染窗口。
+    private var visibleRange: Range<Int> {
+        let lower = max(0, index - 5)
+        let upper = min(items.count, index + 6)
+        return lower..<max(lower, upper)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 20)
 
             ZStack {
-                ForEach(Array(items.enumerated()), id: \.element.id) { pair in
+                ForEach(visibleRange, id: \.self) { itemIndex in
+                    let pair = (offset: itemIndex, element: items[itemIndex])
                     let offset = Double(pair.offset - index)
                     let distance = abs(pair.offset - index)
 
@@ -983,6 +1012,8 @@ struct DiscoverTemplateView: View {
     let title: String
     var moreTitle: String = "全部"
     var books: [Book] = []
+    /// 预先转好的卡片；传了就优先用，省掉 body 里的 map/prefix。
+    var cards: [DeckItem] = []
     var history: [HistoryItem] = []
     var count: Int = DiscoverTemplate.countCeiling
     /// 外观：卡片倍率 / 圆角 / 序号
@@ -998,7 +1029,8 @@ struct DiscoverTemplateView: View {
     }
 
     private var deckItems: [DeckItem] {
-        Array(books.prefix(limit)).map { DeckItem(book: $0) }
+        if !cards.isEmpty { return cards }
+        return Array(books.prefix(limit)).map { DeckItem(book: $0) }
     }
 
     var body: some View {

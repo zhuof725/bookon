@@ -270,6 +270,22 @@ struct CustomDiscoverConfig: Codable, Hashable {
 
     static let allCategory = "全部"
 
+    /// 一次性把条目按分类分好：`分类名 → 条目`。
+    ///
+    /// `entries(inCategory:)` 每调一次就遍历一遍全部条目，分类多了就是 O(分类数 × 条目数)；
+    /// 首页每次重建都会用到所有分类，所以在这里一次分完。
+    func entriesByCategory() -> [String: [CustomDiscoverEntry]] {
+        var grouped: [String: [CustomDiscoverEntry]] = [:]
+        for entry in entries {
+            let name = entry.sourceName.trimmingCharacters(in: .whitespacesAndNewlines)
+            grouped[name, default: []].append(entry)
+        }
+        // 「全部」包含所有条目；没匹配到任何分类的条目也归到这里，
+        // 避免手写了一个不存在的分类名就看不到东西。
+        grouped[Self.allCategory] = entries
+        return grouped
+    }
+
     /// 仍然可用的板块：书源存在（启用与否不拦，用户明确挑过）且分类地址非空。
     func visibleEntries(from sources: [BookSource]) -> [CustomDiscoverEntry] {
         let available = Set(DiscoverCatalog.explorableSources(sources).map(\.bookSourceUrl))

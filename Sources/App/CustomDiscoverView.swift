@@ -16,18 +16,18 @@ struct CustomDiscoverView: View {
     @State private var fullPage: CustomDiscoverEntry?
     @State private var categoryIndex = 0
 
-    private var categories: [String] { model.visibleCategories }
+    /// 全部读 Store 里预计算好的值，body 不再重复过滤/映射。
+    private var categories: [String] { model.categories }
 
     private var currentCategory: String {
         categories.indices.contains(categoryIndex) ? categories[categoryIndex] : CustomDiscoverConfig.allCategory
     }
 
     private var sections: [DiscoverSectionModel] {
-        model.sections(inCategory: currentCategory)
+        model.sectionsByCategory[currentCategory] ?? []
     }
 
-    /// 轮播页：与分类同序，切轮播也会切分类。
-    private var heroes: [CustomDiscoverHero] { model.carouselHeroes }
+    private var heroes: [CustomDiscoverHero] { model.heroes }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,6 +63,8 @@ struct CustomDiscoverView: View {
             if model.isEmpty { model.reloadConfig() }
             await model.loadInitial()
         }
+        // 书架变化（读完一本书、加书、删书）才重算进度，不随滚动触发
+        .onChange(of: store.books.count) { _, _ in model.refreshHistoryIfNeeded() }
         .onChange(of: model.revision) { _, _ in
             // 配置变了，分类可能变少：把索引拉回范围内
             categoryIndex = min(categoryIndex, max(categories.count - 1, 0))
@@ -96,7 +98,10 @@ struct CustomDiscoverView: View {
     private func categoryChip(title: String, index: Int) -> some View {
         let selected = index == categoryIndex
         return Button {
+            guard categoryIndex != index else { return }
             categoryIndex = index
+            // 只加载当前分类的前几个，别一次性把所有分类都拉一遍
+            Task { await model.loadCategory(title) }
         } label: {
             Text(title)
                 .appFont(.system(size: 14, weight: selected ? .semibold : .regular))
@@ -127,6 +132,10 @@ struct CustomDiscoverView: View {
                     if !heroes.isEmpty {
                         CustomDiscoverCarousel(pages: heroes, index: $categoryIndex)
                             .padding(.bottom, 14)
+                            .onChange(of: categoryIndex) { _, newValue in
+                                guard categories.indices.contains(newValue) else { return }
+                                Task { await model.loadCategory(categories[newValue]) }
+                            }
                     }
                     // 分类胶囊条（轮播的辅助指示，点它也能切）
                     if categories.count > 1 {
@@ -172,6 +181,7 @@ struct CustomDiscoverView: View {
                 title: section.title,
                 moreTitle: "全部",
                 books: section.books,
+                cards: section.cards,
                 count: section.count,
                 scale: section.entry.scale,
                 corner: section.entry.corner,

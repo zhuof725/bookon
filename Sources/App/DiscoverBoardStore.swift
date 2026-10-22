@@ -20,14 +20,21 @@ final class DiscoverSectionModel: ObservableObject, Identifiable {
     var title: String { entry.boardTitle }
     var count: Int { entry.count }
 
+    /// 已转好的卡片条目：模板每次刷新都拿这个，避免重复 map/prefix。
+    /// `books` 变化时一起更新，视图层就不必在 body 里做转换了。
+    @Published private(set) var cards: [DeckItem] = []
+
     init(entry: CustomDiscoverEntry) {
         self.entry = entry
         self.id = entry.id
     }
 
     /// 配置改了（标题 / 模板 / 数量），把新值写回，已加载的书保留。
+    /// 只在真正变化时才重新生成卡片，避免无谓的重绘。
     func update(entry newEntry: CustomDiscoverEntry) {
+        let changed = newEntry != entry
         entry = newEntry
+        if changed { rebuildCards() }
     }
 
     func setBooks(_ list: [Book]) {
@@ -35,6 +42,7 @@ final class DiscoverSectionModel: ObservableObject, Identifiable {
         failed = false
         errorText = nil
         loading = false
+        rebuildCards()
     }
 
     func setFailed(_ message: String?) {
@@ -48,14 +56,23 @@ final class DiscoverSectionModel: ObservableObject, Identifiable {
         failed = false
         errorText = nil
     }
+
+    /// 把书转成卡片，一次算好。数量上限在配置里，这里截断避免模板自己 prefix。
+    private func rebuildCards() {
+        let limit = entry.count
+        let limitCount = limit == DiscoverTemplate.unlimited ? books.count : min(max(limit, 0), books.count)
+        cards = books.prefix(limitCount).map { DeckItem(book: $0) }
+    }
 }
 
-// MARK: - 发现页数据源
+// MARK: - 首页数据源
 
 /// 把「配置 + 书源」变成可渲染的板块。
 ///
-/// 职责单一：读配置、按需拉书、给视图提供 `DiscoverSectionModel`。
-/// 不做任何排版决定——排版由模板自己负责。
+/// 性能上做了三件事：
+/// 1. 分类、轮播、可视板块列表都缓存成 @Published 属性，视图 body 里不再重复计算；
+/// 2. 书架进度只在「我的」或书架变化时刷新，不在每次排版时读磁盘；
+/// 3. 章节数按 bookUrl 缓存在内存，避免每本书都 md5 + 读 JSON。
 @MainActor
 final class DiscoverBoardStore: ObservableObject {
     static let shared = DiscoverBoardStore()
@@ -64,11 +81,18 @@ final class DiscoverBoardStore: ObservableObject {
     @Published private(set) var historyItems: [HistoryItem] = []
     @Published private(set) var config = CustomDiscoverConfig()
 
+    /// 预计算好，给视图直接用。
+    @Published private(set) var categories: [String] = []
+    @Published private(set) var heroes: [CustomDiscoverHero] = []
+    /// 分类名 → 该分类下的板块。切分类时不用再过滤。
+    @Published private(set) var sectionsByCategory: [String: [DiscoverSectionModel]] = [:]
+
     /// 配置变更计数：外部改了配置后 bump，页面据此重建。
     @Published private(set) var revision = 0
 
     private var loadingIDs: Set<String> = []
-    /// 直接用共享实例，避免 unowned 引用在单例场景下的生命周期隐患。
+    /// 章节数缓存：bookUrl → 章数（nil 表示查过但没有目录缓存）
+    private var chapterCountCache: [String: Int?] = [:]
     private var appStore: AppStore { AppStore.shared }
 
     var isEmpty: Bool { sections.isEmpty }
@@ -91,26 +115,103 @@ final class DiscoverBoardStore: ObservableObject {
         revision &+= 1
     }
 
-    // MARK: 板块
+    // MARK: 重建
 
+    /// 配置或书源变化后重建列表。已加载的书会复用，不会整页重刷。
     private func rebuild() {
         let entries = config.visibleEntries(from: appStore.sources)
-        // 复用已加载的书，避免配置微调时整页重刷
         let existing = Dictionary(sections.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         sections = entries.map { entry in
             if let model = existing[entry.id] {
-                // 同一个板块：把最新配置（标题/模板/数量）写回去，保留已加载的书
                 model.update(entry: entry)
                 return model
             }
             return DiscoverSectionModel(entry: entry)
         }
+        recomputeIndex()
+        refreshHistoryIfNeeded()
+    }
+
+    /// 一次性算好分类、每分类的板块、轮播页。
+    private func recomputeIndex() {
+        let names = config.effectiveCategories
+        if names.isEmpty {
+            categories = []
+        } else if config.categories.isEmpty {
+            categories = [CustomDiscoverConfig.allCategory] + names
+        } else {
+            categories = names
+        }
+
+        // 分类 → 板块：先把条目按分类分组（一次遍历），再按 id 集合筛板块
+        let grouped = config.entriesByCategory()
+        let byID = Dictionary(sections.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var index: [String: [DiscoverSectionModel]] = [:]
+        index.reserveCapacity(categories.count)
+        for category in categories {
+            guard let list = grouped[category], !list.isEmpty else {
+                // 手写了一个匹配不到的分类：退回全量，别让页面空着
+                index[category] = sections
+                continue
+            }
+            let models = list.compactMap { byID[$0.id] }
+            index[category] = models.isEmpty ? sections : models
+        }
+        sectionsByCategory = index
+
+        // 轮播页与分类同序
+        heroes = categories.enumerated().map { offset, category in
+            let list = index[category] ?? []
+            let covers: [URL?] = (list.first?.books ?? []).prefix(3).map { BookCoverLocation.url(for: $0) }
+            let detail = list.prefix(3).map(\.title).joined(separator: " · ")
+            return CustomDiscoverHero(
+                id: "\(category)-\(offset)",
+                title: category,
+                subtitle: list.isEmpty ? "" : "\(list.count) 个板块",
+                detail: detail,
+                covers: covers
+            )
+        }
+    }
+
+    /// 轮播封面依赖已加载的书：某个板块加载完要更新对应页的封面。
+    private func refreshHeroCovers() {
+        guard !heroes.isEmpty else { return }
+        heroes = heroes.enumerated().map { offset, hero in
+            let list = sectionsByCategory[hero.title] ?? []
+            var updated = hero
+            updated.covers = (list.first?.books ?? []).prefix(3).map { BookCoverLocation.url(for: $0) }
+            _ = offset
+            return updated
+        }
+    }
+
+    // MARK: 继续阅读
+
+    /// 书架进度：只在书架变化或手动刷新时重算，不在每帧调用。
+    private var lastHistorySignature: Int = 0
+
+    private func historySignature() -> Int {
+        // 书架数量 + 最近一次阅读时间足够判断是否需要重算
+        var hasher = Hasher()
+        hasher.combine(appStore.books.count)
+        for book in appStore.books.prefix(24) {
+            hasher.combine(book.bookUrl)
+            hasher.combine(book.durChapterIndex)
+            hasher.combine(book.lastReadAt.timeIntervalSince1970)
+        }
+        return hasher.finalize()
+    }
+
+    func refreshHistoryIfNeeded(force: Bool = false) {
+        let signature = historySignature()
+        guard force || signature != lastHistorySignature else { return }
+        lastHistorySignature = signature
         refreshHistory()
     }
 
-    /// 继续阅读：取书架里最近读的若干本。
+    /// 继续阅读：取书架里最近读的若干本。章节数走内存缓存。
     func refreshHistory() {
-        // 书架里的书都算候选，按最后阅读时间排序
         let books = appStore.books.sorted { $0.lastReadAt > $1.lastReadAt }
         historyItems = books.map { book in
             HistoryItem(book: book,
@@ -119,61 +220,17 @@ final class DiscoverBoardStore: ObservableObject {
         }
     }
 
-    /// 顶部分类：配置里写了就用配置，没写按书源名自动生成，并加「全部」。
-    var visibleCategories: [String] {
-        let names = config.effectiveCategories
-        guard !names.isEmpty else { return [] }
-        // 自动生成时没有「全部」，这里补在最前；手写了就不硬塞
-        if config.categories.isEmpty {
-            return [CustomDiscoverConfig.allCategory] + names
-        }
-        return names
-    }
-
-    /// 某个分类下的板块。
-    func sections(inCategory category: String) -> [DiscoverSectionModel] {
-        let allowed = Set(config.entries(inCategory: category).map(\.id))
-        if allowed.isEmpty { return sections }
-        return sections.filter { allowed.contains($0.id) }
-    }
-
-    /// 顶部轮播：按分类生成，一屏一个分类。
-    ///
-    /// 封面取该分类下第一个板块的前三本书；板块还没加载完时先给空槽，
-    /// 加载完会随 sections 的 @Published 变化自动刷新。
-    var carouselHeroes: [CustomDiscoverHero] {
-        visibleCategories.enumerated().map { offset, category in
-            let list = sections(inCategory: category)
-            let firstBooks = list.first?.books ?? []
-            let covers: [URL?] = firstBooks.prefix(3).map { BookCoverLocation.url(for: $0) }
-
-            let count = list.count
-            let sub = list.isEmpty ? "" : "\(count) 个板块"
-
-            // 「全部」这一屏用第一个板块的书名做说明；其余用板块名列表
-            let detail: String
-            if list.isEmpty {
-                detail = ""
-            } else if category == CustomDiscoverConfig.allCategory {
-                detail = list.prefix(3).map(\.title).joined(separator: " · ")
-            } else {
-                detail = list.prefix(3).map(\.title).joined(separator: " · ")
-            }
-
-            return CustomDiscoverHero(
-                id: "\(category)-\(offset)",
-                title: category,
-                subtitle: sub,
-                detail: detail,
-                covers: covers
-            )
-        }
-    }
-
     private func chapterCount(for book: Book) -> Int? {
+        if let cached = chapterCountCache[book.bookUrl] { return cached }
         let toc = appStore.isLocal(book) ? appStore.localToc(book) : appStore.cachedToc(book)
-        guard let toc, !toc.isEmpty else { return nil }
-        return toc.count
+        let count = (toc?.isEmpty == false) ? toc?.count : nil
+        chapterCountCache[book.bookUrl] = count
+        return count
+    }
+
+    /// 目录更新后（比如进了阅读器）清掉对应缓存。
+    func invalidateChapterCount(for bookUrl: String) {
+        chapterCountCache.removeValue(forKey: bookUrl)
     }
 
     // MARK: 加载
@@ -190,6 +247,9 @@ final class DiscoverBoardStore: ObservableObject {
         if !force, let cached = DiscoverBlockCache.cached(source: model.entry.sourceUrl,
                                                           url: model.entry.kindUrl) {
             model.setBooks(cached)
+            refreshHeroCovers()
+            // 缓存的目录可能变了，顺手清掉进度缓存
+            chapterCountCache.removeAll()
             return
         }
 
@@ -202,6 +262,7 @@ final class DiscoverBoardStore: ObservableObject {
             DiscoverBlockCache.store(source: model.entry.sourceUrl,
                                      url: model.entry.kindUrl,
                                      books: list)
+            refreshHeroCovers()
         } catch {
             model.setFailed(error.localizedDescription)
         }
@@ -209,20 +270,30 @@ final class DiscoverBoardStore: ObservableObject {
         loadingIDs.remove(model.id)
     }
 
-    /// 首屏：只加载前面几个板块，滚动到再加载其余。
+    /// 首屏：只加载「全部」也就是第一个分类的前几个板块，其余滚动到再加载。
+    /// 多个分类同时拉会让首屏排队等网络，反而更慢。
     func loadInitial(maxSections: Int = 3) async {
-        for model in sections.prefix(maxSections) {
+        let category = categories.first ?? CustomDiscoverConfig.allCategory
+        await loadCategory(category, maxSections: maxSections)
+    }
+
+    /// 进入某个分类时按需加载它的板块。
+    func loadCategory(_ category: String, maxSections: Int = 3) async {
+        let list = sectionsByCategory[category] ?? []
+        for model in list.prefix(maxSections) {
             await load(model)
         }
     }
 
-    /// 下拉刷新：清缓存后重拉可见板块。
-    func refresh() async {
+    /// 下拉刷新：清缓存后重拉当前分类可见板块。
+    func refresh(category: String? = nil) async {
         DiscoverBlockCache.clear()
         DiscoverKindsCache.clear()
+        chapterCountCache.removeAll()
         revision &+= 1
-        refreshHistory()
-        for model in sections {
+        refreshHistoryIfNeeded(force: true)
+        let list = category.flatMap { sectionsByCategory[$0] } ?? sections
+        for model in list {
             await load(model, force: true)
         }
     }

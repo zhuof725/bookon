@@ -233,5 +233,21 @@ enum CustomDiscoverRegression {
         let ordered = CustomDiscoverConfig(categories: ["甲", "乙", "丙"], entries: [])
         check(ordered.effectiveCategories == ["甲", "乙", "丙"],
               "分类：轮播页与分类同序（手写顺序即轮播顺序）")
+
+        // 18. 一次性分组：与逐分类过滤结果一致
+        var grouped = CustomDiscoverConfig(categories: [], entries: [entryA, entryB, third])
+        let byCategory = grouped.entriesByCategory()
+        check(byCategory[CustomDiscoverConfig.allCategory]?.count == 3,
+              "分组：「全部」包含所有条目")
+        check(byCategory["书源甲"]?.count == 1 && byCategory["书源乙"]?.count == 1,
+              "分组：按书源名各自归组")
+        // 和逐个调用 entries(inCategory:) 的结果对齐
+        for name in ["书源甲", "书源乙", "书源丙"] {
+            let fast = Set(byCategory[name]?.map(\.id) ?? [])
+            let slow = Set(grouped.entries(inCategory: name).map(\.id))
+            check(fast == slow, "分组：\(name) 与逐分类过滤结果一致")
+        }
+        // 不存在的分类在分组字典里没有键，调用方靠回退兜底
+        check(byCategory["不存在的源"] == nil, "分组：未出现的分类不产生键")
     }
 }

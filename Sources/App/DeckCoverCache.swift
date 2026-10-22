@@ -133,18 +133,20 @@ struct DeckCoverImage: View {
     @State private var image: UIImage?
 
     var body: some View {
-        GeometryReader { geo in
-            Group {
+        // 用 Color.clear + overlay 撑尺寸，比 GeometryReader 省：后者在滚动中
+        // 每次尺寸变化都会重新求值 body，一屏几十张封面就是持续的布局开销。
+        Color.clear
+            .overlay {
                 if let image {
-                    Image(uiImage: image).resizable().scaledToFill()
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
                 } else {
                     Rectangle().fill(Color(uiColor: .secondarySystemFill))
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-        }
-        .task(id: url) { await load() }
+            .task(id: url) { await load() }
     }
 
     private func load() async {
@@ -156,6 +158,7 @@ struct DeckCoverImage: View {
             return
         }
         // 2. 走完整链路（磁盘 → 网络）
+        // 直接赋值，不加隐式动画：一屏几十张图同时做过渡会堆积动画事务
         if let loaded = await DeckCoverCache.shared.image(for: url) {
             image = loaded
         }
