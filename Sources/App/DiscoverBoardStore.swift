@@ -13,13 +13,16 @@ final class DiscoverSectionModel: ObservableObject, Identifiable {
     @Published private(set) var failed = false
     @Published private(set) var errorText: String?
 
-    var id: String { entry.id }
+    /// 存成属性而不是计算属性：`Identifiable` 要求能在 main actor 之外读取，
+    /// 计算属性会跨 actor 隔离，Swift 6 下是错误。
+    let id: String
     var kind: DiscoverTemplateKind { entry.template }
     var title: String { entry.boardTitle }
     var count: Int { entry.count }
 
     init(entry: CustomDiscoverEntry) {
         self.entry = entry
+        self.id = entry.id
     }
 
     /// 配置改了（标题 / 模板 / 数量），把新值写回，已加载的书保留。
@@ -73,7 +76,7 @@ final class DiscoverBoardStore: ObservableObject {
     // MARK: 配置
 
     func reloadConfig() {
-        config = CustomDiscoverStore.loadConfig()
+        config = CustomDiscoverStore.load()
         config.refreshNames(from: appStore.sources)
         rebuild()
         revision &+= 1
@@ -82,16 +85,11 @@ final class DiscoverBoardStore: ObservableObject {
     func save(_ next: CustomDiscoverConfig) {
         var updated = next
         updated.refreshNames(from: appStore.sources)
-        CustomDiscoverStore.saveConfig(updated)
+        CustomDiscoverStore.save(updated)
         config = updated
         rebuild()
         revision &+= 1
     }
-
-    /// 落盘位置与读取，直接复用 Engine 层的实现。
-    static func configURL() -> URL { CustomDiscoverStore.fileURL }
-    static func loadConfig() -> CustomDiscoverConfig { CustomDiscoverStore.load() }
-    static func saveConfig(_ config: CustomDiscoverConfig) { CustomDiscoverStore.save(config) }
 
     // MARK: 板块
 
