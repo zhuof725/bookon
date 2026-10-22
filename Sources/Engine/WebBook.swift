@@ -529,7 +529,10 @@ enum WebBook {
         let baseURL = chapter?.url ?? ""
         return { src in
             let options = ContentBlocks.srcOptions(src)
-            var out = src
+            // 默认返回**剥掉 ,{...} 选项**的地址，和没有这个钩子时一致。
+            // （早前这里直接返回原 src，payload 里混着 ,{...}，base64 解不出来，
+            //   番茄聚合这类「SVG 里画条数」的气泡就丢了数字，段评条数全变成 1。）
+            var out = ContentBlocks.stripOptions(src)
             if let js = options["js"]?.trimmingCharacters(in: .whitespacesAndNewlines), !js.isEmpty {
                 if let real = JSEngine.shared.evalString(js, result: src, baseUrl: baseURL,
                                                        jsLib: source.jsLib, context: ctx),
@@ -541,7 +544,9 @@ enum WebBook {
                 let decoded = ImageDecodeRuntime.decode(src, rule: rule, source: source,
                                                         context: ctx, baseURL: baseURL)
                 // 有 js 选项时，真实图片由 js 生成；否则用 imageDecode 的结果（图片解密类书源）。
-                if options["js"]?.isEmpty != false { out = decoded }
+                // 规则多半原样返回 src（src 里带 ,{...} 选项），这里要剥掉，
+                // 否则 base64 payload 里混着选项，解不出 SVG（段评条数就丢了）。
+                if options["js"]?.isEmpty != false { out = ContentBlocks.stripOptions(decoded) }
             }
             return out
         }

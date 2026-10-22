@@ -160,5 +160,26 @@ enum ReviewBubbleRegression {
         }
         check(cappedCount == 205,
               "段评条数用回调里的真实值而不是 SVG 里封顶的 99（实际 \(cappedCount.map(String.init) ?? "nil")）")
+
+        // MARK: 正文图片钩子不能把 ,{...} 选项留在地址里
+        //
+        // 为执行书源的 imageDecode 规则，阅读器给每张图片加了个钩子。
+        // 钩子若原样返回 src，payload 里就混着 ,{...}：base64 解不出来 →
+        // 「SVG 里画条数」的气泡（番茄聚合）条数全变成 1，章评条也整条不显示。
+        let hookSource = BookSource(bookSourceUrl: "https://bubble-hook.invalid", bookSourceName: "hook")
+        let hook = WebBook.contentImageHook(source: hookSource, book: nil, chapter: nil)
+        check(hook != nil, "正文图片钩子存在")
+        let hooked = hook?(cappedSrc) ?? ""
+        check(hooked == cappedURI, "图片钩子返回剥掉 ,{...} 选项的地址（实际 \(hooked.prefix(48))）")
+        let fullSrc = cappedURI + ",{\"click\":\"getChapComments('a','b','c')\",\"style\":\"full\"}"
+        let fullHooked = hook?(fullSrc) ?? ""
+        check(ContentBlocks.svgText(fullHooked)?.contains("<svg") == true,
+              "图片钩子之后章评条的 SVG 仍能解出来")
+        var hookedCount: Int?
+        for block in ContentBlocks.parse(cappedLine, imageDecode: hook) {
+            if case .paragraph(_, let c, _) = block { hookedCount = c }
+        }
+        check(hookedCount == 205,
+              "经过图片钩子段评条数仍是真实值（实际 \(hookedCount.map(String.init) ?? "nil")）")
     }
 }

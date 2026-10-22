@@ -99,9 +99,11 @@ enum ContentBlocks {
                         // 书源要求按文字大小行内显示：接到上一段末尾，而不是单独成大图。
                         // 条数：SVG 里的数字可能是封顶值（番茄聚合 >99 一律画 99），
                         // 真实条数从回调里取（见 commentCount）。
-                        let svgCount = svgTexts(svgText(decoded) ?? "").compactMap { Int($0) }.first
+                        let svg = svgText(decoded)
+                        let svgCount = svg.map { svgTexts($0).compactMap { Int($0) }.first } ?? nil
                         blocks.append(.inlineBubble(src: decoded,
-                                                    count: commentCount(svgCount: svgCount, click: click),
+                                                    count: commentCount(svgCount: svgCount, click: click,
+                                                                        payloadIsSVG: svg?.contains("<svg") == true),
                                                     clickURL: click,
                                                     rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
@@ -248,13 +250,19 @@ enum ContentBlocks {
 
     /// 段评条数：
     /// 1. createSvg 系列的第 4 个参数就是条数（知秋段评的 SVG 里根本没有数字，只能靠它）。
-    /// 2. showCmt 系列的第 4 个参数只在「SVG 明确画了封顶值 99」时才用 ——
-    ///    番茄聚合 >99 一律画 99，真实条数只有回调里有；书山那个参数是日期片段，
-    ///    用「不超过 4 位」把它挡掉（日期片段固定 6 位）。
+    /// 2. showCmt 系列的第 4 个参数有两种含义：
+    ///    - 番茄聚合：条数。SVG 里画的是封顶值（>99 一律 99），真实条数只有回调里有；
+    ///      书源把气泡换成「气泡社区」的图（取图接口没登录时返回一段 JSON）时，
+    ///      SVG 里根本没有数字，条数也只能从回调里取。
+    ///    - 书山：日期片段（时间戳后 6 位）。它画的是一个正常 SVG（<svg…>），
+    ///      所以「图不是 SVG」这个条件能把它挡在外面；另外要求 4 位以内。
     /// 3. 其余情况用 SVG 里的数字。
-    static func commentCount(svgCount: Int?, click: String?) -> Int? {
+    static func commentCount(svgCount: Int?, click: String?, payloadIsSVG: Bool = true) -> Int? {
         if let n = countFromClick(click) { return n }
-        if let n = showCmtCount(click), svgCount == 99, n > 99, n < 10000 { return n }
+        if let n = showCmtCount(click), n < 10000 {
+            if svgCount == 99, n > 99 { return n }              // 画的是封顶值 99 → 真实条数
+            if svgCount == nil, !payloadIsSVG { return n }      // 图被换成了别的东西（气泡社区取图失败）
+        }
         return svgCount
     }
 
