@@ -49,6 +49,23 @@ enum DebugLog {
         return entries.joined(separator: "\n")
     }
 
+    /// 阅读器的点击链路诊断（点评论气泡的每一步）：**一直记录**，不管有没有在调试。
+    /// 只留最近 80 行，不含 Cookie/请求头。
+    private static var readerEntries: [String] = []
+
+    static func readerAdd(_ message: String) {
+        lock.lock(); defer { lock.unlock() }
+        readerEntries.append("\(formatTime(Date().timeIntervalSince(startedAt))) \(message)")
+        if readerEntries.count > 80 { readerEntries.removeFirst(readerEntries.count - 80) }
+    }
+
+    /// 阅读器诊断日志；调试页把它附在报告后面，方便用户反馈「点了没反应」时的现场。
+    static func readerSnapshot() -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard !readerEntries.isEmpty else { return "" }
+        return "── 阅读器 ──\n" + readerEntries.joined(separator: "\n")
+    }
+
     /// [mm:ss.SSS]，从本次调试开始计时；与 Legado 的 debugTimeFormat 一致。
     static func formatTime(_ seconds: TimeInterval) -> String {
         let totalMS = Int((max(0, seconds) * 1000).rounded())

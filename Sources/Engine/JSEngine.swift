@@ -1969,7 +1969,7 @@ final class JSEngine {
             // 书源自己的接口挂了（番茄聚合取 forum_id 那个 403）：脚本会当场抛错，
             // 评论页开不了。再跑一次，这次 JSON 解析出的对象「缺字段也不报错」，
             // 脚本就能走到打开页面的那一步（页面内容还是书源给的那份）。
-            DebugLog.add("≡段评重试：书源脚本没打开页面，用宽松 JSON 再试一次")
+            DebugLog.readerAdd("≡段评重试：书源脚本没打开页面，用宽松 JSON 再试一次")
             outcome = attempt(deepJSON: true)
         }
 
@@ -1981,7 +1981,7 @@ final class JSEngine {
         var error: String?
         switch outcome {
         case .failure(let e):
-            DebugLog.add("≡段评点击失败：\(e.message)")
+            DebugLog.readerAdd("≡段评点击失败：\(e.message)")
             // 失败原因要回到界面上：否则用户点了没反应，完全不知道是书源自己的接口挂了。
             error = "评论打不开：\(e.message)"
         case .success:
@@ -1990,11 +1990,11 @@ final class JSEngine {
                 // （缓存标记未清 / 共享 Token 为空）走了 toast 分支。
                 let token = (try? JSEngine.shared.evalString("String(source.getVariable())",
                                                             context: RuleContext(source: source))) ?? ""
-                DebugLog.add("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
+                DebugLog.readerAdd("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
                              + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
                 error = "评论打不开：书源脚本没有打开任何页面（可能缺少 Token 或接口不可用）"
             } else {
-                DebugLog.add("≡段评地址：\(result!)" + (content?.isEmpty == false ? "（带页面内容 \(content!.count) 字）" : ""))
+                DebugLog.readerAdd("≡段评地址：\(result!)" + (content?.isEmpty == false ? "（带页面内容 \(content!.count) 字）" : ""))
             }
         }
         return ReviewClickResult(url: result, content: content, error: error)

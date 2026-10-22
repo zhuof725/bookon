@@ -86,7 +86,7 @@ struct SourceDebugView: View {
                 while !Task.isCancelled {
                     // 一直刷新：阅读器里的点击链路（≡段评…）也写进同一份日志，
                     // 这样不用先跑一次调试就能看到上一次点了没反应的原因。
-                    report = DebugLog.snapshot() + ruleIssues
+                    report = DebugLog.snapshot() + ruleIssues + DebugLog.readerSnapshot()
                     do { try await Task.sleep(nanoseconds: 300_000_000) } catch { break }
                 }
             }
@@ -236,7 +236,7 @@ struct SourceDebugView: View {
                 text += (text.isEmpty ? "" : "\n") + "── 规则问题 ──\n" + issues.joined(separator: "\n")
             }
             ruleIssues = issues.isEmpty ? "" : (text.isEmpty ? "" : "\n") + "── 规则问题 ──\n" + issues.joined(separator: "\n")
-            report = text
+            report = text + DebugLog.readerSnapshot()
             running = false
             DebugLog.end()
         }

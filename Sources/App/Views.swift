@@ -1478,12 +1478,12 @@ struct ReaderView: View {
         if t.hasPrefix("js:") {
             guard !commentBusy else { return }
             guard let src = store.source(for: book.origin) else {
-                DebugLog.add("≡段评点击失败：找不到书籍对应的书源（origin=\(book.origin)）")
+                DebugLog.readerAdd("≡段评点击失败：找不到书籍对应的书源（origin=\(book.origin)）")
                 return
             }
             commentBusy = true
             let call = String(t.dropFirst(3))
-            DebugLog.add("≡段评点击：\(String(call.prefix(80)))")
+            DebugLog.readerAdd("≡段评点击：\(String(call.prefix(80)))")
             Task {
                 let target = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
                 commentBusy = false
@@ -1493,7 +1493,7 @@ struct ReaderView: View {
                     // 书源脚本自己失败（接口挂了、Token 没了…）时要把原因摆出来，
                     // 否则点了没反应，用户完全不知道发生了什么。
                     let message = target.error ?? "≡段评点击后没有拿到评论页地址"
-                    DebugLog.add(message)
+                    DebugLog.readerAdd(message)
                     bookmarkNotice = message
                     let notice = bookmarkNotice
                     Task { @MainActor in

@@ -130,5 +130,9 @@ enum ReviewClickRegression {
         let brokenResult = JSEngine.shared.resolveClickURL(source: brokenSource, click: "openComment()")
         check(brokenResult.url?.contains("c.invalid/viewer") == true,
               "书源接口挂了时用宽松 JSON 重试，评论页仍能打开（实际 \(brokenResult.url ?? "nil")）")
+
+        // 阅读器的点击诊断要一直记着（不用先跑一次调试），方便用户反馈「点了没反应」。
+        check(DebugLog.readerSnapshot().contains("≡段评"),
+              "阅读器点击链路诊断一直记录（实际 \(DebugLog.readerSnapshot().isEmpty ? "空" : "有")）")
     }
 }
