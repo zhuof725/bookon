@@ -92,8 +92,8 @@ struct SourceLoginView: View {
             }
             // 登录脚本里的 java.startBrowser/showBrowser/startBrowserAwait 一律在应用内浏览器打开，
             // 不再跳出到系统浏览器，关闭时按书源开关回流 Cookie。
-            ToastCenter.setBrowserHandler { u, t in
-                DispatchQueue.main.async { open(u, title: t) }
+            ToastCenter.setBrowserHandler { u, t, c in
+                DispatchQueue.main.async { open(u, title: t, content: c) }
             }
         }
         .onDisappear { ToastCenter.setHandler(nil); ToastCenter.setBrowserHandler(nil) }
@@ -284,12 +284,12 @@ struct SourceLoginView: View {
     }
 
     /// 只有需要跳转的登录网址才用内置浏览器打开，不跳出到系统浏览器。
-    private func open(_ url: String, title: String) {
+    private func open(_ url: String, title: String, content: String? = nil) {
         guard let target = SourceLoginForm.browserURL(url) else {
             message = "这个网址无法在内置浏览器打开"
             return
         }
-        browser = BrowserTarget(url: target, title: title)
+        browser = BrowserTarget(url: target, title: title, content: content)
     }
 
     private func runScript(_ call: String, reloadAfter: Bool = false, onSuccess: (() -> Void)? = nil) {
@@ -351,10 +351,12 @@ struct LoginToastCard: View {
 }
 
 /// 内置浏览器目标：登录页与登录脚本请求的跳转网址。
+/// content 是书源直接给的页面内容（HTML）：有内容就按内容渲染，没有才请求 url。
 struct BrowserTarget: Identifiable, Equatable {
     let id = UUID()
     let url: String
     let title: String
+    var content: String? = nil
 }
 
 /// 内置浏览器：登录相关跳转都在应用内打开，关闭时按书源开关回流当前主机 Cookie。
@@ -367,7 +369,7 @@ struct InAppBrowserSheet: View {
 
     var body: some View {
         NavigationStack {
-            LoginWebView(url: target.url, model: model)
+            LoginWebView(url: target.url, model: model, content: target.content)
                 .overlay { if model.isLoading { ProgressView().padding(10).modifier(SettingsGlassSurface()) } }
                 .navigationTitle(target.title.isEmpty ? "登录" : target.title)
                 .navigationBarTitleDisplayMode(.inline)
@@ -448,6 +450,8 @@ final class BrowserNavigationModel: ObservableObject {
 struct LoginWebView: UIViewRepresentable {
     let url: String
     var model: BrowserNavigationModel?
+    /// 书源直接给的 HTML 内容：有内容就按内容渲染（服务器按 text/plain 发的页面只能这样看）。
+    var content: String?
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
@@ -456,7 +460,12 @@ struct LoginWebView: UIViewRepresentable {
         web.customUserAgent = WebViewSupport.userAgent
         web.navigationDelegate = context.coordinator
         context.coordinator.model?.attach(web)
-        if let u = URL(string: url) {
+        if let c = content, !c.isEmpty, let u = URL(string: url) {
+            Task {
+                await WebViewLoader.syncCookiesToWebView(for: u)
+                web.loadHTMLString(c, baseURL: u)
+            }
+        } else if let u = URL(string: url) {
             Task {
                 await WebViewLoader.syncCookiesToWebView(for: u)
                 web.load(URLRequest(url: u))

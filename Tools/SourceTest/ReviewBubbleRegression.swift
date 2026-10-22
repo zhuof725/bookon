@@ -47,6 +47,14 @@ enum ReviewBubbleRegression {
 
         check(ContentBlocks.countFromClick("createSvg('a','b',1,999,2)") == 999, "三位数段评数量")
         check(ContentBlocks.countFromClick("showCmt('a')") == nil, "非 createSvg 调用不猜测数量")
+        // 番茄聚合的段评气泡：showCmt('书','章','段','条数')，第 4 个参数才是真实条数。
+        // 它的 SVG 里只画了封顶后的数字（>99 一律画 99），真实条数只有回调里才有。
+        check(ContentBlocks.showCmtCount("showCmt('7208454824847739938','7208456691589841412','0','205')") == 205,
+              "showCmt 回调里的第 4 个参数是段评条数")
+        check(ContentBlocks.showCmtCount("showCmt('a','b','c')") == nil, "showCmt 参数不够时不猜数量")
+        // 书山的 showCmt 第 4 个参数是日期片段（时间戳后 6 位），不能当条数用。
+        check(ContentBlocks.commentCount(svgCount: 12, click: "showCmt(\"bid1\",\"cid1\",\"3\",\"186989\")") == 12,
+              "书山的 showCmt 日期片段不会被当成条数")
 
         // MARK: imageDecode 必须拿到书源原始的 src（含 ,{...} 选项）
         //
@@ -121,8 +129,7 @@ enum ReviewBubbleRegression {
         check(ContentBlocks.svgText(svgURI) == discussionSVG, "base64 的 SVG data URI 解出 SVG 文本")
         check(ContentBlocks.svgText(svgURI)?.contains("<svg") == true, "解出的是 SVG 而不是 base64 原文")
 
-        // 端到端：正文末尾的章评条（FULL 样式 + js 选项）→ 原生评论卡片，不能落回图片分支
-        let chapterSrc = "data:image/svg+xml;base64,,{\"style\":\"FULL\",\"type\":\"fqpl\","
+        // 端到端：正文末尾的章评条（FULL 样式 + js 选项）→ 原生评论卡片，不能落回图片分支        let chapterSrc = "data:image/svg+xml;base64,,{\"style\":\"FULL\",\"type\":\"fqpl\","
             + "\"click\":\"createSvg2('7320955143208307774','7322565597089235518',-1,42,1700000000123)\","
             + "\"js\":\"createSvg2('7320955143208307774','7322565597089235518',-1,42,1700000000123)\"}"
         let chapterLine = "正文最后一段。" + "<img src=\"" + chapterSrc + "\">"
@@ -137,5 +144,20 @@ enum ReviewBubbleRegression {
         check(cardTitle == "本章讨论" && cardCount == "42",
               "章评条渲染成原生卡片（实际 \(cardTitle ?? "nil")/\(cardCount ?? "nil")）")
         check(!fellBackToImage, "章评条不再落回图片分支")
+
+        // 番茄聚合的段评气泡：SVG 里画的是封顶数字（>99 一律 99），真实条数在回调第 4 个参数。
+        let cappedSVG = "<svg viewBox=\"5 14 45 36\" xmlns=\"http://www.w3.org/2000/svg\" width=\"180\" height=\"144\">"
+            + "<path d=\"M44 48 Q48 48 48 44 L48 20 Z\" fill=\"none\" stroke=\"#A9A9A9\"/>"
+            + "<text x=\"32\" y=\"38\" text-anchor=\"middle\" font-size=\"18\">99</text></svg>"
+        let cappedURI = "data:image/svg+xml;base64," + Data(cappedSVG.utf8).base64EncodedString()
+        let cappedSrc = cappedURI + ",{\"style\":\"text\",\"type\":\"bubble\","
+            + "\"click\":\"showCmt('7208454824847739938','7208456691589841412','0','205')\"}"
+        let cappedLine = "这一段有段评。" + "<img src=\"" + cappedSrc + "\">"
+        var cappedCount: Int?
+        for block in ContentBlocks.parse(cappedLine) {
+            if case .paragraph(_, let c, _) = block { cappedCount = c }
+        }
+        check(cappedCount == 205,
+              "段评条数用回调里的真实值而不是 SVG 里封顶的 99（实际 \(cappedCount.map(String.init) ?? "nil")）")
     }
 }

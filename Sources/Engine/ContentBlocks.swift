@@ -97,9 +97,11 @@ enum ContentBlocks {
                     let decoded = imageDecode?(src) ?? clean
                     if opts["style"]?.lowercased() == "text" {
                         // 书源要求按文字大小行内显示：接到上一段末尾，而不是单独成大图。
+                        // 条数：SVG 里的数字可能是封顶值（番茄聚合 >99 一律画 99），
+                        // 真实条数从回调里取（见 commentCount）。
                         let svgCount = svgTexts(svgText(decoded) ?? "").compactMap { Int($0) }.first
                         blocks.append(.inlineBubble(src: decoded,
-                                                    count: svgCount ?? countFromClick(click),
+                                                    count: commentCount(svgCount: svgCount, click: click),
                                                     clickURL: click,
                                                     rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
@@ -229,6 +231,31 @@ enum ContentBlocks {
               let m = re.firstMatch(in: click, range: NSRange(location: 0, length: (click as NSString).length)),
               let r = Range(m.range(at: 4), in: click) else { return nil }
         return Int(click[r])
+    }
+
+    /// showCmt(...) 的第 4 个参数：番茄聚合里是段评条数，
+    /// 但书山的 showCmt(bid, cid, para, date) 第 4 个参数是时间戳后 6 位（日期片段），
+    /// 两者长得一样，只能靠「SVG 里的数字是否被封顶」来判断能不能用。
+    static func showCmtCount(_ click: String?) -> Int? {
+        guard let click, !click.isEmpty else { return nil }
+        let pattern = "showCmt\\(\\s*['\"]?[^,'\")]*['\"]?\\s*,\\s*['\"]?[^,'\")]*['\"]?\\s*,"
+            + "\\s*['\"]?[^,'\")]*['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let m = re.firstMatch(in: click, range: NSRange(location: 0, length: (click as NSString).length)),
+              let r = Range(m.range(at: 1), in: click) else { return nil }
+        return Int(click[r])
+    }
+
+    /// 段评条数：
+    /// 1. createSvg 系列的第 4 个参数就是条数（知秋段评的 SVG 里根本没有数字，只能靠它）。
+    /// 2. showCmt 系列的第 4 个参数只在「SVG 明确画了封顶值 99」时才用 ——
+    ///    番茄聚合 >99 一律画 99，真实条数只有回调里有；书山那个参数是日期片段，
+    ///    用「不超过 4 位」把它挡掉（日期片段固定 6 位）。
+    /// 3. 其余情况用 SVG 里的数字。
+    static func commentCount(svgCount: Int?, click: String?) -> Int? {
+        if let n = countFromClick(click) { return n }
+        if let n = showCmtCount(click), svgCount == 99, n > 99, n < 10000 { return n }
+        return svgCount
     }
 
     static func clickFromOptions(_ opts: [String: String]) -> String? {

@@ -474,16 +474,18 @@ enum SourceVerificationBridge {
 /// JS 里 java.toast / longToast 的消息出口：界面订阅 handler 即可显示；没有订阅者时只丢弃。
 enum ToastCenter {
     /// 评论页等「打开网页」请求的统一入口。界面收到后弹半屏网页。
-    private static var browserHandler: ((String, String) -> Void)?
-    static func setBrowserHandler(_ h: ((String, String) -> Void)?) { lock.lock(); browserHandler = h; lock.unlock() }
-    private static var captures: [(String) -> Void] = []
-    static func pushBrowserCapture(_ f: @escaping (String) -> Void) { lock.lock(); captures.append(f); lock.unlock() }
+    /// content 是书源直接给的 HTML 页面内容（Legado 的 showBrowser(url, content) 语义）：
+    /// 有内容就按内容渲染，没有内容才去请求 url。
+    private static var browserHandler: ((String, String, String?) -> Void)?
+    static func setBrowserHandler(_ h: ((String, String, String?) -> Void)?) { lock.lock(); browserHandler = h; lock.unlock() }
+    private static var captures: [((String, String?) -> Void)] = []
+    static func pushBrowserCapture(_ f: @escaping (String, String?) -> Void) { lock.lock(); captures.append(f); lock.unlock() }
     static func popBrowserCapture() { lock.lock(); if !captures.isEmpty { captures.removeLast() }; lock.unlock() }
-    static func openBrowser(_ url: String, _ title: String) {
+    static func openBrowser(_ url: String, _ title: String, _ content: String? = nil) {
         lock.lock(); let h = browserHandler; let cap = captures.last; lock.unlock()
         // 有捕获者（评论点击）时只交给它，不再弹系统浏览器。
-        if let cap = cap { cap(url); return }
-        h?(url, title)
+        if let cap = cap { cap(url, content); return }
+        h?(url, title, content)
     }
     private static let lock = NSLock()
     private static var handler: ((String) -> Void)?
@@ -1014,17 +1016,17 @@ final class JSEngine {
         return String(java.ajaxNative(String(u)));
     };
     java.ajaxAll=function(arr){var o=[];for(var i=0;i<arr.length;i++){o.push(__response(java.connectNative(String(arr[i]))));}return o;};
-    java.startBrowserAwait=function(u,t){var s=String(u||'');if(typeof __openBrowser==='function'&&/^https?:/i.test(s)){__openBrowser(s,String(t||''));return '';}return java.connect(s)};
-    java.showBrowser=function(u,h,js,cfg){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(h||''));}return '';};
+    java.startBrowserAwait=function(u,t){var s=String(u||'');if(typeof __openBrowser==='function'&&/^https?:/i.test(s)){__openBrowser(s,String(t||''),'');return '';}return java.connect(s)};
+    java.showBrowser=function(u,h,js,cfg){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'',String(h||''));}return '';};
     java.sleep=function(ms){return '';};
     java.getWebViewUA=function(){return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';};
-    java.showReadingBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''));}return '';};
-    java.startBrowserDp=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''));}return '';};
+    java.showReadingBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
+    java.startBrowserDp=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
     java.open=function(){return '';};
     java.searchBook=function(){return '';};
     java.qread=function(){return '';};
     java.getThemeConfig=function(){return 'light';};
-    java.startBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''));}return ''};
+    java.startBrowser=function(u,t,c){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''),String(c||''));}return ''};
     java.webView=function(h,u,js){
         if(typeof __headlessWeb==='function'){
             var out=String(__headlessWeb(String(h==null?'':h),String(u==null?'':u),String(js==null?'':js)));
@@ -1220,7 +1222,7 @@ final class JSEngine {
     // java.getSource()：Legado JsExtensions 取当前书源对象（聚合源登录脚本会用它兜底取 source）。
     java.getSource=function(){return source;};
     // java.openUrl(u)：登录脚本里打开网址的旧式兜底（用户中心 / 帮助页）。
-    java.openUrl=function(u){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'');}return '';};
+    java.openUrl=function(u){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'','');}return '';};
     """
 
     /// 书源传给 `cookie.*` 的“地址”经常不是 URL：真实书源会写
@@ -1880,11 +1882,19 @@ final class JSEngine {
 
     /// 阅读器里点击评论气泡：click 是书源里的函数调用（如 showCmt('书','章','段','数')），
     /// 在书源的 loginUrl 函数库里执行，收集它通过 java.showBrowser/startBrowser 想打开的网址。
-    func resolveClickURL(source: BookSource, click: String) -> String? {
+    /// content 是书源直接给的页面内容（Legado 的 showBrowser(url, content) 语义）：
+    /// 番茄聚合的评论页是 gitee 上的静态 html，服务器按 text/plain 发，
+    /// 直接请求网址只会显示源码；按内容渲染才是原版行为。
+    func resolveClickURL(source: BookSource, click: String) -> (url: String, content: String?)? {
         let lib = SourceLoginForm.loginScript(source.loginUrl) ?? ""
         var opened: String?
+        var pageContent: String?
         let lock = NSLock()
-        ToastCenter.pushBrowserCapture { u in lock.lock(); if opened == nil, !u.isEmpty { opened = u }; lock.unlock() }
+        ToastCenter.pushBrowserCapture { u, c in
+            lock.lock()
+            if opened == nil, !u.isEmpty { opened = u; pageContent = c }
+            lock.unlock()
+        }
         defer { ToastCenter.popBrowserCapture() }
         var outcome = runLoginScript(source: source, library: lib, call: click)
         lock.lock()
@@ -1899,6 +1909,7 @@ final class JSEngine {
             }
         }
         let result = opened
+        let content = pageContent
         lock.unlock(); defer { lock.unlock() }
         // 诊断：点击没反应时，靠这几行能立刻看出是脚本报错、还是脚本没调 showBrowser。
         switch outcome {
@@ -1913,10 +1924,11 @@ final class JSEngine {
                 DebugLog.add("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
                              + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
             } else {
-                DebugLog.add("≡段评地址：\(result!)")
+                DebugLog.add("≡段评地址：\(result!)" + (content?.isEmpty == false ? "（带页面内容 \(content!.count) 字）" : ""))
             }
         }
-        return result
+        guard let result else { return nil }
+        return (result, content)
     }
 
     /// 从书源的点击表达式里取出「已渲染」标记的键。
@@ -1942,7 +1954,7 @@ final class JSEngine {
         let ctx = makeContext(context)
         // Legado 执行登录按钮时，`result` 是当前表单值（键为字段名）；`book`/`chapter` 在登录页没有，保持默认。
         ctx.setObject(formValues, forKeyedSubscript: "result" as NSString)
-        let openBrowser: @convention(block) (String, String) -> Void = { ToastCenter.openBrowser($0, $1) }
+        let openBrowser: @convention(block) (String, String, String) -> Void = { ToastCenter.openBrowser($0, $1, $2.isEmpty ? nil : $2) }
         ctx.setObject(openBrowser, forKeyedSubscript: "__openBrowser" as NSString)
         var thrown: String?
         ctx.exceptionHandler = { _, value in thrown = value?.toString() ?? "脚本错误" }

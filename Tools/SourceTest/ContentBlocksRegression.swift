@@ -93,10 +93,17 @@ enum InlineBubbleRegression {
         let ctx = RuleContext()
         _ = ctx
         var got: [String] = []
-        ToastCenter.pushBrowserCapture { got.append($0) }
+        var gotContent: [String?] = []
+        ToastCenter.pushBrowserCapture { u, c in got.append(u); gotContent.append(c) }
         defer { ToastCenter.popBrowserCapture() }
         ToastCenter.openBrowser("https://c.invalid/viewer", "")
         check(got == ["https://c.invalid/viewer"], "评论点击：网址被捕获而不是弹系统浏览器")
+        // 书源直接给页面内容时（showBrowser(url, content)）内容也要带出去：
+        // 番茄聚合的评论页服务器按 text/plain 发，直接请求只会显示一屏源码。
+        got.removeAll(); gotContent.removeAll()
+        ToastCenter.openBrowser("https://c.invalid/viewer", "", "<html>评论页</html>")
+        check(got == ["https://c.invalid/viewer"] && gotContent.first??.contains("评论页") == true,
+              "评论点击：书源给的页面内容一起被捕获")
     }
 }
 

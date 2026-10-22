@@ -98,7 +98,7 @@ enum ServerPanelLoginRegression {
         defer { JSEngine.loginStore.removeLoginInfo(key) }
         let lib = SourceLoginForm.loginScript(s.loginUrl) ?? ""
         var opened: [String] = []
-        ToastCenter.setBrowserHandler { u, _ in opened.append(u) }
+        ToastCenter.setBrowserHandler { u, _, _ in opened.append(u) }
         defer { ToastCenter.setBrowserHandler(nil) }
         ToastCenter.setHandler { _ in }
         defer { ToastCenter.setHandler(nil) }

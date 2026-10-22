@@ -99,7 +99,7 @@ enum ReviewClickRegression {
         _ = JSEngine.shared.evalString("source.setVariable('TOKEN123')", context: RuleContext(source: source))
         if let got = JSEngine.shared.resolveClickURL(source: source,
                                                      click: "createSvg('\(bid)','\(cid)',\(pid),42,1700000000123)") {
-            check(got.contains("comment/page?bid=\(bid)"), "点击气泡能拿到评论页地址（实际 \(got)）")
+            check(got.url.contains("comment/page?bid=\(bid)"), "点击气泡能拿到评论页地址（实际 \(got.url)）")
         } else {
             check(false, "点击气泡能拿到评论页地址（实际 nil）")
         }

@@ -299,7 +299,7 @@ struct ReaderView: View {
     @State private var index = 0
     @State private var text = ""
     @State private var blocks: [ContentBlock] = []
-    @State private var commentURL: URL?
+    @State private var commentTarget: BrowserTarget?
     @State private var commentBusy = false
     @State private var pages: [BookPage] = []
     @State private var pageIndex = 0
@@ -580,7 +580,11 @@ struct ReaderView: View {
                 .padding().frame(maxWidth: .infinity).modifier(SettingsGlassSurface()).padding(12)
             }
         }
-        .sheet(item: $commentURL) { link in CommentSheet(url: link) }
+        .sheet(item: $commentTarget) { target in
+            if let u = URL(string: target.url) {
+                CommentSheet(url: u, content: target.content)
+            }
+        }
         .onChange(of: scenePhase) { phase in
             if phase != .active { persistContinuousProgress(); store.flushProgress(); closeReadingSession() }
             else if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
@@ -1158,7 +1162,7 @@ struct ReaderView: View {
     }
 
     private func recordContinuousPosition(_ chapter: Int, position: Int) {
-        guard settings.pageMode == 0, !loading, !showToc, !showSettings, commentURL == nil,
+        guard settings.pageMode == 0, !loading, !showToc, !showSettings, commentTarget == nil,
               scrollChapters.contains(where: { $0.id == chapter }) else { return }
         scrollProgress.chapter = chapter
         scrollProgress.position = position
@@ -1459,7 +1463,7 @@ struct ReaderView: View {
     private var previousChapter: Int? { readableIndex(from: index - 1, direction: -1) }
 
     private func goAcrossEdge(_ dir: Int) {
-        guard !loading, pendingEdge == nil, !showToc, !showSettings, commentURL == nil, !commentBusy else { return }
+        guard !loading, pendingEdge == nil, !showToc, !showSettings, commentTarget == nil, !commentBusy else { return }
         let step = dir > 0 ? 1 : -1
         guard let target = readableIndex(from: index + step, direction: step) else { return }
         // 必须直到这次请求成功/失败才解锁，不能用固定 0.6 秒窗口。
@@ -1481,16 +1485,16 @@ struct ReaderView: View {
             let call = String(t.dropFirst(3))
             DebugLog.add("≡段评点击：\(String(call.prefix(80)))")
             Task {
-                let url = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
+                let target = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
                 commentBusy = false
-                if let u = url, let link = URL(string: u) {
-                    commentURL = link
+                if let t = target, URL(string: t.url) != nil {
+                    commentTarget = BrowserTarget(url: t.url, title: "", content: t.content)
                 } else {
                     DebugLog.add("≡段评点击后没有拿到评论页地址")
                 }
             }
-        } else if let link = URL(string: t) {
-            commentURL = link
+        } else if URL(string: t) != nil {
+            commentTarget = BrowserTarget(url: t, title: "", content: nil)
         }
     }
 

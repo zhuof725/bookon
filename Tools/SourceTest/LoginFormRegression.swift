@@ -104,7 +104,7 @@ enum LoginFormRegression {
             check(e.message.contains("bad"), "登录脚本：异常以 failure 返回")
         } else { check(false, "登录脚本：异常应返回 failure") }
         var opened: [String] = []
-        ToastCenter.setBrowserHandler { u, _ in opened.append(u) }
+        ToastCenter.setBrowserHandler { u, _, _ in opened.append(u) }
         defer { ToastCenter.setBrowserHandler(nil) }
         _ = JSEngine.shared.runLoginScript(source: s, library: "function o(){java.startBrowser('https://b.invalid/','t');}", call: "o()")
         check(opened == ["https://b.invalid/"], "登录脚本：java.startBrowser 通过出口打开网址")

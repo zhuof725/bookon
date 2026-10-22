@@ -5,13 +5,17 @@ import CoreText
 extension URL: Identifiable { public var id: String { absoluteString } }
 
 /// 段评/章评：默认半屏，上划可展开到全屏；内容区域优先滚动网页。
+/// content 是书源直接给的页面内容（HTML）：有内容就按内容渲染，
+/// 没有内容才去请求 url —— 番茄聚合的评论页服务器按 text/plain 发，
+/// 直接请求只会显示一屏源码。
 struct CommentSheet: View {
     let url: URL
+    var content: String?
     var heightFraction: CGFloat = 0.6
 
     var body: some View {
         // 不放额外按钮：下拉或点半屏外侧即可关闭。
-        CommentWebView(url: url)
+        CommentWebView(url: url, content: content)
             .ignoresSafeArea(edges: .bottom)
             // 默认半屏；上划可展开到全屏，网页内容仍优先接收滚动。
             .presentationDetents([.fraction(heightFraction), .large])
@@ -34,15 +38,35 @@ private struct SheetCorner: ViewModifier {
 
 struct CommentWebView: UIViewRepresentable {
     let url: URL
+    /// 书源直接给的 HTML 内容；有内容就按内容渲染（baseURL 仍用 url，
+    /// 页面里的相对路径、fetch 的同源策略才和原版一致）。
+    var content: String?
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero)
         web.customUserAgent = WebViewSupport.userAgent
         web.navigationDelegate = context.coordinator
-        web.load(URLRequest(url: url))
+        load(web)
         return web
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    private func load(_ web: WKWebView) {
+        if let content, !content.isEmpty {
+            // 书源直接给的页面内容：按内容渲染，baseURL 仍用 url
+            // （页面里的相对路径、同源策略才和原版一致）。
+            if let u = URL(string: url.absoluteString) {
+                Task {
+                    await WebViewLoader.syncCookiesToWebView(for: u)
+                    web.loadHTMLString(content, baseURL: u)
+                }
+            } else {
+                web.loadHTMLString(content, baseURL: url)
+            }
+        } else {
+            web.load(URLRequest(url: url))
+        }
+    }
 
     /// 段评页在白名单域名上（证书过期已按白名单放行）：WebView 的 TLS 校验必须走同一套规则，
     /// 否则加载失败只剩一片空白。
