@@ -13,7 +13,7 @@ extension AppCacheCategory {
         switch self {
         case .content: return "已下载和预读的在线章节。清理后再次阅读需要联网，不影响本地 TXT / EPUB。"
         case .catalog: return "书源书籍的目录副本。清理后进入书籍时重新获取，不影响本地书籍目录。"
-        case .network: return "系统 URLCache 保存的网络响应，可能包含远程图片。不会清除 Cookie 或网页登录信息。"
+        case .network: return "系统 URLCache 保存的网络响应，以及本机保存的封面图片缓存。不会清除 Cookie 或网页登录信息。"
         case .all: return "清理在线正文、在线目录和系统网络响应缓存。之后可能需要联网重新加载。"
         }
     }

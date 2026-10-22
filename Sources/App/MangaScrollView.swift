@@ -148,13 +148,8 @@ final class MangaImageLoader {
                 throw URLError(.badServerResponse)
             }
             let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
-            guard var image = await downsample(data: data, targetPixelWidth: target) else {
+            guard let image = await downsample(data: data, targetPixelWidth: target) else {
                 throw URLError(.cannotDecodeContentData)
-            }
-            // 超分：原图比显示宽度还小才放大（模型输出 2 倍），原图够大保持原样。
-            if let cgImage = image.cgImage,
-               let upscaled = await UpscaleRuntime.mangaUpscaler?(cgImage, Int(target)) {
-                image = UIImage(cgImage: upscaled)
             }
             return .success(image)
         } catch {

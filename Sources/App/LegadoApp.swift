@@ -12,8 +12,6 @@ struct LegadoApp: App {
     init() {
         // 尽早安装：未捕获异常 / 信号都写入本机崩溃日志（我的 → 崩溃日志）。
         CrashReporter.install()
-        // 图片超分执行器注入 Engine 的钩子（CoreML 实现在 App 层，Engine 不依赖它）。
-        UpscaleEngine.register()
     }
 
     private var appColorScheme: ColorScheme? {

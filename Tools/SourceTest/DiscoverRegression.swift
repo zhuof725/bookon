@@ -55,6 +55,27 @@ enum DiscoverRegression {
         check(DiscoverCatalog.cardSubtitle(blankGroup) == "a.invalid", "发现：空白分组回落域名")
         check(DiscoverCatalog.cardSubtitle(enabled) == "a.invalid", "发现：无分组显示域名")
 
+        // 3d. 分类筛选面板的标签：有地址的分类一律保留（标题带空格/方块也是真分类），
+        //     只有「没有地址的分组标题」才按装饰规则跳过；空标题给兜底名，控件不参与。
+        func panelKind(_ title: String, _ url: String?, type: String? = nil) -> SourceDiagnostics.ExploreKind {
+            SourceDiagnostics.ExploreKind(title: title, url: url, type: type)
+        }
+        let panelKinds: [SourceDiagnostics.ExploreKind] = [
+            panelKind("■■■■ 男 生 ■■■■", ""),                    // 装饰性分组标题 → 跳过
+            panelKind(" 二 次 元 ", "https://a.invalid/c?cat=207"), // 带空格的真分类 → 保留
+            panelKind("历史", "https://a.invalid/c?cat=56"),
+            panelKind("", "https://a.invalid/c?cat=999"),          // 空标题 → 兜底名
+            panelKind("模式", nil, type: "select")                  // 控件 → 跳过
+        ]
+        let panelTags = DiscoverCatalog.categoryTags(panelKinds)
+        check(panelTags.map(\.title) == ["二 次 元", "历史", "分类 4"],
+              "发现：分类面板保留带空格的真分类，空标题给兜底名")
+        check(panelTags.count == 3, "发现：分类面板跳过装饰分组标题与控件")
+        check(panelTags[0].kind.url == "https://a.invalid/c?cat=207" && !panelTags[0].isSection,
+              "发现：分类面板保留原地址")
+        let sectionTags = DiscoverCatalog.categoryTags([panelKind("男频", "")])
+        check(sectionTags.count == 1 && sectionTags[0].isSection, "发现：普通分组标题作为定位标签保留")
+
         // 3c. 排列方式偏好：存储值与显示名
         check(SourceListLayout(rawValue: "grid") == SourceListLayout.grid
               && SourceListLayout(rawValue: "list") == SourceListLayout.list

@@ -67,6 +67,37 @@ enum DiscoverCatalog {
         return out
     }
 
+    /// 分类筛选面板的一个标签：有地址的是分类（点了加载书单），没地址的是书源的分节标题。
+    struct DiscoverCategoryTag: Identifiable, Hashable {
+        let id: String
+        /// 显示用标题（去掉了首尾空白；空标题给了兜底名）。
+        let title: String
+        let kind: SourceDiagnostics.ExploreKind
+        /// 没地址 = 分节标题（点它只定位板块，不加载书单）。
+        let isSection: Bool
+    }
+
+    /// 分类筛选面板的标签：书源发现规则里所有能当分类用的项。
+    ///
+    /// 关键：**有地址的分类一律保留**。书源常给标题加空格或方块排版（如「 二 次 元 」，
+    /// 有效文字不到一半），那也是真分类；早先按「装饰性标题」一刀切掉，分类就凭空消失了。
+    /// 只有「没有地址的分节标题」才按装饰规则跳过（■■ 男 生 ■■ 这种排版行）。
+    static func categoryTags(_ kinds: [SourceDiagnostics.ExploreKind]) -> [DiscoverCategoryTag] {
+        var out: [DiscoverCategoryTag] = []
+        for (index, kind) in kinds.enumerated() {
+            // 控件（text / button / select）是筛选条，不是分类。
+            guard (kind.type ?? "").isEmpty else { continue }
+            let url = kind.url ?? ""
+            let isSection = url.isEmpty
+            if isSection && isDecorativeControlTitle(kind.title) { continue }
+            let title = kind.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            out.append(DiscoverCategoryTag(id: "\(index)-\(kind.title)-\(url)",
+                                           title: title.isEmpty ? "分类 \(index + 1)" : title,
+                                           kind: kind, isSection: isSection))
+        }
+        return out
+    }
+
     /// 榜单类板块用排名横条展示（分类名含「榜 / 推荐 / 排行 / 热门 / 热搜」），其余用封面网格。
     static func isRankingTitle(_ title: String) -> Bool {
         for keyword in ["榜", "推荐", "排行", "热门", "热搜"] where title.contains(keyword) {

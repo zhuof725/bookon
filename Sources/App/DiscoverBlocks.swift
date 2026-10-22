@@ -206,7 +206,7 @@ struct DiscoverRankRow: View {
                 .foregroundStyle(.white)
                 .frame(width: 26, height: 26)
                 .background(badgeColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            DiscoverCoverImage(url: BookCoverLocation.url(for: book))
+            DiscoverCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
                 .frame(width: 58, height: 78)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
@@ -250,7 +250,7 @@ struct DiscoverCoverCard: View {
         VStack(alignment: .leading, spacing: 5) {
             Color.clear
                 .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                .overlay { DiscoverCoverImage(url: BookCoverLocation.url(for: book)) }
+                .overlay { DiscoverCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin) }
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(book.name)
                 .appFont(.system(size: 13, weight: .medium))
@@ -285,7 +285,7 @@ struct DiscoverBookListRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            DiscoverCoverImage(url: BookCoverLocation.url(for: book))
+            DiscoverCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
                 .frame(width: 58, height: 78)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {

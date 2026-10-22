@@ -691,11 +691,13 @@ struct MangaReaderView: View {
     private var statusOverlay: some View {
         VStack(spacing: 14) {
             if manga.loadingChapter {
-                ProgressView()
+                ProgressView().allowsHitTesting(false)
                 Text("正在加载图片列表…").appFont(.footnote).foregroundStyle(foreground.opacity(0.7))
+                    .allowsHitTesting(false)
             } else if let message = manga.errorMessage {
                 Text(message).appFont(.footnote).foregroundStyle(foreground.opacity(0.8))
                     .multilineTextAlignment(.center).padding(.horizontal, 24)
+                    .allowsHitTesting(false)
                 HStack(spacing: 12) {
                     Button("重试") { manga.reloadCurrent() }
                         .buttonStyle(.borderedProminent)
@@ -706,11 +708,16 @@ struct MangaReaderView: View {
                 }
             } else {
                 Text("正在准备…").appFont(.footnote).foregroundStyle(foreground.opacity(0.7))
+                    .allowsHitTesting(false)
             }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(background.opacity(0.9))
+        .background {
+            // 遮罩上的空白处点一下就开/收顶部面板（按钮照常点，不受影响）。
+            Color.clear.contentShape(Rectangle()).onTapGesture { toggleBars() }
+        }
         .allowsHitTesting(true)
     }
 

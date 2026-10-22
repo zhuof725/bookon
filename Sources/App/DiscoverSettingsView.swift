@@ -14,7 +14,6 @@ struct DiscoverSettingsView: View {
     @AppStorage(DiscoverSettings.cycleVerticalKey) private var cycleVertical = DiscoverSettings.defaultCycleVertical
     @AppStorage(DiscoverSettings.cycleHorizontalKey) private var cycleHorizontal = DiscoverSettings.defaultCycleHorizontal
     @AppStorage(DiscoverSettings.preloadCountKey) private var preloadCount = DiscoverSettings.defaultPreloadCount
-    @AppStorage(DiscoverSettings.homeGroupKey) private var homeGroup = ""
     @AppStorage(DiscoverSettings.coverConcurrencyKey) private var coverConcurrency = DiscoverSettings.defaultCoverConcurrency
     @AppStorage(DiscoverSettings.cacheDaysKey) private var cacheDays = DiscoverSettings.defaultCacheDays
     @State private var showAddKeyword = false
@@ -67,23 +66,6 @@ struct DiscoverSettingsView: View {
                     Text("布局")
                 } footer: {
                     Text(pageLayout == .magazine ? "杂志布局把配置的所有榜单平铺成一屏。" : "列表布局是分类筛选 + 书卡列表。")
-                }
-
-                Section {
-                    NavigationLink {
-                        DiscoverHomeGroupPicker()
-                    } label: {
-                        HStack {
-                            Label("首屏配置", systemImage: "arrow.right.circle")
-                            Spacer()
-                            Text(homeGroup.isEmpty ? "不启用" : homeGroup)
-                                .foregroundStyle(palette.secondary)
-                        }
-                    }
-                } header: {
-                    Text("首屏配置")
-                } footer: {
-                    Text("设置后，打开书签时会直接进入该配置。")
                 }
 
                 Section {
@@ -233,49 +215,5 @@ struct DiscoverSettingsView: View {
         var list = keywords
         list.remove(atOffsets: offsets)
         keywordsRaw = DiscoverSettings.keywordsText(list)
-    }
-}
-
-/// 首屏配置：选择打开发现时直接进入的分组（或「不启用」）。
-private struct DiscoverHomeGroupPicker: View {
-    @ThemePalette private var palette
-    @EnvironmentObject private var store: AppStore
-    @Environment(\.dismiss) private var dismiss
-    @AppStorage(DiscoverSettings.homeGroupKey) private var homeGroup = ""
-
-    private var groups: [String] {
-        DiscoverCatalog.sections(store.sources).map(\.name)
-    }
-
-    var body: some View {
-        List {
-            row(title: "不启用", selected: homeGroup.isEmpty) {
-                homeGroup = ""
-                dismiss()
-            }
-            ForEach(groups, id: \.self) { group in
-                row(title: group, selected: homeGroup == group) {
-                    homeGroup = group
-                    dismiss()
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .foregroundStyle(palette.primary)
-        .background { AppThemeCanvas().ignoresSafeArea() }
-        .navigationTitle("首屏配置")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func row(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                Spacer()
-                if selected {
-                    Image(systemName: "checkmark").foregroundStyle(palette.accent)
-                }
-            }
-        }
     }
 }

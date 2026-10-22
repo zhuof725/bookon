@@ -367,6 +367,11 @@ struct ReaderView: View {
         withAnimation(.easeInOut(duration: 0.18)) { showBars.toggle() }
     }
 
+    /// 漫画阅读器自带顶部/底部面板；它在的时候不要再叠阅读器面板（漫画页上会出两套菜单）。
+    private var mangaReaderMounted: Bool {
+        mangaMode && !chapters.isEmpty && !loading
+    }
+
     private func commentTapped(_ target: String?) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         openComment(target)
@@ -405,7 +410,7 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
         .overlay(alignment: .top) {
-            if showBars {
+            if showBars && !mangaReaderMounted {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
                     coverURL: BookCoverLocation.url(for: book),
                     background: theme.bg, foreground: theme.fg,
@@ -414,7 +419,7 @@ struct ReaderView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if showBars {
+            if showBars && !mangaReaderMounted {
                 ReaderBottomChrome(chapter: readerChapterTitle, positionLabel: readerPositionLabel,
                     progress: $menuProgress, canScrub: canScrubReader,
                     canPrevious: !loading && readableIndex(from: index - 1, direction: -1) != nil,
@@ -566,6 +571,8 @@ struct ReaderView: View {
                     ProgressView("正在加载章节…")
                         .padding(18).modifier(SettingsGlassSurface())
                 }
+                // 只是提示，不该把下面的正文点击吃掉：换章加载时照样能唤出/收起面板。
+                .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottom) {
@@ -751,13 +758,18 @@ struct ReaderView: View {
     private var mangaBody: some View {
         if chapters.isEmpty || loading {
             VStack(spacing: 10) {
-                if loading { ProgressView() }
+                if loading { ProgressView().allowsHitTesting(false) }
                 if let error {
                     Text(error).appFont(.footnote).foregroundStyle(theme.fg.opacity(0.75))
                         .multilineTextAlignment(.center).padding(.horizontal, 24)
+                } else if loading {
+                    Text("轻点屏幕可打开或收起菜单").appFont(.caption).foregroundStyle(theme.fg.opacity(0.55))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 加载中也能随时唤出/收起面板：整块都可点。
+            .contentShape(Rectangle())
+            .onTapGesture { toggleBars() }
         } else {
             // 漫画阅读器固定黑色画布：翻页模式下页面四周是留白，黑色观感更好（用户要求）。
             MangaReaderView(manga: manga, book: book, background: .black, foreground: .white,
@@ -1005,10 +1017,14 @@ struct ReaderView: View {
     private var continuousScrollBody: some View {
         if scrollChapters.isEmpty {
             VStack(spacing: 8) {
-                if loading { ProgressView() }
-                else if let error { Text(error).foregroundStyle(.red) }
+                if loading { ProgressView().allowsHitTesting(false) }
+                else if let error { Text(error).foregroundStyle(.red).allowsHitTesting(false) }
+                else { Text("轻点屏幕可打开或收起菜单").appFont(.caption).foregroundStyle(theme.fg.opacity(0.55)).allowsHitTesting(false) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 加载中也能随时唤出/收起面板。
+            .contentShape(Rectangle())
+            .onTapGesture { toggleBars() }
         } else {
             ReaderContinuousScrollView(chapters: scrollChapters.map { chapter in
                 ReaderScrollChapter(id: chapter.id, revision: chapter.revision,
@@ -1441,8 +1457,10 @@ struct ReaderView: View {
     @ViewBuilder
     private var pagedBody: some View {
         if pages.isEmpty {
-            VStack { if loading { ProgressView() } else if let e = error { Text(e).foregroundStyle(.red) } else { Text("") } }
+            VStack { if loading { ProgressView().allowsHitTesting(false) } else if let e = error { Text(e).foregroundStyle(.red).allowsHitTesting(false) } else { Text("") } }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 加载中也能随时唤出/收起面板（和正文点一下一个行为）。
+                .contentShape(Rectangle())
                 .onTapGesture { toggleBars() }
         } else {
             pageTurnContainer

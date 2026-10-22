@@ -32,20 +32,7 @@ final class LocalCoverImageLoader: ObservableObject {
             return UIImage(cgImage: thumbnail)
         }.value
         guard !Task.isCancelled, generation == token, sourceURL == url else { return }
-        var result = decoded
-        // 封面超分：只放大比显示目标小的封面。放大与缓存由 UpscaleRuntime 承担
-        // （Engine 层注入点，测试工程里没有超分实现时保持原图）。
-        if UpscaleSettings.coverEnabled,
-           let cgImage = decoded?.cgImage,
-           UpscaleSettings.shouldUpscale(pixelWidth: cgImage.width,
-                                         pixelHeight: cgImage.height,
-                                         targetWidth: pixelBudget,
-                                         quality: UpscaleSettings.quality) {
-            let cacheKey = "\(url.absoluteString)|\(pixelBudget)|\(UpscaleSettings.quality.rawValue)"
-            if let upscaled = await UpscaleRuntime.coverUpscaler?(cgImage, pixelBudget, cacheKey) {
-                result = UIImage(cgImage: upscaled)
-            }
-        }
+        let result = decoded
         if let result { image = result; didFail = false }
         else { didFail = image == nil }
     }
@@ -56,10 +43,78 @@ final class LocalCoverImageLoader: ObservableObject {
 enum CoverDecodeRuntime {
     /// 该书源是否配置了 coverDecodeJs（实现里会切到主线程读 AppStore）。
     typealias NeedsDecode = (String) async -> Bool
-    /// 下载 + 解密 + 解码；失败返回 nil。
-    typealias Loader = (URL, String, Int) async -> UIImage?
+    /// 下载 + 解密 → 返回可以直接显示的图片字节；失败返回 nil。
+    typealias Loader = (URL, String) async -> Data?
+    /// 普通封面（没有解密规则）：带书源请求头下载 → 返回图片字节；失败返回 nil。
+    typealias PlainLoader = (URL, String) async -> Data?
     static var needsDecode: NeedsDecode?
     static var load: Loader?
+    static var loadPlain: PlainLoader?
+}
+
+/// 远程封面加载：先看本机缓存（换网络/开 VPN 也显示得出来），没有再下载并落盘。
+@MainActor
+final class RemoteCoverImageLoader: ObservableObject {
+    @Published private(set) var image: UIImage?
+    @Published private(set) var failed = false
+    private var token = UUID()
+
+    func load(url: URL, origin: String?, pixelSize: Int) async {
+        let id = UUID()
+        token = id
+        failed = false
+        let budget = max(1, min(pixelSize, 1200))
+        // 1) 本机缓存：有就直接显示，不碰网络。
+        if let cached = CoverDiskCache.data(for: url),
+           let image = Self.downsample(cached, maxPixel: budget) {
+            self.image = image
+            return
+        }
+        // 2) 重新下载（带书源请求头；解密书源走解密路径）。
+        let data = await fetch(url: url, origin: origin)
+        guard token == id else { return }
+        guard let data, let loaded = Self.downsample(data, maxPixel: budget) else {
+            failed = true
+            return
+        }
+        image = loaded
+    }
+
+    private func fetch(url: URL, origin: String?) async -> Data? {
+        if let origin, let needs = CoverDecodeRuntime.needsDecode, await needs(origin),
+           let decode = CoverDecodeRuntime.load {
+            return await decode(url, origin)
+        }
+        if let origin, let plain = CoverDecodeRuntime.loadPlain,
+           let data = await plain(url, origin) {
+            return data
+        }
+        return await Self.systemDownload(url: url)
+    }
+
+    /// 没有书源钩子时的兜底：系统请求（缓存仍会落到本机）。
+    private static func systemDownload(url: URL) async -> Data? {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+            guard !data.isEmpty else { return nil }
+            CoverDiskCache.store(data, for: url)
+            return data
+        } catch {
+            return nil
+        }
+    }
+
+    /// 按显示尺寸缩放（缓存里存的是原始字节，显示时才缩，避免大图占内存）。
+    static func downsample(_ data: Data, maxPixel: Int) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixel)
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: thumbnail)
+    }
 }
 
 /// Shared production loader for shelf/detail/list/reader-cover views.
@@ -70,11 +125,7 @@ struct BookCoverImage: View {
     /// 书源地址（Book.origin）；有 coverDecodeJs 时改走解密加载。
     var origin: String? = nil
     @StateObject private var loader = LocalCoverImageLoader()
-    /// 远程封面的三种状态：未判定 / 普通图片 / 需要解密。
-    private enum RemoteMode { case unknown, plain, decoded }
-    @State private var remoteMode: RemoteMode = .unknown
-    @State private var decodedImage: UIImage?
-    @State private var decodeFailed = false
+    @StateObject private var remote = RemoteCoverImageLoader()
     @Environment(\.scenePhase) private var scenePhase
     @State private var retry = 0
 
@@ -92,19 +143,9 @@ struct BookCoverImage: View {
                         fallback
                     } else { placeholder }
                 } else if let resolvedURL, ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") {
-                    if remoteMode == .decoded {
-                        if let image = decodedImage {
-                            Image(uiImage: image).resizable().scaledToFill()
-                        } else if decodeFailed { fallback } else { placeholder }
-                    } else if remoteMode == .plain {
-                        AsyncImage(url: resolvedURL) { phase in
-                            switch phase {
-                            case .success(let image): image.resizable().scaledToFill()
-                            case .failure: fallback
-                            default: placeholder
-                            }
-                        }
-                    } else { placeholder }
+                    if let image = remote.image {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    } else if remote.failed { fallback } else { placeholder }
                 } else { fallback }
             }
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
@@ -115,18 +156,9 @@ struct BookCoverImage: View {
                 await loader.load(resolvedURL, pixelSize: pixelSize)
                 return
             }
-            // 有 coverDecodeJs 的书源：下载原始字节 → 脚本解密 → 显示；
-            // 其余书源走系统 AsyncImage，行为与改动前一致。
-            if let origin, let needs = CoverDecodeRuntime.needsDecode, await needs(origin),
-               let decode = CoverDecodeRuntime.load {
-                remoteMode = .decoded
-                let image = await decode(resolvedURL, origin, pixelSize)
-                guard !Task.isCancelled else { return }
-                decodedImage = image
-                decodeFailed = image == nil
-            } else {
-                remoteMode = .plain
-            }
+            guard ["http", "https"].contains(resolvedURL.scheme?.lowercased() ?? "") else { return }
+            // 先查本机缓存，没有再下载；下载到的封面会落到本机，下次开 VPN/断网也显示得出来。
+            await remote.load(url: resolvedURL, origin: origin, pixelSize: pixelSize)
         }
         .onChange(of: scenePhase) { phase in if phase == .active { retry += 1 } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in retry += 1 }

@@ -33,7 +33,7 @@ targets:
       - path: CoverPersistenceHarness.swift
       - path: ../../Sources/Models/BookCoverLocation.swift
       - path: ../../Sources/App/LocalCoverImageLoader.swift
-      - path: ../../Sources/Engine/UpscaleSettings.swift
+      - path: ../../Sources/Engine/CoverDiskCache.swift
       - path: ThemeHarness.swift
       - path: CustomThemeHarness.swift
       - path: ThemeCustomizationHarness.swift

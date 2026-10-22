@@ -15,7 +15,6 @@ enum DiscoverSettings {
     static let cacheDaysKey = "discover.cache.days"
     static let cycleVerticalKey = "discover.cycle.vertical"
     static let cycleHorizontalKey = "discover.cycle.horizontal"
-    static let homeGroupKey = "discover.home.group"
 
     static let defaultKeywords = ["榜", "排行", "热门", "推荐", "最热", "畅销"]
     static let defaultVerticalCount = 4
