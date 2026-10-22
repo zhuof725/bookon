@@ -137,6 +137,39 @@ final class DiscoverBoardStore: ObservableObject {
         return sections.filter { allowed.contains($0.id) }
     }
 
+    /// 顶部轮播：按分类生成，一屏一个分类。
+    ///
+    /// 封面取该分类下第一个板块的前三本书；板块还没加载完时先给空槽，
+    /// 加载完会随 sections 的 @Published 变化自动刷新。
+    var carouselHeroes: [CustomDiscoverHero] {
+        visibleCategories.enumerated().map { offset, category in
+            let list = sections(inCategory: category)
+            let firstBooks = list.first?.books ?? []
+            let covers: [URL?] = firstBooks.prefix(3).map { BookCoverLocation.url(for: $0) }
+
+            let count = list.count
+            let sub = list.isEmpty ? "" : "\(count) 个板块"
+
+            // 「全部」这一屏用第一个板块的书名做说明；其余用板块名列表
+            let detail: String
+            if list.isEmpty {
+                detail = ""
+            } else if category == CustomDiscoverConfig.allCategory {
+                detail = list.prefix(3).map(\.title).joined(separator: " · ")
+            } else {
+                detail = list.prefix(3).map(\.title).joined(separator: " · ")
+            }
+
+            return CustomDiscoverHero(
+                id: "\(category)-\(offset)",
+                title: category,
+                subtitle: sub,
+                detail: detail,
+                covers: covers
+            )
+        }
+    }
+
     private func chapterCount(for book: Book) -> Int? {
         let toc = appStore.isLocal(book) ? appStore.localToc(book) : appStore.cachedToc(book)
         guard let toc, !toc.isEmpty else { return nil }

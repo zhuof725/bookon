@@ -1,36 +1,5 @@
 import SwiftUI
 
-// MARK: - 封面
-
-/// 板块内统一封面：占位色 → 异步图 → 失败保持占位。
-struct DeckCoverImage: View {
-    let url: URL?
-
-    @State private var image: UIImage?
-
-    var body: some View {
-        GeometryReader { geo in
-            Group {
-                if let image {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else {
-                    Rectangle().fill(Color(uiColor: .secondarySystemFill))
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-        }
-        .task(id: url) { await load() }
-    }
-
-    private func load() async {
-        guard let url, url.scheme == "http" || url.scheme == "https" else { return }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let decoded = UIImage(data: data) else { return }
-        image = decoded
-    }
-}
-
 // MARK: - 卡片壳（三种布局共用）
 
 /// 一张竖版卡片：封面 + 可选角标 + 底部渐变书名条。

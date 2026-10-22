@@ -273,7 +273,12 @@ struct CustomDiscoverConfig: Codable, Hashable {
     /// 仍然可用的板块：书源存在（启用与否不拦，用户明确挑过）且分类地址非空。
     func visibleEntries(from sources: [BookSource]) -> [CustomDiscoverEntry] {
         let available = Set(DiscoverCatalog.explorableSources(sources).map(\.bookSourceUrl))
-        return entries.filter { !$0.kindUrl.isEmpty && available.contains($0.sourceUrl) }
+        return entries.filter { entry in
+            guard !entry.kindUrl.isEmpty else { return false }
+            // 不依赖书源的板块（继续阅读）直接放行
+            if entry.sourceUrl.isEmpty { return true }
+            return available.contains(entry.sourceUrl)
+        }
     }
 
     /// 追加板块：同一书源同一分类只留一条（重复添加时覆盖模板与数量）。

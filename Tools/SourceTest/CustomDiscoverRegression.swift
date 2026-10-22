@@ -216,5 +216,22 @@ enum CustomDiscoverRegression {
         check(legacyConfig.entries.count == 3, "模板：旧字段 style 不会导致整条丢失")
         check(legacyConfig.entries.allSatisfy { $0.template == .deck },
               "模板：旧字段读不出时回落卡片堆叠")
+
+        // 16. 不依赖书源的板块（继续阅读）不能被书源过滤丢掉
+        let historyEntry = CustomDiscoverEntry(sourceUrl: "", sourceName: "书架",
+                                               kindTitle: "继续阅读",
+                                               kindUrl: "history://shelf",
+                                               template: .history)
+        let withHistory = CustomDiscoverConfig(categories: [], entries: [historyEntry, entryA])
+        let kept = withHistory.visibleEntries(from: [live])
+        check(kept.map(\.template) == [.history, .deck],
+              "分类：继续阅读板块来源为空也保留")
+        check(!kept.isEmpty && kept.contains { $0.template == .history },
+              "分类：继续阅读不会被书源过滤掉")
+
+        // 17. 分类与轮播同序
+        let ordered = CustomDiscoverConfig(categories: ["甲", "乙", "丙"], entries: [])
+        check(ordered.effectiveCategories == ["甲", "乙", "丙"],
+              "分类：轮播页与分类同序（手写顺序即轮播顺序）")
     }
 }

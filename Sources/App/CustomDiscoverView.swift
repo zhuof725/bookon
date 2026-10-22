@@ -26,11 +26,11 @@ struct CustomDiscoverView: View {
         model.sections(inCategory: currentCategory)
     }
 
+    /// 轮播页：与分类同序，切轮播也会切分类。
+    private var heroes: [CustomDiscoverHero] { model.carouselHeroes }
+
     var body: some View {
         VStack(spacing: 0) {
-            if !categories.isEmpty && !model.isEmpty {
-                categoryBar
-            }
             content
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -71,30 +71,25 @@ struct CustomDiscoverView: View {
         .accessibilityIdentifier("customdiscover.page")
     }
 
-    // MARK: 顶部分类（横向可滑动，带指示）
+    // MARK: 分类胶囊条
 
     private var categoryBar: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(categories.enumerated()), id: \.offset) { pair in
-                            categoryChip(title: pair.element, index: pair.offset)
-                                .id(pair.offset)
-                        }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(categories.enumerated()), id: \.offset) { pair in
+                        categoryChip(title: pair.element, index: pair.offset)
+                            .id(pair.offset)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
                 }
-                .onChange(of: categoryIndex) { _, value in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(value, anchor: .center)
-                    }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 6)
+            }
+            .onChange(of: categoryIndex) { _, value in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(value, anchor: .center)
                 }
             }
-            Rectangle()
-                .fill(palette.primary.opacity(0.06))
-                .frame(height: 0.5)
         }
     }
 
@@ -128,6 +123,16 @@ struct CustomDiscoverView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    // 顶部轮播：每个分类一屏，滑动即切分类
+                    if !heroes.isEmpty {
+                        CustomDiscoverCarousel(pages: heroes, index: $categoryIndex)
+                            .padding(.bottom, 14)
+                    }
+                    // 分类胶囊条（轮播的辅助指示，点它也能切）
+                    if categories.count > 1 {
+                        categoryBar
+                            .padding(.bottom, 4)
+                    }
                     ForEach(sections) { section in
                         sectionBlock(section)
                     }
