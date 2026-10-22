@@ -300,5 +300,17 @@ enum CustomDiscoverRegression {
         check(orbsA.allSatisfy { $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 },
               "预览：装饰圆坐标在 0...1")
         check(DiscoverPreviewCatalog.cards(count: 5).count == 5, "预览：可只取前 N 张卡片")
+
+        // 22. 缩略图素材够用：每种模板都要能取到至少 6 本
+        check(DiscoverPreviewCatalog.heroSamples(count: 6).count == 6,
+              "预览：模板缩略图能取到 6 本示例")
+        check(DiscoverPreviewCatalog.heroSamples(count: 2).count == 2,
+              "预览：可按需只取 2 本")
+        // 装饰圆半径在合理区间，太大会糊住封面
+        for sample in DiscoverPreviewCatalog.samples {
+            let orbs = DiscoverPreviewCover.orbs(for: sample.title)
+            check(orbs.allSatisfy { $0.r > 0.05 && $0.r < 0.25 },
+                  "预览：\(sample.title) 装饰圆半径合理")
+        }
     }
 }

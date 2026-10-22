@@ -14,9 +14,8 @@ struct CustomDiscoverEditorPage: View {
     @EnvironmentObject private var model: DiscoverBoardStore
 
     @State private var draft = CustomDiscoverConfig()
-    @State private var showTemplatePicker = false
+    @State private var showAddPage = false
     @State private var showCarouselPicker = false
-    @State private var showMore = false
     @State private var loaded = false
 
     var body: some View {
@@ -41,7 +40,7 @@ struct CustomDiscoverEditorPage: View {
                 VStack {
                     Spacer()
                     Button {
-                        showTemplatePicker = true
+                        showAddPage = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 26, weight: .medium))
@@ -65,21 +64,15 @@ struct CustomDiscoverEditorPage: View {
                         .fontWeight(.semibold)
                 }
             }
-            .sheet(isPresented: $showTemplatePicker) {
-                TemplatePickerSheet { picked in
-                    for entry in picked { draft.upsert(entry) }
-                    showTemplatePicker = false
+            .navigationDestination(isPresented: $showAddPage) {
+                AddBoardPage { entries in
+                    for entry in entries { draft.upsert(entry) }
                 }
                 .environmentObject(store)
             }
             .sheet(isPresented: $showCarouselPicker) {
                 CarouselDataSourcePicker(config: $draft)
                     .environmentObject(store)
-            }
-            .sheet(isPresented: $showMore) {
-                CustomDiscoverSettingsView(initial: draft)
-                    .environmentObject(store)
-                    .environmentObject(model)
             }
             .onAppear {
                 guard !loaded else { return }
@@ -118,10 +111,9 @@ struct CustomDiscoverEditorPage: View {
                 .padding(.bottom, 34)
 
             entryRow("选择轮播数据", enabled: true) { showCarouselPicker = true }
-            entryRow("关闭轮播图", enabled: !draft.carouselHidden) {
-                draft.carouselHidden.toggle()
+            entryRow(draft.carouselHidden ? "打开轮播图" : "关闭轮播图", enabled: true) {
+                withAnimation(.easeInOut(duration: 0.2)) { draft.carouselHidden.toggle() }
             }
-            entryRow(systemImage: "gearshape", "更多设置", enabled: true) { showMore = true }
         }
         .padding(.horizontal, 24)
     }
@@ -154,6 +146,10 @@ struct CustomDiscoverEditorPage: View {
     private var boardList: some View {
         VStack(spacing: 14) {
             ForEach(Array(draft.entries.enumerated()), id: \.element.id) { pair in
+                NavigationLink {
+                    EntryEditor(entry: binding(for: pair.offset))
+                        .environmentObject(store)
+                } label: {
                 HStack(spacing: 10) {
                     Image(systemName: DiscoverTemplateIcon.symbol(pair.element.template))
                         .font(.system(size: 13, weight: .semibold))
@@ -185,15 +181,24 @@ struct CustomDiscoverEditorPage: View {
                     ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), isCard: true)
                 }
                 .padding(.horizontal, 20)
+                }
+                .buttonStyle(.plain)
             }
-
-            Button { showMore = true } label: {
-                Label("更多设置", systemImage: "gearshape")
-                    .appFont(.system(size: 14))
-                    .foregroundStyle(palette.secondary)
-            }
-            .padding(.top, 8)
         }
+    }
+
+    private func binding(for index: Int) -> Binding<CustomDiscoverEntry> {
+        Binding(
+            get: {
+                draft.entries.indices.contains(index)
+                    ? draft.entries[index]
+                    : CustomDiscoverEntry(sourceUrl: "", sourceName: "", kindTitle: "", kindUrl: "")
+            },
+            set: { value in
+                guard draft.entries.indices.contains(index) else { return }
+                draft.entries[index] = value
+            }
+        )
     }
 
     private func save() {

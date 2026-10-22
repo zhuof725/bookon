@@ -112,39 +112,49 @@ struct DiscoverTemplateThumbnail: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            content
+        GeometryReader { geo in
+            // 缩略图会被放进 104x78 这种小格子里，所有内部尺寸按可用宽度等比缩
+            let unit = max(geo.size.width, 1) / 104
+
+            VStack(alignment: .leading, spacing: 6 * unit) {
+                content(unit: unit)
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
+            .clipped()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(unit: CGFloat) -> some View {
+        // 所有尺寸乘 unit：从 104pt 宽的大预览到 78pt 的小格子都按比例缩
+        let gap = 6 * unit
+        let small = 9 * unit
+
         switch kind {
         case .badgeGrid:
-            HStack(spacing: 8) {
+            HStack(spacing: gap) {
                 ForEach(Array(samples.prefix(2).enumerated()), id: \.element.id) { pair in
                     ZStack(alignment: .bottomLeading) {
-                        PreviewCoverArt(title: pair.element.title)
+                        PreviewCoverArt(title: pair.element.title, corner: 6 * unit)
                             .aspectRatio(3.0 / 4.0, contentMode: .fit)
                         Text(String(format: "%02d", pair.offset + 1))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 18 * unit, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                            .padding(.leading, 5)
+                            .padding(.leading, 4 * unit)
                             .padding(.bottom, 1)
                     }
                 }
             }
 
         case .covers:
-            HStack(spacing: 6) {
+            HStack(spacing: gap * 0.8) {
                 ForEach(samples.prefix(4)) { sample in
-                    VStack(alignment: .leading, spacing: 3) {
-                        PreviewCoverArt(title: sample.title, corner: 6)
+                    VStack(alignment: .leading, spacing: 2 * unit) {
+                        PreviewCoverArt(title: sample.title, corner: 5 * unit)
                             .aspectRatio(3.0 / 4.0, contentMode: .fit)
                         Text(sample.title)
-                            .font(.system(size: 7))
+                            .font(.system(size: 6.5 * unit))
                             .foregroundStyle(palette.primary)
                             .lineLimit(1)
                     }
@@ -152,17 +162,17 @@ struct DiscoverTemplateThumbnail: View {
             }
 
         case .rankRow:
-            VStack(spacing: 4) {
+            VStack(spacing: 3 * unit) {
                 ForEach(Array(samples.prefix(3).enumerated()), id: \.element.id) { pair in
-                    HStack(spacing: 6) {
+                    HStack(spacing: gap * 0.8) {
                         Text("\(pair.offset + 1)")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8 * unit, weight: .bold))
                             .foregroundStyle(palette.secondary)
-                            .frame(width: 10)
-                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 3)
-                            .frame(width: 18, height: 24)
+                            .frame(width: 9 * unit)
+                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 2 * unit)
+                            .frame(width: 16 * unit, height: 21 * unit)
                         Text(pair.element.title)
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 8 * unit, weight: .semibold))
                             .foregroundStyle(palette.primary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
@@ -171,17 +181,17 @@ struct DiscoverTemplateThumbnail: View {
             }
 
         case .waterfall:
-            HStack(alignment: .top, spacing: 6) {
-                VStack(spacing: 6) {
-                    PreviewCoverArt(title: samples[0].title, corner: 5)
+            HStack(alignment: .top, spacing: gap) {
+                VStack(spacing: gap) {
+                    PreviewCoverArt(title: samples[0].title, corner: 4 * unit)
                         .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                    PreviewCoverArt(title: samples[1].title, corner: 5)
+                    PreviewCoverArt(title: samples[1].title, corner: 4 * unit)
                         .aspectRatio(1, contentMode: .fit)
                 }
-                VStack(spacing: 6) {
-                    PreviewCoverArt(title: samples[2].title, corner: 5)
+                VStack(spacing: gap) {
+                    PreviewCoverArt(title: samples[2].title, corner: 4 * unit)
                         .aspectRatio(1, contentMode: .fit)
-                    PreviewCoverArt(title: samples[3].title, corner: 5)
+                    PreviewCoverArt(title: samples[3].title, corner: 4 * unit)
                         .aspectRatio(3.0 / 4.0, contentMode: .fit)
                 }
             }
@@ -191,42 +201,45 @@ struct DiscoverTemplateThumbnail: View {
             ZStack {
                 ForEach(0..<3, id: \.self) { index in
                     let sample = samples[index]
-                    PreviewCoverArt(title: sample.title, showTitle: index == 1, corner: 6)
-                        .frame(width: 54, height: 72)
+                    PreviewCoverArt(title: sample.title,
+                                    showTitle: index == 1,
+                                    corner: 5 * unit)
+                        .frame(width: 42 * unit, height: 56 * unit)
                         .rotationEffect(.degrees(rotation(for: index)))
-                        .offset(x: offsetX(for: index), y: offsetY(for: index))
+                        .offset(x: offsetX(for: index, unit: unit),
+                                y: offsetY(for: index, unit: unit))
                         .scaleEffect(index == 1 ? 1 : 0.88)
                         .opacity(index == 1 ? 1 : 0.85)
                         .zIndex(index == 1 ? 1 : 0)
                 }
             }
-            .frame(height: 84)
             .frame(maxWidth: .infinity)
 
         case .history:
-            HStack(spacing: 6) {
+            HStack(spacing: gap) {
                 ForEach(samples.prefix(2)) { sample in
                     ZStack(alignment: .bottomLeading) {
-                        PreviewCoverArt(title: sample.title, showTitle: false, corner: 6)
+                        PreviewCoverArt(title: sample.title, showTitle: false, corner: 5 * unit)
                             .aspectRatio(4.0 / 5.0, contentMode: .fit)
                         LinearGradient(colors: [.clear, .black.opacity(0.7)],
                                        startPoint: .center, endPoint: .bottom)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
+                            .clipShape(RoundedRectangle(cornerRadius: 5 * unit, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1 * unit) {
                             Text(sample.title)
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 7 * unit, weight: .bold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                             Text("读到 第 12 章")
-                                .font(.system(size: 6.5))
+                                .font(.system(size: 5.8 * unit))
                                 .foregroundStyle(.white.opacity(0.8))
                                 .lineLimit(1)
                         }
-                        .padding(4)
+                        .padding(3 * unit)
                     }
                 }
             }
         }
+        _ = small
     }
 
     private func rotation(for index: Int) -> Double {
@@ -237,18 +250,18 @@ struct DiscoverTemplateThumbnail: View {
         }
     }
 
-    private func offsetX(for index: Int) -> CGFloat {
+    private func offsetX(for index: Int, unit: CGFloat) -> CGFloat {
         switch kind {
-        case .fan: return CGFloat(index - 1) * 10
-        case .curve: return CGFloat(index - 1) * 30
-        default: return CGFloat(index - 1) * 26
+        case .fan: return CGFloat(index - 1) * 8 * unit
+        case .curve: return CGFloat(index - 1) * 23 * unit
+        default: return CGFloat(index - 1) * 20 * unit
         }
     }
 
-    private func offsetY(for index: Int) -> CGFloat {
+    private func offsetY(for index: Int, unit: CGFloat) -> CGFloat {
         switch kind {
-        case .fan: return CGFloat(abs(index - 1)) * 5
-        default: return CGFloat(abs(index - 1)) * 4
+        case .fan: return CGFloat(abs(index - 1)) * 4 * unit
+        default: return CGFloat(abs(index - 1)) * 3 * unit
         }
     }
 }
