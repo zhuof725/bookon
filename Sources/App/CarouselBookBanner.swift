@@ -78,8 +78,8 @@ struct CarouselBookBanner: View {
                     .minimumScaleFactor(0.78)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if let author = book.author, !author.isEmpty {
-                    Text(author)
+                if !book.author.isEmpty {
+                    Text(book.author)
                         .appFont(.system(size: 14))
                         .foregroundStyle(palette.secondary)
                         .lineLimit(1)
