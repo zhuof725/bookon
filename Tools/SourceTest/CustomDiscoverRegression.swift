@@ -58,19 +58,31 @@ enum CustomDiscoverRegression {
         check(deleting.entries.map(\.kindTitle) == ["热播周榜", "新书榜"],
               "自定义发现：按 id 删除")
 
-        // 5. 可见性：书源被删 / 没有发现地址 / 分类地址为空 都不显示
+        // 5. 可见性：书源被删 / 没配发现地址 / 分类地址为空 都不显示
+        //    此刻 config 含三条：u1(热播周榜) / u2(月票榜) / u3(新书榜)
         var live = BookSource(bookSourceUrl: "u1", bookSourceName: "书源甲")
         live.exploreUrl = "/explore"
+        // u2 有书源但发现地址是空白 → 不参与发现
         var noExplore = BookSource(bookSourceUrl: "u2", bookSourceName: "书源乙")
         noExplore.exploreUrl = "  "
+        // u3 干脆不在书源列表里（已删除）
         var hidden = config
         hidden.upsert(CustomDiscoverEntry(sourceUrl: "ghost", sourceName: "已删除",
                                           kindTitle: "幽灵", kindUrl: "/g"))
         hidden.upsert(CustomDiscoverEntry(sourceUrl: "u1", sourceName: "书源甲",
                                           kindTitle: "空地址", kindUrl: ""))
         let visible = hidden.visibleEntries(from: [live, noExplore])
-        check(visible.map(\.kindTitle) == ["热播周榜", "月票榜"],
+        // 只剩 u1 的「热播周榜」：幽灵源不在列表、u1 的空地址条目不显示、
+        // u2 发现地址是空白、u3 不在书源列表
+        check(visible.map(\.kindTitle) == ["热播周榜"],
               "自定义发现：书源不存在、未配发现地址、分类地址为空都不显示")
+        // 补上 u2（给了正常发现地址）后，「月票榜」应该回来
+        noExplore.exploreUrl = "/explore"
+        let visible2 = hidden.visibleEntries(from: [live, noExplore])
+        check(visible2.map(\.kindTitle) == ["热播周榜", "月票榜"],
+              "自定义发现：补上发现地址后条目恢复显示")
+        check(!visible2.contains { $0.kindTitle == "新书榜" },
+              "自定义发现：书源已删除的条目仍然隐藏")
 
         // 6. 书源改名后标题跟着变
         var renamed = config
