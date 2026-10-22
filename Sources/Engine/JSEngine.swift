@@ -1880,12 +1880,20 @@ final class JSEngine {
         return "\(v)"
     }
 
+    /// 阅读器里点击评论气泡的结果：地址、书源直接给的页面内容、或失败原因。
+    struct ReviewClickResult {
+        var url: String?
+        var content: String?
+        /// 脚本出错时的原因（书源自己的接口挂了、脚本写错等）；空表示脚本跑通了。
+        var error: String?
+    }
+
     /// 阅读器里点击评论气泡：click 是书源里的函数调用（如 showCmt('书','章','段','数')），
     /// 在书源的 loginUrl 函数库里执行，收集它通过 java.showBrowser/startBrowser 想打开的网址。
     /// content 是书源直接给的页面内容（Legado 的 showBrowser(url, content) 语义）：
     /// 番茄聚合的评论页是 gitee 上的静态 html，服务器按 text/plain 发，
     /// 直接请求网址只会显示源码；按内容渲染才是原版行为。
-    func resolveClickURL(source: BookSource, click: String) -> (url: String, content: String?)? {
+    func resolveClickURL(source: BookSource, click: String) -> ReviewClickResult {
         let lib = SourceLoginForm.loginScript(source.loginUrl) ?? ""
         var opened: String?
         var pageContent: String?
@@ -1912,9 +1920,12 @@ final class JSEngine {
         let content = pageContent
         lock.unlock(); defer { lock.unlock() }
         // 诊断：点击没反应时，靠这几行能立刻看出是脚本报错、还是脚本没调 showBrowser。
+        var error: String?
         switch outcome {
         case .failure(let e):
             DebugLog.add("≡段评点击失败：\(e.message)")
+            // 失败原因要回到界面上：否则用户点了没反应，完全不知道是书源自己的接口挂了。
+            error = "评论打不开：\(e.message)"
         case .success:
             if result == nil {
                 // 脚本执行成功但没打开页面：多半是 createSvg 里的守卫
@@ -1923,12 +1934,12 @@ final class JSEngine {
                                                             context: RuleContext(source: source))) ?? ""
                 DebugLog.add("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
                              + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
+                error = "评论打不开：书源脚本没有打开任何页面（可能缺少 Token 或接口不可用）"
             } else {
                 DebugLog.add("≡段评地址：\(result!)" + (content?.isEmpty == false ? "（带页面内容 \(content!.count) 字）" : ""))
             }
         }
-        guard let result else { return nil }
-        return (result, content)
+        return ReviewClickResult(url: result, content: content, error: error)
     }
 
     /// 从书源的点击表达式里取出「已渲染」标记的键。

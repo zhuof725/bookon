@@ -1487,10 +1487,19 @@ struct ReaderView: View {
             Task {
                 let target = await Task.detached { JSEngine.shared.resolveClickURL(source: src, click: call) }.value
                 commentBusy = false
-                if let t = target, URL(string: t.url) != nil {
-                    commentTarget = BrowserTarget(url: t.url, title: "", content: t.content)
+                if let u = target.url, URL(string: u) != nil {
+                    commentTarget = BrowserTarget(url: u, title: "", content: target.content)
                 } else {
-                    DebugLog.add("≡段评点击后没有拿到评论页地址")
+                    // 书源脚本自己失败（接口挂了、Token 没了…）时要把原因摆出来，
+                    // 否则点了没反应，用户完全不知道发生了什么。
+                    let message = target.error ?? "≡段评点击后没有拿到评论页地址"
+                    DebugLog.add(message)
+                    bookmarkNotice = message
+                    let notice = bookmarkNotice
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 4_000_000_000)
+                        if bookmarkNotice == notice { bookmarkNotice = nil }
+                    }
                 }
             }
         } else if URL(string: t) != nil {

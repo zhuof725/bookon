@@ -98,8 +98,8 @@ enum ReviewClickRegression {
         // 两者都满足才会 java.showBrowser(url)。这里模拟「已有 token」的情况。
         _ = JSEngine.shared.evalString("source.setVariable('TOKEN123')", context: RuleContext(source: source))
         if let got = JSEngine.shared.resolveClickURL(source: source,
-                                                     click: "createSvg('\(bid)','\(cid)',\(pid),42,1700000000123)") {
-            check(got.url.contains("comment/page?bid=\(bid)"), "点击气泡能拿到评论页地址（实际 \(got.url)）")
+                                                     click: "createSvg('\(bid)','\(cid)',\(pid),42,1700000000123)").url {
+            check(got.contains("comment/page?bid=\(bid)"), "点击气泡能拿到评论页地址（实际 \(got)）")
         } else {
             check(false, "点击气泡能拿到评论页地址（实际 nil）")
         }
@@ -107,5 +107,12 @@ enum ReviewClickRegression {
         // 标记未清时点击打不开：引擎应清掉标记后重试一次
         let key = JSEngine.reviewCacheKeys(in: "createSvg('7320955143208307774','7322565597089235518',12,42,1)")
         check(key == ["fq-7320955143208307774-7322565597089235518-12"], "从点击表达式取出「已渲染」标记键")
+
+        // 书源自己的脚本/接口挂了时，要给出原因，不能点了没反应。
+        // （番茄聚合的「本章说」就是这种：它先请求 ms.show 的 forum_id，
+        //   那个接口现在对所有人 403，脚本抛错 → 页面根本打不开。）
+        let broken = JSEngine.shared.resolveClickURL(source: source, click: "notExistFunction()")
+        check(broken.url == nil, "脚本失败时不返回评论页地址")
+        check(!(broken.error ?? "").isEmpty, "脚本失败时给出失败原因（实际 \(broken.error ?? "nil")）")
     }
 }
