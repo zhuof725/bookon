@@ -344,7 +344,7 @@ enum ContentBlocks {
     // MARK: - 番茄系「本章讨论 / 本书讨论」条
 
     /// 章评/书评条上的标题文字。
-    private static let discussionTitles: Set<String> = ["本章讨论", "本书讨论", "本章评论", "本书评论"]
+    static let discussionTitles: Set<String> = ["本章说", "本章讨论", "本书讨论", "本章评论", "本书评论"]
 
     /// 番茄系章评/书评：书源把整条画成一张 SVG ——「本章讨论 | 条数 | 〉」。
     /// 三个 <text>，既不是「标签+一行」的热评，也不是只画一个数字的气泡，
@@ -406,9 +406,10 @@ enum ContentBlocks {
         if texts.count == 2, Self.hotCommentLabels.contains(texts[0]) {
             return .hotComment(label: texts[0], text: texts[1], clickURL: click)
         }
-        if texts.count >= 2, texts[0] == "本章说" {
+        if texts.count >= 2, Self.discussionTitles.contains(texts[0]) {
             // 后面是 用户名、(点赞数 在图形里)、正文行… 的重复；书源把正文按行切成多个 <text>。
             // 这里只可靠地得到标题和计数；条目不再还原，点击进入评论页查看。
+            // 认成原生卡片还有两个好处：条数能显示出来，而且是文字控件（比 SVG 图片好点）。
             return .chapterComments(title: texts[0], count: texts[1], items: [], clickURL: click)
         }
         return nil

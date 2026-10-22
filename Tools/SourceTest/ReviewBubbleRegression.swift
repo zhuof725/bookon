@@ -153,6 +153,31 @@ enum ReviewBubbleRegression {
               "章评条渲染成原生卡片（实际 \(cardTitle ?? "nil")/\(cardCount ?? "nil")）")
         check(!fellBackToImage, "章评条不再落回图片分支")
 
+        // 番茄聚合的章评条：「本章讨论 | 查看评论 >」→ 原生卡片（可点、能显示文字）
+        let chapBarSVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1024 150\">"
+            + "<rect width=\"1024\" height=\"150\" rx=\"14\" fill=\"#D5D5D5\"/>"
+            + "<text x=\"40\" y=\"90\" font-size=\"42\" font-weight=\"bold\" fill=\"#333\">本章讨论</text>"
+            + "<text x=\"984\" y=\"90\" font-size=\"30\" font-weight=\"bold\" fill=\"#888\" text-anchor=\"end\">查看评论 &gt;</text></svg>"
+        if case .chapterComments(let barTitle, let barCount, _, let barClick)? =
+            ContentBlocks.nativeBlock(fromSVG: chapBarSVG, click: "js:getChapComments('1','2','3')") {
+            check(barTitle == "本章讨论", "章评条标题（实际 \(barTitle)）")
+            check(barCount == "查看评论 >", "章评条右侧文字（实际 \(barCount)）")
+            check(barClick != nil, "章评条带点击目标")
+        } else {
+            check(false, "「本章讨论」SVG 认成原生评论卡片")
+        }
+        // 端到端：正文末尾的章评条（FULL 样式）→ 原生卡片，不是图片块
+        let barURI = "data:image/svg+xml;base64," + Data(chapBarSVG.utf8).base64EncodedString()
+        let barSrc = barURI + ",{\"click\":\"getChapComments('7208454824847739938','7208456691589841412','')\",\"style\":\"full\"}"
+        var barIsCard = false
+        var barIsImage = false
+        for block in ContentBlocks.parse("正文最后一段。" + "<img src=\"" + barSrc + "\">") {
+            if case .chapterComments = block { barIsCard = true }
+            if case .image = block { barIsImage = true }
+        }
+        check(barIsCard, "章评条走原生卡片")
+        check(!barIsImage, "章评条不再落回图片块（图片块里的 SVG 不好点）")
+
         // 番茄聚合的段评气泡：SVG 里画的是封顶数字（>99 一律 99），真实条数在回调第 4 个参数。
         let cappedSVG = "<svg viewBox=\"5 14 45 36\" xmlns=\"http://www.w3.org/2000/svg\" width=\"180\" height=\"144\">"
             + "<path d=\"M44 48 Q48 48 48 44 L48 20 Z\" fill=\"none\" stroke=\"#A9A9A9\"/>"

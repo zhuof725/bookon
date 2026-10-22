@@ -10,6 +10,8 @@ struct SourceDebugView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var report = ""
+    /// 规则问题（正则编译失败）的追加内容：刷新日志时要保留。
+    @State private var ruleIssues = ""
     @State private var running = false
     @State private var showHelp = true
     @State private var runTask: Task<Void, Never>?
@@ -82,7 +84,9 @@ struct SourceDebugView: View {
                 loadExplore()
                 focused = true
                 while !Task.isCancelled {
-                    if running { report = DebugLog.snapshot() }
+                    // 一直刷新：阅读器里的点击链路（≡段评…）也写进同一份日志，
+                    // 这样不用先跑一次调试就能看到上一次点了没反应的原因。
+                    report = DebugLog.snapshot() + ruleIssues
                     do { try await Task.sleep(nanoseconds: 300_000_000) } catch { break }
                 }
             }
@@ -231,6 +235,7 @@ struct SourceDebugView: View {
                 // 规则里的正则编译失败：Java/ICU 语法差异会让规则「静默不生效」，这里明确提示。
                 text += (text.isEmpty ? "" : "\n") + "── 规则问题 ──\n" + issues.joined(separator: "\n")
             }
+            ruleIssues = issues.isEmpty ? "" : (text.isEmpty ? "" : "\n") + "── 规则问题 ──\n" + issues.joined(separator: "\n")
             report = text
             running = false
             DebugLog.end()
