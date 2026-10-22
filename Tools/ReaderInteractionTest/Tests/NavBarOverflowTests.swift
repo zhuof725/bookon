@@ -47,9 +47,11 @@ final class NavBarOverflowTests: XCTestCase {
         // 导航栏里的标题不能盖到按钮上。
         let navBar = app.navigationBars.firstMatch
         XCTAssertTrue(navBar.exists)
+        // 只看标题本身（按钮里的「登录」「分类」文字也是 staticText，要排除）。
         let titles = navBar.staticTexts.allElementsBoundByIndex
+            .filter { $0.exists && $0.label.contains("木里番茄") }
         XCTAssertFalse(titles.isEmpty, "导航栏里没有标题")
-        for text in titles where text.exists {
+        for text in titles {
             let frame = text.frame
             guard frame.width > 0, frame.height > 0 else { continue }
             XCTAssertFalse(frame.intersects(login.frame), "标题「\(text.label)」压住了登录按钮")
