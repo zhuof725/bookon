@@ -2,7 +2,7 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [main, fix/source-compat-runtime]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
