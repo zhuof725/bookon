@@ -44,9 +44,20 @@ enum DiscoverBlockCache {
         guard let file = fileURL(source: source, url: url),
               let data = try? Data(contentsOf: file),
               let entry = try? JSONDecoder().decode(Entry.self, from: data) else { return nil }
-        let ttl = TimeInterval(days) * 86400
+        let ttl = validInterval(books: entry.books, now: now)
         guard now.timeIntervalSince(entry.storedAt) < ttl else { return nil }
         return entry.books
+    }
+
+    /// 缓存还能用多久（秒）：设置里的天数，但**不能超过封面签名的过期时刻** ——
+    /// 番茄系封面是签名地址（x-expires），过期就是 403 的死链，
+    /// 缓存里留着它们就等于留着一堆白屏的封面。
+    static func validInterval(books: [Book], now: Date = Date()) -> TimeInterval {
+        var ttl = TimeInterval(days) * 86400
+        if let expiry = CoverSignature.earliestExpiry(of: books) {
+            ttl = min(ttl, expiry.timeIntervalSince(now))
+        }
+        return ttl
     }
 
     static func store(source: String, url: String, books: [Book], at date: Date = Date()) {

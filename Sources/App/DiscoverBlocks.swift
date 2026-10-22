@@ -79,6 +79,16 @@ final class DiscoverBlockLoader: ObservableObject {
         }
     }
 
+    /// 封面加载失败（多是签名过期）时重新拉一次这个板块，换新的封面地址。
+    /// 每个板块只自动重试一次，避免一直失败时反复请求。
+    private var coverRetried: Set<String> = []
+
+    func coverFailed(_ url: String) {
+        guard !url.isEmpty, !coverRetried.contains(url) else { return }
+        coverRetried.insert(url)
+        Task { await load(url, force: true) }
+    }
+
     /// 清空（下拉刷新）。
     func reset() {
         books.removeAll()
@@ -159,7 +169,8 @@ struct DiscoverSectionBlock: View {
                     NavigationLink {
                         BookDetailView(book: pair.element)
                     } label: {
-                        DiscoverRankRow(rank: pair.offset + 1, book: pair.element)
+                        DiscoverRankRow(rank: pair.offset + 1, book: pair.element,
+                                        onCoverFailure: { loader.coverFailed(url) })
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("discover.book.\(pair.element.id)")
@@ -172,7 +183,7 @@ struct DiscoverSectionBlock: View {
                         NavigationLink {
                             BookDetailView(book: book)
                         } label: {
-                            DiscoverCoverCard(book: book)
+                            DiscoverCoverCard(book: book, onCoverFailure: { loader.coverFailed(url) })
                                 .frame(width: 108)
                         }
                         .buttonStyle(.plain)
@@ -190,6 +201,8 @@ struct DiscoverRankRow: View {
     @ThemePalette private var palette
     let rank: Int
     let book: Book
+    /// 封面加载失败时回调（板块据此重新拉取）。
+    var onCoverFailure: (() -> Void)? = nil
 
     private var badgeColor: Color {
         switch rank {
@@ -206,7 +219,7 @@ struct DiscoverRankRow: View {
                 .foregroundStyle(.white)
                 .frame(width: 26, height: 26)
                 .background(badgeColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            DiscoverCoverImage(url: BookCoverLocation.url(for: book))
+            DiscoverCoverImage(url: BookCoverLocation.url(for: book), onFailure: onCoverFailure)
                 .frame(width: 58, height: 78)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
@@ -245,12 +258,16 @@ struct DiscoverRankRow: View {
 struct DiscoverCoverCard: View {
     @ThemePalette private var palette
     let book: Book
+    /// 封面加载失败时回调（板块据此重新拉取）。
+    var onCoverFailure: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Color.clear
                 .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                .overlay { DiscoverCoverImage(url: BookCoverLocation.url(for: book)) }
+                .overlay {
+                    DiscoverCoverImage(url: BookCoverLocation.url(for: book), onFailure: onCoverFailure)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(book.name)
                 .appFont(.system(size: 13, weight: .medium))
@@ -282,6 +299,8 @@ struct DiscoverCoverCard: View {
 struct DiscoverBookListRow: View {
     @ThemePalette private var palette
     let book: Book
+    /// 封面加载失败时回调（列表据此重新拉取）。
+    var onCoverFailure: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {

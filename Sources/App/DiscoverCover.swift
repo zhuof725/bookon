@@ -42,6 +42,8 @@ final class DiscoverCoverCache {
 struct DiscoverCoverImage: View {
     @AppStorage(DiscoverSettings.coverConcurrencyKey) private var concurrency = DiscoverSettings.defaultCoverConcurrency
     let url: URL?
+    /// 封面下载失败（签名过期、链接失效等）时回调：让板块重新拉一次，换新的封面地址。
+    var onFailure: (() -> Void)? = nil
     @State private var image: UIImage?
 
     var body: some View {
@@ -74,15 +76,22 @@ struct DiscoverCoverImage: View {
         }
         await CoverLoadGate.shared.updateLimit(concurrency)
         await CoverLoadGate.shared.acquire()
+        var failed = false
         do {
-            let (data, _) = try await URLSession.shared.data(from: resolved)
+            let (data, response) = try await URLSession.shared.data(from: resolved)
             if let decoded = UIImage(data: data) {
                 DiscoverCoverCache.shared.store(decoded, for: resolved)
                 image = decoded
+            } else {
+                failed = true
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                DebugLog.readerAdd("◇发现页封面加载失败（\(status)）：\(resolved.absoluteString)")
             }
         } catch {
-            // 失败时保持占位色块。
+            failed = true
+            DebugLog.readerAdd("◇发现页封面加载出错：\(error.localizedDescription)")
         }
         await CoverLoadGate.shared.release()
+        if failed { onFailure?() }
     }
 }
