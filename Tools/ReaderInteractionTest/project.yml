@@ -61,6 +61,8 @@ targets:
       - path: ../../Sources/App/AppPalette.swift
       - path: ../../Sources/App/AppTypography.swift
       - path: AppFontHarness.swift
+      - path: NavBarOverflowHarness.swift
+      - path: ../../Sources/App/NavTextButton.swift
       - path: ShelfHarness.swift
       - path: ../../Sources/App/ShelfListRow.swift
       - path: ../../Sources/App/ReaderBookmarkList.swift

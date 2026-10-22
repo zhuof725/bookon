@@ -143,17 +143,19 @@ struct DiscoverSourceView: View {
         .navigationTitle(source.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 12) {
-                    if hasLogin {
-                        navTextButton("登录", symbol: "person.crop.circle", id: "discover.source.login") {
-                            activeSheet = .login
-                        }
+            // 用 ToolbarItemGroup 而不是「一个 ToolbarItem 里套 HStack」：
+            // 后者在标题很长时会把整组压窄，两个标签被挤成竖排、压在标题上。
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if hasLogin {
+                    NavTextButton(title: "登录", symbol: "person.crop.circle", tint: palette.accent) {
+                        activeSheet = .login
                     }
-                    navTextButton("分类", symbol: "square.grid.2x2", id: "discover.source.category") {
-                        activeSheet = .category
-                    }
+                    .accessibilityIdentifier("discover.source.login")
                 }
+                NavTextButton(title: "分类", symbol: "square.grid.2x2", tint: palette.accent) {
+                    activeSheet = .category
+                }
+                .accessibilityIdentifier("discover.source.category")
             }
         }
         .task(id: reloadToken) { await load() }
@@ -176,20 +178,6 @@ struct DiscoverSourceView: View {
 
     /// 书源配了登录才显示「登录」按钮（没配登录的只显示「分类」）。
     private var hasLogin: Bool { SourceLoginForm.hasLogin(source) }
-
-    private func navTextButton(_ title: String, symbol: String, id: String,
-                                action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                Text(title).appFont(.system(size: 15, weight: .medium))
-                Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(palette.accent)
-            .frame(height: 44)
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(id)
-    }
 
     /// 选了分类：列表布局直接换成该分类的书单，杂志布局滚到对应板块。
     private func selectCategory(_ kind: SourceDiagnostics.ExploreKind) {
