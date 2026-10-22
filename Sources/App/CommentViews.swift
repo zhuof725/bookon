@@ -55,14 +55,7 @@ struct CommentWebView: UIViewRepresentable {
         if let content, !content.isEmpty {
             // 书源直接给的页面内容：按内容渲染，baseURL 仍用 url
             // （页面里的相对路径、同源策略才和原版一致）。
-            if let u = URL(string: url.absoluteString) {
-                Task {
-                    await WebViewLoader.syncCookiesToWebView(for: u)
-                    web.loadHTMLString(content, baseURL: u)
-                }
-            } else {
-                web.loadHTMLString(content, baseURL: url)
-            }
+            web.loadHTMLString(content, baseURL: url)
         } else {
             web.load(URLRequest(url: url))
         }
