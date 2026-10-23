@@ -75,8 +75,10 @@ actor AppCacheService {
         }
         if category == .network || category == .all {
             urlCache.removeAllCachedResponses()
-            // 封面本地缓存也算网络缓存：清掉后下次联网会重新下载。
+            // 封面/漫画图片/有声书音频都属于「网络缓存」：清掉后下次联网重新下载。
             CoverDiskCache.removeAll()
+            MangaImageDiskCache.removeAll()
+            AudioDiskCache.removeAll()
             if urlCache.currentDiskUsage > 0 || urlCache.currentMemoryUsage > 0 {
                 files.failures.append("URLCache 清理后仍有缓存占用（可能有并发网络写入或延迟释放）")
             }
@@ -91,7 +93,8 @@ actor AppCacheService {
         let files = AppCacheFiles.scan(cachesDirectory)
         return AppCacheSnapshot(contentBytes: files.contentBytes, contentFiles: files.contentFiles,
             contentMemoryEntries: entries, catalogBytes: files.catalogBytes, catalogFiles: files.catalogFiles,
-            networkDiskBytes: Int64(urlCache.currentDiskUsage) + CoverDiskCache.diskBytes(),
+            networkDiskBytes: Int64(urlCache.currentDiskUsage) + CoverDiskCache.diskBytes()
+                + MangaImageDiskCache.diskBytes() + AudioDiskCache.diskBytes(),
             networkMemoryBytes: Int64(urlCache.currentMemoryUsage),
             warnings: files.failures)
     }

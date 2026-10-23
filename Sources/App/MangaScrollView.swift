@@ -125,6 +125,17 @@ final class MangaImageLoader {
             }
             return
         }
+        // 本机已有这张图（原版 BookHelp.saveImage 的落盘缓存）：直接解码，不再联网。
+        if let cached = MangaImageDiskCache.data(for: url) {
+            callbacks[url] = [progress]
+            completions[url] = [completion]
+            Task { [weak self] in
+                let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
+                let image = await Self.downsample(data: cached, targetPixelWidth: target)
+                self?.finish(url: url, result: image.map { .success($0) } ?? .failure(URLError(.cannotDecodeContentData)))
+            }
+            return
+        }
         guard let requestURL = URL(string: url) else { completion(nil); return }
         callbacks[url] = [progress]
         completions[url] = [completion]
@@ -185,6 +196,8 @@ final class MangaImageLoader {
                 SourceImageDecoder.decode(data, src: requestURL.absoluteString,
                                           script: decodeScript, source: decodeSource)
             }.value
+            // 解密后的字节落盘：同一页再看、断网重开都不用重新下载。
+            MangaImageDiskCache.store(decoded, for: requestURL.absoluteString)
             let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
             guard let image = await downsample(data: decoded, targetPixelWidth: target) else {
                 throw URLError(.cannotDecodeContentData)
@@ -750,7 +763,10 @@ final class MangaPageCell: UICollectionViewCell {
         contentView.backgroundColor = .clear
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.contentMode = .scaleAspectFit
+        // 条漫逐页拼接：单元格高度按真实宽高比向上取整，aspectFit 会在页脚留出
+        // 半条到一条黑缝（用户看到的「中间有条线」）。用填充铺满整格，误差不足 1pt，
+        // 相邻两页严丝合缝。
+        imageView.contentMode = .scaleToFill
         imageView.clipsToBounds = true
         contentView.addSubview(imageView)
 

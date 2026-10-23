@@ -35,6 +35,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// 一章可能由多段音频组成（原版正文规则返回 JSON 数组时按段拼播）。
     private var queue: [URL] = []
     private var queueIndex = 0
+    /// 本章的原始网络地址（用来写磁盘缓存；queue 里可能是已缓存的本地文件）。
+    private var remoteQueue: [String] = []
+    private var cacheTask: Task<Void, Never>?
     private var album = ""
     private var timeObserver: Any?
     private var itemEndObserver: NSObjectProtocol?
@@ -89,8 +92,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0) {
         let urls = rawURLs.compactMap { raw -> URL? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let url = URL(string: trimmed),
-                  url.scheme?.lowercased().hasPrefix("http") == true else { return nil }
+            guard let url = URL(string: trimmed) else { return nil }
+            // 已缓存的段是本地文件（file://），同样可以播。
+            let scheme = url.scheme?.lowercased() ?? ""
+            guard scheme.hasPrefix("http") || scheme == "file" else { return nil }
             return url
         }
         guard !urls.isEmpty else {
@@ -101,7 +106,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         failureNotified = false
         chapterTitle = title
         self.album = album
-        queue = urls
+        remoteQueue = urls.map(\.absoluteString)
+        // 已经缓存过的段直接播本地文件（原版 SimpleCache 的效果），其余走网络边播边存。
+        queue = urls.map { AudioDiskCache.cachedFile(for: $0.absoluteString) ?? $0 }
         queueIndex = 0
         chapterURL = urls[0]
         activateSession()
@@ -129,6 +136,30 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         created.playImmediately(atRate: Float(speed))
         isPlaying = true
         updateNowPlaying()
+        startDiskCaching()
+    }
+
+    /// 后台把本章音频存到本地缓存（原版 ExoPlayer SimpleCache 的等价物）。
+    /// 不挡起播：先在线听，存完下次直接播本地文件。
+    private func startDiskCaching() {
+        cacheTask?.cancel()
+        let remote = remoteQueue
+        guard !remote.isEmpty else { return }
+        cacheTask = Task.detached(priority: .utility) {
+            for raw in remote {
+                if Task.isCancelled { return }
+                if AudioDiskCache.cachedFile(for: raw) != nil { continue }
+                guard let url = URL(string: raw),
+                      url.scheme?.lowercased().hasPrefix("http") == true else { continue }
+                var request = URLRequest(url: url, timeoutInterval: 30)
+                request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                                 forHTTPHeaderField: "User-Agent")
+                guard let (data, response) = try? await URLSession.shared.data(for: request),
+                      let http = response as? HTTPURLResponse,
+                      (200..<300).contains(http.statusCode), !data.isEmpty else { continue }
+                AudioDiskCache.store(data, for: raw)
+            }
+        }
     }
 
     /// 建条目并按当前倍速保持音调（音频书倍速的关键设置）。
@@ -195,6 +226,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     }
 
     func stop() {
+        cacheTask?.cancel()
+        cacheTask = nil
+        remoteQueue = []
         removeItemObservers()
         removeTimeObserver()
         playerStatusObserver?.invalidate()
