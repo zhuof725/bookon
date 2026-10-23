@@ -15,6 +15,14 @@ enum SourceToneAudio {
     private static let storagePrefix = "reader.sourceTone.v1."
     private static let availabilityPrefix = "reader.toneAvailability.v1."
 
+    /// 正文照常显示、音频在后台播（不切到有声书界面）。
+    static let backgroundKey = "reader.sourceTone.background.v1"
+
+    static var backgroundPlayback: Bool {
+        get { UserDefaults.standard.bool(forKey: backgroundKey) }
+        set { UserDefaults.standard.set(newValue, forKey: backgroundKey) }
+    }
+
     struct Config: Codable, Equatable {
         var sourceUrl: String
         /// `tone_id=1` 这种查询片段（也兼容裸 id）。

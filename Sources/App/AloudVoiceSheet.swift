@@ -13,6 +13,7 @@ struct AloudVoiceSheet: View {
     var currentChapter: BookChapter? = nil
     var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
     @ObservedObject private var store = AppStore.shared
+    @AppStorage(SourceToneAudio.backgroundKey) private var backgroundPlayback = false
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var voices: [AloudVoiceConfig.Option] = []
@@ -113,6 +114,17 @@ struct AloudVoiceSheet: View {
                     Text("书源音色")
                 } footer: {
                     Text("书源自带的朗读音色（番茄源的 _getTones、书山聚合这类源的 xxxTones 都能识别）。这些音色只在该书源的有声书里生效。")
+                }
+
+                Section {
+                    Toggle(isOn: $backgroundPlayback) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("正文照常显示").appFont(.body)
+                            Text("音频在后台播放，阅读页保留正文（退出用阅读页底栏的喇叭键暂停）")
+                                .appFont(.caption).foregroundStyle(palette.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("aloud.voice.background")
                 }
 
                 Section {

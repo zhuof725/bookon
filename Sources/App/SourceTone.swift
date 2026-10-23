@@ -72,8 +72,13 @@ enum SourceTone {
             let key = array.prefix.lowercased() + "_tts_tone"
             guard script.contains(key) else { continue }
             if groups.contains(where: { $0.id == key }) { continue }
+            // 书源的音色表常常没有「真人」这一项（番茄的 tone_id=0），补一个默认项。
+            var tones = array.tones
+            if !tones.contains(where: { $0.value == "0" || $0.value == "tone_id=0" }) {
+                tones.insert(Item(index: -1, name: "真人（默认）", value: "0"), at: 0)
+            }
             groups.append(Group(id: key, title: title(forKey: key), kind: .declared(key: key),
-                                tones: array.tones, currentValue: string(config[key])))
+                                tones: tones, currentValue: string(config[key])))
         }
         return groups
     }

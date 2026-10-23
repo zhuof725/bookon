@@ -374,8 +374,13 @@ struct ReaderView: View {
 
     /// 有声书播放器同样是整页界面，自带返回/目录/倍速/设置；
     /// 阅读器的上下栏叠上去会盖住播放键（还会出现两条进度条）。
+    /// 正文照常显示、音频在后台播（书源音色 →「正文照常显示」开关）。
+    private var sourceToneBackground: Bool {
+        SourceToneAudio.backgroundPlayback && SourceToneAudio.isActive(bookUrl: book.bookUrl)
+    }
+
     private var audioReaderMounted: Bool {
-        bookAudio.chapterURL != nil
+        bookAudio.chapterURL != nil && !sourceToneBackground
     }
 
     /// 任何「自带面板的全屏阅读界面」都不叠阅读器 chrome。
@@ -1823,6 +1828,16 @@ struct ReaderView: View {
         }
     }
 
+    /// 正文模式下的后台音频：这一章还没在播就按当前音色取一次地址并播放。
+    private func startBackgroundAudio(_ target: Int, source: BookSource) {
+        guard chapters.indices.contains(target) else { return }
+        let chapter = chapters[target]
+        if bookAudio.chapterURL != nil, bookAudio.chapterTitle == chapter.title { return }
+        Task { @MainActor in
+            await beginAudioChapter(target, source: source)
+        }
+    }
+
     /// 朗读面板里给这本书选了书源音色（番茄 tone_id）：先用该音色试着取一次音频，
     /// 成功就切到书源音频播放这本书（不动书源的全局模式）。
     private func useSourceToneAudio(source: BookSource, tone: SourceTone.Item) async -> Bool {
@@ -1834,9 +1849,11 @@ struct ReaderView: View {
             SourceToneAudio.deactivate(bookUrl: book.bookUrl)
             return false
         }
-        BookKindStore.save(.audio, bookUrl: book.bookUrl)
         showAloudPanel = false
         aloud.stop()
+        if !SourceToneAudio.backgroundPlayback {
+            BookKindStore.save(.audio, bookUrl: book.bookUrl)
+        }
         await beginAudioChapter(index, source: source)
         return true
     }
@@ -2091,7 +2108,9 @@ struct ReaderView: View {
         }
         guard chapters.indices.contains(target), contentRequestID == requestID else { return }
         let chapter = chapters[target]
+        let backgroundAudio = sourceToneBackground
         if !store.isLocal(book), let source = store.source(for: book.origin),
+           !backgroundAudio,
            BookKindStore.saved(bookUrl: book.bookUrl) == .audio
                || SourceToneAudio.isActive(bookUrl: book.bookUrl)
                || AudioChapter.isAudio(source: source, chapter: chapter) {
@@ -2106,7 +2125,7 @@ struct ReaderView: View {
             store.updateScrollPosition(book, permille: 0)
             return
         }
-        bookAudio.stop()
+        if !backgroundAudio { bookAudio.stop() }
         do {
             let raw = try await rawContent(at: target, priority: .userInitiated)
             try Task.checkCancellation()
@@ -2134,6 +2153,9 @@ struct ReaderView: View {
                 store.updateScrollPosition(book, permille: position)
             }
             if let source = store.source(for: book.origin) { prefetch(source) }
+            if backgroundAudio, let source = store.source(for: book.origin) {
+                startBackgroundAudio(target, source: source)
+            }
         } catch is CancellationError {
             // 离开阅读器后不再呈现旧请求的错误，但取消路径也必须解锁。
             if contentRequestID == requestID { pendingEdge = nil; pendingChapterDirection = 0 }
