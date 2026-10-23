@@ -131,9 +131,9 @@ struct CustomDiscoverView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // 顶部轮播：单张大图，内容是配置里选的分类下的书
+                    // 顶部轮播：用配置里选的模板渲染，内容是该分类下的书
                     if !carouselBooks.isEmpty {
-                        CarouselBookBanner(books: carouselBooks)
+                        carouselBlock
                             .padding(.bottom, 16)
                     }
                     // 分类胶囊条（只在配了多个分类时出现）
@@ -155,6 +155,22 @@ struct CustomDiscoverView: View {
             }
             .refreshable { await model.refresh(category: currentCategory); await model.loadCarousel(force: true) }
         }
+    }
+
+    /// 顶部轮播：把「轮播数据源」当成一个板块，用它选的模板画。
+    ///
+    /// 这样轮播不再是固定的大图横滑——选「大型阅读卡片」就是一排白卡，
+    /// 选「横滑封面」就是一行大封面，和其他栏目用的是同一套版式。
+    private var carouselBlock: some View {
+        DiscoverTemplateView(
+            kind: model.config.effectiveCarouselTemplate,
+            title: "",
+            moreTitle: "",
+            books: carouselBooks,
+            count: min(carouselBooks.count, DiscoverTemplate.countCeiling),
+            onMore: nil,
+            onSelectBook: { selectedBook = $0 }
+        )
     }
 
     @ViewBuilder private func sectionBlock(_ section: DiscoverSectionModel) -> some View {

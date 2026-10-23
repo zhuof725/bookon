@@ -17,6 +17,8 @@ struct CustomDiscoverEditorPage: View {
     @State private var showAddPage = false
     @State private var showCarouselPicker = false
     @State private var loaded = false
+    /// 空配置时先让用户从展示库挑一个模板；选完才进「添加栏目」。
+    @State private var pickedTemplate: DiscoverTemplateKind?
 
     var body: some View {
         NavigationStack {
@@ -24,16 +26,22 @@ struct CustomDiscoverEditorPage: View {
                 AppThemeCanvas().ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 0) {
-                        if draft.entries.isEmpty {
-                            emptyCanvas
-                        } else {
-                            boardList
+                    if draft.entries.isEmpty {
+                        // 空配置：第一屏就是模板展示库，点一个模板直接开始配置
+                        DiscoverTemplateLibrary(current: pickedTemplate ?? .largeCard) { kind in
+                            pickedTemplate = kind
+                            showAddPage = true
                         }
-                        Spacer(minLength: 40)
+                        .environmentObject(store)
+                        carouselEntries
+                    } else {
+                        VStack(spacing: 0) {
+                            boardList
+                            Spacer(minLength: 40)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 30)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 30)
                 }
 
                 // 底部圆形加号
@@ -65,7 +73,7 @@ struct CustomDiscoverEditorPage: View {
                 }
             }
             .navigationDestination(isPresented: $showAddPage) {
-                AddBoardPage { entries in
+                AddBoardPage(initialTemplate: pickedTemplate ?? .deck) { entries in
                     for entry in entries { draft.upsert(entry) }
                 }
                 .environmentObject(store)
@@ -82,40 +90,18 @@ struct CustomDiscoverEditorPage: View {
         }
     }
 
-    // MARK: 空白画布
+    // MARK: 空配置时的轮播入口
 
-    private var emptyCanvas: some View {
+    /// 空配置首屏是模板展示库，这里只留一行轮播开关，不打断浏览。
+    private var carouselEntries: some View {
         VStack(spacing: 0) {
-            // 幽灵图标
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(palette.accent.opacity(0.16))
-                    .frame(width: 78, height: 78)
-                    .overlay {
-                        Image(systemName: "theatermasks")
-                            .font(.system(size: 32, weight: .regular))
-                            .foregroundStyle(palette.accent)
-                    }
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(palette.secondary)
-                    .padding(5)
-                    .background(Color(uiColor: .systemBackground), in: Circle())
-                    .offset(x: 2, y: 2)
-            }
-            .padding(.bottom, 14)
-
-            Text("空白配置")
-                .appFont(.system(size: 17, weight: .semibold))
-                .foregroundStyle(palette.primary)
-                .padding(.bottom, 34)
-
-            entryRow("选择轮播数据", enabled: true) { showCarouselPicker = true }
-            entryRow(draft.carouselHidden ? "打开轮播图" : "关闭轮播图", enabled: true) {
+            entryRow(draft.carouselHidden ? "打开顶部轮播" : "关闭顶部轮播", enabled: true) {
                 withAnimation(.easeInOut(duration: 0.2)) { draft.carouselHidden.toggle() }
             }
+            entryRow("轮播用哪个模板", enabled: true) { showCarouselPicker = true }
         }
         .padding(.horizontal, 24)
+        .padding(.bottom, 40)
     }
 
     private func entryRow(_ title: String, enabled: Bool, action: @escaping () -> Void) -> some View {

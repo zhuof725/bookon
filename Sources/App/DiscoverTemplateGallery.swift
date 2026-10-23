@@ -9,14 +9,23 @@ import SwiftUI
 struct DiscoverTemplateLibrary: View {
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: AppStore
 
     /// 当前已选的模板，用来打勾。
     var current: DiscoverTemplateKind = .deck
     /// 选中某个模板（调用方负责据此添加板块）。
     var onPick: (DiscoverTemplateKind) -> Void = { _ in }
 
-    /// 预览用的书：公版书目，不联网、不涉及第三方素材。
-    private let samples = DiscoverPreviewCatalog.cards(count: 12)
+    /// 展示库用的书：优先书架里的真实书籍（连封面一起），书架太空才回落到公版书目。
+    ///
+    /// 用真实书籍是关键——预览里看到的封面、书名、作者，和加到首页后完全一致。
+    private var samples: [DeckItem] {
+        let shelf = Array(store.books.prefix(12))
+        if shelf.count >= 4 {
+            return shelf.map { DeckItem(localCover: $0) }
+        }
+        return DiscoverPreviewCatalog.cards(count: 12)
+    }
 
     var body: some View {
         ScrollView {
@@ -98,9 +107,14 @@ struct DiscoverTemplateLibrary: View {
             .padding(.top, 6)
     }
 
-    /// 记录模板要的进度数据，用同一批示例书编出来。
+    /// 记录模板要的进度数据：优先用书架里真实的阅读进度和封面。
     private var historySamples: [HistoryItem] {
-        DiscoverPreviewCatalog.samples.prefix(4).enumerated().map { index, sample in
+        let shelf = store.books.filter { $0.durChapterIndex > 0 }.prefix(4)
+        if shelf.count >= 2 {
+            return shelf.map { HistoryItem(localCover: $0, chapterCount: nil) }
+        }
+        // 书架没有进度数据时，用公版书目编一组，保证预览不是空的。
+        return DiscoverPreviewCatalog.samples.prefix(4).enumerated().map { index, sample in
             let total = 120 + index * 137
             let read = max(1, (total * (3 + index * 2)) / 10)
             return HistoryItem(

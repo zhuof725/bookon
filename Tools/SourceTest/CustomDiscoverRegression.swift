@@ -299,6 +299,29 @@ enum CustomDiscoverRegression {
         carouselConfig.carouselKindUrl = ""
         check(!carouselConfig.hasCarousel, "轮播：缺分类地址不启用")
 
+        // 19.1 轮播模板：默认大卡片，记录模板读不进来，写盘能往返
+        check(CustomDiscoverConfig().carouselTemplate == .largeCard,
+              "轮播模板：默认大型阅读卡片")
+        check(CustomDiscoverConfig().effectiveCarouselTemplate == .largeCard,
+              "轮播模板：默认就是可用的书籍模板")
+        var templateConfig = CustomDiscoverConfig()
+        templateConfig.carouselTemplate = .history
+        check(templateConfig.effectiveCarouselTemplate == .largeCard,
+              "轮播模板：记录模板回落大卡片（轮播只吃书籍列表）")
+        templateConfig.carouselTemplate = .threeColumn
+        check(templateConfig.effectiveCarouselTemplate == .threeColumn,
+              "轮播模板：书籍模板原样使用")
+        let legacyJSON = Data(#"{"carouselSourceUrl":"u1","carouselKindUrl":"/a"}"#.utf8)
+        let legacyConfig = CustomDiscoverStore.decode(legacyJSON)
+        check(legacyConfig.carouselTemplate == .largeCard,
+              "轮播模板：老配置没有该字段时回落到大卡片")
+        let retiredJSON = Data(#"{"carouselSourceUrl":"u1","carouselKindUrl":"/a","carouselTemplate":"fan"}"#.utf8)
+        check(CustomDiscoverStore.decode(retiredJSON).carouselTemplate == .curve,
+              "轮播模板：已下线的扇形迁移到弧形走廊")
+        let recordJSON = Data(#"{"carouselTemplate":"history"}"#.utf8)
+        check(CustomDiscoverStore.decode(recordJSON).carouselTemplate == .largeCard,
+              "轮播模板：配置里写了记录模板也会被纠正回大卡片")
+
         // 20. 轮播字段能落盘往返
         let carouselTmp = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("carousel-\(UUID().uuidString).json")
@@ -306,8 +329,11 @@ enum CustomDiscoverRegression {
         saveConfig.carouselSourceUrl = "u1"
         saveConfig.carouselKindTitle = "热播周榜"
         saveConfig.carouselKindUrl = "/a"
+        saveConfig.carouselTemplate = .threeColumn
         check(CustomDiscoverStore.save(saveConfig, to: carouselTmp), "轮播：写盘成功")
         let reloadedCarousel = CustomDiscoverStore.load(from: carouselTmp)
+        check(reloadedCarousel.carouselTemplate == .threeColumn,
+              "轮播模板：写盘后读回一致")
         check(reloadedCarousel.carouselSourceUrl == "u1"
               && reloadedCarousel.carouselKindTitle == "热播周榜"
               && reloadedCarousel.carouselKindUrl == "/a",

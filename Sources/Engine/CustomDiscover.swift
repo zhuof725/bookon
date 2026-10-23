@@ -312,24 +312,29 @@ struct CustomDiscoverConfig: Codable, Hashable {
     var carouselKindUrl: String
     /// 是否隐藏轮播图
     var carouselHidden: Bool
+    /// 轮播用哪个模板渲染。老配置读不到就用大卡片。
+    var carouselTemplate: DiscoverTemplateKind
 
     init(categories: [String] = [],
          entries: [CustomDiscoverEntry] = [],
          carouselSourceUrl: String = "",
          carouselKindTitle: String = "",
          carouselKindUrl: String = "",
-         carouselHidden: Bool = false) {
+         carouselHidden: Bool = false,
+         carouselTemplate: DiscoverTemplateKind = .largeCard) {
         self.categories = categories
         self.entries = entries
         self.carouselSourceUrl = carouselSourceUrl
         self.carouselKindTitle = carouselKindTitle
         self.carouselKindUrl = carouselKindUrl
         self.carouselHidden = carouselHidden
+        self.carouselTemplate = carouselTemplate
     }
 
     private enum CodingKeys: String, CodingKey {
         case categories, entries
         case carouselSourceUrl, carouselKindTitle, carouselKindUrl, carouselHidden
+        case carouselTemplate
     }
 
     init(from decoder: Decoder) throws {
@@ -340,11 +345,21 @@ struct CustomDiscoverConfig: Codable, Hashable {
         carouselKindTitle = (try? c.decodeIfPresent(String.self, forKey: .carouselKindTitle)) ?? ""
         carouselKindUrl = (try? c.decodeIfPresent(String.self, forKey: .carouselKindUrl)) ?? ""
         carouselHidden = (try? c.decodeIfPresent(Bool.self, forKey: .carouselHidden)) ?? false
+        var template = DiscoverTemplateKind.normalized(
+            try? c.decodeIfPresent(String.self, forKey: .carouselTemplate))
+        // 轮播只吃书籍列表；记录模板不适用于轮播，兜底回大卡片。
+        if template.dataSource != .bookList { template = .largeCard }
+        carouselTemplate = template
     }
 
     /// 轮播是否已配置且未关闭。
     var hasCarousel: Bool {
         !carouselHidden && !carouselSourceUrl.isEmpty && !carouselKindUrl.isEmpty
+    }
+
+    /// 轮播实际用哪个模板：记录模板吃不到书籍列表，统一兜底回大卡片。
+    var effectiveCarouselTemplate: DiscoverTemplateKind {
+        carouselTemplate.dataSource == .bookList ? carouselTemplate : .largeCard
     }
 
     var isEmpty: Bool { entries.isEmpty }

@@ -70,15 +70,16 @@ struct CarouselDataSourcePicker: View {
     private var mainList: some View {
         List {
             Section {
-                // 轮播大图预览
+                // 轮播预览：直接用选中的模板画，看到的就是首页会长的样子
                 if !previewBooks.isEmpty {
-                    TabView {
-                        ForEach(Array(previewBooks.prefix(4).enumerated()), id: \.element.bookUrl) { pair in
-                            carouselPreview(pair.element)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .frame(height: 220)
+                    DiscoverTemplateView(
+                        kind: config.effectiveCarouselTemplate,
+                        title: "",
+                        moreTitle: "",
+                        books: previewBooks,
+                        count: min(previewBooks.count, DiscoverTemplate.countCeiling)
+                    )
+                    .allowsHitTesting(false)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 } else {
@@ -124,6 +125,32 @@ struct CarouselDataSourcePicker: View {
                 }
             } header: {
                 Text("数据源")
+            }
+
+            Section {
+                NavigationLink {
+                    DiscoverTemplateLibrary(current: config.carouselTemplate) { kind in
+                        config.carouselTemplate = kind
+                    }
+                    .environmentObject(store)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("轮播模板").appFont(.system(size: 15, weight: .semibold))
+                            Text(config.effectiveCarouselTemplate.title)
+                                .appFont(.caption)
+                                .foregroundStyle(palette.secondary)
+                        }
+                        Spacer()
+                        Text("展示库")
+                            .appFont(.caption.weight(.semibold))
+                            .foregroundStyle(palette.accent)
+                    }
+                }
+            } header: {
+                Text("模板")
+            } footer: {
+                Text("轮播不再是固定大图，而是用这个模板渲染你选的分类。")
             }
 
             Section {

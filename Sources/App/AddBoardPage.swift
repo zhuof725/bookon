@@ -11,8 +11,11 @@ struct AddBoardPage: View {
 
     /// 添加成功回调（由编辑页写入草稿）
     var onAdd: ([CustomDiscoverEntry]) -> Void
+    /// 从展示库进来时预选的模板；不传就是卡片堆叠。
+    var initialTemplate: DiscoverTemplateKind = .deck
 
     @State private var template: DiscoverTemplateKind = .deck
+    @State private var templateReady = false
     @State private var sourceUrl: String = ""
     @State private var kinds: [SourceDiagnostics.ExploreKind] = []
     @State private var kindsLoading = false
@@ -59,7 +62,13 @@ struct AddBoardPage: View {
         .safeAreaInset(edge: .bottom) {
             addBar
         }
-        .task { await preloadFirstSource() }
+        .task {
+            if !templateReady {
+                templateReady = true
+                template = initialTemplate
+            }
+            await preloadFirstSource()
+        }
     }
 
     // MARK: 模板（当前选择 + 展示库入口）
