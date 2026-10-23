@@ -1829,8 +1829,8 @@ struct ReaderView: View {
         guard chapters.indices.contains(index) else { return false }
         SourceToneAudio.activate(bookUrl: book.bookUrl, sourceUrl: source.bookSourceUrl,
                                  tone: tone.value, toneName: tone.name)
-        guard let url = await SourceToneAudio.audioURL(source: source, chapter: chapters[index],
-                                                       bookUrl: book.bookUrl), !url.isEmpty else {
+        guard let url = await SourceToneAudio.audioURL(source: source, book: book,
+                                                       chapter: chapters[index]), !url.isEmpty else {
             SourceToneAudio.deactivate(bookUrl: book.bookUrl)
             return false
         }
