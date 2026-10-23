@@ -372,6 +372,17 @@ struct ReaderView: View {
         mangaMode && !chapters.isEmpty && !loading
     }
 
+    /// 有声书播放器同样是整页界面，自带返回/目录/倍速/设置；
+    /// 阅读器的上下栏叠上去会盖住播放键（还会出现两条进度条）。
+    private var audioReaderMounted: Bool {
+        bookAudio.chapterURL != nil
+    }
+
+    /// 任何「自带面板的全屏阅读界面」都不叠阅读器 chrome。
+    private var readerChromeMounted: Bool {
+        !mangaReaderMounted && !audioReaderMounted
+    }
+
     private func commentTapped(_ target: String?) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         openComment(target)
@@ -410,7 +421,7 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
         .overlay(alignment: .top) {
-            if showBars && !mangaReaderMounted {
+            if showBars && readerChromeMounted {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
                     coverURL: BookCoverLocation.url(for: book),
                     background: theme.bg, foreground: theme.fg,
@@ -419,7 +430,7 @@ struct ReaderView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if showBars && !mangaReaderMounted {
+            if showBars && readerChromeMounted {
                 ReaderBottomChrome(chapter: readerChapterTitle, positionLabel: readerPositionLabel,
                     progress: $menuProgress, canScrub: canScrubReader,
                     canPrevious: !loading && readableIndex(from: index - 1, direction: -1) != nil,
@@ -648,6 +659,11 @@ struct ReaderView: View {
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
+            // 退出前存下这一秒，下次进来接着听。
+            if bookAudio.chapterURL != nil {
+                AudioProgress.save(bookUrl: book.bookUrl, chapter: index,
+                                   seconds: bookAudio.currentTime)
+            }
             bookAudio.stop()
             manga.stop()
             aloud.detach()
@@ -1668,7 +1684,11 @@ struct ReaderView: View {
     private func beginAudioChapter(_ target: Int, source: BookSource) async {
         guard chapters.indices.contains(target) else { return }
         let chapter = chapters[target]
-        bookAudio.onFinish = { audioNextChapter() }
+        bookAudio.onFinish = {
+            // 这一章听完了：清掉进度，别再「续播」到结尾。
+            AudioProgress.clear(bookUrl: book.bookUrl, chapter: target)
+            audioNextChapter()
+        }
         bookAudio.onRemoteNext = { audioNextChapter() }
         bookAudio.onRemotePrevious = { audioPreviousChapter() }
         bookAudio.onPlaybackFailed = { audioPlaybackFailed() }
@@ -1681,7 +1701,12 @@ struct ReaderView: View {
                 error = "没取到音频地址：书源的正文规则没有返回可播放的链接"
                 return
             }
-            bookAudio.play(urls: urls, title: chapter.title, album: book.name)
+            // 上次听到这里就接着播（原版 durChapterPos）。
+            let resume = AudioProgress.resumeSeconds(bookUrl: book.bookUrl, chapter: target)
+            bookAudio.onProgress = { seconds in
+                AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
+            }
+            bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume)
         } catch is CancellationError {
             return
         } catch {

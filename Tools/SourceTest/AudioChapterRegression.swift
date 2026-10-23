@@ -62,6 +62,27 @@ enum AudioChapterRegression {
         check(AudioChapter.playURLs(fromContent: "").isEmpty, "空正文解析不出地址")
         check(AudioChapter.playURLs(fromContent: "未获取到资源链接").isEmpty, "提示文字不当地址")
 
+        // 播放记忆：按书记住章 + 秒，同章才续播。
+        let suite = "audio-progress-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        let bookURL = "https://mobile.ximalaya.com/album/1"
+        check(AudioProgress.load(bookUrl: bookURL, defaults: defaults) == nil, "第一次没有播放记忆")
+        AudioProgress.save(bookUrl: bookURL, chapter: 3, seconds: 92.5, defaults: defaults)
+        check(AudioProgress.load(bookUrl: bookURL, defaults: defaults)
+              == AudioProgress.Position(chapter: 3, seconds: 92.5), "记忆章号与秒数")
+        check(AudioProgress.resumeSeconds(bookUrl: bookURL, chapter: 3, defaults: defaults) == 92.5,
+              "同一章从上次位置续播")
+        check(AudioProgress.resumeSeconds(bookUrl: bookURL, chapter: 4, defaults: defaults) == 0,
+              "换章从章首开始")
+        check(AudioProgress.resumeSeconds(bookUrl: "https://other/book", chapter: 3, defaults: defaults) == 0,
+              "不同书互不影响")
+        AudioProgress.save(bookUrl: bookURL, chapter: 3, seconds: -1, defaults: defaults)
+        check(AudioProgress.load(bookUrl: bookURL, defaults: defaults)?.seconds == 92.5,
+              "非法秒数不覆盖已有记忆")
+        AudioProgress.clear(bookUrl: bookURL, defaults: defaults)
+        check(AudioProgress.load(bookUrl: bookURL, defaults: defaults) == nil, "清空后没有记忆")
+        defaults.removePersistentDomain(forName: suite)
+
         // 刷新目录后按标题重定位（音频直链每次抓取都会重新签名，URL 必然变化）。
         let refreshed = [
             BookChapter(url: "https://vod.xmcdn.com/x.m4a?sign=new1", title: "第1集", index: 0),

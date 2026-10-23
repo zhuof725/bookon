@@ -25,6 +25,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// 锁屏「下一章 / 上一章」回调，由阅读器接到章节跳转。
     var onRemoteNext: (() -> Void)?
     var onRemotePrevious: (() -> Void)?
+    /// 播放进度（秒），约每秒回调一次，用于「上次听到哪」的记忆。
+    var onProgress: ((TimeInterval) -> Void)?
     /// 当前章播放失败（多为时间签名链接过期返回 403）回调；
     /// 阅读器据此刷新目录换新链接后重试，本播放器保持原状态不改。
     var onPlaybackFailed: (() -> Void)?
@@ -40,6 +42,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     /// 一次播放只上报一次失败，避免状态与结束通知重复触发。
     private var failureNotified = false
+    private var lastReportedSecond: TimeInterval = -1
     private var playerStatusObserver: NSKeyValueObservation?
     private var sleepTask: Task<Void, Never>?
     private var sleepSecondsLeft = 0
@@ -82,7 +85,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     }
 
     /// 播放一章（可能是多段）。地址按顺序播完，最后一段结束才回调 onFinish。
-    func play(urls rawURLs: [String], title: String, album: String) {
+    /// - Parameter startAt: 上次听到的秒数（同一章才传，>0 时从那里续播）。
+    func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0) {
         let urls = rawURLs.compactMap { raw -> URL? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: trimmed),
@@ -108,7 +112,14 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         currentTime = 0
         duration = 0
         isBuffering = true
+        lastReportedSecond = -1
         startTimeObserver(created)
+        if startAt > 1 {
+            // 续播：先定位再起播，避免从 0 秒响一下再跳。
+            let target = CMTime(seconds: startAt, preferredTimescale: 600)
+            created.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+            currentTime = startAt
+        }
         // 缓冲状态用 KVO 更新：周期性时间回调在卡住/失败时不可靠，界面会永远停在「正在缓冲」。
         playerStatusObserver = created.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             let status = player.timeControlStatus
@@ -139,6 +150,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
             currentTime = 0
             duration = 0
             isBuffering = true
+            lastReportedSecond = -1
             if let player {
                 player.replaceCurrentItem(with: next)
                 player.playImmediately(atRate: Float(speed))
@@ -313,6 +325,12 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 let total = currentItem.duration.seconds
                 if total.isFinite, total > 0 { self.duration = total }
                 self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                // 每秒报一次进度，界面关闭/杀进程都能记住听到哪。
+                let second = floor(self.currentTime)
+                if second != self.lastReportedSecond {
+                    self.lastReportedSecond = second
+                    self.onProgress?(self.currentTime)
+                }
             }
         }
     }
