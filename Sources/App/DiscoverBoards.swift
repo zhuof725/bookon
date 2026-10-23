@@ -356,63 +356,6 @@ struct BoardDualRow: View {
 
 // MARK: - 05 固定列表
 
-struct BoardFixedList: View {
-    @ThemePalette private var palette
-    let title: String
-    let moreTitle: String
-    let items: [DeckItem]
-    var onMore: (() -> Void)?
-    var onSelect: (Int) -> Void = { _ in }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            BoardHeader(title: title, moreTitle: moreTitle, onMore: onMore)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { pair in
-                    Button { onSelect(pair.offset) } label: {
-                        HStack(spacing: 13) {
-                            BoardCover(url: pair.element.cover,
-                                       title: pair.element.title,
-                                       author: pair.element.caption,
-                                       corner: 2,
-                                       captionScale: 0.62)
-                                .frame(width: 56, height: 75)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(pair.element.title)
-                                    .appFont(.system(size: 15.5, weight: .semibold))
-                                    .foregroundStyle(palette.primary)
-                                    .lineLimit(1)
-                                if !pair.element.caption.isEmpty {
-                                    Text(pair.element.caption)
-                                        .appFont(.system(size: 13))
-                                        .foregroundStyle(palette.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 9)
-                        .contentShape(Rectangle())
-                        .overlay(alignment: .top) {
-                            // 分隔线从缩进处开始，和书名左缘对齐
-                            if pair.offset > 0 {
-                                Rectangle()
-                                    .fill(palette.secondary.opacity(0.22))
-                                    .frame(height: 0.5)
-                                    .padding(.leading, 69)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("board.list.\(pair.element.id)")
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 18)
-    }
-}
-
 // MARK: - 06 图文大卡
 
 struct BoardFeatureCard: View {
@@ -486,66 +429,6 @@ struct BoardFeatureCard: View {
 }
 
 // MARK: - 07 更新信息流
-
-/// 追更专用：书名 + 蓝色「更新」标签 + 章节 + 相对时间。
-struct BoardUpdateFeed: View {
-    @ThemePalette private var palette
-    let title: String
-    let moreTitle: String
-    let items: [DeckItem]
-    var onMore: (() -> Void)?
-    var onSelect: (Int) -> Void = { _ in }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            BoardHeader(title: title, moreTitle: moreTitle, onMore: onMore)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { pair in
-                    Button { onSelect(pair.offset) } label: {
-                        HStack(spacing: 11) {
-                            BoardCover(url: pair.element.cover,
-                                       title: pair.element.title,
-                                       author: pair.element.caption,
-                                       corner: 3,
-                                       captionScale: 0.58)
-                                .frame(width: 46, height: 61)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pair.element.title)
-                                    .appFont(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(palette.primary)
-                                    .lineLimit(1)
-                                HStack(spacing: 4) {
-                                    Text("更新")
-                                        .appFont(.system(size: 12.5))
-                                        .foregroundStyle(palette.accent)
-                                    Text(pair.element.caption.isEmpty ? "有新章节" : pair.element.caption)
-                                        .appFont(.system(size: 12.5))
-                                        .foregroundStyle(palette.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                        .overlay(alignment: .top) {
-                            if pair.offset > 0 {
-                                Rectangle()
-                                    .fill(palette.secondary.opacity(0.22))
-                                    .frame(height: 0.5)
-                                    .padding(.leading, 57)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("board.feed.\(pair.element.id)")
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 18)
-    }
-}
 
 // MARK: - 配色
 

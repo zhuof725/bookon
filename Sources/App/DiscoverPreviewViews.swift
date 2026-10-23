@@ -218,36 +218,6 @@ struct DiscoverTemplateThumbnail: View {
                 }
             }
 
-        case .fixedList:
-            VStack(spacing: 0) {
-                ForEach(Array(samples.prefix(3).enumerated()), id: \.element.id) { pair in
-                    HStack(spacing: 6 * unit) {
-                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 2 * unit)
-                            .frame(width: 14 * unit, height: 19 * unit)
-                        VStack(alignment: .leading, spacing: 1.5 * unit) {
-                            Text(pair.element.title)
-                                .font(.system(size: 7.5 * unit, weight: .semibold))
-                                .foregroundStyle(palette.primary)
-                                .lineLimit(1)
-                            Text(pair.element.author)
-                                .font(.system(size: 6 * unit))
-                                .foregroundStyle(palette.secondary)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 3.5 * unit)
-                    .overlay(alignment: .top) {
-                        if pair.offset > 0 {
-                            Rectangle()
-                                .fill(palette.secondary.opacity(0.2))
-                                .frame(height: 0.5)
-                                .padding(.leading, 20 * unit)
-                        }
-                    }
-                }
-            }
-
         case .featureCard:
             // 大色块卡 + 左下胶囊按钮
             ZStack(alignment: .bottomLeading) {
@@ -280,40 +250,6 @@ struct DiscoverTemplateThumbnail: View {
                                startPoint: .topLeading, endPoint: .bottomTrailing)
             }
             .clipShape(RoundedRectangle(cornerRadius: 8 * unit, style: .continuous))
-
-        case .updateFeed:
-            VStack(spacing: 0) {
-                ForEach(Array(samples.prefix(3).enumerated()), id: \.element.id) { pair in
-                    HStack(spacing: 6 * unit) {
-                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 2 * unit)
-                            .frame(width: 13 * unit, height: 17 * unit)
-                        VStack(alignment: .leading, spacing: 1.5 * unit) {
-                            Text(pair.element.title)
-                                .font(.system(size: 7.2 * unit, weight: .semibold))
-                                .foregroundStyle(palette.primary)
-                                .lineLimit(1)
-                            HStack(spacing: 1.5 * unit) {
-                                Text("更新")
-                                    .font(.system(size: 5.6 * unit))
-                                    .foregroundStyle(palette.accent)
-                                Text("第 \(782 - pair.offset * 37) 章")
-                                    .font(.system(size: 5.6 * unit))
-                                    .foregroundStyle(palette.secondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 3.5 * unit)
-                    .overlay(alignment: .top) {
-                        if pair.offset > 0 {
-                            Rectangle()
-                                .fill(palette.secondary.opacity(0.2))
-                                .frame(height: 0.5)
-                                .padding(.leading, 19 * unit)
-                        }
-                    }
-                }
-            }
 
         case .badgeGrid:
             HStack(spacing: gap) {

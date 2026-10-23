@@ -999,24 +999,12 @@ struct DiscoverTemplateView: View {
                          onSelect: { index in
                              if books.indices.contains(index) { onSelectBook(books[index]) }
                          })
-        case .fixedList:
-            BoardFixedList(title: title, moreTitle: moreTitle, items: deckItems,
-                           onMore: onMore,
-                           onSelect: { index in
-                               if books.indices.contains(index) { onSelectBook(books[index]) }
-                           })
         case .featureCard:
             BoardFeatureCard(title: title, moreTitle: moreTitle, items: deckItems,
                              onMore: onMore,
                              onSelect: { index in
                                  if books.indices.contains(index) { onSelectBook(books[index]) }
                              })
-        case .updateFeed:
-            BoardUpdateFeed(title: title, moreTitle: moreTitle, items: deckItems,
-                            onMore: onMore,
-                            onSelect: { index in
-                                if books.indices.contains(index) { onSelectBook(books[index]) }
-                            })
         case .badgeGrid:
             DiscoverBadgeGridSection(
                 title: title,

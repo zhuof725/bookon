@@ -11,18 +11,24 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     case largeCard
     /// 整卡封面色铺底，小封面 + 白书名。
     case compactCard
+
+    // ── 卡片类：这三个是主力，排在展示库前部 ──
+    /// 弧形走廊：卡片沿弧线排开，中间最大最亮。
+    case curve
+    /// 卡片堆叠：中央卡在前，左右各两张向后旋转压暗。
+    case deck
+    /// 继续阅读：大图 + 进度条 + 最后阅读时间。
+    case history
+
+    // ── 其它版式 ──
     /// 三列网格，封面撑满列宽。
     case threeColumn
     /// 两行横向轮播，一屏两倍展示量。
     case dualRow
-    /// 固定列表：小封面 + 分隔线，像设置页。
-    case fixedList
     /// 图文大卡：大封面 + 简介 + 胶囊按钮。
     case featureCard
-    /// 更新信息流：蓝色「更新」+ 章节 + 相对时间。
-    case updateFeed
 
-    // ── 原 3D / 视觉线 ──
+    // ── 视觉线 ──
     /// 两列大封面 + 左下角序号药丸。
     case badgeGrid
     /// 一行横滑大封面。
@@ -31,12 +37,6 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     case rankRow
     /// 错位瀑布流：双列不等高。
     case waterfall
-    /// 弧形走廊：卡片沿弧线排开，中间最大最亮。
-    case curve
-    /// 卡片堆叠：中央卡在前，左右各两张向后旋转压暗。
-    case deck
-    /// 继续阅读：大图 + 进度条 + 最后阅读时间。
-    case history
 
     var id: String { rawValue }
 
@@ -47,9 +47,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .compactCard: return "精简阅读卡片"
         case .threeColumn: return "三列书架"
         case .dualRow: return "双行横向轮播"
-        case .fixedList: return "固定列表"
         case .featureCard: return "图文大卡"
-        case .updateFeed: return "更新信息流"
         case .badgeGrid: return "大封面"
         case .covers: return "横滑封面"
         case .rankRow: return "竖排榜单"
@@ -66,9 +64,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .compactCard: return "封面色铺底，小封面 + 白书名"
         case .threeColumn: return "三列网格，封面撑满列宽"
         case .dualRow: return "两行横向轮播，一屏两倍书"
-        case .fixedList: return "小封面 + 分隔线，像设置页"
         case .featureCard: return "大封面 + 简介 + 胶囊按钮"
-        case .updateFeed: return "蓝色更新标签 + 章节 + 时间"
         case .badgeGrid: return "两列封面，左下角带序号"
         case .covers: return "一行大封面左右滑动"
         case .rankRow: return "大号斜体排名 + 小封面"
@@ -99,7 +95,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     var family: DiscoverTemplateFamily {
         switch self {
         case .largeCard, .compactCard, .threeColumn, .dualRow,
-             .fixedList, .featureCard, .updateFeed:
+             .featureCard:
             return .layout
         case .badgeGrid, .covers, .rankRow, .waterfall, .curve, .deck:
             return .visual

@@ -23,6 +23,11 @@ enum CustomDiscoverRegression {
               "模板：缺模板键回落卡片堆叠")
         check(DiscoverTemplateKind.normalized("notATemplate") == .deck,
               "模板：未知模板回落卡片堆叠")
+        // 已删掉的「固定列表 / 更新信息流」不能让老配置变空板块
+        check(DiscoverTemplateKind.normalized("fixedList") == .deck,
+              "模板：固定列表的旧配置回落到卡片堆叠")
+        check(DiscoverTemplateKind.normalized("updateFeed") == .deck,
+              "模板：更新信息流的旧配置回落到卡片堆叠")
         let fanJSON = Data(#"{"entries":[{"sourceUrl":"u1","kindUrl":"/a","template":"fan"}]}"#.utf8)
         let fanConfig = CustomDiscoverStore.decode(fanJSON)
         check(fanConfig.entries.count == 1 && fanConfig.entries[0].template == .curve,
@@ -164,10 +169,10 @@ enum CustomDiscoverRegression {
         check(DiscoverTemplate.all.count == DiscoverTemplateKind.allCases.count,
               "模板：列表长度等于枚举数量")
         check(DiscoverTemplateKind.allCases.map(\.rawValue)
-              == ["largeCard", "compactCard", "threeColumn", "dualRow", "fixedList",
-                  "featureCard", "updateFeed",
+              == ["largeCard", "compactCard", "threeColumn", "dualRow",
+                  "featureCard",
                   "badgeGrid", "covers", "rankRow", "waterfall", "curve", "deck", "history"],
-              "模板：十四个模板的稳定键")
+              "模板：十二个模板的稳定键")
         for kind in DiscoverTemplateKind.allCases {
             check(DiscoverTemplate.template(for: kind).kind == kind,
                   "模板：\(kind.title) 能按枚举取回")
@@ -178,10 +183,8 @@ enum CustomDiscoverRegression {
               && DiscoverTemplateKind.compactCard.dataSource == .bookList
               && DiscoverTemplateKind.threeColumn.dataSource == .bookList
               && DiscoverTemplateKind.dualRow.dataSource == .bookList
-              && DiscoverTemplateKind.fixedList.dataSource == .bookList
-              && DiscoverTemplateKind.featureCard.dataSource == .bookList
-              && DiscoverTemplateKind.updateFeed.dataSource == .bookList,
-              "模板：七种新版式都吃书籍列表")
+              && DiscoverTemplateKind.featureCard.dataSource == .bookList,
+              "模板：五种新版式都吃书籍列表")
         check(DiscoverTemplateKind.badgeGrid.dataSource == .bookList
               && DiscoverTemplateKind.covers.dataSource == .bookList
               && DiscoverTemplateKind.rankRow.dataSource == .bookList

@@ -92,15 +92,23 @@ struct DiscoverTemplateLibrary: View {
         return samples.map { DeckItem(id: $0.id, title: $0.title, caption: "", cover: $0.cover) }
     }
 
-    /// 预览里放几本：卡片型排太多会挤出屏，列表型多给几本才看得出节奏。
+    /// 预览里放几本。这里只影响「添加模板」这一页，首页仍按配置的数量显示。
+    ///
+    /// 数量按每种版式的可见节奏定：
+    ///  - 大封面（一行横滑）：4 个就够看出横向滑动，多了要滑很长；
+    ///  - 三列书架：6 个 = 正好两行；
+    ///  - 竖排榜单：4 个，一行一个，再多就占满全屏；
+    ///  - 错位瀑布：6 个，双列三行，封面尺寸按模板自己的比例走、不缩放。
     private func previewCount(for kind: DiscoverTemplateKind) -> Int {
         switch kind {
+        case .covers: return 4
+        case .threeColumn: return 6
+        case .rankRow: return 4
+        case .waterfall: return 6
         case .largeCard, .compactCard, .featureCard, .deck, .curve: return 6
-        case .dualRow, .covers: return 12
-        case .fixedList, .updateFeed: return 5
+        case .dualRow: return 12
         case .history: return 4
-        // 三列 / 大封面 / 榜单 / 瀑布默认多放几本；新增模板也走这里，不会漏分支。
-        default: return 9
+        default: return 6
         }
     }
 
