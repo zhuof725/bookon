@@ -527,6 +527,9 @@ struct DeckCarousel<Card: View>: View {
                             .scrollTransition(.interactive, axis: .horizontal) { content, phase in
                                 // 相邻卡片也要有明显角度，所以先把相位放大再夹到 0…1
                                 let depth = min(abs(phase.value) * 2.2, 1)
+                                // 注意：VisualEffect 里没有 zIndex/offset 这类布局修饰符，
+                                // 只有 transform 类（rotation3DEffect / scaleEffect / opacity /
+                                // offset(y:) 属于 geometryEffect 可用）。层级靠外面的静态值排。
                                 return content
                                     .rotation3DEffect(.degrees(Double(-phase.value) * flipDegrees),
                                                       axis: (x: 0, y: 1, z: 0),
@@ -535,10 +538,11 @@ struct DeckCarousel<Card: View>: View {
                                     .scaleEffect(1 - (1 - scaleFloor) * depth)
                                     .offset(y: yDrift * depth)
                                     .opacity(1 - (1 - opacityFloor) * depth)
-                                    // 越靠近中心越靠前，两侧的卡压在后面
-                                    .zIndex(-depth)
                             }
                             .frame(width: step, height: stageHeight)
+                            // 层级用静态下标算：正中的卡压在最上层，越往两边越往后，
+                            // 这样叠压时中间那张不会被侧卡盖住
+                            .zIndex(-Double(abs(i - (index ?? 0))))
                             .id(i)
                     }
                 }
