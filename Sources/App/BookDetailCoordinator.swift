@@ -382,9 +382,9 @@ struct BookDetailSourcePicker: View {
         guard !sources.isEmpty else { loading = false; message = "没有其他可搜索的书源"; return }
         let reference = SearchRanking.mergeKey(book)
         let name = book.name
-        let matches = await withTaskGroup(of: [Book].self) { group in
+        var seen = Set<String>()
+        await withTaskGroup(of: [Book].self) { group in
             var iterator = sources.makeIterator()
-            var found: [Book] = []
             let fanout = NetworkSettings.searchFanout
             func addNext() {
                 if let source = iterator.next() {
@@ -392,7 +392,9 @@ struct BookDetailSourcePicker: View {
                         if let cached = SearchResultCache.cached(source: source.bookSourceUrl, key: name) {
                             return cached
                         }
-                        let list = (try? await WebBook.search(source: source, key: name)) ?? []
+                        guard let list = await WebBook.searchWithTimeout(source: source, key: name) else {
+                            return []
+                        }
                         SearchResultCache.store(list, source: source.bookSourceUrl, key: name)
                         return list
                     }
@@ -401,14 +403,22 @@ struct BookDetailSourcePicker: View {
             for _ in 0..<min(fanout, sources.count) { addNext() }
             for await list in group {
                 if Task.isCancelled { group.cancelAll(); break }
-                found.append(contentsOf: list.filter { SearchRanking.mergeKey($0) == reference })
+                // 边搜边显示：原版也是每有一个书源返回就刷新列表。
+                let matched = list.filter { SearchRanking.mergeKey($0) == reference && $0.bookUrl != book.bookUrl }
+                var added = false
+                for candidate in matched where !seen.contains(candidate.bookUrl) {
+                    seen.insert(candidate.bookUrl)
+                    results.append(candidate)
+                    added = true
+                }
+                if added {
+                    results.sort { $0.originName.localizedStandardCompare($1.originName) == .orderedAscending }
+                    loading = false
+                }
                 addNext()
             }
-            return found
         }
         guard !Task.isCancelled else { return }
-        results = matches.filter { candidate in candidate.bookUrl != book.bookUrl }
-            .sorted { $0.originName.localizedStandardCompare($1.originName) == .orderedAscending }
         if results.isEmpty { message = "其他书源没有找到同名同作者的书" }
         loading = false
         if NetworkSettings.loadTocOnSourceSwitch, !results.isEmpty {

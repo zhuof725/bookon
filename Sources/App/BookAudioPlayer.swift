@@ -847,6 +847,30 @@ struct AudioChapterView: View {
             .accessibilityIdentifier("reader.audio.para.\(index)")
     }
 
+    /// 手动校准：把当前高亮段的起点对齐到当前播放时间，后面所有边界整体平移。
+    /// 段落级估算会越来越偏，用这个一键校正。
+    private func calibrateTimeline() {
+        guard let index = estimatedParagraphIndex,
+              let current = boundaries ?? AudioSentenceTimeline.cached(bookUrl: book.bookUrl,
+                                                                       chapter: audio.chapterTitle,
+                                                                       count: paragraphs.count),
+              current.indices.contains(index + 1),
+              audio.duration > 0 else { return }
+        let target = min(max(audio.currentTime, 0), audio.duration)
+        let delta = target - current[index]
+        var shifted: [Double] = []
+        var last = 0.0
+        for value in current {
+            let next = min(max(value + delta, last + 0.05), audio.duration)
+            shifted.append(next)
+            last = next
+        }
+        if let lastIndex = shifted.indices.last { shifted[lastIndex] = audio.duration }
+        boundaries = shifted
+        AudioSentenceTimeline.store(shifted, bookUrl: book.bookUrl, chapter: audio.chapterTitle)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     private func loadParagraphsIfNeeded() async {
         guard let onLoadParagraphs else { return }
         loadingText = true
@@ -879,6 +903,12 @@ struct AudioChapterView: View {
         Menu {
             Button { onTOC() } label: {
                 Label("目录", systemImage: "list.bullet.rectangle")
+            }
+            if mode == 1 {
+                Button { calibrateTimeline() } label: {
+                    Label("对齐到当前段", systemImage: "scope")
+                }
+                .accessibilityIdentifier("reader.audio.calibrate")
             }
             Divider()
             Button(role: .destructive) {

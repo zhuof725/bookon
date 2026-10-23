@@ -3,6 +3,21 @@ import SwiftSoup
 
 enum WebBook {
     // MARK: Search
+    /// 带超时的搜索：对齐原版 SearchModel 的 `withTimeout(30000)`。
+    static func searchWithTimeout(source: BookSource, key: String, page: Int = 1,
+                                  seconds: Double = 30) async -> [Book]? {
+        await withTaskGroup(of: [Book]?.self) { group in
+            group.addTask { try? await search(source: source, key: key, page: page) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(max(seconds, 1) * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
     static func search(source: BookSource, key: String, page: Int = 1) async throws -> [Book] {
         guard let su = source.searchUrl, !su.isEmpty, let rule = source.ruleSearch else { return [] }
         let context = RuleContext(source: source)

@@ -194,11 +194,11 @@ struct SearchView: View {
                             if let cached = SearchResultCache.cached(source: s.bookSourceUrl, key: key) {
                                 return (cached, false)
                             }
-                            do {
-                                let list = try await WebBook.search(source: s, key: key)
-                                SearchResultCache.store(list, source: s.bookSourceUrl, key: key)
-                                return (list, false)
-                            } catch { return ([], true) }
+                            guard let list = await WebBook.searchWithTimeout(source: s, key: key) else {
+                                return ([], true)
+                            }
+                            SearchResultCache.store(list, source: s.bookSourceUrl, key: key)
+                            return (list, false)
                         }
                     }
                 }

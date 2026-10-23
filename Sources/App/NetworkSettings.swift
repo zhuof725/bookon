@@ -60,8 +60,10 @@ enum NetworkSettings {
         coverConcurrency == 0 ? 64 : coverConcurrency
     }
 
+    /// 搜索/换源的实际并发：原版是线程池 min(threadCount, MAX_THREAD=9)，
+    /// 再多也会被 9 个线程卡住，这里直接按 9 封顶。
     static var searchFanout: Int {
-        min(max(concurrency, 1), 16)
+        min(max(concurrency, 1), 9)
     }
 
     /// 把封面并发应用到全局闸门（启动与改设置时调用）。
