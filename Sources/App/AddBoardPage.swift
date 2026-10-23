@@ -40,6 +40,11 @@ struct AddBoardPage: View {
         }
     }
 
+    /// 可选分类按书源自己的分组切段（「男频榜单」「男频分类」…）。
+    private var kindGroups: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
+        DiscoverCatalog.selectableKindSections(kinds)
+    }
+
     private var canAdd: Bool {
         template.dataSource == .readingProgress || !picked.isEmpty
     }
@@ -184,8 +189,13 @@ struct AddBoardPage: View {
 
     // MARK: 分类
 
+    /// 分类网格的列数：手机上三列最紧凑又不挤，「都市人生」这种四个字一行放得下。
+    private var kindColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+    }
+
     private var kindSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 sectionTitle("选择分类")
                 if kindsLoading {
@@ -194,9 +204,16 @@ struct AddBoardPage: View {
                 }
                 Spacer(minLength: 0)
                 if !picked.isEmpty {
-                    Text("已选 \(picked.count)")
-                        .appFont(.system(size: 11.5))
-                        .foregroundStyle(palette.accent)
+                    HStack(spacing: 6) {
+                        Text("已选 \(picked.count)")
+                            .appFont(.system(size: 11.5))
+                            .foregroundStyle(palette.accent)
+                        Button("清空") {
+                            withAnimation(.easeInOut(duration: 0.15)) { picked.removeAll() }
+                        }
+                        .appFont(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(palette.secondary)
+                    }
                 }
             }
 
@@ -220,13 +237,26 @@ struct AddBoardPage: View {
             } else if selectableKinds.isEmpty && !kindsLoading {
                 hintRow("这个书源没有可用的发现分类")
             } else {
-                // 骨架 + 真实列表：加载中用骨架占位，避免空白跳变
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 14) {
                     if kindsLoading && selectableKinds.isEmpty {
-                        ForEach(0..<4, id: \.self) { _ in kindSkeleton }
+                        LazyVGrid(columns: kindColumns, spacing: 8) {
+                            ForEach(0..<9, id: \.self) { _ in kindCellSkeleton }
+                        }
                     } else {
-                        ForEach(selectableKinds, id: \.self) { item in
-                            kindRow(item)
+                        ForEach(Array(kindGroups.enumerated()), id: \.offset) { pair in
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let header = pair.element.header {
+                                    Text(header)
+                                        .appFont(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(palette.secondary)
+                                        .padding(.leading, 2)
+                                }
+                                LazyVGrid(columns: kindColumns, spacing: 8) {
+                                    ForEach(pair.element.items, id: \.self) { item in
+                                        kindCell(item)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -236,7 +266,8 @@ struct AddBoardPage: View {
         }
     }
 
-    private func kindRow(_ item: SourceDiagnostics.ExploreKind) -> some View {
+    /// 网格里的一个分类：整块可点，选中后描边加底色，右上角一个勾。
+    private func kindCell(_ item: SourceDiagnostics.ExploreKind) -> some View {
         let url = item.url ?? ""
         let on = picked.contains(url)
         return Button {
@@ -244,37 +275,48 @@ struct AddBoardPage: View {
                 if on { picked.remove(url) } else { picked.insert(url) }
             }
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 17))
-                    .foregroundStyle(on ? palette.accent : palette.secondary.opacity(0.35))
-                    .transition(.scale.combined(with: .opacity))
+            ZStack(alignment: .topTrailing) {
                 Text(item.title)
-                    .appFont(.system(size: 14))
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+                    .appFont(.system(size: 13.5, weight: on ? .semibold : .regular))
+                    .foregroundStyle(on ? palette.accent : palette.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .padding(.horizontal, 6)
+
+                if on {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(palette.accent)
+                        .padding(4)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
             .background {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(on ? palette.accent.opacity(0.08) : palette.primary.opacity(0.028))
+                    .fill(on ? palette.accent.opacity(0.10) : palette.primary.opacity(0.028))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(on ? palette.accent.opacity(0.55) : Color.clear, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("add.kind.\(item.title)")
+        .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
-    /// 加载占位：灰条呼吸，比纯转圈更能提示「这里有内容要出现」。
-    private var kindSkeleton: some View {
+    /// 加载占位：和真实格子同高，避免网格跳变。
+    private var kindCellSkeleton: some View {
         RoundedRectangle(cornerRadius: 11, style: .continuous)
             .fill(palette.primary.opacity(0.05))
             .frame(height: 44)
-            .overlay(alignment: .leading) {
+            .overlay {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(palette.primary.opacity(0.07))
-                    .frame(width: 72, height: 11)
-                    .padding(.leading, 40)
+                    .frame(width: 44, height: 10)
             }
             .redacted(reason: .placeholder)
     }

@@ -59,14 +59,19 @@ struct CustomDiscoverView: View {
                 .environmentObject(model)
         }
         .sheet(isPresented: $showPageManager) {
-            PageManagerView { pageID in
+            PageManagerView(onOpenPage: { pageID in
                 model.selectPage(pageID)
                 // 空页面直接进编辑，能立刻加组件
                 if model.pages.currentConfig.isEmpty {
                     openEditorAdding = true
                     showSettings = true
                 }
-            }
+            }, onEditPage: { pageID in
+                // 长按「编辑页面」：无论有没有组件都直接进编辑
+                model.selectPage(pageID)
+                openEditorAdding = false
+                showSettings = true
+            })
             .environmentObject(store)
             .environmentObject(model)
         }

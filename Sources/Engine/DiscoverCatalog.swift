@@ -67,6 +67,56 @@ enum DiscoverCatalog {
         return out
     }
 
+    /// 可选分类的分组：和 `kindSections` 同一套切节规则，但保留分组标题、丢掉控件项，
+    /// 只留下「有网址的普通分类」。收藏/添加板块时用这个把分类按书源自己的分组摆开。
+    static func selectableKindSections(_ kinds: [SourceDiagnostics.ExploreKind])
+        -> [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
+        var out: [(header: String?, items: [SourceDiagnostics.ExploreKind])] = []
+        var header: String?
+        var items: [SourceDiagnostics.ExploreKind] = []
+        func flush() {
+            if !items.isEmpty { out.append((header, items)) }
+            header = nil
+            items = []
+        }
+        for kind in kinds {
+            if let type = kind.type, !type.isEmpty { continue }
+            guard let url = kind.url, !url.isEmpty else {
+                flush()
+                header = isDecorativeControlTitle(kind.title) ? nil : kind.title
+                continue
+            }
+            items.append(kind)
+        }
+        flush()
+        return out
+    }
+
+    /// 控件标题的显示名：书源里的标题常写成「☃关键词💭：书名/作者」「🏷 言情」，
+    /// 前面挂图标、后面带说明。取第一个分隔符（：: / ( （ |）前面的部分，再去掉
+    /// 图标符号与首尾空白，标题里没剩下文字时回落到原串。
+    static func controlTitle(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var head = trimmed
+        for separator in ["：", ":", "/", "(", "（", "|"] {
+            if let range = head.range(of: separator) {
+                head = String(head[..<range.lowerBound])
+            }
+        }
+        // 只保留有实际含义的字符（字母/数字/汉字）与词间空格，标点与 emoji 去掉。
+        var buffer = ""
+        for scalar in head.unicodeScalars {
+            if CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar) {
+                buffer.unicodeScalars.append(scalar)
+            } else if CharacterSet.whitespaces.contains(scalar), !buffer.isEmpty, !buffer.hasSuffix(" ") {
+                // 词间空格保留一个，避免「性别 ♂ 男频」被粘成「性别男频」
+                buffer.append(" ")
+            }
+        }
+        let text = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? trimmed : text
+    }
+
     /// 榜单类板块用排名横条展示（分类名含「榜 / 推荐 / 排行 / 热门 / 热搜」），其余用封面网格。
     static func isRankingTitle(_ title: String) -> Bool {
         for keyword in ["榜", "推荐", "排行", "热门", "热搜"] where title.contains(keyword) {

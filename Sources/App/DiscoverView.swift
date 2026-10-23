@@ -158,6 +158,12 @@ struct DiscoverGroupView: View {
 
 // MARK: - 三级：某个书源的发现分类
 
+/// 一个书源的发现页。两种形态：
+///  - 列表（默认，对应参考图）：顶部搜索框 →「筛选」里的控件行 → 分组标题 + 分类行；
+///  - 杂志：把所有榜单平铺成一屏（老样子，保留给习惯平铺浏览的人）。
+///
+/// 书源发现规则里的控件三类都要认：`select`（性别/模式/源站…）、`text`（关键词输入）、
+/// `button`（搜索/刷新/登录）。以前只取 select，text 和 button 被当成装饰丢掉了。
 struct DiscoverSourceView: View {
     @ThemePalette private var palette
     let source: BookSource
@@ -165,10 +171,13 @@ struct DiscoverSourceView: View {
     @State private var kinds: [SourceDiagnostics.ExploreKind] = []
     @State private var loading = true
     @State private var reloadToken = UUID()
-    @State private var selectedKindURL: String?
     @State private var controlValues: [String: String] = [:]
     @State private var applyingControl = false
-    @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.magazine.rawValue
+    /// 顶部「搜索发现项目」：只过滤本页的分类行，不发请求。
+    @State private var query = ""
+    @State private var showLogin = false
+    @State private var searchRequest: SourceSearchRequest?
+    @AppStorage(DiscoverSettings.pageLayoutKey) private var pageLayoutRaw = DiscoverSettings.PageLayout.list.rawValue
     @AppStorage(DiscoverSettings.rankingModeKey) private var rankingModeRaw = DiscoverSettings.RankingMode.cycle.rawValue
     @AppStorage(DiscoverSettings.rankingKeywordsKey) private var keywordsRaw = ""
     @AppStorage(DiscoverSettings.verticalCountKey) private var verticalCount = DiscoverSettings.defaultVerticalCount
@@ -183,19 +192,56 @@ struct DiscoverSourceView: View {
     }
 
     private var errorText: String? { DiscoverCatalog.kindError(kinds) }
-    /// 顶部筛选行：只显示有选项的 select 控件，跳过纯装饰横幅（如「████ 男生 ████」）。
-    private var controls: [SourceDiagnostics.ExploreKind] {
-        kinds.filter { kind in
+
+    /// 有选项的下拉控件：性别、模式、源站…
+    private var selectControls: [SourceDiagnostics.ExploreKind] {
+        // 书源脚本可能把同一组控件拼两次，按标题去重，避免同样一行出现两遍
+        var seen = Set<String>()
+        return kinds.filter { kind in
             guard (kind.type ?? "") == "select", !(kind.chars ?? []).isEmpty else { return false }
-            return !DiscoverCatalog.isDecorativeControlTitle(kind.title)
+            guard !DiscoverCatalog.isDecorativeControlTitle(kind.title) else { return false }
+            return seen.insert(kind.title).inserted
         }
     }
-    private var sections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
+    /// 输入控件：关键词之类。
+    private var textControls: [SourceDiagnostics.ExploreKind] {
+        var seen = Set<String>()
+        return kinds.filter { kind in
+            guard (kind.type ?? "") == "text", !DiscoverCatalog.isDecorativeControlTitle(kind.title) else { return false }
+            return seen.insert(kind.title).inserted
+        }
+    }
+    /// 按钮控件：搜索 / 刷新 / 登录。
+    private var buttonControls: [SourceDiagnostics.ExploreKind] {
+        var seen = Set<String>()
+        return kinds.filter { kind in
+            guard (kind.type ?? "") == "button", !DiscoverCatalog.isDecorativeControlTitle(kind.title) else { return false }
+            return seen.insert(kind.title).inserted
+        }
+    }
+    private var hasControls: Bool {
+        !selectControls.isEmpty || !textControls.isEmpty || !buttonControls.isEmpty
+    }
+
+    private var allSections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
         DiscoverCatalog.kindSections(kinds)
     }
-    private var flatItems: [SourceDiagnostics.ExploreKind] { sections.flatMap(\.items) }
+    /// 搜索框过滤后的分组（标题和条目都参与匹配）。
+    private var sections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
+        let key = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return allSections }
+        return allSections.compactMap { section in
+            let items = section.items.filter { $0.title.localizedCaseInsensitiveContains(key) }
+            if items.isEmpty {
+                guard let header = section.header, header.localizedCaseInsensitiveContains(key) else { return nil }
+                return (header, section.items)
+            }
+            return (section.header, items)
+        }
+    }
+    private var flatItems: [SourceDiagnostics.ExploreKind] { allSections.flatMap(\.items) }
     private var pageLayout: DiscoverSettings.PageLayout {
-        DiscoverSettings.PageLayout(rawValue: pageLayoutRaw) ?? .magazine
+        DiscoverSettings.PageLayout(rawValue: pageLayoutRaw) ?? .list
     }
     private var rankingMode: DiscoverSettings.RankingMode {
         DiscoverSettings.RankingMode(rawValue: rankingModeRaw) ?? .cycle
@@ -205,7 +251,7 @@ struct DiscoverSourceView: View {
     var body: some View {
         Group {
             if pageLayout == .list {
-                listLayout
+                referenceLayout
             } else {
                 magazineLayout
             }
@@ -215,7 +261,224 @@ struct DiscoverSourceView: View {
         .navigationTitle(source.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: reloadToken) { await load() }
+        .sheet(isPresented: $showLogin) {
+            SourceLoginView(source: source)
+        }
+        .navigationDestination(item: $searchRequest) { request in
+            DiscoverSourceSearchView(source: source, key: request.key)
+        }
         .accessibilityIdentifier("discover.source.page")
+    }
+
+    // MARK: 列表布局（参考图：搜索框 + 筛选 + 分组行）
+
+    private var referenceLayout: some View {
+        List {
+            Section {
+                searchField
+                    .independentGlassRow()
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            }
+
+            if hasControls {
+                Section {
+                    ForEach(Array(textControls.enumerated()), id: \.offset) { pair in
+                        textControlRow(pair.element)
+                            .independentGlassRow()
+                    }
+                    ForEach(Array(selectControls.enumerated()), id: \.offset) { pair in
+                        selectControlRow(pair.element)
+                            .independentGlassRow()
+                    }
+                    if !buttonControls.isEmpty {
+                        buttonControlRow
+                            .independentGlassRow()
+                    }
+                    if applyingControl {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("正在切换…").appFont(.footnote).foregroundStyle(palette.secondary)
+                        }
+                        .independentGlassRow()
+                    }
+                } header: {
+                    Text("筛选")
+                } footer: {
+                    Text("这些是书源自己的筛选与操作，改动会写回书源配置。")
+                }
+            }
+
+            if loading {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("正在读取发现分类…").appFont(.footnote).foregroundStyle(palette.secondary)
+                }
+                .independentGlassRow()
+            } else if let errorText {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorText).appFont(.footnote).foregroundStyle(palette.secondary)
+                    Button("重试") { reloadToken = UUID() }
+                        .appFont(.footnote.weight(.semibold))
+                        .accessibilityIdentifier("discover.retry")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .independentGlassRow()
+            } else if sections.isEmpty {
+                Text(query.isEmpty
+                     ? "这个书源暂时没有发现分类；可以在书源编辑里检查「发现地址」。"
+                     : "没有匹配「\(query)」的发现项目。")
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
+                    .independentGlassRow()
+            }
+
+            ForEach(Array(sections.enumerated()), id: \.offset) { pair in
+                Section {
+                    ForEach(pair.element.items, id: \.self) { kind in
+                        NavigationLink {
+                            DiscoverBooksView(source: source,
+                                              kindTitle: kind.title,
+                                              kindUrl: kind.url ?? "")
+                        } label: {
+                            kindRowLabel(kind)
+                        }
+                        .independentGlassRow()
+                        .accessibilityIdentifier("discover.kind.\(kind.title)")
+                    } header: {
+                        if let header = pair.element.header {
+                            Text(header)
+                                .appFont(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(palette.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .refreshable { await refreshAll() }
+        .accessibilityIdentifier("discover.source.list")
+    }
+
+    /// 顶部搜索框：只过滤本页项目，不联网。
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(palette.secondary)
+            TextField("", text: $query,
+                      prompt: Text("搜索发现项目").foregroundColor(palette.secondary))
+                .appFont(.system(size: 15))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("discover.source.search")
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(palette.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .background {
+            Capsule().fill(palette.primary.opacity(0.045))
+        }
+    }
+
+    /// 分类行：标题 + 右侧箭头（参考图的形态）。
+    private func kindRowLabel(_ kind: SourceDiagnostics.ExploreKind) -> some View {
+        HStack(spacing: 8) {
+            Text(kind.title)
+                .appFont(.system(size: 15))
+                .foregroundStyle(palette.primary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(palette.secondary.opacity(0.6))
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// 下拉控件行：左边标题，右边当前值 + 上下箭头（和图二一致）。
+    private func selectControlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
+        let current = controlValues[control.title] ?? control.defaultValue ?? control.chars?.first ?? ""
+        return Menu {
+            ForEach(control.chars ?? [], id: \.self) { option in
+                Button {
+                    applyControl(control, value: option)
+                } label: {
+                    if current == option {
+                        Label(option, systemImage: "checkmark")
+                    } else {
+                        Text(option)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(DiscoverCatalog.controlTitle(control.title))
+                    .appFont(.system(size: 15))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(current)
+                    .appFont(.system(size: 14))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(palette.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("discover.filter.\(control.title)")
+    }
+
+    /// 输入控件行：标题 + 输入框，回车提交 action。
+    private func textControlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
+        HStack(spacing: 8) {
+            Text(DiscoverCatalog.controlTitle(control.title))
+                .appFont(.system(size: 15))
+                .foregroundStyle(palette.primary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            TextField("", text: Binding(
+                get: { controlValues[control.title] ?? "" },
+                set: { controlValues[control.title] = $0 }
+            ), prompt: Text("书源/作者").foregroundColor(palette.secondary))
+                .appFont(.system(size: 14))
+                .multilineTextAlignment(.trailing)
+                .submitLabel(.search)
+                .onSubmit { applyControl(control, value: controlValues[control.title] ?? "") }
+                .accessibilityIdentifier("discover.text.\(control.title)")
+        }
+    }
+
+    /// 按钮控件：搜索 / 刷新 / 登录 一类的操作，一行一个。
+    private var buttonControlRow: some View {
+        HStack(spacing: 10) {
+            ForEach(Array(buttonControls.enumerated()), id: \.offset) { pair in
+                Button {
+                    let keyword = textControls.first.flatMap { controlValues[$0.title] } ?? ""
+                    applyControl(pair.element, value: keyword)
+                } label: {
+                    Text(DiscoverCatalog.controlTitle(pair.element.title))
+                        .appFont(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background { ThemeSurface(shape: Capsule()) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("discover.button.\(pair.element.title)")
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: 杂志布局（榜单平铺）
@@ -226,8 +489,8 @@ struct DiscoverSourceView: View {
                 filterRows
                 stateRows
 
-                if !loading, errorText == nil, !sections.isEmpty {
-                    ForEach(Array(sections.enumerated()), id: \.offset) { pair in
+                if !loading, errorText == nil, !allSections.isEmpty {
+                    ForEach(Array(allSections.enumerated()), id: \.offset) { pair in
                         if let header = pair.element.header {
                             Text(header)
                                 .appFont(.headline)
@@ -254,63 +517,9 @@ struct DiscoverSourceView: View {
         .refreshable { await refreshAll() }
     }
 
-    // MARK: 列表布局（分类筛选 + 书卡列表）
-
-    private var listLayout: some View {
-        VStack(spacing: 0) {
-            filterRows
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(flatItems, id: \.self) { kind in
-                        kindChip(kind)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            }
-            Divider().opacity(0.15)
-            ScrollView {
-                LazyVStack(spacing: 14) {
-                    stateRows
-                    if let url = selectedKindURL {
-                        let books = loader.books(for: url) ?? []
-                        if books.isEmpty {
-                            if loader.isLoading(url) {
-                                HStack(spacing: 8) {
-                                    ProgressView().controlSize(.small)
-                                    Text("加载中…").appFont(.footnote).foregroundStyle(palette.secondary)
-                                }
-                            } else if loader.hasFailed(url) {
-                                HStack(spacing: 10) {
-                                    Text("加载失败").appFont(.footnote).foregroundStyle(palette.secondary)
-                                    Button("重试") { Task { await loader.load(url, force: true) } }
-                                        .appFont(.footnote.weight(.semibold))
-                                }
-                            } else {
-                                Text("暂无内容").appFont(.footnote).foregroundStyle(palette.secondary)
-                            }
-                        } else {
-                            ForEach(books) { book in
-                                NavigationLink {
-                                    BookDetailView(book: book)
-                                } label: {
-                                    DiscoverBookListRow(book: book)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.horizontal, 16)
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 12)
-            }
-            .refreshable { await refreshAll() }
-        }
-    }
-
     @ViewBuilder private var filterRows: some View {
-        if !controls.isEmpty {
-            DiscoverFilterBar(controls: controls, values: controlValues) { control, value in
+        if !selectControls.isEmpty {
+            DiscoverFilterBar(controls: selectControls, values: controlValues) { control, value in
                 applyControl(control, value: value)
             }
             .padding(.horizontal, 16)
@@ -323,29 +532,6 @@ struct DiscoverSourceView: View {
             }
             .padding(.horizontal, 16)
         }
-    }
-
-    private func kindChip(_ kind: SourceDiagnostics.ExploreKind) -> some View {
-        let selected = selectedKindURL == (kind.url ?? "")
-        return Button {
-            selectedKindURL = kind.url
-            if let url = kind.url { Task { await loader.load(url) } }
-        } label: {
-            Text(kind.title)
-                .appFont(.system(size: 13, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? palette.onAccent : palette.primary)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background {
-                    if selected {
-                        Capsule().fill(palette.accent)
-                    } else {
-                        ThemeSurface(shape: Capsule())
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("discover.kind.\(kind.title)")
     }
 
     @ViewBuilder private var stateRows: some View {
@@ -363,7 +549,7 @@ struct DiscoverSourceView: View {
                     .accessibilityIdentifier("discover.retry")
             }
             .padding(.horizontal, 16)
-        } else if sections.isEmpty {
+        } else if allSections.isEmpty {
             Text("这个书源暂时没有发现分类；可以在书源编辑里检查「发现地址」。")
                 .appFont(.footnote).foregroundStyle(palette.secondary)
                 .padding(.horizontal, 16)
@@ -414,7 +600,7 @@ struct DiscoverSourceView: View {
         applyDefaultSelection()
     }
 
-    /// 切换筛选控件：执行控件 action（写书源配置），然后重新读取分类列表。
+    /// 执行控件 action：写配置 / 刷新分类 / 打开登录 / 发起搜索。
     private func applyControl(_ control: SourceDiagnostics.ExploreKind, value: String) {
         guard let action = control.action, !action.isEmpty else { return }
         var info = controlValues
@@ -423,9 +609,10 @@ struct DiscoverSourceView: View {
         applyingControl = true
         let src = source
         Task {
-            _ = await Task.detached(priority: .userInitiated) {
+            let ui = await Task.detached(priority: .userInitiated) {
                 SourceDiagnostics.applyExploreControl(source: src, action: action, info: info)
             }.value
+            if let ui { handle(ui) }
             let result = await Task.detached(priority: .userInitiated) {
                 SourceDiagnostics.exploreKinds(source: src)
             }.value
@@ -434,9 +621,21 @@ struct DiscoverSourceView: View {
                 DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
             }
             var values = Self.controlValues(from: result)
-            if values[control.title] == nil { values[control.title] = value }
+            for (key, v) in info where values[key] == nil { values[key] = v }
             controlValues = values
             applyingControl = false
+        }
+    }
+
+    /// 脚本想打开的界面：登录页 / 书源内搜索。
+    private func handle(_ action: SourceUiAction) {
+        switch action {
+        case .open(let ui, _, _):
+            if ui == "login" { showLogin = true }
+        case .search(let key, _):
+            let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            searchRequest = SourceSearchRequest(key: trimmed)
         }
     }
 
@@ -452,15 +651,6 @@ struct DiscoverSourceView: View {
         return values
     }
 
-    private func applyDefaultSelection() {
-        let items = DiscoverCatalog.kindSections(kinds).flatMap(\.items)
-        guard selectedKindURL == nil, let first = items.first?.url else { return }
-        selectedKindURL = first
-        if pageLayout == .list {
-            Task { await loader.load(first) }
-        }
-    }
-
     /// 下拉刷新：清缓存并重新拉取分类与已加载的板块。
     private func refreshAll() async {
         DiscoverBlockCache.clear()
@@ -470,9 +660,73 @@ struct DiscoverSourceView: View {
         for url in loaded {
             await loader.load(url, force: true)
         }
-        if pageLayout == .list, let url = selectedKindURL {
-            await loader.load(url, force: true)
+    }
+}
+
+/// 书源内搜索的请求（`java.searchBook` 触发）。
+struct SourceSearchRequest: Identifiable, Hashable {
+    let id = UUID()
+    let key: String
+}
+
+/// 书源内搜索：直接走这个书源的搜索规则，不再跨源聚合。
+struct DiscoverSourceSearchView: View {
+    @ThemePalette private var palette
+    let source: BookSource
+    let key: String
+
+    @State private var books: [Book] = []
+    @State private var loading = true
+    @State private var errorText: String?
+
+    var body: some View {
+        List {
+            if loading {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("正在搜索「\(key)」…").appFont(.footnote).foregroundStyle(palette.secondary)
+                }
+                .independentGlassRow()
+            } else if let errorText {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorText).appFont(.footnote).foregroundStyle(palette.secondary)
+                    Button("重试") { Task { await run() } }
+                        .appFont(.footnote.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .independentGlassRow()
+            } else if books.isEmpty {
+                Text("没有搜到相关书籍").appFont(.footnote).foregroundStyle(palette.secondary)
+                    .independentGlassRow()
+            } else {
+                ForEach(books) { book in
+                    NavigationLink {
+                        BookDetailView(book: book)
+                    } label: {
+                        BookRow(book: book, subtitle: "来源：\(source.bookSourceName)")
+                    }
+                    .independentGlassRow()
+                }
+            }
         }
+        .scrollContentBackground(.hidden)
+        .foregroundStyle(palette.primary)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .navigationTitle(key)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await run() }
+    }
+
+    private func run() async {
+        loading = true
+        errorText = nil
+        let src = source
+        do {
+            books = try await WebBook.search(source: src, key: key)
+        } catch {
+            errorText = "搜索失败：\(error)"
+        }
+        loading = false
     }
 }
 

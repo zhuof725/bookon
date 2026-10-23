@@ -190,6 +190,14 @@ final class DiscoverBoardStore: ObservableObject {
         revision &+= 1
     }
 
+    /// 把某一页挪到最前面（长按菜单「设为首页」），当前页不变。
+    func movePageToFront(_ id: String) {
+        guard let index = pages.pages.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        pages.move(fromOffsets: IndexSet(integer: index), toOffset: 0)
+        CustomDiscoverStore.savePages(pages)
+        revision &+= 1
+    }
+
     // MARK: 重建
 
     /// 配置或书源变化后重建列表。已加载的书会复用，不会整页重刷。

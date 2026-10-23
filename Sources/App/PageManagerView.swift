@@ -4,8 +4,8 @@ import SwiftUI
 
 /// 首页页面管理：列出所有页面，可以新增、删除、排序、改名，点一页进去编辑。
 ///
-/// 对应参考图：标题「页面管理」，下面「添加页面」一组；每个页面一行，
-/// 显示图标、名称、组件数。
+/// 删除与编辑都走**长按菜单**：列表上左滑不再负责删除（容易误触），
+/// 只在长按弹出的小菜单里给「编辑页面 / 外观 / 删除」。
 struct PageManagerView: View {
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
@@ -14,9 +14,13 @@ struct PageManagerView: View {
 
     /// 点某个页面 → 进它的编辑页。
     var onOpenPage: (String) -> Void = { _ in }
+    /// 长按「编辑页面」→ 直接进内容编辑（空页面也进）。
+    var onEditPage: (String) -> Void = { _ in }
 
     @State private var editingPage: CustomDiscoverPage?
     @State private var showDiscoverSettings = false
+    /// 待确认删除的页面（长按菜单触发，删除前再问一次）。
+    @State private var pendingDelete: CustomDiscoverPage?
 
     var body: some View {
         NavigationStack {
@@ -24,19 +28,39 @@ struct PageManagerView: View {
                 Section {
                     ForEach(pages) { page in
                         pageRow(page, isCurrent: page.id == model.pages.currentID)
+                            .contextMenu {
+                                Button {
+                                    model.selectPage(page.id)
+                                    onEditPage(page.id)
+                                    dismiss()
+                                } label: {
+                                    Label("编辑页面", systemImage: "square.and.pencil")
+                                }
+                                Button {
+                                    editingPage = page
+                                } label: {
+                                    Label("页面外观", systemImage: "paintpalette")
+                                }
+                                Button {
+                                    model.movePageToFront(page.id)
+                                } label: {
+                                    Label("设为首页", systemImage: "arrow.up.to.line")
+                                }
+                                .disabled(page.id == model.pages.currentID || pages.first?.id == page.id)
+                                Divider()
+                                Button(role: .destructive) {
+                                    pendingDelete = page
+                                } label: {
+                                    Label("删除页面", systemImage: "trash")
+                                }
+                                .disabled(pages.count <= 1)
+                            }
                     }
                     .onMove { model.movePages(fromOffsets: $0, toOffset: $1) }
-                    .onDelete { offsets in
-                        // 至少留一页，删到只剩一页时按钮置灰
-                        guard pages.count > 1 else { return }
-                        for index in offsets where pages.indices.contains(index) {
-                            model.removePage(pages[index].id)
-                        }
-                    }
                 } header: {
                     Text("全部页面")
                 } footer: {
-                    Text("左滑删除，右侧拖动排序。点一页可以切换并编辑它。")
+                    Text("长按一行可以编辑或删除；右侧拖动排序。点一行进入该页面。")
                 }
 
                 Section {
@@ -92,6 +116,20 @@ struct PageManagerView: View {
                 DiscoverSettingsView()
                     .environmentObject(store)
             }
+            .confirmationDialog("删除「\(pendingDelete?.name ?? "")」？",
+                                isPresented: Binding(
+                                    get: { pendingDelete != nil },
+                                    set: { if !$0 { pendingDelete = nil } }
+                                ),
+                                titleVisibility: .visible) {
+                Button("删除页面", role: .destructive) {
+                    if let page = pendingDelete { model.removePage(page.id) }
+                    pendingDelete = nil
+                }
+                Button("取消", role: .cancel) { pendingDelete = nil }
+            } message: {
+                Text("页面里的板块会一起删掉，无法撤销。")
+            }
             .accessibilityIdentifier("pageManager")
         }
     }
@@ -130,17 +168,11 @@ struct PageManagerView: View {
                 }
             }
             .padding(.vertical, 3)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button {
-                editingPage = page
-            } label: {
-                Label("外观", systemImage: "pencil")
-            }
-            .tint(palette.accent)
-        }
         .accessibilityIdentifier("pageManager.page.\(page.id)")
+        .accessibilityHint("长按可编辑或删除")
     }
 }
 

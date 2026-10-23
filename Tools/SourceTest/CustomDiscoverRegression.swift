@@ -417,6 +417,16 @@ enum CustomDiscoverRegression {
         book.removePage(firstID)
         check(book.pages.count == 1, "页面：最后一页不能删")
 
+        // 长按菜单「设为首页」：挪到最前，当前页不变
+        var reorder = CustomDiscoverPages()
+        let pageB = reorder.addPage(name: "乙")
+        let pageC = reorder.addPage(name: "丙")
+        reorder.setCurrent(pageB.id)
+        reorder.move(fromOffsets: IndexSet(integer: reorder.pages.firstIndex { $0.id == pageC.id } ?? 0),
+                     toOffset: 0)
+        check(reorder.pages.first?.id == pageC.id, "页面：能挪到最前")
+        check(reorder.currentID == pageB.id, "页面：挪动不影响当前页")
+
         // 落盘往返
         let pagesTmp = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("pages-\(UUID().uuidString).json")

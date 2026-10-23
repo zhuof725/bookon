@@ -82,6 +82,17 @@ enum DiscoverRegression {
               && DiscoverCatalog.isRankingTitle("热搜榜"), "发现：榜单分类识别")
         check(!DiscoverCatalog.isRankingTitle("猜你喜欢") && !DiscoverCatalog.isRankingTitle("西方奇幻"),
               "发现：普通分类识别")
+
+        // 3d-2. 控件标题清洗：书源标题带图标与说明，界面只显示名称
+        check(DiscoverCatalog.controlTitle("☃关键词💭：书名/作者") == "关键词",
+              "发现：控件标题取冒号前并去图标（实际 \(DiscoverCatalog.controlTitle("☃关键词💭：书名/作者"))）")
+        check(DiscoverCatalog.controlTitle("晋江标签") == "晋江标签", "发现：无修饰的控件标题原样保留")
+        check(DiscoverCatalog.controlTitle("🏷 言情") == "言情", "发现：控件标题去 emoji 与空格")
+        check(DiscoverCatalog.controlTitle("性别 ♂ 男频") == "性别 男频",
+              "发现：控件标题保留词间空格（实际 \(DiscoverCatalog.controlTitle("性别 ♂ 男频"))）")
+        check(DiscoverCatalog.controlTitle("源站") == "源站", "发现：短标题不改动")
+        check(DiscoverCatalog.controlTitle("🔍搜索") == "搜索", "发现：按钮标题去图标")
+        check(!DiscoverCatalog.controlTitle("💭").isEmpty, "发现：纯图标标题回落为原串不返回空")
         check(DiscoverCatalog.isDecorativeControlTitle("██████ 男 生 ██████"), "发现：装饰性控件标题识别")
         check(DiscoverCatalog.isDecorativeControlTitle("■■■■■■■■ 男 生 ■■■■■■■■"), "发现：真实七猫横幅识别")
         check(DiscoverCatalog.isDecorativeControlTitle("████████████████"), "发现：纯方块横幅识别")
