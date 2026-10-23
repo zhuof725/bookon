@@ -420,12 +420,14 @@ struct BookDetailSourcePicker: View {
     @MainActor
     private func prefetchTOCs() async {
         let candidates = results
+        let pairs: [(Book, BookSource)] = candidates.compactMap { book in
+            store.source(for: book.origin).map { (book, $0) }
+        }
         await withTaskGroup(of: (String, [BookChapter]).self) { group in
-            var iterator = candidates.makeIterator()
+            var iterator = pairs.makeIterator()
             var active = 0
             func addNext() -> Bool {
-                guard let book = iterator.next(),
-                      let source = store.source(for: book.origin) else { return false }
+                guard let (book, source) = iterator.next() else { return false }
                 group.addTask {
                     let chapters = (try? await WebBook.chapters(source: source, book: book)) ?? []
                     return (book.bookUrl, chapters)
