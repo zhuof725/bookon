@@ -478,6 +478,7 @@ struct ReaderView: View {
         .fullScreenCover(isPresented: $showAloudPanel) {
             AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
                             onRefreshToc: tocRefreshAction,
+                            currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
                             onUseSourceTone: { source, tone in
                                 await useSourceToneAudio(source: source, tone: tone)
                             })

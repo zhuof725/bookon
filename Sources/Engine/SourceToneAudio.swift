@@ -1,18 +1,23 @@
 import Foundation
 import CryptoKit
 
-/// 用书源自己的音频接口听书（番茄系的 `tone_id` 音色）。
+/// 用书源自己的「音频模式」取章节音频（番茄系的 tone_id 音色）。
 ///
-/// 番茄源在「听书模式」下请求 `/api/content?item_ids=<章节>&tone_id=N&ts=听书`
-/// 得到音频地址。这里**不改书源的全局模式**：按「每本书」记住选中的音色，
-/// 取这一章的音频时直接走同一个接口（服务端按 tone_id 合成），
-/// 所以切音色只影响这本书，其他书照旧按书源默认模式阅读。
+/// 思路：不改书源的全局模式，只把这**一个章节地址**里的文字模式标记改写成音频模式，
+/// 再交给书源自己的正文规则去算地址：
+/// - 番茄源：`ys_module=3`（小说） → `ys_module=2`（听书），规则会请求
+///   `/api/content?item_ids=…&tone_id=…&ts=听书`，音色就是源变量里的 `tone`。
+/// - 聚合源（书山聚合这类）：章节地址里的 `source=番茄小说` → `source=番茄听书`，
+///   规则里对应的音频分支会用它自己的 `getTtsTone('fanqie')`。
+///
+/// 音色可用性用同一个内容接口探测（只取 JSON，不下载音频），按书缓存。
 enum SourceToneAudio {
     private static let storagePrefix = "reader.sourceTone.v1."
+    private static let availabilityPrefix = "reader.toneAvailability.v1."
 
     struct Config: Codable, Equatable {
         var sourceUrl: String
-        /// `tone_id=1` 这种查询片段。
+        /// `tone_id=1` 这种查询片段（也兼容裸 id）。
         var tone: String
         var toneName: String
     }
@@ -39,11 +44,92 @@ enum SourceToneAudio {
 
     // MARK: 取音频地址
 
-    /// 当前章的书源音频地址；这本书没开音色、或接口没返回可播地址时返回 nil。
-    static func audioURL(source: BookSource, chapter: BookChapter, bookUrl: String) async -> String? {
-        guard let config = config(bookUrl: bookUrl),
-              config.sourceUrl == source.bookSourceUrl else { return nil }
-        guard let itemID = queryValue(chapter.url, "q"), !itemID.isEmpty else { return nil }
+    /// 这一章在「音频模式」下的地址：把章节链接里的文字模式标记换掉。
+    /// 没有任何可改写的标记时返回 nil（说明这个源没有音频变体）。
+    static func audioVariant(of chapter: BookChapter) -> BookChapter? {
+        var url = chapter.url
+        var changed = false
+        for pair in [("ys_module=3", "ys_module=2"), ("ys_module=13", "ys_module=2")] {
+            if url.contains(pair.0) {
+                url = url.replacingOccurrences(of: pair.0, with: pair.1)
+                changed = true
+            }
+        }
+        for textMode in ["番茄小说", "番茄短剧"] {
+            let encoded = textMode.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? textMode
+            let audioMode = "番茄听书"
+            let encodedAudio = audioMode.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? audioMode
+            if url.contains(encoded) {
+                url = url.replacingOccurrences(of: encoded, with: encodedAudio)
+                changed = true
+            } else if url.contains(textMode) {
+                url = url.replacingOccurrences(of: textMode, with: audioMode)
+                changed = true
+            }
+        }
+        guard changed else { return nil }
+        return BookChapter(url: url, title: chapter.title, index: chapter.index,
+                           isVolume: chapter.isVolume, updateTime: chapter.updateTime,
+                           isVip: chapter.isVip)
+    }
+
+    /// 让书源用自己的正文规则算这一章的音频地址（含当前音色）。
+    static func audioURL(source: BookSource, book: Book, chapter: BookChapter) async -> String? {
+        guard let variant = audioVariant(of: chapter) else { return nil }
+        guard let raw = try? await WebBook.rawContentWithBookInfoHealing(
+            source: source, book: book, chapter: variant,
+            fallbackToAutoDetect: false, followNextPage: false, normalizeText: false),
+              !raw.isEmpty else { return nil }
+        return AudioChapter.playURLs(fromContent: raw).first
+    }
+
+    // MARK: 音色可用性（按书缓存）
+
+    static func cachedAvailability(bookUrl: String, tone: String) -> Bool? {
+        let map = availabilityMap(bookUrl: bookUrl)
+        guard let value = map[tone] else { return nil }
+        return value
+    }
+
+    static func storeAvailability(_ available: Bool, bookUrl: String, tone: String) {
+        var map = availabilityMap(bookUrl: bookUrl)
+        map[tone] = available
+        UserDefaults.standard.set(map, forKey: availabilityKey(bookUrl))
+    }
+
+    private static func availabilityMap(bookUrl: String) -> [String: Bool] {
+        UserDefaults.standard.dictionary(forKey: availabilityKey(bookUrl)) as? [String: Bool] ?? [:]
+    }
+
+    /// 探测一个音色：直接问书源的内容接口（只要 JSON，不下载音频）。
+    static func probe(tone: String, source: BookSource, chapter: BookChapter) async -> Bool {
+        guard let itemID = queryValue(chapter.url, "q") ?? queryValue(chapter.url, "item_id"),
+              !itemID.isEmpty else { return false }
+        guard let url = contentAPIURL(source: source, itemID: itemID, tone: tone) else { return false }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return false
+            }
+            let code = (root["code"] as? NSNumber)?.intValue ?? 0
+            guard code == 0 else { return false }
+            let payload = (root["data"] as? [String: Any]) ?? root
+            if let raw = payload["raw_url"] as? String, raw.hasPrefix("http") { return true }
+            if let backups = payload["backup_url"] as? [String],
+               let first = backups.first, first.hasPrefix("http") { return true }
+            if let content = payload["content"] as? String, content.hasPrefix("http") { return true }
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: 接口地址
+
+    private static func contentAPIURL(source: BookSource, itemID: String, tone: String) -> URL? {
         let host = serverHost(source) ?? source.bookSourceUrl
         guard var components = URLComponents(string: host.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return nil
@@ -54,53 +140,20 @@ enum SourceToneAudio {
             URLQueryItem(name: "item_ids", value: itemID),
             URLQueryItem(name: "ts", value: "听书"),
         ]
-        let rawTone = config.tone.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tone: String
-        if rawTone.isEmpty {
-            tone = "tone_id=0"
-        } else if rawTone.contains("=") {
-            tone = rawTone
-        } else {
-            // 声明式音色表里存的是裸 id（"1"），番茄接口要 tone_id=1。
-            tone = "tone_id=" + rawTone
-        }
-        for pair in tone.split(separator: "&") {
+        let rawTone = tone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = rawTone.isEmpty ? "tone_id=0" : (rawTone.contains("=") ? rawTone : "tone_id=" + rawTone)
+        for pair in normalized.split(separator: "&") {
             let parts = pair.split(separator: "=", maxSplits: 1)
             guard let name = parts.first else { continue }
-            let value = parts.count > 1 ? String(parts[1]) : ""
-            items.append(URLQueryItem(name: String(name), value: value))
+            items.append(URLQueryItem(name: String(name), value: parts.count > 1 ? String(parts[1]) : ""))
         }
         if let key = configValue(source, "api_key"), !key.isEmpty {
             items.append(URLQueryItem(name: "api_key", value: key))
         }
         components.queryItems = items
-        guard let url = components.url else { return nil }
-        return await fetchAudioURL(url)
+        return components.url
     }
 
-    private static func fetchAudioURL(_ url: URL) async -> String? {
-        var request = URLRequest(url: url, timeoutInterval: 20)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                return nil
-            }
-            guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-            let payload = (root["data"] as? [String: Any]) ?? root
-            if let raw = payload["raw_url"] as? String, raw.hasPrefix("http") { return raw }
-            if let backups = payload["backup_url"] as? [String],
-               let first = backups.first, first.hasPrefix("http") { return first }
-            if let content = payload["content"] as? String, content.hasPrefix("http") { return content }
-            return nil
-        } catch {
-            return nil
-        }
-    }
-
-    // MARK: 书源配置
-
-    /// 源变量里的 server（多线路时是当前线路）；没有就用书源地址本身。
     private static func serverHost(_ source: BookSource) -> String? {
         for key in ["server", "host"] {
             if let value = configValue(source, key)?
@@ -135,8 +188,14 @@ enum SourceToneAudio {
     }
 
     private static func storageKey(_ bookUrl: String) -> String {
-        let digest = SHA256.hash(data: Data(bookUrl.utf8))
-            .map { String(format: "%02x", $0) }.joined()
-        return storagePrefix + digest
+        storagePrefix + digest(bookUrl)
+    }
+
+    private static func availabilityKey(_ bookUrl: String) -> String {
+        availabilityPrefix + digest(bookUrl)
+    }
+
+    private static func digest(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }

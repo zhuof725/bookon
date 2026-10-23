@@ -10,6 +10,7 @@ struct AloudVoiceSheet: View {
     @ObservedObject var engines = SpeakEngineModel.shared
     /// 当前正在读的书：这本书所属的书源可以「用这个音色听这本书」。
     var currentBook: Book? = nil
+    var currentChapter: BookChapter? = nil
     var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
     @ObservedObject private var store = AppStore.shared
     @ThemePalette private var palette
@@ -22,6 +23,21 @@ struct AloudVoiceSheet: View {
     private var selectedEngineID: String { AloudTTSConfig.selectedEngineID }
     private var isSystem: Bool {
         selectedEngineID.isEmpty || selectedEngineID == "0" || AloudTTSConfig.selectedEngine == nil
+    }
+
+    /// 当前书的音色可用性探测（按这本书的章节，结果按书缓存）。
+    private func sourceProbe(for source: BookSource) -> SourceToneList.Probe? {
+        guard let book = currentBook, book.origin == source.bookSourceUrl,
+              let chapter = currentChapter else { return nil }
+        return SourceToneList.Probe(
+            cached: { tone in
+                SourceToneAudio.cachedAvailability(bookUrl: book.bookUrl, tone: tone)
+            },
+            run: { tone in
+                let ok = await SourceToneAudio.probe(tone: tone, source: source, chapter: chapter)
+                SourceToneAudio.storeAvailability(ok, bookUrl: book.bookUrl, tone: tone)
+                return ok
+            })
     }
 
     /// 只有当前这本书所属的书源，才提供「用这个音色听这本书」。
@@ -79,7 +95,8 @@ struct AloudVoiceSheet: View {
                         ForEach(toneSources) { source in
                             NavigationLink {
                                 SourceToneList(source: source,
-                                               onUseForBook: useSourceToneHandler(for: source))
+                                               onUseForBook: useSourceToneHandler(for: source),
+                                               probe: sourceProbe(for: source))
                                     .navigationTitle(source.bookSourceName)
                                     .navigationBarTitleDisplayMode(.inline)
                             } label: {

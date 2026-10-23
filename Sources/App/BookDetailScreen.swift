@@ -24,6 +24,8 @@ struct BookDetailScreen: View {
     let onShelfAction: () -> Void
     let onEditIntro: () -> Void
     let onTOC: () -> Void
+    /// 「类型」栏手动切换（文本 / 音频 / 漫画）；nil 时只显示不可点。
+    var onTypeChange: ((BookKind) -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 长简介默认收起 4 行，点「展开全文」再看全。
@@ -31,11 +33,13 @@ struct BookDetailScreen: View {
 
     init(book: Book, onShelf: Bool, category: String, chapters: [BookChapter],
          loading: Bool, message: String?, sourceType: String = "文本",
+         onTypeChange: ((BookKind) -> Void)? = nil,
          onBack: @escaping () -> Void,
          onMore: @escaping () -> Void, onRead: @escaping () -> Void,
          onCategory: @escaping () -> Void, onSource: @escaping () -> Void,
          onShelfAction: @escaping () -> Void, onEditIntro: @escaping () -> Void,
          onTOC: @escaping () -> Void) {
+        self.onTypeChange = onTypeChange
         self.book = book
         self.onShelf = onShelf
         self.category = category
@@ -270,13 +274,48 @@ struct BookDetailScreen: View {
             infoColumn(icon: "folder.fill", title: "分组", value: categoryText,
                        valueID: "detail.group.value", id: "detail.changeCategory", action: onCategory)
             stripDivider
-            infoColumn(icon: "doc.text.fill", title: "类型", value: sourceType,
-                       valueID: "detail.type.value", id: nil, action: nil)
+            typeColumn
             stripDivider
             infoColumn(icon: "bell.fill", title: "更新", value: updateText,
                        valueID: "detail.update.value", id: nil, action: nil)
         }
         .modifier(DetailCardSurface(padding: 14))
+    }
+
+    /// 「类型」栏：点一下可以把这本书手动定为 文本 / 音频 / 漫画（覆盖自动识别）。
+    private var typeColumn: some View {
+        let content = VStack(spacing: 5) {
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(palette.accent)
+            Text("类型")
+                .appFont(.subheadline)
+                .foregroundStyle(palette.primary)
+            HStack(spacing: 2) {
+                Text(sourceType)
+                if onTypeChange != nil {
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+                }
+            }
+            .appFont(.caption)
+            .foregroundStyle(palette.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .accessibilityIdentifier("detail.type.value")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+
+        return Menu {
+            Button { onTypeChange?(.text) } label: { Label("文本", systemImage: "doc.text") }
+            Button { onTypeChange?(.audio) } label: { Label("音频", systemImage: "waveform") }
+            Button { onTypeChange?(.image) } label: { Label("漫画", systemImage: "photo") }
+        } label: {
+            content
+        }
+        .disabled(onTypeChange == nil)
+        .accessibilityIdentifier("detail.changeType")
     }
 
     private var stripDivider: some View {

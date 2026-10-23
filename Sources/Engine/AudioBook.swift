@@ -155,9 +155,9 @@ enum AudioChapter {
     static func playURLs(source: BookSource, book: Book, chapter: BookChapter,
                          content: String? = nil) async throws -> [String] {
         let chapterURL = chapter.url.trimmingCharacters(in: .whitespacesAndNewlines)
-        // 这本书选了书源音色（番茄 tone_id）：直接问书源的音频接口，不走正文规则。
-        if let toneURL = await SourceToneAudio.audioURL(source: source, chapter: chapter,
-                                                        bookUrl: book.bookUrl) {
+        // 书源有「音频模式」变体（番茄的 ys_module=2、聚合源的 source=番茄听书）：
+        // 把章节地址改写成音频模式，让书源自己的规则算地址（音色取源变量里的 tone）。
+        if let toneURL = await SourceToneAudio.audioURL(source: source, book: book, chapter: chapter) {
             return [toneURL]
         }
         guard hasContentRule(source) else {

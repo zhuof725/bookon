@@ -25,14 +25,21 @@ struct BookDetailView: View {
         store.isOnShelf(book)
     }
 
-    /// 「类型」栏：书源声明的类型 → 正文识别（+缓存）→ 识别中。
+    /// 「类型」栏：手动设置 → 书源声明的类型 → 正文识别（+缓存）→ 识别中。
     private var sourceTypeLabel: String {
         if store.isLocal(book) { return BookKind.local.label }
+        if let saved = BookKindStore.saved(bookUrl: book.bookUrl) { return saved.label }
         if let declared = BookKind.from(sourceType: store.source(for: book.origin)?.bookSourceType) {
             return declared.label
         }
         if detectingKind { return "识别中…" }
         return detectedKind?.label ?? "文本"
+    }
+
+    /// 手动改类型：写缓存，阅读器下次打开就按这个类型走（音频=书源音频/音色）。
+    private func changeKind(_ kind: BookKind) {
+        BookKindStore.save(kind, bookUrl: book.bookUrl)
+        detectedKind = kind
     }
 
     /// 书源没写类型（或写得不对）时，抓一章正文判断到底是文本、漫画还是音频。
@@ -101,6 +108,7 @@ struct BookDetailView: View {
         BookDetailScreen(book: current, onShelf: onCurrentShelf,
             category: BookDetailMetadata.category(for: book), chapters: chapters,
             loading: loading, message: message, sourceType: sourceTypeLabel,
+            onTypeChange: { kind in changeKind(kind) },
             onBack: { dismiss() }, onMore: { showingMore = true },
             onRead: { showingReader = true }, onCategory: { showingCategory = true },
             onSource: { showingSources = true },

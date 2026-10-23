@@ -10,6 +10,8 @@ struct AloudPlayerView: View {
     let chapters: [BookChapter]
     /// 刷新目录闭包（本地书籍为 nil，目录页不显示刷新）。
     var onRefreshToc: (@MainActor () async -> String?)? = nil
+    /// 当前正在读的章节（音色面板要用它检测该书的音色可用性）。
+    var currentChapter: BookChapter? = nil
     /// 音色面板里给当前书选了书源音色：交给阅读器切到书源音频播放，返回是否成功。
     var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
 
@@ -60,7 +62,8 @@ struct AloudPlayerView: View {
         .sheet(isPresented: $showToc) { tocSheet.modifier(AppThemeRoot()) }
         .sheet(isPresented: $showQueue) { queueSheet.modifier(AppThemeRoot()) }
         .sheet(isPresented: $showVoice, onDismiss: { aloud.refreshEngineLabel() }) {
-            AloudVoiceSheet(aloud: aloud, currentBook: book, onUseSourceTone: onUseSourceTone)
+            AloudVoiceSheet(aloud: aloud, currentBook: book, currentChapter: currentChapter,
+                            onUseSourceTone: onUseSourceTone)
                 .modifier(AppThemeRoot())
         }
         .overlay(alignment: .bottom) { noticeToast }

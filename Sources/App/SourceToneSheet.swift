@@ -12,6 +12,12 @@ struct SourceToneList: View {
     var onApplied: (() -> Void)? = nil
     /// 当前这本书可以用这个书源的音色：选中后切到书源音频播放，返回是否成功。
     var onUseForBook: ((SourceTone.Item) async -> Bool)? = nil
+    /// 音色可用性探测（按当前书的章节，结果由调用方缓存）。
+    struct Probe {
+        var cached: (String) -> Bool?
+        var run: (String) async -> Bool
+    }
+    var probe: Probe? = nil
 
     @ThemePalette private var palette
     @State private var groups: [SourceTone.Group] = []
@@ -20,6 +26,9 @@ struct SourceToneList: View {
     @State private var applying = false
     @State private var message: String?
     @State private var showSourceSettings = false
+    @State private var availability: [String: Bool] = [:]
+    @State private var checking: Set<String> = []
+    @State private var probeTask: Task<Void, Never>?
 
     var body: some View {
         List {
@@ -58,6 +67,11 @@ struct SourceToneList: View {
 
             if !groups.isEmpty {
                 Section {
+                    if let probeSummary {
+                        Text(probeSummary)
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
+                            .accessibilityIdentifier("tone.probeSummary")
+                    }
                     Text(onUseForBook == nil
                          ? "音色由书源提供；有声书切换后会重新加载本章音频。"
                          : "选中后会用这个音色直接播这本书（书源按音色合成音频，不改书源的全局模式）。")
@@ -87,29 +101,100 @@ struct SourceToneList: View {
         }
         .scrollContentBackground(.hidden)
         .background { AppThemeCanvas().ignoresSafeArea() }
-        .task { await load() }
+        .task {
+            await load()
+            startProbing()
+        }
+        .onDisappear { probeTask?.cancel() }
         .sheet(isPresented: $showSourceSettings) {
             SourceLoginView(source: source)
         }
     }
 
+    private enum ToneState { case unknown, checking, available, unavailable }
+
+    private func toneState(_ tone: SourceTone.Item) -> ToneState {
+        if let value = availability[tone.value] { return value ? .available : .unavailable }
+        if checking.contains(tone.value) { return .checking }
+        return .unknown
+    }
+
     private func toneRow(_ tone: SourceTone.Item, group: SourceTone.Group) -> some View {
         let selected = !tone.value.isEmpty && tone.value == group.currentValue
+        let state = toneState(tone)
         return Button {
             apply(tone, group: group)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Text(tone.name).appFont(.body)
                 Spacer(minLength: 8)
+                switch state {
+                case .checking:
+                    ProgressView().scaleEffect(0.65)
+                case .unavailable:
+                    Text("不可用").appFont(.caption2).foregroundStyle(palette.secondary)
+                case .available:
+                    Circle().fill(Color.green.opacity(0.7)).frame(width: 6, height: 6)
+                case .unknown:
+                    EmptyView()
+                }
                 if selected {
                     Image(systemName: "checkmark").foregroundStyle(palette.accent)
                 }
             }
+            .opacity(state == .unavailable ? 0.45 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(applying)
+        .disabled(applying || state == .unavailable)
         .accessibilityIdentifier("tone.option.\(group.id).\(tone.index)")
+    }
+
+    // MARK: 可用性探测
+
+    private func startProbing() {
+        guard let probe else { return }
+        var queue: [SourceTone.Item] = []
+        for group in groups {
+            for tone in group.tones where !tone.value.isEmpty {
+                if let cached = probe.cached(tone.value) {
+                    availability[tone.value] = cached
+                } else if availability[tone.value] == nil {
+                    queue.append(tone)
+                }
+            }
+        }
+        guard !queue.isEmpty else { return }
+        probeTask?.cancel()
+        probeTask = Task { @MainActor in
+            await withTaskGroup(of: (String, Bool).self) { group in
+                var iterator = queue.makeIterator()
+                var active = 0
+                func launchNext() -> Bool {
+                    guard let tone = iterator.next() else { return false }
+                    checking.insert(tone.value)
+                    group.addTask { (tone.value, await probe.run(tone.value)) }
+                    return true
+                }
+                while active < 3, launchNext() { active += 1 }
+                while let result = await group.next() {
+                    availability[result.0] = result.1
+                    checking.remove(result.0)
+                    if !launchNext() { active -= 1 }
+                }
+            }
+        }
+    }
+
+    private var probeSummary: String? {
+        guard probe != nil, !groups.isEmpty else { return nil }
+        let values = groups.flatMap(\.tones).filter { !$0.value.isEmpty }
+        guard !values.isEmpty else { return nil }
+        let ok = values.filter { availability[$0.value] == true }.count
+        let bad = values.filter { availability[$0.value] == false }.count
+        let pending = values.filter { availability[$0.value] == nil }.count
+        if ok == 0, bad == 0 { return "正在逐个检测音色可用性…" }
+        return "可用 \(ok) · 不可用 \(bad)" + (pending > 0 ? " · 检测中 \(pending)" : "")
     }
 
     private func load() async {
