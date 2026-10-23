@@ -41,29 +41,47 @@ enum AudioSentenceTimeline {
     static func build(url: URL, paragraphs: [String], duration: TimeInterval) async -> [Double]? {
         guard paragraphs.count > 1, duration > 5 else { return nil }
         guard let local = await localFile(for: url) else { return nil }
-        guard let pauses = pauseTimes(url: local, duration: duration) else { return nil }
+        // 以文件真实时长为准；和播放器报的时长差太多（多段拼接/换过章）就别用。
+        guard let fileDuration = audioDuration(local), fileDuration > 5,
+              abs(fileDuration - duration) <= max(5, duration * 0.05) else { return nil }
+        guard let pauses = pauseTimes(url: local, duration: fileDuration) else { return nil }
 
         let totalChars = paragraphs.reduce(0) { $0 + max($1.count, 1) }
         guard totalChars > 0 else { return nil }
 
+        // 吸附窗口跟章节长度走：长章节的估算误差更大。
+        let window = max(2.5, min(9.0, fileDuration * 0.07))
         var boundaries: [Double] = [0]
         var cursor = 0
         var last = 0.0
+        var searchStart = 0
         for (index, text) in paragraphs.enumerated() {
             cursor += max(text.count, 1)
             if index == paragraphs.count - 1 { break }
-            let expected = Double(cursor) / Double(totalChars) * duration
-            var chosen = expected
-            if let pause = pauses.first(where: { $0 > last + 0.15 && $0 >= expected - snapRadius }),
-               pause <= expected + snapRadius {
-                chosen = pause
+            let expected = Double(cursor) / Double(totalChars) * fileDuration
+            while searchStart < pauses.count, pauses[searchStart] < last + 0.15 { searchStart += 1 }
+            var best: Double?
+            var bestDelta = Double.greatestFiniteMagnitude
+            var probe = searchStart
+            while probe < pauses.count, pauses[probe] <= expected + window {
+                let delta = abs(pauses[probe] - expected)
+                if delta < bestDelta {
+                    bestDelta = delta
+                    best = pauses[probe]
+                }
+                probe += 1
             }
-            chosen = min(max(chosen, last + 0.15), duration)
+            let chosen = min(max(best ?? expected, last + 0.15), fileDuration)
             boundaries.append(chosen)
             last = chosen
         }
-        boundaries.append(duration)
+        boundaries.append(fileDuration)
         return boundaries
+    }
+
+    private static func audioDuration(_ url: URL) -> TimeInterval? {
+        guard let file = try? AVAudioFile(forReading: url), file.processingFormat.sampleRate > 0 else { return nil }
+        return Double(file.length) / file.processingFormat.sampleRate
     }
 
     /// 分析要读本地文件：远端地址先下载（已经缓存过就直接用缓存）。

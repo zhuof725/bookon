@@ -385,7 +385,7 @@ struct BookDetailSourcePicker: View {
         let matches = await withTaskGroup(of: [Book].self) { group in
             var iterator = sources.makeIterator()
             var found: [Book] = []
-            let fanout = min(NetworkSettings.searchFanout, 6)
+            let fanout = NetworkSettings.searchFanout
             func addNext() {
                 if let source = iterator.next() {
                     group.addTask {
@@ -434,7 +434,8 @@ struct BookDetailSourcePicker: View {
                 }
                 return true
             }
-            while active < 3, addNext() { active += 1 }
+            let tocConcurrency = min(max(NetworkSettings.concurrency, 1), 4)
+            while active < tocConcurrency, addNext() { active += 1 }
             while let (url, chapters) = await group.next() {
                 tocCounts[url] = chapters.count
                 if let book = candidates.first(where: { $0.bookUrl == url }), !chapters.isEmpty {
