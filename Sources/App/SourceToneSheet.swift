@@ -10,6 +10,8 @@ struct SourceToneList: View {
     let source: BookSource
     /// 换音色后的回调（有声书播放器用来重新取本章音频）。
     var onApplied: (() -> Void)? = nil
+    /// 切到朗读（TTS）：停掉书源音频，用系统语音/在线引擎读这本书。
+    var onSwitchToTTS: ((HTTPTTS?) -> Void)? = nil
     /// 当前这本书可以用这个书源的音色：选中后切到书源音频播放，返回是否成功。
     var onUseForBook: ((SourceTone.Item) async -> Bool)? = nil
     /// 音色可用性探测（按当前书的章节，结果由调用方缓存）。
@@ -26,6 +28,7 @@ struct SourceToneList: View {
     var currentBook: Book? = nil
 
     @ThemePalette private var palette
+    @ObservedObject private var engineModel = SpeakEngineModel.shared
     @State private var groups: [SourceTone.Group] = []
     @State private var summary = ""
     @State private var loading = true
@@ -96,6 +99,39 @@ struct SourceToneList: View {
                          ? "音色由书源提供；有声书切换后会重新加载本章音频。"
                          : "选中后会用这个音色直接播这本书（书源按音色合成音频，不改书源的全局模式）。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
+                }
+            }
+
+            if let onSwitchToTTS {
+                Section {
+                    Button {
+                        onSwitchToTTS(nil)
+                    } label: {
+                        HStack {
+                            Label("系统语音朗读", systemImage: "waveform")
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("tone.tts.system")
+                    ForEach(engineModel.list) { engine in
+                        Button {
+                            onSwitchToTTS(engine)
+                        } label: {
+                            HStack {
+                                Text(engine.displayName).appFont(.body)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("tone.tts.\(engine.id)")
+                    }
+                } header: {
+                    Text("用朗读引擎读这本书")
+                } footer: {
+                    Text("选中后会停掉书源音频，改用系统语音/在线引擎朗读；音色面板里的系统音色/引擎设置同样生效。")
                 }
             }
 
@@ -255,21 +291,32 @@ struct SourceToneList: View {
         }
         guard !queue.isEmpty else { return }
         probeTask?.cancel()
+        // 逐个检测很吃 CPU/网络：并发压到 2，结果每 5 个合并一次再刷 UI，
+        // 否则 79 行列表每测完一个就整体重绘，明显掉帧。
         probeTask = Task { @MainActor in
             await withTaskGroup(of: (String, Bool).self) { taskGroup in
                 var iterator = queue.makeIterator()
                 var active = 0
+                var pending: [String: Bool] = [:]
                 func launchNext() -> Bool {
                     guard let entry = iterator.next() else { return false }
-                    checking.insert(entry.1.value)
-                    taskGroup.addTask { (entry.1.value, await probe.run(entry.0, entry.1)) }
+                    taskGroup.addTask {
+                        let ok = await Task.detached { await probe.run(entry.0, entry.1) }.value
+                        return (entry.1.value, ok)
+                    }
                     return true
                 }
-                while active < 3, launchNext() { active += 1 }
+                while active < 2, launchNext() { active += 1 }
                 while let result = await taskGroup.next() {
-                    availability[result.0] = result.1
-                    checking.remove(result.0)
+                    pending[result.0] = result.1
+                    if pending.count >= 5 {
+                        availability.merge(pending) { _, new in new }
+                        pending.removeAll()
+                    }
                     if !launchNext() { active -= 1 }
+                }
+                if !pending.isEmpty {
+                    availability.merge(pending) { _, new in new }
                 }
             }
         }
@@ -348,6 +395,7 @@ struct SourceToneList: View {
 struct SourceToneSheet: View {
     let source: BookSource
     var onApplied: () -> Void
+    var onSwitchToTTS: ((HTTPTTS?) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -356,6 +404,9 @@ struct SourceToneSheet: View {
             SourceToneList(source: source, onApplied: {
                 onApplied()
                 dismiss()
+            }, onSwitchToTTS: { engine in
+                dismiss()
+                onSwitchToTTS?(engine)
             })
             .navigationTitle("音色")
             .navigationBarTitleDisplayMode(.inline)

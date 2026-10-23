@@ -543,6 +543,11 @@ struct AudioChapterView: View {
     var onStop: (() -> Void)? = nil
     /// 正文页：取本章文字段落（有声书没有逐句时间戳，高亮按进度估算）。
     var onLoadParagraphs: (() async -> [String])? = nil
+    /// 正文页的字号/行距：跟阅读器设置一致。
+    var textFontSize: CGFloat = 18
+    var textLineSpacing: CGFloat = 8
+    /// 切到朗读（TTS）：停掉书源音频，用系统语音/在线引擎读这本书。
+    var onSwitchToTTS: ((HTTPTTS?) -> Void)? = nil
     let onPrevious: () -> Void
     let onNext: () -> Void
     let onBack: () -> Void
@@ -575,7 +580,8 @@ struct AudioChapterView: View {
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
         .sheet(isPresented: $showTone) {
             if let source {
-                SourceToneSheet(source: source, onApplied: { onReloadAudio?() })
+                SourceToneSheet(source: source, onApplied: { onReloadAudio?() },
+                                onSwitchToTTS: onSwitchToTTS)
                     .modifier(AppThemeRoot())
             }
         }
@@ -714,21 +720,67 @@ struct AudioChapterView: View {
         return paragraphs.count - 1
     }
 
+    /// 段落内按比例估到当前句（番茄音频没有逐句时间戳，只能按字数比例推进）。
+    private func sentenceRange(in text: String, withinParagraph fraction: Double) -> Range<String.Index>? {
+        guard !text.isEmpty else { return nil }
+        let target = Int(Double(text.count) * min(max(fraction, 0), 1))
+        let breaks = CharacterSet(charactersIn: "。！？…；\n")
+        var start = text.startIndex
+        var idx = text.startIndex
+        var offset = 0
+        for ch in text {
+            if ch.unicodeScalars.contains(where: { breaks.contains($0) }) {
+                if target <= offset + 1 {
+                    let end = text.index(after: idx)
+                    return start..<end
+                }
+                start = text.index(after: idx)
+            }
+            idx = text.index(after: idx)
+            offset += 1
+        }
+        return start..<text.endIndex
+    }
+
+    /// 本章各段的累计字数，用来把「已播比例」换成段内比例。
+    private var paragraphOffsets: (starts: [Int], total: Int) {
+        var starts: [Int] = []
+        var cursor = 0
+        for text in paragraphs {
+            starts.append(cursor)
+            cursor += max(text.count, 1)
+        }
+        return (starts, cursor)
+    }
+
     private func paragraphView(_ index: Int) -> some View {
         let current = index == estimatedParagraphIndex
-        return Text(paragraphs[index])
-            .appFont(.body)
-            .lineSpacing(8)
+        let text = paragraphs[index]
+        var attributed = AttributedString(text)
+        if current, audio.duration > 0 {
+            let offsets = paragraphOffsets
+            let total = max(offsets.total, 1)
+            let played = Int(Double(total) * min(max(audio.currentTime / audio.duration, 0), 1))
+            let start = offsets.starts.indices.contains(index) ? offsets.starts[index] : 0
+            let fraction = Double(played - start) / Double(max(text.count, 1))
+            if let range = sentenceRange(in: text, withinParagraph: fraction) {
+                var combined = AttributedString(String(text[..<range.lowerBound]))
+                var middle = AttributedString(String(text[range]))
+                middle.backgroundColor = palette.highlight
+                middle.foregroundColor = palette.accent
+                combined.append(middle)
+                combined.append(AttributedString(String(text[range.upperBound...])))
+                attributed = combined
+            }
+        }
+        return Text(attributed)
+            .font(.system(size: textFontSize))
+            .lineSpacing(textLineSpacing)
+            .foregroundStyle(palette.primary.opacity(0.88))
             .foregroundStyle(current ? palette.accent : palette.primary.opacity(0.88))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background {
-                if current {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(palette.highlight)
-                }
-            }
             .overlay(alignment: .leading) {
                 if current {
                     Capsule().fill(palette.accent)

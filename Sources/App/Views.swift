@@ -434,6 +434,9 @@ struct ReaderView: View {
                                      }
                                  },
                                  onLoadParagraphs: { await audioChapterParagraphs() },
+                                 textFontSize: settings.fontSize,
+                                 textLineSpacing: settings.lineSpacingPoints,
+                                 onSwitchToTTS: { engine in switchAudioToTTS(engine) },
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: {
@@ -1895,6 +1898,17 @@ struct ReaderView: View {
         }
         await beginAudioChapter(index, source: source)
         return true
+    }
+
+    /// 有声书播放器里切到朗读：停掉书源音频，用选中的引擎从当前页开始读。
+    private func switchAudioToTTS(_ engine: HTTPTTS?) {
+        SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+        BookKindStore.save(.text, bookUrl: book.bookUrl)
+        bookAudio.stop()
+        forceAudioPlayer = false
+        aloud.selectEngine(engine)
+        showAloudPanel = true
+        aloud.openCurrent()
     }
 
     /// 有声书「正文」页的文字：用原章节地址跑正文规则（音频模式是播放时才改写的），
