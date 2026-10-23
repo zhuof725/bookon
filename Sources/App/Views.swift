@@ -410,6 +410,12 @@ struct ReaderView: View {
                                      ? chapters[index + 1].title : nil,
                                  source: store.source(for: book.origin),
                                  onReloadAudio: { reloadAudioChapter() },
+                                 onStop: {
+                                     if SourceToneAudio.isActive(bookUrl: book.bookUrl) {
+                                         SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+                                         BookKindStore.save(.text, bookUrl: book.bookUrl)
+                                     }
+                                 },
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: { dismiss() },
@@ -471,7 +477,10 @@ struct ReaderView: View {
         }
         .fullScreenCover(isPresented: $showAloudPanel) {
             AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
-                            onRefreshToc: tocRefreshAction)
+                            onRefreshToc: tocRefreshAction,
+                            onUseSourceTone: { source, tone in
+                                await useSourceToneAudio(source: source, tone: tone)
+                            })
                 .modifier(AppThemeRoot())
         }
         .overlay(alignment: .bottom) {
@@ -1813,6 +1822,24 @@ struct ReaderView: View {
         }
     }
 
+    /// 朗读面板里给这本书选了书源音色（番茄 tone_id）：先用该音色试着取一次音频，
+    /// 成功就切到书源音频播放这本书（不动书源的全局模式）。
+    private func useSourceToneAudio(source: BookSource, tone: SourceTone.Item) async -> Bool {
+        guard chapters.indices.contains(index) else { return false }
+        SourceToneAudio.activate(bookUrl: book.bookUrl, sourceUrl: source.bookSourceUrl,
+                                 tone: tone.value, toneName: tone.name)
+        guard let url = await SourceToneAudio.audioURL(source: source, chapter: chapters[index],
+                                                       bookUrl: book.bookUrl), !url.isEmpty else {
+            SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+            return false
+        }
+        BookKindStore.save(.audio, bookUrl: book.bookUrl)
+        showAloudPanel = false
+        aloud.stop()
+        await beginAudioChapter(index, source: source)
+        return true
+    }
+
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
     private func reloadAudioChapter() {
         guard bookAudio.chapterURL != nil,
@@ -2064,7 +2091,8 @@ struct ReaderView: View {
         guard chapters.indices.contains(target), contentRequestID == requestID else { return }
         let chapter = chapters[target]
         if !store.isLocal(book), let source = store.source(for: book.origin),
-           AudioChapter.isAudio(source: source, chapter: chapter) {
+           SourceToneAudio.isActive(bookUrl: book.bookUrl)
+               || AudioChapter.isAudio(source: source, chapter: chapter) {
             // 音频章节：链接就是音频直链，不走正文抓取与排版，直接播放。
             index = target
             ChapterPrecacheManager.shared.updateCurrentIndex(target)

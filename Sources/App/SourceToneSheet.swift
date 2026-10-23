@@ -10,6 +10,8 @@ struct SourceToneList: View {
     let source: BookSource
     /// 换音色后的回调（有声书播放器用来重新取本章音频）。
     var onApplied: (() -> Void)? = nil
+    /// 当前这本书可以用这个书源的音色：选中后切到书源音频播放，返回是否成功。
+    var onUseForBook: ((SourceTone.Item) async -> Bool)? = nil
 
     @ThemePalette private var palette
     @State private var groups: [SourceTone.Group] = []
@@ -56,7 +58,9 @@ struct SourceToneList: View {
 
             if !groups.isEmpty {
                 Section {
-                    Text("音色由书源提供；有声书切换后会重新加载本章音频。")
+                    Text(onUseForBook == nil
+                         ? "音色由书源提供；有声书切换后会重新加载本章音频。"
+                         : "选中后会用这个音色直接播这本书（书源按音色合成音频，不改书源的全局模式）。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
                 }
             }
@@ -124,8 +128,8 @@ struct SourceToneList: View {
         message = nil
         Task {
             let ok = await Task.detached { SourceTone.apply(tone, in: group, source: src) }.value
-            applying = false
             guard ok else {
+                applying = false
                 message = "切换失败：书源脚本没有接受这个音色"
                 return
             }
@@ -135,6 +139,15 @@ struct SourceToneList: View {
                                         tones: item.tones, currentValue: tone.value)
             }
             summary = SourceTone.summary(source: source)
+            if let onUseForBook {
+                let started = await onUseForBook(tone)
+                applying = false
+                if !started {
+                    message = "这个音色暂时不能用于这本书（书源没有返回音频）"
+                }
+                return
+            }
+            applying = false
             onApplied?()
         }
     }

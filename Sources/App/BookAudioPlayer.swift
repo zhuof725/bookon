@@ -538,6 +538,8 @@ struct AudioChapterView: View {
     var source: BookSource? = nil
     /// 换音色后重新取一次本章音频。
     var onReloadAudio: (() -> Void)? = nil
+    /// 显式停止播放（用于退出「书源音色」模式）。
+    var onStop: (() -> Void)? = nil
     let onPrevious: () -> Void
     let onNext: () -> Void
     let onBack: () -> Void
@@ -631,7 +633,10 @@ struct AudioChapterView: View {
                 Label("目录", systemImage: "list.bullet.rectangle")
             }
             Divider()
-            Button(role: .destructive) { audio.stop() } label: {
+            Button(role: .destructive) {
+                onStop?()
+                audio.stop()
+            } label: {
                 Label("停止播放", systemImage: "stop.circle")
             }
         } label: {

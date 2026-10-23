@@ -8,6 +8,9 @@ import SwiftUI
 struct AloudVoiceSheet: View {
     @ObservedObject var aloud: ReaderAloudController
     @ObservedObject var engines = SpeakEngineModel.shared
+    /// 当前正在读的书：这本书所属的书源可以「用这个音色听这本书」。
+    var currentBook: Book? = nil
+    var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
     @ObservedObject private var store = AppStore.shared
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +22,13 @@ struct AloudVoiceSheet: View {
     private var selectedEngineID: String { AloudTTSConfig.selectedEngineID }
     private var isSystem: Bool {
         selectedEngineID.isEmpty || selectedEngineID == "0" || AloudTTSConfig.selectedEngine == nil
+    }
+
+    /// 只有当前这本书所属的书源，才提供「用这个音色听这本书」。
+    private func useSourceToneHandler(for source: BookSource) -> ((SourceTone.Item) async -> Bool)? {
+        guard let book = currentBook, book.origin == source.bookSourceUrl,
+              let handler = onUseSourceTone else { return nil }
+        return { tone in await handler(source, tone) }
     }
 
     private func toneLabel(_ source: BookSource) -> String {
@@ -68,7 +78,8 @@ struct AloudVoiceSheet: View {
                     } else {
                         ForEach(toneSources) { source in
                             NavigationLink {
-                                SourceToneList(source: source)
+                                SourceToneList(source: source,
+                                               onUseForBook: useSourceToneHandler(for: source))
                                     .navigationTitle(source.bookSourceName)
                                     .navigationBarTitleDisplayMode(.inline)
                             } label: {
