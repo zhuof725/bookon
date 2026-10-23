@@ -12,6 +12,8 @@ struct AloudVoiceSheet: View {
     var currentBook: Book? = nil
     var currentChapter: BookChapter? = nil
     var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
+    /// 切到系统语音/在线引擎时：停掉正在播的书源音频，改回朗读。
+    var onStopSourceAudio: (() -> Void)? = nil
     @ObservedObject private var store = AppStore.shared
     @AppStorage(SourceToneAudio.backgroundKey) private var backgroundPlayback = false
     @ThemePalette private var palette
@@ -66,12 +68,16 @@ struct AloudVoiceSheet: View {
             List {
                 Section {
                     engineRow(title: "系统语音", detail: "本机声部", selected: isSystem,
-                              id: "aloud.voice.system") { aloud.selectEngine(nil) }
+                              id: "aloud.voice.system") {
+                        aloud.selectEngine(nil)
+                        onStopSourceAudio?()
+                    }
                     ForEach(engines.list) { engine in
                         engineRow(title: engine.displayName, detail: "在线引擎",
                                   selected: selectedEngineID == "\(engine.id)",
                                   id: "aloud.voice.engine.\(engine.id)") {
                             aloud.selectEngine(engine)
+                            onStopSourceAudio?()
                         }
                     }
                 } header: {
@@ -186,8 +192,13 @@ struct AloudVoiceSheet: View {
     /// 找出所有带音色表的书源（要扫脚本，放到后台做）。
     private func loadToneSources() async {
         let sources = store.sources
+        let origin = currentBook?.origin
         let result = await Task.detached { () -> ([BookSource], [String: String]) in
-            let matched = sources.filter { SourceTone.hasTones(source: $0) }
+            // 只列这本书自己的书源（别的源音色对这本书没意义）。
+            let matched = sources.filter { source in
+                guard let origin, source.bookSourceUrl == origin else { return false }
+                return SourceTone.hasTones(source: source)
+            }
             var summaries: [String: String] = [:]
             for source in matched {
                 summaries[source.bookSourceUrl] = SourceTone.summary(source: source)

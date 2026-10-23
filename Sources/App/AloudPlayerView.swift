@@ -14,6 +14,8 @@ struct AloudPlayerView: View {
     var currentChapter: BookChapter? = nil
     /// 音色面板里给当前书选了书源音色：交给阅读器切到书源音频播放，返回是否成功。
     var onUseSourceTone: (@MainActor (BookSource, SourceTone.Item) async -> Bool)? = nil
+    /// 音色面板切到系统语音/引擎：停掉书源音频。
+    var onStopSourceAudio: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @ThemePalette private var palette
@@ -63,7 +65,8 @@ struct AloudPlayerView: View {
         .sheet(isPresented: $showQueue) { queueSheet.modifier(AppThemeRoot()) }
         .sheet(isPresented: $showVoice, onDismiss: { aloud.refreshEngineLabel() }) {
             AloudVoiceSheet(aloud: aloud, currentBook: book, currentChapter: currentChapter,
-                            onUseSourceTone: onUseSourceTone)
+                            onUseSourceTone: onUseSourceTone,
+                            onStopSourceAudio: onStopSourceAudio)
                 .modifier(AppThemeRoot())
         }
         .overlay(alignment: .bottom) { noticeToast }

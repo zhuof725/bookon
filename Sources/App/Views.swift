@@ -440,6 +440,7 @@ struct ReaderView: View {
                                      if forceAudioPlayer { forceAudioPlayer = false } else { dismiss() }
                                  },
                                  onTOC: { showToc = true })
+                    .transition(.opacity)
             } else if settings.pageMode == 1 {
                 pagedBody
             } else {
@@ -475,7 +476,8 @@ struct ReaderView: View {
                     onSearch: { showReaderSearch = true }, onSettings: { showSettings = true },
                     onSpeechLongPress: {
                         guard bookAudio.chapterURL != nil else { return }
-                        forceAudioPlayer = true
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.22)) { forceAudioPlayer = true }
                     })
                     .transition(.opacity)
             }
@@ -505,6 +507,13 @@ struct ReaderView: View {
                             currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
                             onUseSourceTone: { source, tone in
                                 await useSourceToneAudio(source: source, tone: tone)
+                            },
+                            onStopSourceAudio: {
+                                guard SourceToneAudio.isActive(bookUrl: book.bookUrl) else { return }
+                                bookAudio.stop()
+                                SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+                                BookKindStore.save(.text, bookUrl: book.bookUrl)
+                                forceAudioPlayer = false
                             })
                 .modifier(AppThemeRoot())
         }
@@ -1888,15 +1897,22 @@ struct ReaderView: View {
         return true
     }
 
-    /// 有声书「正文」页的文字：用原章节地址跑正文规则（音频模式是播放时才改写的）。
+    /// 有声书「正文」页的文字：用原章节地址跑正文规则（音频模式是播放时才改写的），
+    /// 再走阅读器同一套解析（图片/段评/`<img data:...>` 都会被过滤成图片块丢掉）。
     private func audioChapterParagraphs() async -> [String] {
         guard chapters.indices.contains(index),
               let source = store.source(for: book.origin) else { return [] }
         guard let raw = try? await WebBook.rawContentWithBookInfoHealing(
             source: source, book: book, chapter: chapters[index]) else { return [] }
-        return raw.split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        let chapter = chapters[index]
+        let content = ReaderChapterParser.content(raw: raw, isVolume: chapter.isVolume,
+                                                 replacement: bodyReplacement,
+                                                 imageDecode: imageDecodeHook(for: chapter))
+        return content.blocks.compactMap { block in
+            guard case .paragraph(let text, _, _) = block else { return nil }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
     }
 
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
