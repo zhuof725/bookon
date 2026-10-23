@@ -93,6 +93,49 @@ enum DiscoverRegression {
         check(DiscoverCatalog.controlTitle("源站") == "源站", "发现：短标题不改动")
         check(DiscoverCatalog.controlTitle("🔍搜索") == "搜索", "发现：按钮标题去图标")
         check(!DiscoverCatalog.controlTitle("💭").isEmpty, "发现：纯图标标题回落为原串不返回空")
+
+        // 3d-3. 控件集合：三类控件分开放，值取默认；重复标题只留一条
+        let controlSet = SourceControlSet(kinds: [
+            SourceDiagnostics.ExploreKind(title: "☃关键词💭：书名/作者", url: nil, type: "text"),
+            SourceDiagnostics.ExploreKind(title: "🔍搜索", url: nil, type: "button"),
+            SourceDiagnostics.ExploreKind(title: "性别", url: nil, type: "select",
+                                          chars: ["♂️男频", "♀️女频"], defaultValue: "♀️女频"),
+            SourceDiagnostics.ExploreKind(title: "性别", url: nil, type: "select",
+                                          chars: ["♂️男频", "♀️女频"], defaultValue: "♀️女频"),
+            SourceDiagnostics.ExploreKind(title: "我的书架", url: "/shelf")
+        ])
+        check(controlSet.texts.count == 1 && controlSet.buttons.count == 1,
+              "控件：输入与按钮各一条")
+        check(controlSet.selects.count == 1, "控件：重复标题只留一条")
+        check(controlSet.values["性别"] == "♀️女频", "控件：下拉默认值取书源给的 default")
+        check(controlSet.keyword.isEmpty, "控件：没有输入时关键词为空")
+        check(SourceControlSet(kinds: []).isEmpty, "控件：没有控件时为空集")
+        check(SourceControlSet.isRefreshOnly(SourceDiagnostics.ExploreKind(
+                title: "🔁", url: nil, type: "button", action: "java.refreshExplore()")),
+              "控件：纯刷新按钮识别")
+        check(!SourceControlSet.isRefreshOnly(SourceDiagnostics.ExploreKind(
+                title: "性别", url: nil, type: "select",
+                action: "setConfigs.call(this,{gender:'boy'}); java.refreshExplore()")),
+              "控件：写配置的下拉不算纯刷新")
+
+        // 3d-4. 可选取分类分组：控件项去掉，分组标题保留
+        let mixedKinds = [
+            SourceDiagnostics.ExploreKind(title: "☃关键词", url: nil, type: "text"),
+            SourceDiagnostics.ExploreKind(title: "性别", url: nil, type: "select", chars: ["男", "女"]),
+            SourceDiagnostics.ExploreKind(title: "男频榜单", url: nil),
+            SourceDiagnostics.ExploreKind(title: "月票榜单", url: "/a"),
+            SourceDiagnostics.ExploreKind(title: "畅销榜单", url: "/b"),
+            SourceDiagnostics.ExploreKind(title: "女频榜单", url: nil),
+            SourceDiagnostics.ExploreKind(title: "月票榜单", url: "/c")
+        ]
+        let selectable = DiscoverCatalog.selectableKindSections(mixedKinds)
+        check(selectable.count == 2, "可选取分类：切成两组")
+        check(selectable[0].header == "男频榜单" && selectable[0].items.count == 2,
+              "可选取分类：控件项不进网格")
+        check(selectable[1].header == "女频榜单" && selectable[1].items.count == 1,
+              "可选取分类：同名分类分属不同组")
+        check(selectable.flatMap(\.items).allSatisfy { !($0.url ?? "").isEmpty },
+              "可选取分类：全部带网址")
         check(DiscoverCatalog.isDecorativeControlTitle("██████ 男 生 ██████"), "发现：装饰性控件标题识别")
         check(DiscoverCatalog.isDecorativeControlTitle("■■■■■■■■ 男 生 ■■■■■■■■"), "发现：真实七猫横幅识别")
         check(DiscoverCatalog.isDecorativeControlTitle("████████████████"), "发现：纯方块横幅识别")

@@ -547,7 +547,7 @@ struct DiscoverCurveSection: View {
             .frame(maxWidth: .infinity)
             .frame(height: stageHeight)
             .contentShape(Rectangle())
-            .gesture(swipe)
+            .simultaneousGesture(swipe)
 
             // 当前书名单独放下面，宽度不受卡片限制
             if let current {
@@ -598,16 +598,19 @@ struct DiscoverCurveSection: View {
     }
 
     private var swipe: some Gesture {
-        DragGesture()
+        // 只在横向明显时跟手；纵向留给外层 ScrollView，否则手指落在卡上就滑不动页面
+        DragGesture(minimumDistance: 10)
             .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 // 拖拽时轻微跟手，松手再吸附
                 dragX = value.translation.width * 0.35
             }
             .onEnded { value in
                 let moved = value.translation.width
+                let vertical = abs(value.translation.height)
                 var next = index
-                if moved < -36, index < items.count - 1 { next = index + 1 }
-                if moved > 36, index > 0 { next = index - 1 }
+                if abs(moved) > vertical, moved < -36, index < items.count - 1 { next = index + 1 }
+                if abs(moved) > vertical, moved > 36, index > 0 { next = index - 1 }
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
                     index = next
                     dragX = 0
@@ -652,7 +655,7 @@ struct DiscoverDeckSection: View {
             .frame(maxWidth: .infinity)
             .frame(height: stageHeight)
             .contentShape(Rectangle())
-            .gesture(swipe)
+            .simultaneousGesture(swipe)
 
             if let current {
                 VStack(spacing: 3) {
@@ -734,11 +737,14 @@ struct DiscoverDeckSection: View {
     }
 
     private var swipe: some Gesture {
-        DragGesture()
+        // 横向才翻卡，纵向交还给外层 ScrollView（手指落在书上也能上下滑页面）
+        DragGesture(minimumDistance: 10)
             .onEnded { value in
+                let moved = value.translation.width
+                guard abs(moved) > abs(value.translation.height) else { return }
                 var next = index
-                if value.translation.width < -36, index < items.count - 1 { next = index + 1 }
-                if value.translation.width > 36, index > 0 { next = index - 1 }
+                if moved < -36, index < items.count - 1 { next = index + 1 }
+                if moved > 36, index > 0 { next = index - 1 }
                 guard next != index else { return }
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { index = next }
             }

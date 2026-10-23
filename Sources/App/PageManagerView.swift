@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - 页面管理
 
@@ -143,11 +144,11 @@ struct PageManagerView: View {
             dismiss()
         } label: {
             HStack(spacing: 12) {
-                Text(page.icon)
-                    .font(.system(size: 22))
+                PageIconView(page: page, size: 22)
                     .frame(width: 34, height: 34)
                     .background(palette.primary.opacity(0.06),
                                 in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(page.name)
@@ -179,21 +180,23 @@ struct PageManagerView: View {
 // MARK: - 页面外观（图标 / 名称）
 
 /// 改一个页面的图标和名称。对应参考图三最上面「页面外观」那两块。
+///
+/// 图标只从相册选：内置的那组 emoji 已经去掉，选完的图片裁成方形存到
+/// `PageIconStore`，配置里只留文件名。
 struct PageAppearanceEditor: View {
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft: CustomDiscoverPage
+    @State private var photo: PhotosPickerItem?
+    @State private var importing = false
+    @State private var errorText: String?
     var onSave: (CustomDiscoverPage) -> Void
 
     init(page: CustomDiscoverPage, onSave: @escaping (CustomDiscoverPage) -> Void) {
         _draft = State(initialValue: page)
         self.onSave = onSave
     }
-
-    /// 常用图标，够表达页面用途即可，不追求全量 emoji 面板。
-    private let icons = ["📄", "🏠", "📚", "🔥", "⭐️", "🎯", "🌙", "☀️",
-                         "🧭", "🎬", "🎧", "🪐", "🍀", "🐱", "🗂", "✨"]
 
     var body: some View {
         NavigationStack {
@@ -207,30 +210,44 @@ struct PageAppearanceEditor: View {
                 }
 
                 Section {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
-                                             count: 8), spacing: 10) {
-                        ForEach(icons, id: \.self) { icon in
-                            Button {
-                                draft.icon = icon
-                            } label: {
-                                Text(icon)
-                                    .font(.system(size: 22))
-                                    .frame(width: 34, height: 34)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .fill(draft.icon == icon
-                                                  ? palette.accent.opacity(0.16)
-                                                  : palette.primary.opacity(0.04))
-                                    }
+                    HStack(spacing: 14) {
+                        iconPreview
+                        VStack(alignment: .leading, spacing: 6) {
+                            PhotosPicker(selection: $photo, matching: .images) {
+                                Label(draft.hasIconImage ? "更换图标" : "从相册选择图标",
+                                      systemImage: "photo.on.rectangle")
+                                    .appFont(.system(size: 15, weight: .semibold))
                             }
-                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("pageAppearance.pick")
+
+                            if draft.hasIconImage {
+                                Button(role: .destructive) {
+                                    PageIconStore.remove(named: draft.iconImageFile)
+                                    draft.iconImageFile = nil
+                                } label: {
+                                    Text("移除图标")
+                                        .appFont(.system(size: 13))
+                                }
+                                .accessibilityIdentifier("pageAppearance.clearIcon")
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
                     .padding(.vertical, 4)
+
+                    if importing {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("正在导入…").appFont(.footnote).foregroundStyle(palette.secondary)
+                        }
+                    }
+                    if let errorText {
+                        Text(errorText).appFont(.footnote).foregroundStyle(.red)
+                    }
                 } header: {
                     Text("图标")
                 } footer: {
-                    Text("图标会显示在首页左上角的页面切换按钮上。")
+                    Text("图标显示在首页左上角的页面切换按钮上；选方形图片效果最好。")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -251,8 +268,46 @@ struct PageAppearanceEditor: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
+                    .disabled(importing)
                 }
             }
+            .task(id: photo) { await importPhoto() }
+        }
+    }
+
+    /// 圆形预览：和首页胶囊里的观感一致。
+    private var iconPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(palette.primary.opacity(0.06))
+            PageIconView(page: draft, size: 34, corner: 0)
+        }
+        .frame(width: 52, height: 52)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func importPhoto() async {
+        guard let photo else { return }
+        importing = true
+        errorText = nil
+        defer { importing = false }
+        do {
+            guard let data = try await photo.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                errorText = "这张图片读不出来，换一张试试。"
+                return
+            }
+            try Task.checkCancellation()
+            guard let name = PageIconStore.save(image: image, pageID: draft.id) else {
+                errorText = "图标保存失败，换个位置试试。"
+                return
+            }
+            // 换了新图，旧文件不再需要
+            if let old = draft.iconImageFile, old != name { PageIconStore.remove(named: old) }
+            draft.iconImageFile = name
+        } catch is CancellationError {
+        } catch {
+            errorText = error.localizedDescription
         }
     }
 }

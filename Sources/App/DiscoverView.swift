@@ -222,6 +222,10 @@ struct DiscoverSourceView: View {
     private var hasControls: Bool {
         !selectControls.isEmpty || !textControls.isEmpty || !buttonControls.isEmpty
     }
+    /// 列表里的顺序：下拉、输入、按钮（和参考图一致，按钮排最后）。
+    private var controlRows: [SourceDiagnostics.ExploreKind] {
+        selectControls + textControls + buttonControls
+    }
 
     private var allSections: [(header: String?, items: [SourceDiagnostics.ExploreKind])] {
         DiscoverCatalog.kindSections(kinds)
@@ -282,16 +286,8 @@ struct DiscoverSourceView: View {
 
             if hasControls {
                 Section {
-                    ForEach(Array(textControls.enumerated()), id: \.offset) { pair in
-                        textControlRow(pair.element)
-                            .independentGlassRow()
-                    }
-                    ForEach(Array(selectControls.enumerated()), id: \.offset) { pair in
-                        selectControlRow(pair.element)
-                            .independentGlassRow()
-                    }
-                    if !buttonControls.isEmpty {
-                        buttonControlRow
+                    ForEach(Array(controlRows.enumerated()), id: \.offset) { pair in
+                        controlRow(pair.element)
                             .independentGlassRow()
                     }
                     if applyingControl {
@@ -403,82 +399,32 @@ struct DiscoverSourceView: View {
         .contentShape(Rectangle())
     }
 
-    /// 下拉控件行：左边标题，右边当前值 + 上下箭头（和图二一致）。
-    private func selectControlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
-        let current = controlValues[control.title] ?? control.defaultValue ?? control.chars?.first ?? ""
-        return Menu {
-            ForEach(control.chars ?? [], id: \.self) { option in
-                Button {
-                    applyControl(control, value: option)
-                } label: {
-                    if current == option {
-                        Label(option, systemImage: "checkmark")
-                    } else {
-                        Text(option)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text(DiscoverCatalog.controlTitle(control.title))
-                    .appFont(.system(size: 15))
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text(current)
-                    .appFont(.system(size: 14))
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("discover.filter.\(control.title)")
-    }
-
-    /// 输入控件行：标题 + 输入框，回车提交 action。
-    private func textControlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
-        HStack(spacing: 8) {
-            Text(DiscoverCatalog.controlTitle(control.title))
-                .appFont(.system(size: 15))
-                .foregroundStyle(palette.primary)
-                .lineLimit(1)
-            Spacer(minLength: 6)
-            TextField("", text: Binding(
-                get: { controlValues[control.title] ?? "" },
-                set: { controlValues[control.title] = $0 }
-            ), prompt: Text("书源/作者").foregroundColor(palette.secondary))
-                .appFont(.system(size: 14))
-                .multilineTextAlignment(.trailing)
-                .submitLabel(.search)
-                .onSubmit { applyControl(control, value: controlValues[control.title] ?? "") }
-                .accessibilityIdentifier("discover.text.\(control.title)")
+    /// 一行控件：下拉 / 输入 / 按钮都交给共享的 SourceControlRow，
+    /// 和「选择分类」页保持同一套观感。
+    @ViewBuilder private func controlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
+        if (control.type ?? "").lowercased() == "button" {
+            SourceControlRow(control: control,
+                             value: .constant(""),
+                             onChange: { _ in },
+                             onTap: { applyControl(control, value: keywordValue) },
+                             disabled: applyingControl)
+                .padding(.vertical, 2)
+        } else {
+            SourceControlRow(control: control,
+                             value: Binding(
+                                get: { controlValues[control.title] ?? "" },
+                                set: { controlValues[control.title] = $0 }
+                             ),
+                             onChange: { applyControl(control, value: $0) },
+                             disabled: applyingControl)
+                .padding(.vertical, 2)
         }
     }
 
-    /// 按钮控件：搜索 / 刷新 / 登录 一类的操作，一行一个。
-    private var buttonControlRow: some View {
-        HStack(spacing: 10) {
-            ForEach(Array(buttonControls.enumerated()), id: \.offset) { pair in
-                Button {
-                    let keyword = textControls.first.flatMap { controlValues[$0.title] } ?? ""
-                    applyControl(pair.element, value: keyword)
-                } label: {
-                    Text(DiscoverCatalog.controlTitle(pair.element.title))
-                        .appFont(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.accent)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                        .background { ThemeSurface(shape: Capsule()) }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("discover.button.\(pair.element.title)")
-            }
-            Spacer(minLength: 0)
-        }
+    /// 关键词输入框的当前内容（按钮触发搜索时用）。
+    private var keywordValue: String {
+        guard let first = textControls.first else { return "" }
+        return controlValues[first.title] ?? ""
     }
 
     // MARK: 杂志布局（榜单平铺）

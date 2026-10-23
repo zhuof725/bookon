@@ -12,31 +12,40 @@ struct CustomDiscoverPage: Codable, Hashable, Identifiable {
     var name: String
     /// 页面上显示的表情/符号图标。
     var icon: String
+    /// 从相册选的自定义图标：只存文件名，图片本身在 Application Support/PageIcons 下。
+    /// 有值时优先显示这张图，`icon` 只在没有图片时兜底。
+    var iconImageFile: String? = nil
     var config: CustomDiscoverConfig
 
     init(id: String = UUID().uuidString,
          name: String = "空白页面",
          icon: String = "📄",
+         iconImageFile: String? = nil,
          config: CustomDiscoverConfig = CustomDiscoverConfig()) {
         self.id = id
         self.name = name
         self.icon = icon
+        self.iconImageFile = iconImageFile
         self.config = config
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, icon, config }
+    private enum CodingKeys: String, CodingKey { case id, name, icon, iconImageFile, config }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
         name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? "空白页面"
         icon = (try? c.decodeIfPresent(String.self, forKey: .icon)) ?? "📄"
+        iconImageFile = try? c.decodeIfPresent(String.self, forKey: .iconImageFile)
         config = (try? c.decodeIfPresent(CustomDiscoverConfig.self, forKey: .config))
             ?? CustomDiscoverConfig()
     }
 
     /// 组件数：页面上有几个板块。
     var componentCount: Int { config.entries.count }
+
+    /// 有没有自定义图标图。
+    var hasIconImage: Bool { (iconImageFile?.isEmpty == false) }
 }
 
 // MARK: - 全部页面

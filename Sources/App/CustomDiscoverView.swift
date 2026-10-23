@@ -190,8 +190,7 @@ struct CustomDiscoverView: View {
             showPageManager = true
         } label: {
             HStack(spacing: 7) {
-                Text(model.pages.current.icon)
-                    .font(.system(size: 15))
+                PageIconView(page: model.pages.current, size: 15, corner: 4)
                 Text(model.pages.current.name)
                     .appFont(.system(size: 14, weight: .semibold))
                     .foregroundStyle(palette.primary)

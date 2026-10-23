@@ -25,6 +25,11 @@ struct AddBoardPage: View {
     @State private var picked: Set<String> = []
     /// 切换书源/分类时给一点淡入，避免内容「啪」地跳出来
     @State private var contentVisible = false
+    /// 书源自己的筛选控件（性别 / 模式 / 源站 / 晋江标签…）与当前值
+    @State private var controls = SourceControlSet()
+    @State private var applyingControl = false
+    @State private var showLogin = false
+    @State private var searchRequest: SourceSearchRequest?
 
     private var sources: [BookSource] { DiscoverCatalog.explorableSources(store.sources) }
 
@@ -57,6 +62,7 @@ struct AddBoardPage: View {
                 }
                 if template.dataSource == .bookList {
                     sourceSection
+                    controlSection
                     kindSection
                 }
             }
@@ -70,6 +76,14 @@ struct AddBoardPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             addBar
+        }
+        .sheet(isPresented: $showLogin) {
+            if let source = selectedSource { SourceLoginView(source: source) }
+        }
+        .navigationDestination(item: $searchRequest) { request in
+            if let source = selectedSource {
+                DiscoverSourceSearchView(source: source, key: request.key)
+            }
         }
         .task {
             if !templateReady {
@@ -184,6 +198,114 @@ struct AddBoardPage: View {
                 }
                 .accessibilityIdentifier("add.sourceMenu")
             }
+        }
+    }
+
+    // MARK: 筛选（书源自己的控件）
+
+    /// 书源发现规则里的控件：性别 / 模式 / 源站 / 晋江标签 这类下拉，
+    /// 关键词输入，以及搜索 / 刷新 / 登录按钮。改一个就执行它的 action
+    /// 再重读分类，下面的网格会跟着换一批。
+    private var controlSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !controls.isEmpty {
+                HStack(spacing: 6) {
+                    sectionTitle("筛选")
+                    if applyingControl {
+                        ProgressView().controlSize(.mini)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                VStack(spacing: 0) {
+                    ForEach(Array(rowControls.enumerated()), id: \.offset) { pair in
+                        controlRow(pair.element)
+                        if pair.offset < rowControls.count - 1 {
+                            Divider().opacity(0.35).padding(.leading, 14)
+                        }
+                    }
+                }
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(palette.primary.opacity(0.028))
+                }
+                .disabled(applyingControl)
+            }
+        }
+    }
+
+    /// 行里依次排：下拉、输入、按钮（按钮放最后，和参考图一致）。
+    private var rowControls: [SourceDiagnostics.ExploreKind] {
+        controls.selects + controls.texts + controls.buttons
+    }
+
+    @ViewBuilder private func controlRow(_ control: SourceDiagnostics.ExploreKind) -> some View {
+        let type = (control.type ?? "").lowercased()
+        if type == "button" {
+            SourceControlRow(control: control,
+                             value: .constant(""),
+                             onChange: { _ in },
+                             onTap: { runButton(control) },
+                             disabled: applyingControl)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 46)
+        } else {
+            SourceControlRow(control: control,
+                             value: Binding(
+                                get: { controls.values[control.title] ?? "" },
+                                set: { controls.values[control.title] = $0 }
+                             ),
+                             onChange: { newValue in runControl(control, value: newValue) },
+                             disabled: applyingControl)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 46)
+        }
+    }
+
+    /// 下拉/输入变化：执行 action，再重读分类。
+    private func runControl(_ control: SourceDiagnostics.ExploreKind, value: String) {
+        guard let source = selectedSource, !applyingControl else { return }
+        controls.values[control.title] = value
+        applyingControl = true
+        // 闭包里只带值类型，别把整个 View 拖进 detached 任务
+        let snapshot = controls.values
+        Task {
+            let ui = await Task.detached(priority: .userInitiated) {
+                SourceControlSet.apply(control, value: value, allValues: snapshot, source: source)
+            }.value
+            if let ui { handle(ui) }
+            await loadKinds(force: true, keepSelection: true)
+            applyingControl = false
+        }
+    }
+
+    /// 按钮：搜索用当前关键词，其它按钮执行自己的 action。
+    private func runButton(_ control: SourceDiagnostics.ExploreKind) {
+        guard let source = selectedSource, !applyingControl else { return }
+        applyingControl = true
+        let keyword = controls.keyword
+        let snapshot = controls.values
+        Task {
+            let ui = await Task.detached(priority: .userInitiated) {
+                SourceControlSet.apply(control, value: keyword, allValues: snapshot, source: source)
+            }.value
+            if let ui { handle(ui) }
+            if !SourceControlSet.isRefreshOnly(control) {
+                await loadKinds(force: true, keepSelection: true)
+            }
+            applyingControl = false
+        }
+    }
+
+    /// 脚本想打开的界面：登录页 / 书源内搜索。
+    private func handle(_ action: SourceUiAction) {
+        switch action {
+        case .open(let ui, _, _):
+            if ui == "login" { showLogin = true }
+        case .search(let key, _):
+            let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            searchRequest = SourceSearchRequest(key: trimmed)
         }
     }
 
@@ -387,6 +509,7 @@ struct AddBoardPage: View {
             kinds = []
             picked = []
             kindsError = nil
+            controls = SourceControlSet()
             contentVisible = false
         }
         Task { await loadKinds(force: true) }
@@ -398,14 +521,17 @@ struct AddBoardPage: View {
         await loadKinds()
     }
 
-    private func loadKinds(force: Bool = false) async {
+    /// 读取书源的发现分类与控件。
+    /// - Parameter keepSelection: 改筛选后重读时保留已选分类（书源分类会整组换掉时，
+    ///   保留下来的那几条仍然有效），切书源时不保留。
+    private func loadKinds(force: Bool = false, keepSelection: Bool = false) async {
         guard let source = selectedSource else { return }
         if !force, !kinds.isEmpty {
             contentVisible = true
             return
         }
-        if let cached = DiscoverKindsCache.cached(source: source.bookSourceUrl), !cached.isEmpty {
-            kinds = cached
+        if !keepSelection, let cached = DiscoverKindsCache.cached(source: source.bookSourceUrl), !cached.isEmpty {
+            apply(kinds: cached)
             kindsLoading = false
             contentVisible = true
             return
@@ -420,13 +546,36 @@ struct AddBoardPage: View {
 
         // 只接受当前书源的结果：快速切源时旧请求可能晚到
         guard sourceUrl == source.bookSourceUrl else { return }
-        kinds = result
+        apply(kinds: result, keepSelection: keepSelection)
         if let err = DiscoverCatalog.kindError(result) {
             kindsError = err
         } else if !result.isEmpty {
             DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
         }
         withAnimation(.easeOut(duration: 0.22)) { contentVisible = true }
+    }
+
+    /// 写入分类与控件；已选分类如果在新结果里还在就保留。
+    private func apply(kinds result: [SourceDiagnostics.ExploreKind], keepSelection: Bool = false) {
+        kinds = result
+        let fresh = SourceControlSet(kinds: result)
+        if keepSelection {
+            // 保留用户刚改过的值（书源脚本重启后可能又把默认值写回来）
+            var merged = fresh
+            for (key, value) in controls.values where merged.values[key] != nil {
+                merged.values[key] = value
+            }
+            controls = merged
+        } else {
+            controls = fresh
+        }
+        guard keepSelection else { return }
+        let valid = Set(result.compactMap { kind -> String? in
+            guard (kind.type ?? "").isEmpty else { return nil }
+            guard let url = kind.url, !url.isEmpty else { return nil }
+            return url
+        })
+        picked = picked.filter { valid.contains($0) }
     }
 
     private func add() {
