@@ -28,7 +28,7 @@ struct AloudVoiceSheet: View {
     /// 当前书的音色可用性探测（按这本书的章节，结果按书缓存）。
     private func sourceProbe(for source: BookSource) -> SourceToneList.Probe? {
         guard let book = currentBook, book.origin == source.bookSourceUrl,
-              let chapter = currentChapter else { return nil }
+              let chapter = currentChapter, SourceToneAudio.canProbe(source: source) else { return nil }
         return SourceToneList.Probe(
             cached: { tone in
                 SourceToneAudio.cachedAvailability(bookUrl: book.bookUrl, tone: tone)

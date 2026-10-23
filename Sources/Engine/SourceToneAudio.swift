@@ -47,6 +47,7 @@ enum SourceToneAudio {
     /// 这一章在「音频模式」下的地址：把章节链接里的文字模式标记换掉。
     /// 没有任何可改写的标记时返回 nil（说明这个源没有音频变体）。
     static func audioVariant(of chapter: BookChapter) -> BookChapter? {
+        if let dataVariant = dataChapterAudioVariant(of: chapter) { return dataVariant }
         var url = chapter.url
         var changed = false
         for pair in [("ys_module=3", "ys_module=2"), ("ys_module=13", "ys_module=2")] {
@@ -71,6 +72,40 @@ enum SourceToneAudio {
         return BookChapter(url: url, title: chapter.title, index: chapter.index,
                            isVolume: chapter.isVolume, updateTime: chapter.updateTime,
                            isVip: chapter.isVip)
+    }
+
+    /// 聚合源（书山聚合这类）的章节地址是 `data:chapterUrl;base64,<参数 JSON>,{…}`，
+    /// 把里面的 `source: 番茄小说` 改成 `番茄听书` 就会走它的音频分支。
+    private static func dataChapterAudioVariant(of chapter: BookChapter) -> BookChapter? {
+        let prefix = "data:chapterUrl;base64,"
+        let url = chapter.url
+        guard url.hasPrefix(prefix) else { return nil }
+        let rest = String(url.dropFirst(prefix.count))
+        let parts = rest.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let encoded = parts.first,
+              let data = Data(base64Encoded: String(encoded)),
+              var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let source = (dict["source"] as? String) ?? ""
+        guard ["番茄小说", "番茄短剧", "番茄畅听", "番茄听书"].contains(source) else { return nil }
+        if source == "番茄小说" || source == "番茄短剧" { dict["source"] = "番茄听书" }
+        guard dict["source"] as? String != source,
+              JSONSerialization.isValidJSONObject(dict),
+              let newData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        let rebuilt = prefix + newData.base64EncodedString()
+            + (parts.count > 1 ? "," + String(parts[1]) : "")
+        return BookChapter(url: rebuilt, title: chapter.title, index: chapter.index,
+                           isVolume: chapter.isVolume, updateTime: chapter.updateTime,
+                           isVip: chapter.isVip)
+    }
+
+    /// 能不能用 `/api/content` 探测音色可用性：只有书源地址本身就是番茄系 API 主机才行，
+    /// 聚合源的 bookSourceUrl 不是接口地址，探测会全是失败。
+    static func canProbe(source: BookSource) -> Bool {
+        guard let url = URL(string: source.bookSourceUrl),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return false
+        }
+        return (source.jsLib ?? "").contains("_getTones")
     }
 
     /// 让书源用自己的正文规则算这一章的音频地址（含当前音色）。
