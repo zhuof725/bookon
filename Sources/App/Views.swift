@@ -2092,7 +2092,8 @@ struct ReaderView: View {
         guard chapters.indices.contains(target), contentRequestID == requestID else { return }
         let chapter = chapters[target]
         if !store.isLocal(book), let source = store.source(for: book.origin),
-           SourceToneAudio.isActive(bookUrl: book.bookUrl)
+           BookKindStore.saved(bookUrl: book.bookUrl) == .audio
+               || SourceToneAudio.isActive(bookUrl: book.bookUrl)
                || AudioChapter.isAudio(source: source, chapter: chapter) {
             // 音频章节：链接就是音频直链，不走正文抓取与排版，直接播放。
             index = target
