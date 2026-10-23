@@ -49,12 +49,19 @@ struct BookDetailView: View {
             detectedKind = saved
             return
         }
-        guard let chapter = chapters.first(where: { !$0.isVolume && !$0.url.isEmpty }) else { return }
+        // 开篇常是「片花/序章/公告」这类文字章，只看第一章会误判成文本；
+        // 取前三个可读章节里第一个识别为非文本的结果。
+        let readable = chapters.filter { !$0.isVolume && !$0.url.isEmpty }.prefix(3)
+        guard !readable.isEmpty else { return }
         detectingKind = true
         defer { detectingKind = false }
-        guard let raw = try? await WebBook.rawContent(source: source, chapter: chapter, book: book),
-              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let kind = BookKind.detect(inContent: raw)
+        var kind: BookKind = .text
+        for chapter in readable {
+            guard let raw = try? await WebBook.rawContent(source: source, chapter: chapter, book: book),
+                  !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            let scanned = BookKind.detect(inContent: raw)
+            if scanned != .text { kind = scanned; break }
+        }
         BookKindStore.save(kind, bookUrl: book.bookUrl)
         detectedKind = kind
     }

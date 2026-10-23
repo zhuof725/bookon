@@ -1018,22 +1018,40 @@ struct ReaderView: View {
             BookKindStore.save(.audio, bookUrl: book.bookUrl)
             return false
         }
-        guard let raw = try? await ChapterContentLoader.content(source: source, book: book,
-                                                               chapter: chapters[first],
-                                                               nextChapterURL: nil) else { return false }
-        let kind = BookKind.detect(inContent: raw)
+        // 开篇常常是「片花/序章/公告」这类文字章，光看第一章会把漫画/音频书误判成文本；
+        // 取前几章里第一个能识别的非文本结果。
+        var kind: BookKind = .text
+        var matched = first
+        var matchedRaw: String?
+        for offset in 0..<3 {
+            guard let index = readableIndex(from: first + offset, direction: 1) else { break }
+            guard chapters.indices.contains(index) else { break }
+            guard let raw = try? await ChapterContentLoader.content(source: source, book: book,
+                                                                   chapter: chapters[index],
+                                                                   nextChapterURL: nil) else { continue }
+            let scanned = BookKind.detect(inContent: raw)
+            if scanned != .text {
+                kind = scanned; matched = index; matchedRaw = raw
+                break
+            }
+        }
         BookKindStore.save(kind, bookUrl: book.bookUrl)
         mangaMode = kind == .image
         if mangaMode {
-            CrashReporter.note("首章正文识别为漫画，进入漫画阅读 \(book.name)")
+            CrashReporter.note("正文识别为漫画，进入漫画阅读 \(book.name)")
+            if matched != first {
+                index = matched
+                store.updateProgress(book, index: matched, title: chapters[matched].title)
+            }
             return false
         }
         guard kind == .audio else { return false }
-        CrashReporter.note("首章正文识别为音频，进入有声书播放 \(book.name)")
-        ChapterPrecacheManager.shared.updateCurrentIndex(first)
-        store.updateProgress(book, index: first, title: chapters[first].title)
-        noteReadingChapter(first)
-        await beginAudioChapter(first, source: source, content: raw)
+        CrashReporter.note("正文识别为音频，进入有声书播放 \(book.name)")
+        index = matched
+        ChapterPrecacheManager.shared.updateCurrentIndex(matched)
+        store.updateProgress(book, index: matched, title: chapters[matched].title)
+        noteReadingChapter(matched)
+        await beginAudioChapter(matched, source: source, content: matchedRaw)
         loading = false
         return true
     }
