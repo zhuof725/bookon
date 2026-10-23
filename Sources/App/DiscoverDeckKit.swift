@@ -543,10 +543,11 @@ struct DeckCarousel<Card: View>: View {
                                     .offset(x: fanOut ? phase.value * fanSpread : 0,
                                             y: yDrift * depth)
                                     .opacity(1 - (1 - opacityFloor) * depth)
-                                    // 越靠近中心越靠前，两侧的卡压在后面
-                                    .zIndex(-depth)
                             }
                             .frame(width: step, height: stageHeight)
+                            // 层级只能在 VisualEffect 外面设（里面没有 zIndex）。
+                            // 用「离当前页码几个」算：正中的卡压在最上层。
+                            .zIndex(-Double(abs(i - (index ?? 0))))
                             .id(i)
                     }
                 }
