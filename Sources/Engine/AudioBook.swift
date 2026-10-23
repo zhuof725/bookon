@@ -150,10 +150,20 @@ enum AudioChapter {
     /// 章节的实际播放地址：
     /// - 正文规则为空 → 章节链接（原版 getContentAwait 的短路）；
     /// - 正文规则非空 → 抓章节页跑规则，结果解析成地址；解析不出来时退回章节链接（如果是直链）。
-    static func playURLs(source: BookSource, book: Book, chapter: BookChapter) async throws -> [String] {
+    /// - Parameter content: 已经抓好的正文规则结果（识别阅读模式时顺手拿到的），
+    ///   传了就省一次请求。
+    static func playURLs(source: BookSource, book: Book, chapter: BookChapter,
+                         content: String? = nil) async throws -> [String] {
         let chapterURL = chapter.url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard hasContentRule(source) else {
             return chapterURL.isEmpty ? [] : [chapterURL]
+        }
+        if let content {
+            let prefetched = playURLs(fromContent: content).compactMap { absolute($0, base: chapterURL) }
+            if !prefetched.isEmpty {
+                var seen = Set<String>()
+                return prefetched.filter { seen.insert($0).inserted }
+            }
         }
         // 音频源没有正文可分页，也不该走「自动识别正文容器」兜底。
         do {

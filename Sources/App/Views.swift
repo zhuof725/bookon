@@ -953,7 +953,7 @@ struct ReaderView: View {
         CrashReporter.note("打开阅读 \(book.name)")
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
-        // 书源声明是图片源，或之前从正文识别出「这是漫画」：直接进漫画阅读器。
+        // 先按书源声明/已缓存的结果定模式，没结论的等目录出来再看正文。
         mangaMode = MangaBook.isManga(source: s) || BookKindStore.saved(bookUrl: book.bookUrl) == .image
         index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         if let c = store.cachedToc(book), !c.isEmpty {
@@ -984,6 +984,9 @@ struct ReaderView: View {
             error = "目录中没有可读章节"; loading = false; return
         }
         index = first
+        // 书源没声明类型、也没有缓存：先看一眼首章正文，别把漫画当文字排版打开。
+        // （详情页已经识别过的书这里命中缓存，不会重复抓。）
+        let audioStarted = await resolveReadingMode(source: s, first: first)
         if mangaMode {
             // 漫画：正文是图片列表，不走进度条/分页，直接交给漫画阅读器。
             CrashReporter.note("进入漫画阅读 \(book.name) 共\(chapters.count)章 起始第\(first + 1)章")
@@ -992,7 +995,47 @@ struct ReaderView: View {
             loading = false
             return
         }
+        if audioStarted { return }
         await loadInitialChapter()
+    }
+
+    /// 决定这本书用哪种阅读器：书源声明的类型 → 已识别的缓存 → 抓首章正文识别。
+    /// 文本正文缓存是共享的，这里抓过的章阅读器不会重复抓。
+    /// 返回 true 表示已经由有声书播放器接管，调用方不要再走正文加载。
+    private func resolveReadingMode(source: BookSource, first: Int) async -> Bool {
+        if mangaMode { return false }  // 启动时已经按书源类型/缓存定了漫画
+        if let declared = BookKind.from(sourceType: source.bookSourceType) {
+            if declared == .image { BookKindStore.save(.image, bookUrl: book.bookUrl); mangaMode = true }
+            return false
+        }
+        if let cached = BookKindStore.saved(bookUrl: book.bookUrl) {
+            mangaMode = cached == .image
+            return false
+        }
+        guard chapters.indices.contains(first) else { return false }
+        // 章节链接本身就是音频直链：交给 loadContent 的音频分支，别把音频文件当正文下载。
+        if AudioChapter.isDirectAudioURL(chapters[first].url) {
+            BookKindStore.save(.audio, bookUrl: book.bookUrl)
+            return false
+        }
+        guard let raw = try? await ChapterContentLoader.content(source: source, book: book,
+                                                               chapter: chapters[first],
+                                                               nextChapterURL: nil) else { return false }
+        let kind = BookKind.detect(inContent: raw)
+        BookKindStore.save(kind, bookUrl: book.bookUrl)
+        mangaMode = kind == .image
+        if mangaMode {
+            CrashReporter.note("首章正文识别为漫画，进入漫画阅读 \(book.name)")
+            return false
+        }
+        guard kind == .audio else { return false }
+        CrashReporter.note("首章正文识别为音频，进入有声书播放 \(book.name)")
+        ChapterPrecacheManager.shared.updateCurrentIndex(first)
+        store.updateProgress(book, index: first, title: chapters[first].title)
+        noteReadingChapter(first)
+        await beginAudioChapter(first, source: source, content: raw)
+        loading = false
+        return true
     }
 
     /// 重新抓取目录：目录规则用 `@get:{…}` 取详情页 `@put` 变量（漫画 comic_id）时，
@@ -1676,7 +1719,7 @@ struct ReaderView: View {
     /// 播放地址与原版一致：书源有正文规则时跑规则取结果（音频源常常把真正的
     /// m4a 地址藏在接口 JSON 里，章节链接只是个页面），没有正文规则才直接用
     /// 章节链接。规则可能返回多段地址，播放器按顺序播完才算整章结束。
-    private func beginAudioChapter(_ target: Int, source: BookSource) async {
+    private func beginAudioChapter(_ target: Int, source: BookSource, content: String? = nil) async {
         guard chapters.indices.contains(target) else { return }
         let chapter = chapters[target]
         bookAudio.onFinish = {
@@ -1688,7 +1731,8 @@ struct ReaderView: View {
         bookAudio.onRemotePrevious = { audioPreviousChapter() }
         bookAudio.onPlaybackFailed = { audioPlaybackFailed() }
         do {
-            let urls = try await AudioChapter.playURLs(source: source, book: book, chapter: chapter)
+            let urls = try await AudioChapter.playURLs(source: source, book: book, chapter: chapter,
+                                                       content: content)
             try Task.checkCancellation()
             guard chapters.indices.contains(target), index == target else { return }
             guard !urls.isEmpty else {

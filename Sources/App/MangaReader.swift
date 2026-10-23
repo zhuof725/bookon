@@ -51,6 +51,8 @@ final class MangaSession: ObservableObject {
         currentChapter = min(max(start, 0), max(chapters.count - 1, 0))
         currentPage = max(page, 0)
         chapterTitle = chapters.indices.contains(currentChapter) ? chapters[currentChapter].title : ""
+        // 图片同样是「书源的请求」：原版下载图片时带书源 header、并按 imageDecode 解密。
+        MangaImageLoader.shared.configure(source: source)
     }
 
     /// 打开漫画：先加载当前章，然后按原版取「当前章 ± 1」。
@@ -75,6 +77,7 @@ final class MangaSession: ObservableObject {
     func stop() {
         for task in tasks.values { task.cancel() }
         tasks.removeAll()
+        MangaImageLoader.shared.configure(source: nil)
     }
 
     // MARK: 可见页回报（滚动容器 → 会话）

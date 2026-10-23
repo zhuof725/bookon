@@ -4,8 +4,13 @@ import Foundation
 /// 脚本返回解密后的字节。解密失败时保留原图，避免整本书没有封面。
 enum SourceImageDecoder {
     static func decode(_ data: Data, src: String, source: BookSource?) -> Data {
-        guard let source,
-              let script = source.coverDecodeJs?.trimmingCharacters(in: .whitespacesAndNewlines),
+        decode(data, src: src, script: source?.coverDecodeJs, source: source)
+    }
+
+    /// 正文图片解密（原版 `ImageUtils.decode(isCover = false)` 用的是
+    /// `ruleContent.imageDecode`；封面才用 `coverDecodeJs`）。
+    static func decode(_ data: Data, src: String, script: String?, source: BookSource?) -> Data {
+        guard let script = script?.trimmingCharacters(in: .whitespacesAndNewlines),
               !script.isEmpty else { return data }
         let value = JSEngine.shared.eval(script, result: SourceCrypto.toSigned(data),
                                          baseUrl: src, vars: ["src": src],

@@ -53,6 +53,32 @@ final class MangaImageLoader {
     private var tasks: [String: Task<Void, Never>] = [:]
     private var callbacks: [String: [(Double) -> Void]] = [:]
     private var completions: [String: [(UIImage?) -> Void]] = [:]
+    /// 当前漫画书源的请求头（原版 `AnalyzeUrl(src, source = bookSource)` 下载图片时
+    /// 带的就是书源 header：UA/Referer/Cookie 缺一个，番茄系图床就会 403）。
+    private var requestHeaders: [String: String] = [:]
+    /// 正文图片解密规则（原版 `ruleContent.imageDecode`）。
+    private var imageDecodeScript: String?
+    private var decodeSource: BookSource?
+
+    /// 进入某本漫画前设置书源；退出时传 nil 清掉，避免串到别的书。
+    func configure(source: BookSource?) {
+        decodeSource = source
+        imageDecodeScript = source?.ruleContent?.imageDecode
+        guard let source else {
+            requestHeaders = [:]
+            return
+        }
+        var headers = AnalyzeUrl.headerFields(source.header, key: nil, page: 1,
+                                              baseUrl: source.bookSourceUrl,
+                                              context: RuleContext(source: source),
+                                              jsLib: source.jsLib)
+        if headers["User-Agent"] == nil, headers["user-agent"] == nil {
+            headers["User-Agent"] = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        }
+        requestHeaders = headers
+        // 换书源后旧的失败标记不该继续挂着。
+        lastFailed.removeAll()
+    }
 
     /// 屏幕物理宽度；原版 loadManga 的 override(displayMetrics.widthPixels, SIZE_ORIGINAL)。
     private var targetPixelWidth: CGFloat {
@@ -102,8 +128,12 @@ final class MangaImageLoader {
         guard let requestURL = URL(string: url) else { completion(nil); return }
         callbacks[url] = [progress]
         completions[url] = [completion]
+        let headers = requestHeaders
+        let decodeScript = imageDecodeScript
+        let decodeBookSource = decodeSource
         tasks[url] = Task { [weak self] in
-            let result = await Self.fetch(requestURL: requestURL) { [weak self] fraction in
+            let result = await Self.fetch(requestURL: requestURL, headers: headers,
+                                          decodeScript: decodeScript, decodeSource: decodeBookSource) { [weak self] fraction in
                 Task { @MainActor in
                     guard let self, self.tasks[url] != nil else { return }
                     let previous = self.progressByURL[url] ?? 0
@@ -141,14 +171,22 @@ final class MangaImageLoader {
         }
     }
 
-    private nonisolated static func fetch(requestURL: URL, progress: @escaping (Double) -> Void) async -> Result<UIImage, Error> {
+    private nonisolated static func fetch(requestURL: URL, headers: [String: String],
+                                          decodeScript: String?, decodeSource: BookSource?,
+                                          progress: @escaping (Double) -> Void) async -> Result<UIImage, Error> {
         do {
-            let (data, response) = try await downloadWithProgress(requestURL: requestURL, progress: progress)
+            let (data, response) = try await downloadWithProgress(requestURL: requestURL,
+                                                                  headers: headers, progress: progress)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw URLError(.badServerResponse)
             }
+            // 有些图床的图片是加密的，原版在下载后跑 imageDecode 解密。
+            let decoded = await Task.detached(priority: .utility) {
+                SourceImageDecoder.decode(data, src: requestURL.absoluteString,
+                                          script: decodeScript, source: decodeSource)
+            }.value
             let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
-            guard let image = await downsample(data: data, targetPixelWidth: target) else {
+            guard let image = await downsample(data: decoded, targetPixelWidth: target) else {
                 throw URLError(.cannotDecodeContentData)
             }
             return .success(image)
@@ -158,7 +196,7 @@ final class MangaImageLoader {
     }
 
     /// URLSessionDownloadTask 自带 Progress，可以在下载过程中回报百分比（原版显示百分比）。
-    private nonisolated static func downloadWithProgress(requestURL: URL,
+    private nonisolated static func downloadWithProgress(requestURL: URL, headers: [String: String],
                                                          progress: @escaping (Double) -> Void) async throws -> (Data, URLResponse) {
         final class TaskBox: @unchecked Sendable {
             var task: URLSessionDownloadTask?
@@ -167,7 +205,9 @@ final class MangaImageLoader {
         let box = TaskBox()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                let task = URLSession.shared.downloadTask(with: requestURL) { fileURL, response, error in
+                var request = URLRequest(url: requestURL)
+                for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+                let task = URLSession.shared.downloadTask(with: request) { fileURL, response, error in
                     defer { box.observation = nil }
                     if let error {
                         continuation.resume(throwing: error)
