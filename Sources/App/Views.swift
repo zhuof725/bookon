@@ -953,7 +953,8 @@ struct ReaderView: View {
         CrashReporter.note("打开阅读 \(book.name)")
         if store.isLocal(book) { await startLocal(); return }
         guard let s = store.source(for: book.origin) else { error = "找不到书源"; loading = false; return }
-        mangaMode = MangaBook.isManga(source: s)
+        // 书源声明是图片源，或之前从正文识别出「这是漫画」：直接进漫画阅读器。
+        mangaMode = MangaBook.isManga(source: s) || BookKindStore.saved(bookUrl: book.bookUrl) == .image
         index = requestedChapter ?? (store.books.first(where: { $0.bookUrl == book.bookUrl })?.durChapterIndex ?? book.durChapterIndex)
         if let c = store.cachedToc(book), !c.isEmpty {
             chapters = c
@@ -987,13 +988,7 @@ struct ReaderView: View {
             // 漫画：正文是图片列表，不走进度条/分页，直接交给漫画阅读器。
             CrashReporter.note("进入漫画阅读 \(book.name) 共\(chapters.count)章 起始第\(first + 1)章")
             let savedPage = requestedChapter == nil ? store.scrollPosition(book) : 0
-            manga.configure(book: book, source: s, chapters: chapters, start: first, page: savedPage,
-                            onProgress: { chapter, title, page in
-                                if index != chapter { index = chapter }
-                                ChapterPrecacheManager.shared.updateCurrentIndex(chapter)
-                                store.updateMangaProgress(book, chapterIndex: chapter, title: title, page: page)
-                            },
-                            onChapterRead: { chapter in noteReadingChapter(chapter) })
+            mountManga(source: s, start: first, page: savedPage)
             loading = false
             return
         }
@@ -1854,6 +1849,70 @@ struct ReaderView: View {
         }
     }
 
+    /// 正文与书源类型不一致时切换到对应阅读器；切换成功返回 true（本次加载就此结束）。
+    @MainActor
+    private func adoptDetectedKind(_ raw: String, target: Int) -> Bool {
+        let kind = BookKind.detect(inContent: raw)
+        guard kind != .text else { return false }
+        guard let source = store.source(for: book.origin) else { return false }
+        switch kind {
+        case .image where !mangaMode:
+            // 只有「开篇章节」就是图片列表，才把整本书记成漫画；
+            // 文字书里偶尔插图的章节只这一次按图片显示，不改书的模式。
+            if target == firstReadableChapterIndex {
+                BookKindStore.save(.image, bookUrl: book.bookUrl)
+            }
+            CrashReporter.note("正文识别为漫画，切换到漫画阅读 \(book.name) 第\(target + 1)章")
+            mangaMode = true
+            index = target
+            store.updateProgress(book, index: target, title: chapters[target].title)
+            mountManga(source: source, start: target, page: 0)
+            loading = false
+            return true
+        case .audio:
+            let urls = AudioChapter.playURLs(fromContent: raw)
+            guard !urls.isEmpty else { return false }
+            BookKindStore.save(.audio, bookUrl: book.bookUrl)
+            index = target
+            store.updateProgress(book, index: target, title: chapters[target].title)
+            noteReadingChapter(target)
+            // 地址已经解析出来，直接交给播放器（它内部会先停掉上一章）。
+            bookAudio.onFinish = {
+                AudioProgress.clear(bookUrl: book.bookUrl)
+                audioNextChapter()
+            }
+            bookAudio.onRemoteNext = { audioNextChapter() }
+            bookAudio.onRemotePrevious = { audioPreviousChapter() }
+            bookAudio.onPlaybackFailed = { audioPlaybackFailed() }
+            let resume = AudioProgress.resumeSeconds(bookUrl: book.bookUrl, chapter: target)
+            bookAudio.onProgress = { seconds in
+                AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
+            }
+            bookAudio.play(urls: urls, title: chapters[target].title,
+                           album: book.name, startAt: resume)
+            loading = false
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 目录里第一个可读章节（用来判断「开篇是不是图片」，避免整本书被一章插图带偏）。
+    private var firstReadableChapterIndex: Int {
+        ChapterNavigation.contentIndex(from: 0, direction: 1, chapters: chapters) ?? 0
+    }
+
+    /// 把漫画阅读器挂到指定章节（书源类型是图片源、或正文识别为漫画时共用）。
+    private func mountManga(source: BookSource, start: Int, page: Int) {
+        manga.configure(book: book, source: source, chapters: chapters, start: start, page: page,
+                        onProgress: { chapter, title, page in
+                            if index != chapter { index = chapter }
+                            ChapterPrecacheManager.shared.updateCurrentIndex(chapter)
+                            store.updateMangaProgress(book, chapterIndex: chapter, title: title, page: page)
+                        },
+                        onChapterRead: { chapter in noteReadingChapter(chapter) })
+    }
+
     private func loadChapter(_ target: Int, landing: ChapterLanding) {
         guard !loading, chapters.indices.contains(target) else { return }
         // 新的导航重新给一次「链接过期自动重试」的预算。
@@ -1906,6 +1965,8 @@ struct ReaderView: View {
             let raw = try await rawContent(at: target, priority: .userInitiated)
             try Task.checkCancellation()
             guard contentRequestID == requestID else { return }
+            // 书源类型没写对（最常见：漫画源/音频源被标成文本）：按正文实际内容切换阅读模式。
+            if adoptDetectedKind(raw, target: target) { return }
             // 网络失败时不改章号、不清旧文、不覆盖已保存的阅读位置。
             index = target
             ChapterPrecacheManager.shared.updateCurrentIndex(target)

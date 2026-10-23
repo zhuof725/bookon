@@ -16,22 +16,42 @@ struct BookDetailView: View {
     @State private var showingIntroEditor = false
     @State private var showingMore = false
     @State private var confirmingRemoval = false
+    /// 书源没声明类型时，从正文识别出的阅读模式（文本/漫画/音频）。
+    @State private var detectedKind: BookKind?
 
     private var onCurrentShelf: Bool {
         store.isOnShelf(book)
     }
 
-    /// 「类型」栏：由书源类型决定（文本/音频/漫画/文件/视频），本地书标「本地」。
+    /// 「类型」栏：书源声明的类型 → 正文识别（+缓存）→ 识别中。
     private var sourceTypeLabel: String {
-        if book.origin == AppStore.localOrigin { return "本地" }
-        guard let source = store.source(for: book.origin) else { return "文本" }
-        switch source.bookSourceType ?? 0 {
-        case 1: return "音频"
-        case 2: return "漫画"
-        case 3: return "文件"
-        case 4: return "视频"
-        default: return "文本"
+        if store.isLocal(book) { return BookKind.local.label }
+        if let declared = BookKind.from(sourceType: store.source(for: book.origin)?.bookSourceType) {
+            return declared.label
         }
+        return detectedKind?.label ?? "识别中…"
+    }
+
+    /// 书源没写类型（或写得不对）时，抓一章正文判断到底是文本、漫画还是音频。
+    /// 识别结果按书缓存，之后打开不再重复抓。
+    @MainActor
+    private func detectKindIfNeeded() async {
+        guard !store.isLocal(book) else { detectedKind = .local; return }
+        guard let source = store.source(for: book.origin) else { return }
+        if let declared = BookKind.from(sourceType: source.bookSourceType) {
+            detectedKind = declared
+            return
+        }
+        if let saved = BookKindStore.saved(bookUrl: book.bookUrl) {
+            detectedKind = saved
+            return
+        }
+        guard let chapter = chapters.first(where: { !$0.isVolume && !$0.url.isEmpty }) else { return }
+        guard let raw = try? await WebBook.rawContent(source: source, chapter: chapter, book: book),
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let kind = BookKind.detect(inContent: raw)
+        BookKindStore.save(kind, bookUrl: book.bookUrl)
+        detectedKind = kind
     }
 
     private var current: Book {
@@ -100,10 +120,13 @@ struct BookDetailView: View {
             BookDetailSourcePicker(book: book) { replacement in
                 // Keep the original book and its reading position. Switching here
                 // changes this detail's source; it never deletes a local book.
+                BookKindStore.clear(bookUrl: book.bookUrl)
+                BookKindStore.clear(bookUrl: replacement.bookUrl)
                 book = replacement
                 showingSources = false
                 chapters = []
                 message = nil
+                detectedKind = nil
                 // .task(id: book.bookUrl) starts exactly one load for the replacement.
             }
         }
@@ -132,6 +155,7 @@ struct BookDetailView: View {
             chapters = cached
         } else { chapters = [] }
         if store.isLocal(book) {
+            detectedKind = .local
             loading = false
             if chapters.isEmpty { message = "本地目录不可用，请重新导入文件" }
             return
@@ -161,6 +185,7 @@ struct BookDetailView: View {
             message = "详情加载失败：\(error.localizedDescription)"
         }
         await refreshChapters(source: source, force: force)
+        await detectKindIfNeeded()
     }
 
     @MainActor
