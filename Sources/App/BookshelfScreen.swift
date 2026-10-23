@@ -52,6 +52,8 @@ struct BookshelfScreen: View {
     let books: [Book]
     let localOrigin: String
     let onOpen: (Book) -> Void
+    /// 书籍详情（书架点按现在直接进正文，详情从长按菜单进）。
+    var onDetail: ((Book) -> Void)? = nil
     let onImport: () -> Void
     let onRemove: ([Book]) -> Void
     var loadListChapters: (Book) -> [BookChapter]? = { _ in nil }
@@ -214,6 +216,9 @@ struct BookshelfScreen: View {
         .accessibilityIdentifier("shelf.book." + book.id)
         .contextMenu {
             Button { onOpen(book) } label: { Label("开始阅读", systemImage: "book") }
+            if let onDetail {
+                Button { onDetail(book) } label: { Label("书籍详情", systemImage: "info.circle") }
+            }
             Button { selecting = true; selection.insert(book.id) } label: { Label("选择书籍", systemImage: "checkmark.circle") }
         }
     }

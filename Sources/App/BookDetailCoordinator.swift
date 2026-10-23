@@ -228,6 +228,13 @@ struct BookDetailView: View {
     private func refreshChapters(source: BookSource? = nil, force: Bool = false) async {
         guard !store.isLocal(book), let source = source ?? store.source(for: book.origin) else { return }
         if !force && !chapters.isEmpty { loading = false; return }
+        // 换源时预取过目录：直接拿来用，切源后立刻能看到章节。
+        if !force, NetworkSettings.loadTocOnSourceSwitch,
+           let cached = store.cachedToc(book), !cached.isEmpty {
+            chapters = cached
+            loading = false
+            return
+        }
         loading = true
         defer { loading = false }
         do {
@@ -329,6 +336,7 @@ struct BookDetailSourcePicker: View {
     @State private var results: [Book] = []
     @State private var loading = true
     @State private var message: String?
+    @State private var tocCounts: [String: Int] = [:]
 
     var body: some View {
         NavigationStack {
@@ -343,7 +351,13 @@ struct BookDetailSourcePicker: View {
                 ForEach(results) { found in
                     Button { onSelect(found) } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(found.originName.isEmpty ? found.origin : found.originName).foregroundStyle(palette.primary)
+                            HStack(spacing: 8) {
+                                Text(found.originName.isEmpty ? found.origin : found.originName)
+                                    .foregroundStyle(palette.primary)
+                                if let count = tocCounts[found.bookUrl] {
+                                    Text("\(count) 章").appFont(.caption).foregroundStyle(palette.secondary)
+                                }
+                            }
                             Text(found.name + (found.author.isEmpty ? "" : " · " + found.author))
                                 .appFont(.subheadline).foregroundStyle(palette.secondary)
                         }
@@ -371,12 +385,20 @@ struct BookDetailSourcePicker: View {
         let matches = await withTaskGroup(of: [Book].self) { group in
             var iterator = sources.makeIterator()
             var found: [Book] = []
+            let fanout = min(NetworkSettings.searchFanout, 6)
             func addNext() {
                 if let source = iterator.next() {
-                    group.addTask { (try? await WebBook.search(source: source, key: name)) ?? [] }
+                    group.addTask {
+                        if let cached = SearchResultCache.cached(source: source.bookSourceUrl, key: name) {
+                            return cached
+                        }
+                        let list = (try? await WebBook.search(source: source, key: name)) ?? []
+                        SearchResultCache.store(list, source: source.bookSourceUrl, key: name)
+                        return list
+                    }
                 }
             }
-            for _ in 0..<min(4, sources.count) { addNext() }
+            for _ in 0..<min(fanout, sources.count) { addNext() }
             for await list in group {
                 if Task.isCancelled { group.cancelAll(); break }
                 found.append(contentsOf: list.filter { SearchRanking.mergeKey($0) == reference })
@@ -389,5 +411,35 @@ struct BookDetailSourcePicker: View {
             .sorted { $0.originName.localizedStandardCompare($1.originName) == .orderedAscending }
         if results.isEmpty { message = "其他书源没有找到同名同作者的书" }
         loading = false
+        if NetworkSettings.loadTocOnSourceSwitch, !results.isEmpty {
+            await prefetchTOCs()
+        }
+    }
+
+    /// 「换源时加载目录」：并发取各候选源的目录，顺便写进缓存，切换后立即能用。
+    @MainActor
+    private func prefetchTOCs() async {
+        let candidates = results
+        await withTaskGroup(of: (String, [BookChapter]).self) { group in
+            var iterator = candidates.makeIterator()
+            var active = 0
+            func addNext() -> Bool {
+                guard let book = iterator.next(),
+                      let source = store.source(for: book.origin) else { return false }
+                group.addTask {
+                    let chapters = (try? await WebBook.chapters(source: source, book: book)) ?? []
+                    return (book.bookUrl, chapters)
+                }
+                return true
+            }
+            while active < 3, addNext() { active += 1 }
+            while let (url, chapters) = await group.next() {
+                tocCounts[url] = chapters.count
+                if let book = candidates.first(where: { $0.bookUrl == url }), !chapters.isEmpty {
+                    store.saveToc(book, chapters)
+                }
+                if !addNext() { active -= 1 }
+            }
+        }
     }
 }

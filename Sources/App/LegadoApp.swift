@@ -12,6 +12,8 @@ struct LegadoApp: App {
     init() {
         // 尽早安装：未捕获异常 / 信号都写入本机崩溃日志（我的 → 崩溃日志）。
         CrashReporter.install()
+        // 网络设置里的封面并发要尽早生效（书架/详情首屏就开始下封面）。
+        NetworkSettings.applyCoverLimit()
     }
 
     private var appColorScheme: ColorScheme? {
@@ -92,16 +94,22 @@ struct BookshelfView: View {
     @State private var importMessage: String?
     @State private var selectedBook: Book?
     @State private var showDetail = false
+    @State private var readerBook: Book?
+    @State private var showReader = false
 
     var body: some View {
         BookshelfScreen(books: store.books, localOrigin: AppStore.localOrigin,
-            onOpen: { book in selectedBook = book; showDetail = true },
+            onOpen: { book in readerBook = book; showReader = true },
+            onDetail: { book in selectedBook = book; showDetail = true },
             onImport: { showImport = true },
             onRemove: { books in books.forEach { store.removeFromShelf($0) } },
             loadListChapters: { book in store.isLocal(book) ? store.localToc(book) : store.cachedToc(book) },
             onRefresh: { await refreshShelf() })
         .navigationDestination(isPresented: $showDetail) {
             if let selectedBook { BookDetailView(book: selectedBook) }
+        }
+        .navigationDestination(isPresented: $showReader) {
+            if let readerBook { ReaderView(book: readerBook) }
         }
         .sheet(isPresented: $showImport) {
             DocumentPicker(contentTypes: BookshelfView.localTypes, allowsMultiple: true, onPick: { urls in

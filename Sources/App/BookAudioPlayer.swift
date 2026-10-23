@@ -770,7 +770,7 @@ struct AudioChapterView: View {
         let texts = paragraphs
         let duration = audio.duration
         Task.detached(priority: .utility) {
-            guard let built = AudioSentenceTimeline.build(url: url, paragraphs: texts, duration: duration) else { return }
+            guard let built = await AudioSentenceTimeline.build(url: url, paragraphs: texts, duration: duration) else { return }
             AudioSentenceTimeline.store(built, bookUrl: book.bookUrl, chapter: chapter)
             await MainActor.run { boundaries = built }
         }

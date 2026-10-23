@@ -38,9 +38,10 @@ enum AudioSentenceTimeline {
     // MARK: 构建
 
     /// 段落边界时间戳（count = paragraphs + 1，首尾是 0 和时长）。
-    static func build(url: URL, paragraphs: [String], duration: TimeInterval) -> [Double]? {
+    static func build(url: URL, paragraphs: [String], duration: TimeInterval) async -> [Double]? {
         guard paragraphs.count > 1, duration > 5 else { return nil }
-        guard let pauses = pauseTimes(url: url, duration: duration) else { return nil }
+        guard let local = await localFile(for: url) else { return nil }
+        guard let pauses = pauseTimes(url: local, duration: duration) else { return nil }
 
         let totalChars = paragraphs.reduce(0) { $0 + max($1.count, 1) }
         guard totalChars > 0 else { return nil }
@@ -63,6 +64,23 @@ enum AudioSentenceTimeline {
         }
         boundaries.append(duration)
         return boundaries
+    }
+
+    /// 分析要读本地文件：远端地址先下载（已经缓存过就直接用缓存）。
+    private static func localFile(for url: URL) async -> URL? {
+        if url.isFileURL { return url }
+        if let cached = AudioDiskCache.cachedFile(for: url.absoluteString) { return cached }
+        let key = url.absoluteString.utf8.reduce(UInt64(1469598103934665603)) { hash, byte in
+            (hash ^ UInt64(byte)) &* 1099511628211
+        }
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-analysis-\(String(key, radix: 16))")
+        if FileManager.default.fileExists(atPath: dest.path) { return dest }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (200..<300).contains((response as? HTTPURLResponse)?.statusCode ?? 200),
+              !data.isEmpty else { return nil }
+        guard (try? data.write(to: dest)) != nil else { return nil }
+        return dest
     }
 
     /// 静音段的中点（秒）。

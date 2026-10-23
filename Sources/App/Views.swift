@@ -187,15 +187,22 @@ struct SearchView: View {
             var done = 0
             await withTaskGroup(of: ([Book], Bool).self) { group in
                 var iter = sources.makeIterator()
+                let fanout = NetworkSettings.searchFanout
                 func addNext() {
                     if let s = iter.next() {
                         group.addTask {
-                            do { return (try await WebBook.search(source: s, key: key), false) }
-                            catch { return ([], true) }
+                            if let cached = SearchResultCache.cached(source: s.bookSourceUrl, key: key) {
+                                return (cached, false)
+                            }
+                            do {
+                                let list = try await WebBook.search(source: s, key: key)
+                                SearchResultCache.store(list, source: s.bookSourceUrl, key: key)
+                                return (list, false)
+                            } catch { return ([], true) }
                         }
                     }
                 }
-                for _ in 0..<8 { addNext() }
+                for _ in 0..<fanout { addNext() }
                 for await (list, failed) in group {
                     if Task.isCancelled || requestID != token { group.cancelAll(); break }
                     done += 1

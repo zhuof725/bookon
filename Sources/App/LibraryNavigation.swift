@@ -258,6 +258,9 @@ struct LibraryProfileView: View {
                             .accessibilityIdentifier("library.appearance")
                         LibraryCardDivider()
                         NavigationLink { SearchView() } label: { LibraryLinkLabel(title: "搜索书籍", symbol: "magnifyingglass") }
+                        LibraryCardDivider()
+                        NavigationLink { NetworkSettingsView() } label: { LibraryLinkLabel(title: "网络设置", symbol: "network") }
+                            .accessibilityIdentifier("library.network")
                     }
                 }
                 LibraryCard("本机数据") {
