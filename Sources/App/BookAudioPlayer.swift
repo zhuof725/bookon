@@ -45,6 +45,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     /// 一次播放只上报一次失败，避免状态与结束通知重复触发。
     private var failureNotified = false
+    /// 直连失败后只尝试一次「下载再播」，避免来回重试。
+    private var fallbackTried = false
+    private var downloadTask: Task<Void, Never>?
     private var lastReportedSecond: TimeInterval = -1
     private var playerStatusObserver: NSKeyValueObservation?
     private var sleepTask: Task<Void, Never>?
@@ -104,6 +107,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         }
         stop()
         failureNotified = false
+        fallbackTried = false
         chapterTitle = title
         self.album = album
         remoteQueue = urls.map(\.absoluteString)
@@ -227,6 +231,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     }
 
     func stop() {
+        downloadTask?.cancel()
+        downloadTask = nil
         cacheTask?.cancel()
         cacheTask = nil
         remoteQueue = []
@@ -302,8 +308,52 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         failureNotified = true
         // 失败时立刻结束缓冲显示，否则界面停在「正在缓冲」会把错误提示挡住。
         isBuffering = false
-        pushMessage("音频播放失败，点播放重试")
+        let reason = player?.currentItem?.error?.localizedDescription ?? "无法打开音频"
+        // 直连失败常见于「服务器对 AVPlayer 的请求不友好」：自己带浏览器 UA 下载这一段，
+        // 落盘后改播本地文件（原版用 ExoPlayer + 自定义 OkHttp DataSource，也是自己发请求）。
+        if !fallbackTried, remoteQueue.indices.contains(queueIndex) {
+            let remote = remoteQueue[queueIndex]
+            if remote.lowercased().hasPrefix("http") {
+                fallbackTried = true
+                pushMessage("直连播放失败，正在下载这一段…")
+                downloadThenPlay(remote, from: currentTime)
+                return
+            }
+        }
+        pushMessage("音频播放失败：\(reason)")
         onPlaybackFailed?()
+    }
+
+    /// 下载当前段到本地缓存后从同一位置继续播放。
+    private func downloadThenPlay(_ raw: String, from seconds: TimeInterval) {
+        downloadTask?.cancel()
+        let title = chapterTitle, album = self.album
+        downloadTask = Task { @MainActor in
+            guard let url = URL(string: raw) else { return }
+            var request = URLRequest(url: url, timeoutInterval: 60)
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                             forHTTPHeaderField: "User-Agent")
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                guard (200..<300).contains(http.statusCode), !data.isEmpty else {
+                    throw NSError(domain: "BookAudio", code: http.statusCode,
+                                  userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)，\(data.count) 字节"])
+                }
+                AudioDiskCache.store(data, for: raw)
+                guard let file = AudioDiskCache.cachedFile(for: raw) else {
+                    throw URLError(.fileDoesNotExist)
+                }
+                guard !Task.isCancelled else { return }
+                play(urls: [file.absoluteString], title: title, album: album, startAt: seconds)
+            } catch {
+                guard !Task.isCancelled else { return }
+                pushMessage("下载失败：\(error.localizedDescription)")
+                onPlaybackFailed?()
+            }
+        }
     }
 
     // MARK: 定时停止（按播放时长倒计时，暂停不计）
