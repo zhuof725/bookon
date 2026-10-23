@@ -1057,6 +1057,48 @@ struct DiscoverTemplateView: View {
 
     var body: some View {
         switch kind {
+        case .largeCard:
+            BoardLargeCard(title: title, moreTitle: moreTitle, items: deckItems,
+                           onMore: onMore,
+                           onSelect: { index in
+                               if books.indices.contains(index) { onSelectBook(books[index]) }
+                           })
+        case .compactCard:
+            BoardCompactCard(title: title, moreTitle: moreTitle, items: deckItems,
+                             onMore: onMore,
+                             onSelect: { index in
+                                 if books.indices.contains(index) { onSelectBook(books[index]) }
+                             })
+        case .threeColumn:
+            BoardThreeColumn(title: title, moreTitle: moreTitle, items: deckItems,
+                             onMore: onMore,
+                             onSelect: { index in
+                                 if books.indices.contains(index) { onSelectBook(books[index]) }
+                             })
+        case .dualRow:
+            BoardDualRow(title: title, moreTitle: moreTitle, items: deckItems,
+                         onMore: onMore,
+                         onSelect: { index in
+                             if books.indices.contains(index) { onSelectBook(books[index]) }
+                         })
+        case .fixedList:
+            BoardFixedList(title: title, moreTitle: moreTitle, items: deckItems,
+                           onMore: onMore,
+                           onSelect: { index in
+                               if books.indices.contains(index) { onSelectBook(books[index]) }
+                           })
+        case .featureCard:
+            BoardFeatureCard(title: title, moreTitle: moreTitle, items: deckItems,
+                             onMore: onMore,
+                             onSelect: { index in
+                                 if books.indices.contains(index) { onSelectBook(books[index]) }
+                             })
+        case .updateFeed:
+            BoardUpdateFeed(title: title, moreTitle: moreTitle, items: deckItems,
+                            onMore: onMore,
+                            onSelect: { index in
+                                if books.indices.contains(index) { onSelectBook(books[index]) }
+                            })
         case .badgeGrid:
             DiscoverBadgeGridSection(
                 title: title,

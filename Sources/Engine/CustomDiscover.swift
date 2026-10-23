@@ -6,13 +6,30 @@ import Foundation
 /// 只需要拿着 `DiscoverTemplateKind` 去 `DiscoverTemplate` 里取，不需要知道具体实现。
 /// 纯枚举 + 纯函数放在 Engine，方便 SourceTest 离线回归；真正的视图在 App 层。
 enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
-    /// 两列大封面 + 左下角大号序号。
+    // ── 版式线（Apple Books 风格）：白卡 + 大圆角 + 留白优先 ──
+    /// 一张大卡讲清一本书：左封面，右大标题 + 作者。
+    case largeCard
+    /// 整卡封面色铺底，小封面 + 白书名。
+    case compactCard
+    /// 三列网格，封面撑满列宽。
+    case threeColumn
+    /// 两行横向轮播，一屏两倍展示量。
+    case dualRow
+    /// 固定列表：小封面 + 分隔线，像设置页。
+    case fixedList
+    /// 图文大卡：大封面 + 简介 + 胶囊按钮。
+    case featureCard
+    /// 更新信息流：蓝色「更新」+ 章节 + 相对时间。
+    case updateFeed
+
+    // ── 原 3D / 视觉线 ──
+    /// 两列大封面 + 左下角序号药丸。
     case badgeGrid
-    /// 一行横滑封面。
+    /// 一行横滑大封面。
     case covers
-    /// 竖排排名横条（序号徽章 + 封面 + 书名 / 简介）。
+    /// 竖排榜单：大号斜体数字 + 小封面。
     case rankRow
-    /// 错位瀑布流：双列不等高，每列按自己的高度往下排。
+    /// 错位瀑布流：双列不等高。
     case waterfall
     /// 弧形走廊：卡片沿弧线排开，中间最大最亮。
     case curve
@@ -25,8 +42,16 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 新增模板统一排在前面，旧的保持原顺序，历史配置不受影响。
     var title: String {
         switch self {
+        case .largeCard: return "大型阅读卡片"
+        case .compactCard: return "精简阅读卡片"
+        case .threeColumn: return "三列书架"
+        case .dualRow: return "双行横向轮播"
+        case .fixedList: return "固定列表"
+        case .featureCard: return "图文大卡"
+        case .updateFeed: return "更新信息流"
         case .badgeGrid: return "大封面"
         case .covers: return "横滑封面"
         case .rankRow: return "竖排榜单"
@@ -40,9 +65,16 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .badgeGrid: return "两列封面，左下角带 01 / 02 序号"
-        case .covers: return "一行封面左右滑动"
-        case .rankRow: return "每行一本，带排名徽章与简介"
+        case .largeCard: return "一张白卡讲一本书：大封面 + 大标题"
+        case .compactCard: return "封面色铺底，小封面 + 白书名"
+        case .threeColumn: return "三列网格，封面撑满列宽"
+        case .dualRow: return "两行横向轮播，一屏两倍书"
+        case .fixedList: return "小封面 + 分隔线，像设置页"
+        case .featureCard: return "大封面 + 简介 + 胶囊按钮"
+        case .updateFeed: return "蓝色更新标签 + 章节 + 时间"
+        case .badgeGrid: return "两列封面，左下角带序号"
+        case .covers: return "一行大封面左右滑动"
+        case .rankRow: return "大号斜体排名 + 小封面"
         case .waterfall: return "双列不等高，大小卡错落排下去"
         case .curve: return "卡片沿弧线排开，中间最大最亮"
         case .fan: return "以底边为轴心扇形摊开"
@@ -54,8 +86,16 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     /// 这个模板吃什么数据。
     var dataSource: DiscoverTemplateDataSource {
         switch self {
-        case .badgeGrid, .covers, .rankRow, .waterfall, .curve, .fan, .deck: return .bookList
         case .history: return .readingProgress
+        default: return .bookList
+        }
+    }
+
+    /// 卡片型（本身是翻看交互，按实际数量自己排），其余是列表型（一直往下铺）。
+    var isCardStage: Bool {
+        switch self {
+        case .curve, .fan, .deck: return true
+        default: return false
         }
     }
 

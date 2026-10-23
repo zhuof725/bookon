@@ -130,6 +130,191 @@ struct DiscoverTemplateThumbnail: View {
         let gap = 6 * unit
 
         switch kind {
+        case .largeCard:
+            // 一张白卡 + 左封面右标题
+            HStack(spacing: gap) {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 8 * unit, style: .continuous)
+                        .fill(palette.surface)
+                    HStack(spacing: 7 * unit) {
+                        PreviewCoverArt(title: samples[0].title, corner: 4 * unit)
+                            .frame(width: 26 * unit, height: 35 * unit)
+                        VStack(alignment: .leading, spacing: 2.5 * unit) {
+                            Text(samples[0].title)
+                                .font(.system(size: 8 * unit, weight: .bold))
+                                .foregroundStyle(palette.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Text("作者")
+                                .font(.system(size: 6.5 * unit))
+                                .foregroundStyle(palette.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8 * unit)
+                }
+                .frame(width: 78 * unit, height: 46 * unit)
+            }
+
+        case .compactCard:
+            // 色底横条 + 小封面 + 白字
+            HStack(spacing: gap * 0.8) {
+                ForEach(samples.prefix(2)) { sample in
+                    HStack(spacing: 6 * unit) {
+                        PreviewCoverArt(title: sample.title, corner: 3 * unit)
+                            .frame(width: 18 * unit, height: 24 * unit)
+                        VStack(alignment: .leading, spacing: 1.5 * unit) {
+                            Text(sample.title)
+                                .font(.system(size: 7.5 * unit, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Text("书籍")
+                                .font(.system(size: 5.8 * unit))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(5 * unit)
+                    .frame(width: 62 * unit, height: 34 * unit)
+                    .background {
+                        LinearGradient(colors: BoardTint.pair(for: sample.title),
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 6 * unit, style: .continuous))
+                }
+            }
+
+        case .threeColumn:
+            HStack(alignment: .top, spacing: gap * 0.8) {
+                ForEach(samples.prefix(3)) { sample in
+                    VStack(alignment: .leading, spacing: 2 * unit) {
+                        PreviewCoverArt(title: sample.title, corner: 3 * unit)
+                            .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                        Text(sample.title)
+                            .font(.system(size: 6 * unit, weight: .semibold))
+                            .foregroundStyle(palette.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
+
+        case .dualRow:
+            VStack(spacing: 5 * unit) {
+                ForEach(0..<2, id: \.self) { row in
+                    HStack(spacing: gap * 0.7) {
+                        ForEach(samples.prefix(4).dropFirst(row * 2).prefix(2)) { sample in
+                            VStack(alignment: .leading, spacing: 1.5 * unit) {
+                                PreviewCoverArt(title: sample.title, corner: 3 * unit)
+                                    .frame(width: 22 * unit, height: 29 * unit)
+                                Text(sample.title)
+                                    .font(.system(size: 5.6 * unit))
+                                    .foregroundStyle(palette.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+
+        case .fixedList:
+            VStack(spacing: 0) {
+                ForEach(Array(samples.prefix(3).enumerated()), id: \.element.id) { pair in
+                    HStack(spacing: 6 * unit) {
+                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 2 * unit)
+                            .frame(width: 14 * unit, height: 19 * unit)
+                        VStack(alignment: .leading, spacing: 1.5 * unit) {
+                            Text(pair.element.title)
+                                .font(.system(size: 7.5 * unit, weight: .semibold))
+                                .foregroundStyle(palette.primary)
+                                .lineLimit(1)
+                            Text(pair.element.author)
+                                .font(.system(size: 6 * unit))
+                                .foregroundStyle(palette.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 3.5 * unit)
+                    .overlay(alignment: .top) {
+                        if pair.offset > 0 {
+                            Rectangle()
+                                .fill(palette.secondary.opacity(0.2))
+                                .frame(height: 0.5)
+                                .padding(.leading, 20 * unit)
+                        }
+                    }
+                }
+            }
+
+        case .featureCard:
+            // 大色块卡 + 左下胶囊按钮
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 8 * unit, style: .continuous)
+                    .fill(palette.surface)
+                HStack(alignment: .top, spacing: 6 * unit) {
+                    PreviewCoverArt(title: samples[0].title, corner: 3 * unit)
+                        .frame(width: 28 * unit, height: 38 * unit)
+                    VStack(alignment: .leading, spacing: 2 * unit) {
+                        Text(samples[0].title)
+                            .font(.system(size: 7.5 * unit, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Text("查看作品")
+                            .font(.system(size: 5.4 * unit, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 5 * unit)
+                            .padding(.vertical, 1.8 * unit)
+                            .background(.white, in: Capsule())
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(6 * unit)
+            }
+            .frame(width: 88 * unit, height: 50 * unit)
+            .background {
+                LinearGradient(colors: BoardTint.pair(for: samples[0].title),
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8 * unit, style: .continuous))
+
+        case .updateFeed:
+            VStack(spacing: 0) {
+                ForEach(Array(samples.prefix(3).enumerated()), id: \.element.id) { pair in
+                    HStack(spacing: 6 * unit) {
+                        PreviewCoverArt(title: pair.element.title, showTitle: false, corner: 2 * unit)
+                            .frame(width: 13 * unit, height: 17 * unit)
+                        VStack(alignment: .leading, spacing: 1.5 * unit) {
+                            Text(pair.element.title)
+                                .font(.system(size: 7.2 * unit, weight: .semibold))
+                                .foregroundStyle(palette.primary)
+                                .lineLimit(1)
+                            HStack(spacing: 1.5 * unit) {
+                                Text("更新")
+                                    .font(.system(size: 5.6 * unit))
+                                    .foregroundStyle(palette.accent)
+                                Text("第 \(782 - pair.offset * 37) 章")
+                                    .font(.system(size: 5.6 * unit))
+                                    .foregroundStyle(palette.secondary)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 3.5 * unit)
+                    .overlay(alignment: .top) {
+                        if pair.offset > 0 {
+                            Rectangle()
+                                .fill(palette.secondary.opacity(0.2))
+                                .frame(height: 0.5)
+                                .padding(.leading, 19 * unit)
+                        }
+                    }
+                }
+            }
+
         case .badgeGrid:
             HStack(spacing: gap) {
                 ForEach(Array(samples.prefix(2).enumerated()), id: \.element.id) { pair in

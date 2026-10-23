@@ -148,18 +148,28 @@ enum CustomDiscoverRegression {
         check(CustomDiscoverConfig().isEmpty, "自定义发现：空配置可识别")
         check(!config.isEmpty, "自定义发现：有板块不是空配置")
 
-        // 11. 模板表：八个模板都注册了，且数据源归属正确
+        // 11. 模板表：十五个模板都注册了，且数据源归属正确
         check(DiscoverTemplate.all.count == DiscoverTemplateKind.allCases.count,
               "模板：列表长度等于枚举数量")
         check(DiscoverTemplateKind.allCases.map(\.rawValue)
-              == ["badgeGrid", "covers", "rankRow", "waterfall", "curve", "fan", "deck", "history"],
-              "模板：八个模板的稳定键")
+              == ["largeCard", "compactCard", "threeColumn", "dualRow", "fixedList",
+                  "featureCard", "updateFeed",
+                  "badgeGrid", "covers", "rankRow", "waterfall", "curve", "fan", "deck", "history"],
+              "模板：十五个模板的稳定键")
         for kind in DiscoverTemplateKind.allCases {
             check(DiscoverTemplate.template(for: kind).kind == kind,
                   "模板：\(kind.title) 能按枚举取回")
             check(!kind.title.isEmpty && !kind.detail.isEmpty,
                   "模板：\(kind.rawValue) 有标题和说明")
         }
+        check(DiscoverTemplateKind.largeCard.dataSource == .bookList
+              && DiscoverTemplateKind.compactCard.dataSource == .bookList
+              && DiscoverTemplateKind.threeColumn.dataSource == .bookList
+              && DiscoverTemplateKind.dualRow.dataSource == .bookList
+              && DiscoverTemplateKind.fixedList.dataSource == .bookList
+              && DiscoverTemplateKind.featureCard.dataSource == .bookList
+              && DiscoverTemplateKind.updateFeed.dataSource == .bookList,
+              "模板：七种新版式都吃书籍列表")
         check(DiscoverTemplateKind.badgeGrid.dataSource == .bookList
               && DiscoverTemplateKind.covers.dataSource == .bookList
               && DiscoverTemplateKind.rankRow.dataSource == .bookList
