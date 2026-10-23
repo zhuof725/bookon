@@ -18,6 +18,8 @@ struct BookDetailView: View {
     @State private var confirmingRemoval = false
     /// 书源没声明类型时，从正文识别出的阅读模式（文本/漫画/音频）。
     @State private var detectedKind: BookKind?
+    /// 正在抓正文探测（「类型」栏显示「识别中…」）。
+    @State private var detectingKind = false
 
     private var onCurrentShelf: Bool {
         store.isOnShelf(book)
@@ -29,7 +31,8 @@ struct BookDetailView: View {
         if let declared = BookKind.from(sourceType: store.source(for: book.origin)?.bookSourceType) {
             return declared.label
         }
-        return detectedKind?.label ?? "识别中…"
+        if detectingKind { return "识别中…" }
+        return detectedKind?.label ?? "文本"
     }
 
     /// 书源没写类型（或写得不对）时，抓一章正文判断到底是文本、漫画还是音频。
@@ -47,6 +50,8 @@ struct BookDetailView: View {
             return
         }
         guard let chapter = chapters.first(where: { !$0.isVolume && !$0.url.isEmpty }) else { return }
+        detectingKind = true
+        defer { detectingKind = false }
         guard let raw = try? await WebBook.rawContent(source: source, chapter: chapter, book: book),
               !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let kind = BookKind.detect(inContent: raw)
