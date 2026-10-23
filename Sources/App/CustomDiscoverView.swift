@@ -198,13 +198,13 @@ struct CustomDiscoverView: View {
             }
             .padding(.horizontal, 11)
             .frame(height: 34)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule().strokeBorder(palette.primary.opacity(0.10), lineWidth: 0.5)
-                    }
+            // 玻璃胶囊：和底栏、卡片用同一套主题玻璃，
+            // 首页内容是滚动的，胶囊浮在上面必须透出一点底下的颜色才像玻璃。
+            .modifier(ShelfGlass(shape: Capsule(), isCard: true))
+            .overlay {
+                Capsule().strokeBorder(palette.primary.opacity(0.10), lineWidth: 0.5)
             }
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.pageSwitch")

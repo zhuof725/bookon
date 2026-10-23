@@ -406,6 +406,9 @@ final class DiscoverBoardStore: ObservableObject {
         DiscoverKindsCache.clear()
         chapterCountCache.removeAll()
         refreshHistoryIfNeeded(force: true)
+        // 重读一遍书源的发现分类：书源脚本里有 setConfigs + refreshExplore 的，
+        // 改完模式/源站后分类会整组换掉，只清板块缓存是拿不到新分类的。
+        await reloadSourceKinds()
         // 上一轮可能还有请求在飞（比如刚滚过一圈），不清掉的话
         // force 刷新会在 load() 开头被 loadingIDs 直接挡回来，看起来像「刷新没用」。
         loadingIDs.removeAll()
@@ -418,6 +421,28 @@ final class DiscoverBoardStore: ObservableObject {
             await load(model, force: true)
         }
         await loadCarousel(force: true)
+    }
+
+    /// 重新执行在用书源的发现脚本，把最新分类写回缓存。
+    ///
+    /// 首页的板块是「书源 + 分类地址」绑定的，分类变了不会自动加板块；
+    /// 这里做的只是让后续读取（编辑页选分类、重新添加板块）能看到最新结果。
+    /// 已经加的板块仍然指向原来的分类地址，不受影响。
+    private func reloadSourceKinds() async {
+        let urls = Set(config.entries.map(\.sourceUrl)).filter { !$0.isEmpty }
+        let sources = urls.compactMap { appStore.source(for: $0) }
+        guard !sources.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            for source in sources {
+                group.addTask {
+                    let kinds = await Task.detached(priority: .utility) {
+                        SourceDiagnostics.exploreKinds(source: source)
+                    }.value
+                    guard !kinds.isEmpty, DiscoverCatalog.kindError(kinds) == nil else { return }
+                    DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: kinds)
+                }
+            }
+        }
     }
 
     // MARK: 编辑页预览

@@ -83,8 +83,10 @@ struct DiscoverWaterfallSection: View {
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
-    /// 每 3 本里第 1、3 本是竖版，第 2 本是方形——固定节奏比随机更稳，滚动时不会忽大忽小乱跳。
-    private func isSquare(_ index: Int) -> Bool { index % 3 == 1 }
+    /// 封面统一 3:4。错落感交给「文字高度不同」来做——
+    /// 书名 1 行还是 2 行、有没有简介，天然就会让两列参差，
+    /// 比一大一小的封面稳得多（滚动时不会忽大忽小地跳）。
+    private let coverRatio: CGFloat = 3.0 / 4.0
 
     /// 分列结果：两列各自的 (原始索引, 条目)。
     ///
@@ -111,8 +113,13 @@ struct DiscoverWaterfallSection: View {
         var rightHeight: CGFloat = 0
 
         for (index, item) in items.enumerated() {
-            let coverRatio: CGFloat = isSquare(index) ? 1.0 : 0.75
-            let estimated = coverRatio * 100 + 46
+            // 估算高度（和 cell 的实际结构对应）：
+            // 卡片内边距 8×2 + 封面（宽度按 100 估算）+ 书名行 + 作者行 + 底部留白。
+            // 只要两列的估算大致准，分列就不会一边特别长；
+            // 真正的参差来自书名/作者实际换行数，视觉上自然错开。
+            let titleLines = item.title.count > 10 ? 2.0 : 1.0
+            let captionLines = item.caption.isEmpty ? 0 : (item.caption.count > 14 ? 2.0 : 1.0)
+            let estimated = 16 + coverRatio * 100 + 8 + titleLines * 18 + captionLines * 16 + 10
             let entry = WaterfallColumns.Entry(index: index, item: item)
             if leftHeight <= rightHeight {
                 result.left.append(entry)
@@ -163,28 +170,40 @@ struct DiscoverWaterfallSection: View {
     }
 
     private func cell(_ item: DeckItem, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 参照图一：整块是一张白卡，封面顶满卡片宽度，书名/作者在下面，
+        // 文字行数不同自然让两列参差。
+        VStack(alignment: .leading, spacing: 0) {
             Color.clear
-                .aspectRatio(isSquare(index) ? 1.0 : 3.0 / 4.0, contentMode: .fit)
+                .aspectRatio(coverRatio, contentMode: .fit)
                 .overlay { DeckCoverImage(url: item.cover) }
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .shadow(color: .black.opacity(0.14), radius: 7, x: 0, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(8)
 
-            Text(item.title)
-                .appFont(.system(size: 13, weight: .semibold))
-                .foregroundStyle(palette.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if !item.caption.isEmpty {
-                Text(item.caption)
-                    .appFont(.system(size: 11))
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .appFont(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !item.caption.isEmpty {
+                    Text(item.caption)
+                        .appFont(.system(size: 12))
+                        .foregroundStyle(palette.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(palette.surface)
         }
         .contentShape(Rectangle())
     }
