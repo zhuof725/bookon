@@ -568,6 +568,7 @@ struct AudioChapterView: View {
             Spacer(minLength: 2)
             bottomBar
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(palette.primary)
         .tint(palette.accent)
         .background { playerBackground }
