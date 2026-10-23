@@ -344,11 +344,9 @@ struct DiscoverSourceView: View {
                         .independentGlassRow()
                         .accessibilityIdentifier("discover.kind.\(kind.title)")
                     } header: {
-                        if let header = pair.element.header {
-                            Text(header)
-                                .appFont(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(palette.secondary)
-                        }
+                        Text(pair.element.header ?? "")
+                            .appFont(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(palette.secondary)
                     }
                 }
             }
@@ -584,7 +582,6 @@ struct DiscoverSourceView: View {
             kinds = cached
             controlValues = Self.controlValues(from: cached)
             loading = false
-            applyDefaultSelection()
             return
         }
         loading = true
@@ -597,7 +594,6 @@ struct DiscoverSourceView: View {
         if DiscoverCatalog.kindError(result) == nil, !result.isEmpty {
             DiscoverKindsCache.store(source: source.bookSourceUrl, kinds: result)
         }
-        applyDefaultSelection()
     }
 
     /// 执行控件 action：写配置 / 刷新分类 / 打开登录 / 发起搜索。
