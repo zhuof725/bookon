@@ -82,6 +82,9 @@ final class DetailTests: XCTestCase {
         XCTAssertTrue(source.label.contains("本地书籍"), source.label)
         XCTAssertTrue(source.label.contains("换源"), source.label)
         capture("detail-08-reference-layout")
+        scroll.swipeUp(velocity: .slow)
+        scroll.swipeUp(velocity: .slow)
+        capture("detail-09-reference-layout-bottom")
     }
 
     func testSourceBooksNeverOfferIntroEditing() {
