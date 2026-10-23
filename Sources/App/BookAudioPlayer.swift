@@ -559,6 +559,8 @@ struct AudioChapterView: View {
     @State private var mode = 0
     @State private var paragraphs: [String] = []
     @State private var loadingText = false
+    /// 段落时间轴（本地按停顿对齐）；没有时退回按比例估算。
+    @State private var boundaries: [Double]?
 
     private let speedPresets: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
@@ -704,10 +706,12 @@ struct AudioChapterView: View {
                         }
                     }
                     .onChange(of: paragraphs) { _ in
+                        buildTimelineIfNeeded()
                         guard let index = estimatedParagraphIndex,
                               paragraphs.indices.contains(index) else { return }
                         proxy.scrollTo(index, anchor: .center)
                     }
+                    .onChange(of: audio.duration) { _ in buildTimelineIfNeeded() }
                 }
             }
 
@@ -719,9 +723,14 @@ struct AudioChapterView: View {
         .task(id: audio.chapterTitle) { await loadParagraphsIfNeeded() }
     }
 
-    /// 按「已播比例 × 总字数」估算当前段落。
+    /// 当前段落：有时间轴用时间轴，没有就按「已播比例 × 总字数」估算。
     private var estimatedParagraphIndex: Int? {
         guard !paragraphs.isEmpty, audio.duration > 0 else { return nil }
+        if let boundaries, boundaries.count == paragraphs.count + 1 {
+            let time = audio.currentTime
+            for index in 0..<paragraphs.count where time < boundaries[index + 1] { return index }
+            return paragraphs.count - 1
+        }
         let total = paragraphs.reduce(0) { $0 + max($1.count, 1) }
         guard total > 0 else { return nil }
         let target = Int(Double(total) * min(max(audio.currentTime / audio.duration, 0), 1))
@@ -731,6 +740,40 @@ struct AudioChapterView: View {
             if target <= acc { return i }
         }
         return paragraphs.count - 1
+    }
+
+    /// 段内比例：优先用时间轴算，没有就用字数比例。
+    private func fractionWithinParagraph(_ index: Int) -> Double {
+        if let boundaries, boundaries.count == paragraphs.count + 1 {
+            let start = boundaries[index]
+            let end = boundaries[index + 1]
+            guard end > start else { return 0 }
+            return min(max((audio.currentTime - start) / (end - start), 0), 1)
+        }
+        let offsets = paragraphOffsets
+        let total = max(offsets.total, 1)
+        let played = Int(Double(total) * min(max(audio.currentTime / audio.duration, 0), 1))
+        let start = offsets.starts.indices.contains(index) ? offsets.starts[index] : 0
+        return min(max(Double(played - start) / Double(max(paragraphs[index].count, 1)), 0), 1)
+    }
+
+    /// 生成段落时间轴（下载/解码一次，按书+章缓存）。
+    private func buildTimelineIfNeeded() {
+        guard boundaries == nil, paragraphs.count > 1, audio.duration > 0,
+              let url = audio.chapterURL else { return }
+        let count = paragraphs.count
+        let chapter = audio.chapterTitle
+        if let cached = AudioSentenceTimeline.cached(bookUrl: book.bookUrl, chapter: chapter, count: count) {
+            boundaries = cached
+            return
+        }
+        let texts = paragraphs
+        let duration = audio.duration
+        Task.detached(priority: .utility) {
+            guard let built = AudioSentenceTimeline.build(url: url, paragraphs: texts, duration: duration) else { return }
+            AudioSentenceTimeline.store(built, bookUrl: book.bookUrl, chapter: chapter)
+            await MainActor.run { boundaries = built }
+        }
     }
 
     /// 段落内按比例估到当前句（番茄音频没有逐句时间戳，只能按字数比例推进）。
@@ -771,11 +814,7 @@ struct AudioChapterView: View {
         let text = paragraphs[index]
         var attributed = AttributedString(text)
         if current, audio.duration > 0 {
-            let offsets = paragraphOffsets
-            let total = max(offsets.total, 1)
-            let played = Int(Double(total) * min(max(audio.currentTime / audio.duration, 0), 1))
-            let start = offsets.starts.indices.contains(index) ? offsets.starts[index] : 0
-            let fraction = Double(played - start) / Double(max(text.count, 1))
+            let fraction = fractionWithinParagraph(index)
             if let range = sentenceRange(in: text, withinParagraph: fraction) {
                 var combined = AttributedString(String(text[..<range.lowerBound]))
                 var middle = AttributedString(String(text[range]))
@@ -813,7 +852,9 @@ struct AudioChapterView: View {
         loadingText = true
         let loaded = await onLoadParagraphs()
         paragraphs = loaded
+        boundaries = nil
         loadingText = false
+        buildTimelineIfNeeded()
     }
 
     private var backButton: some View {
