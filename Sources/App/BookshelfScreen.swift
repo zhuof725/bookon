@@ -108,7 +108,7 @@ struct BookshelfScreen: View {
                             ForEach(visibleBooks) { book in bookButton(book, grid: true, coverWidth: metrics?.coverWidth) }
                         }.padding(.horizontal, 24).padding(.top, 2).padding(.bottom, 24)
                     } else {
-                        LazyVStack(spacing: 0) {
+                        LazyVStack(spacing: 10) {
                             ForEach(visibleBooks) { book in
                                 ShelfListBookButton(book: book, localOrigin: localOrigin,
                                     selecting: selecting, selected: selection.contains(book.id),
@@ -120,8 +120,17 @@ struct BookshelfScreen: View {
                                     }, open: { onOpen(book) }, select: {
                                         selecting = true; selection.insert(book.id)
                                     })
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(palette.surface)
+                                    }
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .strokeBorder(palette.border.opacity(0.45), lineWidth: 0.5)
+                                    }
+                                    .padding(.horizontal, 16)
                             }
-                        }.padding(.horizontal, 0).padding(.bottom, 24)
+                        }.padding(.top, 4).padding(.bottom, 24)
                     }
                 }
                 .refreshable { await performRefresh() }
@@ -307,7 +316,9 @@ struct ShelfBookCard: View {
                             .appFont(accessibleCustom ? .headline : .system(size: 13, weight: .semibold))
                             .lineLimit(accessibleCustom ? nil : 2)
                             .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            // 固定两行高度：书名一行/两行的卡片底边能对齐。
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .frame(height: accessibleCustom ? nil : 32, alignment: .topLeading)
                         Text(ShelfListSummary.authorName(book))
                             .appFont(accessibleCustom ? .subheadline : .system(size: 11))
                             .foregroundStyle(palette.secondary)

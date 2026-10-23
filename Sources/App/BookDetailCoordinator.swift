@@ -352,8 +352,9 @@ struct BookDetailSourcePicker: View {
                     Button { onSelect(found) } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(spacing: 8) {
-                                Text(found.originName.isEmpty ? found.origin : found.originName)
+                                Text(sourceLabel(found))
                                     .foregroundStyle(palette.primary)
+                                    .lineLimit(2)
                                 if let count = tocCounts[found.bookUrl] {
                                     Text("\(count) 章").appFont(.caption).foregroundStyle(palette.secondary)
                                 }
@@ -424,6 +425,32 @@ struct BookDetailSourcePicker: View {
         if NetworkSettings.loadTocOnSourceSwitch, !results.isEmpty {
             await prefetchTOCs()
         }
+    }
+
+    /// 聚合源的书地址里带着上游（如书山聚合：data:...base64,{"source":"番茄小说"}），
+    /// 换源列表里把它拼在书源名后面，同一个聚合源的不同上游就能分别显示。
+    private func sourceLabel(_ book: Book) -> String {
+        let base = book.originName.isEmpty ? book.origin : book.originName
+        guard let upstream = upstreamName(book), !upstream.isEmpty else { return base }
+        return base + " · " + upstream
+    }
+
+    private func upstreamName(_ book: Book) -> String? {
+        let raw = book.bookUrl
+        if let range = raw.range(of: "base64,") {
+            let rest = raw[range.upperBound...]
+            let part = rest.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+            if let data = Data(base64Encoded: String(part)),
+               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let source = object["source"] as? String, !source.isEmpty {
+                return source
+            }
+        }
+        if let items = URLComponents(string: raw)?.queryItems,
+           let value = items.first(where: { $0.name == "source" })?.value, !value.isEmpty {
+            return value
+        }
+        return nil
     }
 
     /// 「换源时加载目录」：并发取各候选源的目录，顺便写进缓存，切换后立即能用。

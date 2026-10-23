@@ -100,12 +100,8 @@ struct ShelfListRow: View {
                 line(summary.latestLine)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let percent = ShelfListSummary.progressPercent(book, chapterCount: summary.chapterCount) {
-                Text("\(percent)%")
-                    .appFont(.caption).foregroundStyle(palette.secondary)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .accessibilityHidden(true)
-            }
+            // 百分比不显示：用户只要书名/进度/最新章节。
+
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
