@@ -404,7 +404,10 @@ struct ReaderView: View {
                 mangaBody
             } else if bookAudio.chapterURL != nil {
                 AudioChapterView(audio: bookAudio, book: book,
-                                 positionLabel: "\(index + 1)/\(chapters.count)",
+                                 chapterNumber: index + 1,
+                                 chapterCount: chapters.count,
+                                 nextChapterTitle: chapters.indices.contains(index + 1)
+                                     ? chapters[index + 1].title : nil,
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: { dismiss() },

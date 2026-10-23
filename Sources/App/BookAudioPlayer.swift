@@ -520,12 +520,20 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         }
     }
 }
-/// 音频章节阅读界面：整体布局与听书播放器（AloudPlayerView）一致 ——
-/// 顶栏返回、书名/作者/章节、大封面、章节进度、播放进度条、控制行、底栏（目录/倍速/定时/设置）。
+
+// MARK: - 音频章节界面（有声书）
+
+/// 音频章节阅读界面：布局与听书播放器（AloudPlayerView）一致 ——
+/// 顶栏返回胶囊 / ••• 菜单、书名/作者/章节、大封面（右下角「播放中」）、
+/// 当前章节 + 下一章、播放进度、⏮ / 后退 15 秒 / 播放 / 前进 15 秒 / ⏭、底栏胶囊。
 struct AudioChapterView: View {
     @ObservedObject var audio: BookAudioPlayer
     let book: Book
-    let positionLabel: String
+    /// 当前章节序号（从 1 开始）与总章数。
+    let chapterNumber: Int
+    let chapterCount: Int
+    /// 下一章标题（显示成「下一章 · xxx」；nil 表示已是最后一章）。
+    var nextChapterTitle: String? = nil
     let onPrevious: () -> Void
     let onNext: () -> Void
     let onBack: () -> Void
@@ -540,71 +548,176 @@ struct AudioChapterView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            titleBlock
-            Spacer(minLength: 8)
-            BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900, origin: book.origin)
-                .frame(width: 240, height: 320)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)
-                .accessibilityIdentifier("reader.audio.cover")
-            Spacer(minLength: 8)
-            // 播放状态/进度单独成视图：时间每 0.5 秒刷新，只重绘这一块，
-            // 不再整页（封面、标题、底栏）跟着重排，拖进度条也就不会卡。
-            AudioControlsPanel(audio: audio, positionLabel: positionLabel,
-                               onPrevious: onPrevious, onNext: onNext, onTOC: onTOC)
-            Spacer(minLength: 6)
-            Rectangle().fill(palette.border).frame(height: 0.5)
+            header
+
+            Spacer(minLength: 10)
+            HStack {
+                Spacer(minLength: 0)
+                coverArt
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 10)
+
+            chapterBlock
+                .padding(.horizontal, 24)
+
+            AudioControlsPanel(audio: audio, onPrevious: onPrevious, onNext: onNext)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+
+            Spacer(minLength: 2)
             bottomBar
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(palette.primary)
         .tint(palette.accent)
+        .background { playerBackground }
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
+    }
+
+    private var playerBackground: some View {
+        ZStack {
+            AppThemeCanvas()
+            RadialGradient(colors: [palette.accent.opacity(0.14), palette.accent.opacity(0)],
+                           center: UnitPoint(x: 0.5, y: 0.44),
+                           startRadius: 8, endRadius: 330)
+        }
+        .ignoresSafeArea()
     }
 
     // MARK: 顶栏
 
     private var topBar: some View {
-        HStack {
-            Button { onBack() } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                    Text("返回").appFont(.body)
-                }
-                .foregroundStyle(palette.accent)
-                .padding(.vertical, 8).padding(.trailing, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("reader.audio.back")
-            Spacer()
+        HStack(spacing: 8) {
+            backButton
+            Spacer(minLength: 0)
+            moreButton
         }
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        .frame(height: 56)
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(book.name)
-                .appFont(.title3.bold())
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            if !book.author.isEmpty {
-                Text(book.author).appFont(.subheadline).foregroundStyle(palette.secondary)
+    private var backButton: some View {
+        Button { onBack() } label: {
+            HStack(spacing: 2) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("返回").appFont(.subheadline)
             }
-            Text(audio.chapterTitle.isEmpty ? " " : audio.chapterTitle)
-                .appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(1)
-                .accessibilityIdentifier("reader.audio.title")
+            .foregroundStyle(palette.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background { AppGlassSurface(shape: Capsule(), tint: palette.surface) }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("返回")
+        .accessibilityIdentifier("reader.audio.back")
+    }
+
+    private var moreButton: some View {
+        Menu {
+            Button { onTOC() } label: {
+                Label("目录", systemImage: "list.bullet.rectangle")
+            }
+            Divider()
+            Button(role: .destructive) { audio.stop() } label: {
+                Label("停止播放", systemImage: "stop.circle")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(palette.primary)
+                .frame(width: 34, height: 34)
+                .background { AppGlassSurface(shape: Circle(), tint: palette.surface) }
+                .contentShape(Circle())
+        }
+        .accessibilityLabel("更多")
+        .accessibilityIdentifier("reader.audio.more")
+    }
+
+    // MARK: 书名 / 封面 / 章节
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(book.name)
+                .appFont(.title.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            if !book.author.isEmpty {
+                Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
+            }
+            HStack(spacing: 8) {
+                Text("第 \(chapterNumber) 章")
+                    .appFont(.subheadline)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text("\(chapterNumber) / \(chapterCount) 章")
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .fixedSize()
+                    .accessibilityIdentifier("reader.audio.chapterProgress")
+            }
+            .padding(.top, 5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
-        .padding(.top, 10)
+        .padding(.top, 4)
+    }
+
+    private var coverArt: some View {
+        BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900, origin: book.origin)
+            .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            .frame(maxWidth: 230, maxHeight: 306)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.22), radius: 22, x: 0, y: 12)
+            .overlay(alignment: .bottomTrailing) {
+                playingBadge.padding(10)
+            }
+            .accessibilityIdentifier("reader.audio.cover")
+    }
+
+    /// 封面右下角的小胶囊：播放中 / 已暂停。
+    private var playingBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "waveform")
+                .font(.system(size: 10, weight: .bold))
+            Text(audio.isPlaying ? "播放中" : "已暂停")
+                .appFont(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.black.opacity(0.52)))
+        .accessibilityHidden(true)
+    }
+
+    /// 当前章节（正在播的内容）+ 下一章 / 缓冲 / 错误提示。
+    private var chapterBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(audio.chapterTitle.isEmpty ? " " : audio.chapterTitle)
+                .appFont(.title3.weight(.semibold))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("reader.audio.title")
+            Text(secondaryLine)
+                .appFont(.caption)
+                .foregroundStyle(audio.message == nil ? palette.secondary : .red)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("reader.audio.status")
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+    }
+
+    private var secondaryLine: String {
+        if let message = audio.message { return message }
+        if audio.isBuffering { return "正在缓冲…" }
+        if let next = nextChapterTitle, !next.isEmpty { return "下一章 · \(next)" }
+        return "已是最后一章"
     }
 
     // MARK: 底栏（目录 / 倍速 / 定时 / 设置）
-
-    // MARK: 底栏
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
@@ -623,7 +736,17 @@ struct AudioChapterView: View {
             bottomItem(title: "设置", symbol: "gearshape",
                        id: "reader.audio.settings") { onSettings() }
         }
-        .padding(.top, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 7)
+        .background {
+            AppGlassSurface(shape: Capsule(), tint: palette.surface)
+        }
+        .overlay {
+            Capsule().strokeBorder(palette.border.opacity(0.55), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         .padding(.bottom, 4)
     }
 
@@ -636,12 +759,12 @@ struct AudioChapterView: View {
     }
 
     private func bottomLabel(title: String, symbol: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 22))
-            Text(title).appFont(.caption)
+        VStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 20))
+            Text(title).appFont(.caption2)
         }
         .foregroundStyle(palette.primary)
-        .frame(maxWidth: .infinity, minHeight: 52)
+        .frame(maxWidth: .infinity, minHeight: 46)
         .contentShape(Rectangle())
     }
 
@@ -684,12 +807,11 @@ struct AudioChapterView: View {
     }
 }
 
+/// 播放进度 + 控制行。时间每 0.5 秒刷新，只重绘这一块，不跟着整页（封面、标题）重排。
 struct AudioControlsPanel: View {
     @ObservedObject var audio: BookAudioPlayer
-    let positionLabel: String
     let onPrevious: () -> Void
     let onNext: () -> Void
-    let onTOC: () -> Void
 
     @ThemePalette private var palette
     @State private var scrub: Double?
@@ -698,32 +820,10 @@ struct AudioControlsPanel: View {
     @State private var pendingSeekTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 0) {
-            statusLine
-            chapterCountLabel
+        VStack(spacing: 2) {
             progressBlock
             controlsRow
         }
-    }
-
-    /// 缓冲/错误状态放在听书播放器「当前句」的位置。
-    private var statusLine: some View {
-        Text(audio.isBuffering ? "正在缓冲…" : (audio.message ?? " "))
-            .appFont(.subheadline)
-            .foregroundStyle(audio.message == nil ? palette.secondary : .red)
-            .lineLimit(2)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
-            .padding(.horizontal, 24)
-            .accessibilityIdentifier("reader.audio.status")
-    }
-
-    private var chapterCountLabel: some View {
-        Text(positionLabel + "章")
-            .appFont(.caption).foregroundStyle(palette.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.top, 6)
-            .accessibilityIdentifier("reader.audio.chapterProgress")
     }
 
     private var fraction: Double {
@@ -770,59 +870,69 @@ struct AudioControlsPanel: View {
                 Text("-" + PlaybackTimeText.string(max(audio.duration - displayedSeconds, 0)))
                     .accessibilityIdentifier("reader.audio.timeRemaining")
             }
-            .appFont(.caption)
+            .appFont(.caption2)
             .monospacedDigit()
             .foregroundStyle(palette.secondary)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 6)
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
     }
 
     // MARK: 控制行
 
-    /// 与听书播放器一致：⏮/⏭ 15 秒图标对应上一章/下一章；倍速只在底栏，右侧留同宽占位保持播放键居中。
     private var controlsRow: some View {
         HStack(spacing: 0) {
-            controlButton(symbol: "list.bullet", label: "目录",
-                          id: "reader.audio.tocRow", action: onTOC)
-            controlButton(symbol: "gobackward.15", label: "上一章",
-                          id: "reader.audio.prevChapter", action: onPrevious)
+            chapterButton(direction: -1)
+            skipButton(direction: -1)
             playButton
-            controlButton(symbol: "goforward.15", label: "下一章",
-                          id: "reader.audio.nextChapter", action: onNext)
-            Color.clear.frame(maxWidth: .infinity, minHeight: 72)
+            skipButton(direction: 1)
+            chapterButton(direction: 1)
         }
-        .padding(.top, 10)
     }
 
-    private func controlButton(symbol: String, label: String, id: String,
-                               action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 26))
-                .foregroundStyle(palette.primary)
-                .frame(maxWidth: .infinity, minHeight: 72)
-                .contentShape(Rectangle())
+    private func controlFrame<V: View>(_ content: V) -> some View {
+        content.frame(maxWidth: .infinity, minHeight: 74).contentShape(Rectangle())
+    }
+
+    private func chapterButton(direction: Int) -> some View {
+        let previous = direction < 0
+        return Button { previous ? onPrevious() : onNext() } label: {
+            controlFrame(Image(systemName: previous ? "backward.end.fill" : "forward.end.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(id)
+        .accessibilityLabel(previous ? "上一章" : "下一章")
+        .accessibilityIdentifier(previous ? "reader.audio.prevChapter" : "reader.audio.nextChapter")
+    }
+
+    private func skipButton(direction: Int) -> some View {
+        let previous = direction < 0
+        return Button { audio.skip(previous ? -15 : 15) } label: {
+            controlFrame(Image(systemName: previous ? "gobackward.15" : "goforward.15")
+                .font(.system(size: 27))
+                .foregroundStyle(palette.primary))
+        }
+        .buttonStyle(.plain)
+        .disabled(audio.duration <= 0)
+        .accessibilityLabel(previous ? "后退 15 秒" : "前进 15 秒")
+        .accessibilityIdentifier(previous ? "reader.audio.back15" : "reader.audio.forward15")
     }
 
     private var playButton: some View {
         Button { audio.toggle() } label: {
             ZStack {
-                Circle().fill(palette.accent).frame(width: 74, height: 74)
+                Circle().fill(palette.primary).frame(width: 74, height: 74)
                 if audio.isBuffering {
-                    ProgressView().tint(palette.onAccent)
+                    ProgressView().tint(palette.background)
                 } else {
                     Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(palette.onAccent)
+                        .foregroundStyle(palette.background)
                         .offset(x: audio.isPlaying ? 0 : 3)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 72)
+            .frame(maxWidth: .infinity, minHeight: 74)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
