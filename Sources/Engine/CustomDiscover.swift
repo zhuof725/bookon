@@ -345,11 +345,16 @@ struct CustomDiscoverConfig: Codable, Hashable {
         carouselKindTitle = (try? c.decodeIfPresent(String.self, forKey: .carouselKindTitle)) ?? ""
         carouselKindUrl = (try? c.decodeIfPresent(String.self, forKey: .carouselKindUrl)) ?? ""
         carouselHidden = (try? c.decodeIfPresent(Bool.self, forKey: .carouselHidden)) ?? false
-        var template = DiscoverTemplateKind.normalized(
-            try? c.decodeIfPresent(String.self, forKey: .carouselTemplate))
+        // 没写这个字段（老配置）就用轮播默认的大卡片；
+        // 写了但认不出来（含已下线的扇形）走 normalized 的迁移规则。
+        let raw = try? c.decodeIfPresent(String.self, forKey: .carouselTemplate)
+        if let raw, !raw.isEmpty {
+            carouselTemplate = DiscoverTemplateKind.normalized(raw)
+        } else {
+            carouselTemplate = .largeCard
+        }
         // 轮播只吃书籍列表；记录模板不适用于轮播，兜底回大卡片。
-        if template.dataSource != .bookList { template = .largeCard }
-        carouselTemplate = template
+        if carouselTemplate.dataSource != .bookList { carouselTemplate = .largeCard }
     }
 
     /// 轮播是否已配置且未关闭。
