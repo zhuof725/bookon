@@ -988,6 +988,7 @@ extension HistoryItem {
 /// 调用方（自定义发现页、书源发现页、将来的任何页面）只依赖这个入口：
 /// 想换版式就改 `kind`，不用改调用代码。新增模板时在这里加一条分支即可。
 struct DiscoverTemplateView: View {
+    @ThemePalette private var palette
     let kind: DiscoverTemplateKind
     let title: String
     var moreTitle: String = "全部"
