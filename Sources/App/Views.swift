@@ -421,6 +421,7 @@ struct ReaderView: View {
                                          BookKindStore.save(.text, bookUrl: book.bookUrl)
                                      }
                                  },
+                                 onLoadParagraphs: { await audioChapterParagraphs() },
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: { dismiss() },
@@ -1856,6 +1857,17 @@ struct ReaderView: View {
         }
         await beginAudioChapter(index, source: source)
         return true
+    }
+
+    /// 有声书「正文」页的文字：用原章节地址跑正文规则（音频模式是播放时才改写的）。
+    private func audioChapterParagraphs() async -> [String] {
+        guard chapters.indices.contains(index),
+              let source = store.source(for: book.origin) else { return [] }
+        guard let raw = try? await WebBook.rawContentWithBookInfoHealing(
+            source: source, book: book, chapter: chapters[index]) else { return [] }
+        return raw.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。

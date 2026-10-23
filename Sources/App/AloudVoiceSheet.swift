@@ -38,7 +38,8 @@ struct AloudVoiceSheet: View {
                 let ok = await SourceToneAudio.probe(tone: tone, source: source, chapter: chapter)
                 SourceToneAudio.storeAvailability(ok, bookUrl: book.bookUrl, tone: tone)
                 return ok
-            })
+            },
+            reset: { SourceToneAudio.clearAvailability(bookUrl: book.bookUrl) })
     }
 
     /// 只有当前这本书所属的书源，才提供「用这个音色听这本书」。

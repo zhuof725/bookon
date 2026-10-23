@@ -134,6 +134,10 @@ enum SourceToneAudio {
         return value
     }
 
+    static func clearAvailability(bookUrl: String) {
+        UserDefaults.standard.removeObject(forKey: availabilityKey(bookUrl))
+    }
+
     static func storeAvailability(_ available: Bool, bookUrl: String, tone: String) {
         var map = availabilityMap(bookUrl: bookUrl)
         map[tone] = available

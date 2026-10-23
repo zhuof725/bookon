@@ -540,6 +540,8 @@ struct AudioChapterView: View {
     var onReloadAudio: (() -> Void)? = nil
     /// 显式停止播放（用于退出「书源音色」模式）。
     var onStop: (() -> Void)? = nil
+    /// 正文页：取本章文字段落（有声书没有逐句时间戳，高亮按进度估算）。
+    var onLoadParagraphs: (() async -> [String])? = nil
     let onPrevious: () -> Void
     let onNext: () -> Void
     let onBack: () -> Void
@@ -547,6 +549,10 @@ struct AudioChapterView: View {
 
     @ThemePalette private var palette
     @State private var showTone = false
+    /// 0 = 封面，1 = 正文
+    @State private var mode = 0
+    @State private var paragraphs: [String] = []
+    @State private var loadingText = false
 
     private let speedPresets: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
@@ -554,24 +560,11 @@ struct AudioChapterView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            header
-
-            Spacer(minLength: 10)
-            HStack {
-                Spacer(minLength: 0)
-                coverArt
-                Spacer(minLength: 0)
+            if mode == 0 {
+                coverBody
+            } else {
+                textBody
             }
-            Spacer(minLength: 10)
-
-            chapterBlock
-                .padding(.horizontal, 24)
-
-            AudioControlsPanel(audio: audio, onPrevious: onPrevious, onNext: onNext)
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
-
-            Spacer(minLength: 2)
             bottomBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -600,13 +593,158 @@ struct AudioChapterView: View {
     // MARK: 顶栏
 
     private var topBar: some View {
-        HStack(spacing: 8) {
-            backButton
-            Spacer(minLength: 0)
-            moreButton
+        ZStack {
+            modeSwitch
+            HStack(spacing: 8) {
+                backButton
+                Spacer(minLength: 0)
+                moreButton
+            }
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
+    }
+
+    private var modeSwitch: some View {
+        HStack(spacing: 0) {
+            modeButton(title: "封面", index: 0, id: "reader.audio.modeCover")
+            modeButton(title: "正文", index: 1, id: "reader.audio.modeText")
+        }
+        .padding(3)
+        .background(Capsule().fill(palette.primary.opacity(0.08)))
+    }
+
+    private func modeButton(title: String, index: Int, id: String) -> some View {
+        let selected = mode == index
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { mode = index }
+        } label: {
+            Text(title)
+                .appFont(.subheadline.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? palette.background : palette.secondary)
+                .frame(width: 78, height: 32)
+                .background(Capsule().fill(selected ? palette.primary : Color.clear))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityValue(selected ? "已选中" : "未选中")
+    }
+
+    private var coverBody: some View {
+        VStack(spacing: 0) {
+            header
+
+            Spacer(minLength: 10)
+            HStack {
+                Spacer(minLength: 0)
+                coverArt
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 10)
+
+            chapterBlock
+                .padding(.horizontal, 24)
+
+            AudioControlsPanel(audio: audio, onPrevious: onPrevious, onNext: onNext)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+
+            Spacer(minLength: 2)
+        }
+    }
+
+    /// 正文页：显示本章文字，按音频进度估算高亮当前段落（番茄音频没有逐句时间戳）。
+    private var textBody: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(audio.chapterTitle.isEmpty ? " " : audio.chapterTitle)
+                    .appFont(.title3.bold())
+                    .lineLimit(1)
+                Text(book.author.isEmpty ? book.name : "\(book.name) · \(book.author)")
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 2)
+            .padding(.bottom, 6)
+
+            if loadingText {
+                ProgressView().padding(.top, 50)
+                Spacer(minLength: 0)
+            } else if paragraphs.isEmpty {
+                Text("这一章没有可显示的文字")
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
+                    .padding(.top, 50)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        ForEach(paragraphs.indices, id: \.self) { i in
+                            paragraphView(i)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                }
+            }
+
+            AudioControlsPanel(audio: audio, onPrevious: onPrevious, onNext: onNext)
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+                .padding(.bottom, 4)
+        }
+        .task(id: audio.chapterTitle) { await loadParagraphsIfNeeded() }
+    }
+
+    /// 按「已播比例 × 总字数」估算当前段落。
+    private var estimatedParagraphIndex: Int? {
+        guard !paragraphs.isEmpty, audio.duration > 0 else { return nil }
+        let total = paragraphs.reduce(0) { $0 + max($1.count, 1) }
+        guard total > 0 else { return nil }
+        let target = Int(Double(total) * min(max(audio.currentTime / audio.duration, 0), 1))
+        var acc = 0
+        for (i, text) in paragraphs.enumerated() {
+            acc += max(text.count, 1)
+            if target <= acc { return i }
+        }
+        return paragraphs.count - 1
+    }
+
+    private func paragraphView(_ index: Int) -> some View {
+        let current = index == estimatedParagraphIndex
+        return Text(paragraphs[index])
+            .appFont(.body)
+            .lineSpacing(8)
+            .foregroundStyle(current ? palette.accent : palette.primary.opacity(0.88))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background {
+                if current {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(palette.highlight)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if current {
+                    Capsule().fill(palette.accent)
+                        .frame(width: 3)
+                        .padding(.vertical, 10)
+                }
+            }
+            .id(index)
+            .accessibilityIdentifier("reader.audio.para.\(index)")
+    }
+
+    private func loadParagraphsIfNeeded() async {
+        guard let onLoadParagraphs else { return }
+        loadingText = true
+        let loaded = await onLoadParagraphs()
+        paragraphs = loaded
+        loadingText = false
     }
 
     private var backButton: some View {

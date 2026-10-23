@@ -16,6 +16,7 @@ struct SourceToneList: View {
     struct Probe {
         var cached: (String) -> Bool?
         var run: (String) async -> Bool
+        var reset: () -> Void = {}
     }
     var probe: Probe? = nil
 
@@ -104,6 +105,19 @@ struct SourceToneList: View {
         .task {
             await load()
             startProbing()
+        }
+        .toolbar {
+            if probe != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("重新检测") {
+                        probe?.reset()
+                        availability.removeAll()
+                        checking.removeAll()
+                        startProbing()
+                    }
+                    .accessibilityIdentifier("tone.retest")
+                }
+            }
         }
         .onDisappear { probeTask?.cancel() }
         .sheet(isPresented: $showSourceSettings) {
