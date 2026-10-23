@@ -535,13 +535,12 @@ struct DeckCarousel<Card: View>: View {
                                 return content
                                     .rotation3DEffect(.degrees(Double(-phase.value) * flipDegrees),
                                                       axis: (x: 0, y: 1, z: 0),
-                                                      // 叠牌绕底边翻（像捏着的一叠牌），弧线绕中心
-                                                      anchor: fanOut ? .bottom : .center,
-                                                      perspective: fanOut ? 0.9 : 0.55)
+                                                      // 透视调弱：太强的透视会让倾斜的卡被压扁，
+                                                      // 侧卡看着像一条竖线。
+                                                      anchor: .center,
+                                                      perspective: 0.35)
                                     .scaleEffect(1 - (1 - scaleFloor) * depth)
-                                    // 叠牌额外向两侧散开一点
-                                    .offset(x: fanOut ? phase.value * fanSpread : 0,
-                                            y: yDrift * depth)
+                                    .offset(y: yDrift * depth)
                                     .opacity(1 - (1 - opacityFloor) * depth)
                             }
                             .frame(width: step, height: stageHeight)
@@ -698,14 +697,13 @@ struct DiscoverDeckSection: View {
                          cardWidth: cardWidth,
                          step: step,
                          stageHeight: stageHeight,
-                         // 卡片堆叠：转角更大、更小、压得更暗，并绕底边摊开。
-                         // 之前两套参数太接近，所以看着「一样」。
-                         flipDegrees: 78,
-                         scaleFloor: 0.64,
+                         // 卡片堆叠：温和的叠卡。
+                         // 之前 78° + perspective 0.9 + 绕底边，侧卡直接变成一条竖线，
+                         // 看着很不舒服。现在只做轻微倾斜，侧卡仍能看清封面。
+                         flipDegrees: 26,
+                         scaleFloor: 0.86,
                          yDrift: 0,
-                         opacityFloor: 0.30,
-                         fanOut: true,
-                         fanSpread: 22,
+                         opacityFloor: 0.62,
                          index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
