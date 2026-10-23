@@ -191,7 +191,7 @@ enum CrashReporter {
                 String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
             }
         }
-        return "应用: 阅读iOS \(version) (\(build))\n系统: \(system)\n设备: \(machine)"
+        return "应用: 尚书 \(version) (\(build))\n系统: \(system)\n设备: \(machine)"
     }
 
     private static func deviceSummary() -> String {

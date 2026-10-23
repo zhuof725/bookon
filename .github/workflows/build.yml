@@ -27,13 +27,13 @@ jobs:
         run: xcodegen generate
 
       - name: Resolve packages
-        run: xcodebuild -resolvePackageDependencies -project LegadoiOS.xcodeproj -scheme LegadoiOS
+        run: xcodebuild -resolvePackageDependencies -project BookOn.xcodeproj -scheme BookOn
 
       - name: Build
         run: |
           set -o pipefail
-          xcodebuild -project LegadoiOS.xcodeproj \
-            -scheme LegadoiOS \
+          xcodebuild -project BookOn.xcodeproj \
+            -scheme BookOn \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -47,17 +47,17 @@ jobs:
           echo "APP=$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qr LegadoiOS-unsigned.ipa Payload
-          ls -la LegadoiOS-unsigned.ipa
+          zip -qr BookOn-unsigned.ipa Payload
+          ls -la BookOn-unsigned.ipa
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LegadoiOS-unsigned-ipa
-          path: LegadoiOS-unsigned.ipa
+          name: BookOn-unsigned-ipa
+          path: BookOn-unsigned.ipa
 
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log

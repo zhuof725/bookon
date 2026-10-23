@@ -1,6 +1,6 @@
-name: LegadoiOS
+name: BookOn
 options:
-  bundleIdPrefix: io.github.zhuof725
+  bundleIdPrefix: io.github.xianghuo
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -20,7 +20,7 @@ settings:
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGN_IDENTITY: ""
 targets:
-  LegadoiOS:
+  BookOn:
     type: application
     platform: iOS
     sources:
@@ -31,7 +31,7 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: 阅读iOS
+        CFBundleDisplayName: 尚书
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
@@ -51,6 +51,7 @@ targets:
               - yuedu
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.zhuof725.legadoios
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.xianghuo.book
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
