@@ -263,8 +263,10 @@ enum BookKind: String, CaseIterable {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .text }
         let plain = strippedText(text)
-        // 音频：短、且解析出来的地址都像音频（网页/接口说明页不算）。
-        if text.count <= 2000, plain.count <= 600 {
+        // 音频：整段就是一条播放地址（多段时是地址数组）。
+        // 注意不能限制 600 字：音频代理地址带一大串签名参数，轻松就六七百字符，
+        // 之前按字数卡掉，长地址就会被当成正文显示出来。
+        if text.count <= 8000, !text.contains("\n") {
             let urls = AudioChapter.playURLs(fromContent: text)
             if !urls.isEmpty, urls.allSatisfy({ AudioChapter.looksLikeAudioURL($0) }) {
                 return .audio

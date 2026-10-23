@@ -32,6 +32,11 @@ enum BookKindRegression {
         check(BookKind.detect(inContent: "https://cdn.example/api/get?id=9") == .audio, "接口形状的音频地址")
         check(BookKind.detect(inContent: #"["https://cdn.example/1.mp3","https://cdn.example/2.mp3"]"#) == .audio,
               "音频地址数组")
+        // 音频代理地址很长（带签名参数），不能按字数把它当正文。
+        let longAudio = "https://fqapi.example:8080/api/media/stream?url=https%3A%2F%2Fvod.example%2F"
+            + String(repeating: "abcdef0123456789", count: 40) + "&mime_type=audio_mpeg"
+        check(longAudio.count > 600, "长地址样例足够长")
+        check(BookKind.detect(inContent: longAudio) == .audio, "超长音频代理地址识别为音频")
         check(BookKind.detect(inContent: "https://cdn.example/book/1.html") == .text, "网页地址仍是文本")
         check(BookKind.detect(inContent: "https://cdn.example/play/index.php?id=1") == .text, "php 页面不算音频")
         check(BookKind.detect(inContent: "本章内容请到 https://cdn.example/a.m4a 收听") == .text, "正文里提到音频地址仍是文本")

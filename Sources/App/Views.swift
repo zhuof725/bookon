@@ -1010,6 +1010,14 @@ struct ReaderView: View {
         }
         if let cached = BookKindStore.saved(bookUrl: book.bookUrl) {
             mangaMode = cached == .image
+            if mangaMode { return false }
+            if cached == .audio {
+                // 之前识别过是音频：直接按有声书打开，不用再抓一遍正文确认。
+                index = first
+                await beginAudioChapter(first, source: source)
+                loading = false
+                return true
+            }
             return false
         }
         guard chapters.indices.contains(first) else { return false }
