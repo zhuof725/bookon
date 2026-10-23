@@ -493,7 +493,6 @@ struct BookDetailScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("detail.changeSource")
-        .accessibilityLabel("换源")
         .accessibilityHint("选择其他书源")
     }
 
