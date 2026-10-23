@@ -343,8 +343,10 @@ struct DiscoverSourceView: View {
                         }
                         .independentGlassRow()
                         .accessibilityIdentifier("discover.kind.\(kind.title)")
-                    } header: {
-                        Text(pair.element.header ?? "")
+                    }
+                } header: {
+                    if let header = pair.element.header {
+                        Text(header)
                             .appFont(.system(size: 13, weight: .semibold))
                             .foregroundStyle(palette.secondary)
                     }
