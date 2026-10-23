@@ -1686,7 +1686,7 @@ struct ReaderView: View {
         let chapter = chapters[target]
         bookAudio.onFinish = {
             // 这一章听完了：清掉进度，别再「续播」到结尾。
-            AudioProgress.clear(bookUrl: book.bookUrl, chapter: target)
+            AudioProgress.clear(bookUrl: book.bookUrl)
             audioNextChapter()
         }
         bookAudio.onRemoteNext = { audioNextChapter() }
