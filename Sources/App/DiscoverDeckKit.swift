@@ -480,6 +480,90 @@ struct DiscoverRankRowSection: View {
     }
 }
 
+// MARK: - 3D 翻转景深的卡片轨道
+
+/// 一行可以左右滑的卡片。
+///
+/// **为什么用原生 ScrollView 而不是自己写 DragGesture**：
+///  - 手指落在卡片上往下滑时，自定义拖拽手势会吃掉这次触摸，外层竖向 ScrollView
+///    就再也收不到，页面卡住不动；原生横向滚动是 UIKit 的嵌套滚动，
+///    横向归它、竖向自动交给外层，两边都不抢；
+///  - 自己算位移时，快速甩动会先跟手、再弹回原位（松手才决定翻不翻页），
+///    看着就是「回弹」。原生滚动有惯性和吸附，不存在这个问题。
+///
+/// 3D 翻转景深用 `scrollTransition(.interactive)` 完成：它拿到的 phase 是每一帧
+/// 卡片相对视口中心的实时进度（-1…1），所以拖动过程中卡片就在连续翻转、缩小、
+/// 后退、变淡，停下来再吸附到位。
+struct DeckCarousel<Card: View>: View {
+    let count: Int
+    /// 卡片本体宽度
+    let cardWidth: CGFloat
+    /// 相邻卡片的槽位宽度（小于卡宽就会互相叠压）
+    let step: CGFloat
+    let stageHeight: CGFloat
+    /// 偏离中心时的最大翻转角度（度），越大景深越强
+    var flipDegrees: Double = 62
+    /// 偏离中心时缩小到的比例
+    var scaleFloor: Double = 0.74
+    /// 偏离中心时下移的点数（弧形走廊靠它弯下来）
+    var yDrift: CGFloat = 0
+    /// 偏离中心时淡到的不透明度
+    var opacityFloor: Double = 0.42
+    /// 叠牌形态：卡片绕**底边**翻、并向两侧散开，像手里捏着一叠牌被拨开。
+    /// 弧形走廊不打开，它保持贴着一道弧线滑。
+    var fanOut: Bool = false
+    /// 叠牌时每格额外的横向散开（pt）
+    var fanSpread: CGFloat = 0
+    /// 当前居中的卡片下标（滑动时更新，用于底部书名与圆点）
+    @Binding var index: Int?
+    @ViewBuilder var card: (Int) -> Card
+
+    var body: some View {
+        GeometryReader { proxy in
+            // 两端留出半个槽位的空位，第一张和最后一张也能停在正中
+            let side = max((proxy.size.width - step) / 2, 0)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(0..<max(count, 0), id: \.self) { i in
+                        // 槽位比卡窄：画面宽度按 step 算，卡本身按 cardWidth 画，
+                        // 于是相邻两张自然叠压在一起，像一叠真卡片
+                        card(i)
+                            .frame(width: cardWidth, height: stageHeight)
+                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                // 相邻卡片也要有明显角度，所以先把相位放大再夹到 0…1
+                                let depth = min(abs(phase.value) * 2.2, 1)
+                                return content
+                                    .rotation3DEffect(.degrees(Double(-phase.value) * flipDegrees),
+                                                      axis: (x: 0, y: 1, z: 0),
+                                                      // 叠牌绕底边翻（像捏着的一叠牌），弧线绕中心
+                                                      anchor: fanOut ? .bottom : .center,
+                                                      perspective: fanOut ? 0.9 : 0.55)
+                                    .scaleEffect(1 - (1 - scaleFloor) * depth)
+                                    // 叠牌额外向两侧散开一点
+                                    .offset(x: fanOut ? phase.value * fanSpread : 0,
+                                            y: yDrift * depth)
+                                    .opacity(1 - (1 - opacityFloor) * depth)
+                                    // 越靠近中心越靠前，两侧的卡压在后面
+                                    .zIndex(-depth)
+                            }
+                            .frame(width: step, height: stageHeight)
+                            .id(i)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            // 内容装得下时不回弹；甩动由系统惯性接管，不会弹回原卡
+            .scrollBounceBehavior(.basedOnSize)
+            .contentMargins(.horizontal, side, for: .scrollContent)
+            .scrollPosition(id: $index)
+            .frame(height: stageHeight)
+        }
+        .frame(height: stageHeight)
+    }
+}
+
 // MARK: - U2 弧形走廊
 
 /// 卡片沿一条向上弯的弧线排列：中间最大最亮，向两侧逐渐缩小、下移、后退。
@@ -510,13 +594,15 @@ struct DiscoverCurveSection: View {
             header
                 .padding(.horizontal, 20)
 
-            DeckPagingView(count: items.count,
-                           cardWidth: cardWidth,
-                           cardHeight: cardHeight,
-                           step: step,
-                           stageHeight: stageHeight,
-                           style: .arc,
-                           index: $index) { itemIndex in
+            DeckCarousel(count: items.count,
+                         cardWidth: cardWidth,
+                         step: step,
+                         stageHeight: stageHeight,
+                         flipDegrees: 58,
+                         scaleFloor: 0.78,
+                         yDrift: 11,
+                         opacityFloor: 0.45,
+                         index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
                          showCaption: false,
@@ -607,13 +693,19 @@ struct DiscoverDeckSection: View {
             header
                 .padding(.horizontal, 20)
 
-            DeckPagingView(count: items.count,
-                           cardWidth: cardWidth,
-                           cardHeight: cardHeight,
-                           step: step,
-                           stageHeight: stageHeight,
-                           style: .stack,
-                           index: $index) { itemIndex in
+            DeckCarousel(count: items.count,
+                         cardWidth: cardWidth,
+                         step: step,
+                         stageHeight: stageHeight,
+                         // 卡片堆叠：转角更大、更小、压得更暗，并绕底边摊开。
+                         // 之前两套参数太接近，所以看着「一样」。
+                         flipDegrees: 78,
+                         scaleFloor: 0.64,
+                         yDrift: 0,
+                         opacityFloor: 0.30,
+                         fanOut: true,
+                         fanSpread: 22,
+                         index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
                          showCaption: false,
