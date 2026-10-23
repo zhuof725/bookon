@@ -407,7 +407,7 @@ struct ReaderView: View {
             }.ignoresSafeArea().allowsHitTesting(false)
             if mangaMode {
                 mangaBody
-            } else if bookAudio.chapterURL != nil {
+            } else if bookAudio.chapterURL != nil, !sourceToneBackground {
                 AudioChapterView(audio: bookAudio, book: book,
                                  chapterNumber: index + 1,
                                  chapterCount: chapters.count,
