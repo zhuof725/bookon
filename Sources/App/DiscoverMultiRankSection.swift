@@ -13,8 +13,8 @@ struct DiscoverMultiRankSection: View {
     let moreTitle: String
     /// 勾选过的分类（按用户勾选顺序）
     let kinds: [MultiRankKind]
-    /// 这些分类属于哪个书源
-    let source: BookSource
+    /// 这些分类属于哪个书源；nil 表示预览（用内置示例数据，不联网）
+    let source: BookSource?
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
@@ -27,7 +27,7 @@ struct DiscoverMultiRankSection: View {
     init(title: String,
          moreTitle: String,
          kinds: [MultiRankKind],
-         source: BookSource,
+         source: BookSource?,
          onMore: (() -> Void)? = nil,
          onSelect: @escaping (DeckItem, Int) -> Void = { _, _ in }) {
         self.title = title
@@ -232,6 +232,11 @@ struct DiscoverMultiRankSection: View {
     private func load(force: Bool = false) async {
         guard let kind = currentKind else { return }
         if !force, loaded[kind.url] != nil { return }
+        // 预览模式（没有书源）：用示例数据，不联网，也能切换标签看效果
+        guard let source else {
+            loaded[kind.url] = MultiRankPreview.items(for: kind, index: kinds.firstIndex(of: kind) ?? 0)
+            return
+        }
         guard !loading.contains(kind.url) else { return }
         // 命中共享缓存就不必再等网络
         if let hit = MultiRankLoader.cached(sourceUrl: source.bookSourceUrl, kindUrl: kind.url) {
@@ -247,5 +252,24 @@ struct DiscoverMultiRankSection: View {
         } else {
             failed.insert(kind.url)
         }
+    }
+}
+
+
+/// 多分类竖排榜在「添加模板」预览里的示例数据。
+/// 不联网、瞬间出图，只为让人看清版式。
+enum MultiRankPreview {
+    /// 每个标签给一组不同的书，切标签能看出内容真的变了。
+    /// 封面用 `preview://` 自绘地址，不请求网络。
+    static func items(for kind: MultiRankKind, index: Int) -> [DeckItem] {
+        DiscoverPreviewCatalog.cards(count: 12)
+            .enumerated()
+            .filter { $0.offset % 3 == index % 3 }
+            .map { offset, card in
+                DeckItem(id: "\(kind.url)#\(offset)",
+                         title: card.title,
+                         caption: card.caption,
+                         cover: card.cover)
+            }
     }
 }

@@ -166,7 +166,21 @@ struct CustomDiscoverView: View {
                             .padding(.bottom, 4)
                     }
                     ForEach(sections) { section in
-                        sectionBlock(section)
+                        HomeSectionBlock(
+                            section: section,
+                            history: model.historyItems,
+                            onMore: { fullPage = section.entry },
+                            onSelectBook: { selectedBook = $0 },
+                            onSelectHistory: { item in
+                                selectedBook = store.books.first { $0.bookUrl == item.id }
+                            },
+                            onRetry: { Task { await model.load(section, force: true) } },
+                            identity: DeckIdentity(sourceUrl: section.entry.sourceUrl,
+                                                   kindUrl: section.entry.kindUrl),
+                            multiKinds: section.entry.multiKinds,
+                            source: store.source(for: section.entry.sourceUrl)
+                        )
+                        .task { await model.load(section) }
                     }
                     if sections.isEmpty {
                         Text("这个分类下还没有板块")
@@ -225,79 +239,6 @@ struct CustomDiscoverView: View {
             onMore: nil,
             onSelectBook: { selectedBook = $0 }
         )
-    }
-
-    @ViewBuilder private func sectionBlock(_ section: DiscoverSectionModel) -> some View {
-        if section.kind == .history {
-            DiscoverTemplateView(
-                kind: .history,
-                title: section.title,
-                moreTitle: "全部",
-                history: model.historyItems,
-                count: section.count,
-                onMore: { fullPage = section.entry },
-                onSelectHistory: { item in
-                    selectedBook = store.books.first { $0.bookUrl == item.id }
-                }
-            )
-        } else if section.failed {
-            failedRow(section)
-        } else if section.books.isEmpty && section.loading {
-            loadingRow(section)
-        } else {
-            DiscoverTemplateView(
-                kind: section.kind,
-                title: section.title,
-                moreTitle: "全部",
-                books: section.books,
-                cards: section.cards,
-                count: section.count,
-                scale: section.entry.scale,
-                corner: section.entry.corner,
-                showNumber: section.entry.showNumber,
-                onMore: { fullPage = section.entry },
-                onSelectBook: { book in selectedBook = book },
-                // 卡片类模板靠它记住滑到第几张
-                identity: DeckIdentity(sourceUrl: section.entry.sourceUrl,
-                                       kindUrl: section.entry.kindUrl),
-                // 多分类竖排榜：勾选的分类 + 拉数据用的书源
-                multiKinds: section.entry.multiKinds,
-                source: store.source(for: section.entry.sourceUrl)
-            )
-            .task { await model.load(section) }
-        }
-    }
-
-    private func loadingRow(_ section: DiscoverSectionModel) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header(section.title)
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("加载中…")
-                    .appFont(.system(size: 12))
-                    .foregroundStyle(palette.secondary)
-            }
-            .frame(height: 60)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 18)
-    }
-
-    private func failedRow(_ section: DiscoverSectionModel) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header(section.title)
-            HStack(spacing: 10) {
-                Text(section.errorText ?? "加载失败")
-                    .appFont(.system(size: 12))
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(2)
-                Button("重试") { Task { await model.load(section, force: true) } }
-                    .appFont(.system(size: 12, weight: .semibold))
-            }
-            .frame(height: 60)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 18)
     }
 
     private func header(_ title: String) -> some View {

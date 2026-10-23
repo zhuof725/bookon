@@ -59,11 +59,15 @@ struct DiscoverTemplateLibrary: View {
             // 这里保留可交互，卡片自己的点按交给空回调（预览不跳转）。
             DiscoverTemplateView(
                 kind: template.kind,
-                title: "",
-                moreTitle: "",
+                // 标题跟首页一致：首页板块是有标题的，预览留空会看不出真实观感
+                title: template.kind == .history ? "继续阅读" : "示例榜单",
+                moreTitle: "全部",
                 cards: previewCards(for: template.kind),
                 history: historySamples,
-                count: previewCount(for: template.kind)
+                count: previewCount(for: template.kind),
+                // 多分类竖排榜要有分类数据才画得出来，这里用示例分类
+                multiKinds: previewMultiKinds(for: template.kind),
+                source: previewSource(for: template.kind)
             )
             .padding(.top, 18)
 
@@ -85,6 +89,17 @@ struct DiscoverTemplateLibrary: View {
         .accessibilityIdentifier("library.template.\(template.kind.rawValue)")
         .accessibilityLabel("\(template.title)，\(template.detail)")
     }
+
+    /// 多分类竖排榜的预览分类：示例三个，切标签能看到不同内容。
+    private func previewMultiKinds(for kind: DiscoverTemplateKind) -> [MultiRankKind] {
+        guard kind == .multiRank else { return [] }
+        return [MultiRankKind(title: "月票榜单", url: "preview://multirank?tab=1"),
+                MultiRankKind(title: "畅销榜单", url: "preview://multirank?tab=2"),
+                MultiRankKind(title: "阅读榜单", url: "preview://multirank?tab=3")]
+    }
+
+    /// 预览不联网，所以不给书源；多分类板块会走「无书源」的占位分支。
+    private func previewSource(for kind: DiscoverTemplateKind) -> BookSource? { nil }
 
     /// 卡片型模板（弧形 / 堆叠）自带一行「书名 + 作者」说明，
     /// 展示库里它紧挨着居中的模板名，读起来会串行，所以这里把说明清空。
