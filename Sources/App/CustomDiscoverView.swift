@@ -42,11 +42,23 @@ struct CustomDiscoverView: View {
                 Button { showSettings = true } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(palette.primary)
+                        .frame(width: 34, height: 34)
+                        .background {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Circle().strokeBorder(palette.primary.opacity(0.10),
+                                                          lineWidth: 0.5)
+                                }
+                        }
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("customdiscover.settings")
             }
         }
-        .sheet(isPresented: $showSettings) {
+        // 编辑页改成全屏：板块预览要按真实宽度铺开，sheet 的圆角和留白会打断观感。
+        .fullScreenCover(isPresented: $showSettings) {
             CustomDiscoverEditorPage()
                 .environmentObject(store)
                 .environmentObject(model)

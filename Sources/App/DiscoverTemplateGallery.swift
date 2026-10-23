@@ -38,8 +38,10 @@ struct DiscoverTemplateLibrary: View {
                 }
                 footNote
             }
-            .padding(.bottom, 40)
+            .padding(.bottom, 48)
         }
+        // 全屏浏览：内容铺到屏幕底部，不要被安全区挤出一条边
+        .ignoresSafeArea(edges: .bottom)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
         .navigationTitle("添加模板")
