@@ -436,19 +436,37 @@ struct BookDetailSourcePicker: View {
     }
 
     private func upstreamName(_ book: Book) -> String? {
-        let raw = book.bookUrl
+        if let name = upstreamFromURL(book.bookUrl) { return name }
+        // 书地址里没有标记时，看看目录里第一章的地址（有的聚合源只把上游编在章节地址里）。
+        if let toc = store.cachedToc(book), let first = toc.first,
+           let name = upstreamFromURL(first.url) {
+            return name
+        }
+        return nil
+    }
+
+    /// 聚合源的子源标记：`data:...base64,{"source":"番茄小说",...}`、查询参数 `source=/site=`
+    /// 这些写法都认；不同聚合源用的键名不一样，这里按常见键名逐个找。
+    private func upstreamFromURL(_ raw: String) -> String? {
+        let keys = ["source", "src", "site", "platform", "from", "channel", "origin", "源"]
         if let range = raw.range(of: "base64,") {
             let rest = raw[range.upperBound...]
             let part = rest.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-            if let data = Data(base64Encoded: String(part)),
-               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let source = object["source"] as? String, !source.isEmpty {
-                return source
+            let trimmed = String(part).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let data = Data(base64Encoded: trimmed),
+               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                for key in keys {
+                    if let value = object[key] as? String, !value.isEmpty { return value }
+                }
             }
         }
-        if let items = URLComponents(string: raw)?.queryItems,
-           let value = items.first(where: { $0.name == "source" })?.value, !value.isEmpty {
-            return value
+        if let items = URLComponents(string: raw)?.queryItems {
+            for key in keys {
+                if let value = items.first(where: { $0.name.lowercased() == key })?.value,
+                   !value.isEmpty {
+                    return value
+                }
+            }
         }
         return nil
     }
