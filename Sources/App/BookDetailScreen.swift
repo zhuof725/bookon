@@ -36,12 +36,14 @@ struct BookDetailScreen: View {
     init(book: Book, onShelf: Bool, category: String, chapters: [BookChapter],
          loading: Bool, message: String?, sourceType: String = "文本",
          onTypeChange: ((BookKind) -> Void)? = nil,
+         sourceUpstream: String? = nil,
          onBack: @escaping () -> Void,
          onMore: @escaping () -> Void, onRead: @escaping () -> Void,
          onCategory: @escaping () -> Void, onSource: @escaping () -> Void,
          onShelfAction: @escaping () -> Void, onEditIntro: @escaping () -> Void,
          onTOC: @escaping () -> Void) {
         self.onTypeChange = onTypeChange
+        self.sourceUpstream = sourceUpstream
         self.book = book
         self.onShelf = onShelf
         self.category = category
