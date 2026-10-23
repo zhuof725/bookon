@@ -168,11 +168,15 @@ enum CustomDiscoverRegression {
         // 11. 模板表：十四个模板都注册了，且数据源归属正确
         check(DiscoverTemplate.all.count == DiscoverTemplateKind.allCases.count,
               "模板：列表长度等于枚举数量")
+        // 顺序即「添加模板」页的展示顺序：三个卡片类模板排在第 3、4、5 位。
         check(DiscoverTemplateKind.allCases.map(\.rawValue)
-              == ["largeCard", "compactCard", "threeColumn", "dualRow",
-                  "featureCard",
-                  "badgeGrid", "covers", "rankRow", "waterfall", "curve", "deck", "history"],
-              "模板：十二个模板的稳定键")
+              == ["largeCard", "compactCard", "curve", "deck", "history",
+                  "threeColumn", "dualRow", "featureCard",
+                  "badgeGrid", "covers", "rankRow", "waterfall"],
+              "模板：十二个模板的稳定键与展示顺序")
+        check(DiscoverTemplateKind.allCases.map(\.rawValue).prefix(5)
+              == ["largeCard", "compactCard", "curve", "deck", "history"],
+              "模板：弧形走廊 / 卡片堆叠 / 继续阅读 在第 3、4、5 位")
         for kind in DiscoverTemplateKind.allCases {
             check(DiscoverTemplate.template(for: kind).kind == kind,
                   "模板：\(kind.title) 能按枚举取回")
