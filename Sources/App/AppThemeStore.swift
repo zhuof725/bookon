@@ -4,7 +4,7 @@ import SwiftUI
 /// Color/name edits are drafts until save. No book, font or paper preferences
 /// are read or rewritten by this repository.
 final class AppThemeStore: ObservableObject {
-    static let shared = AppThemeStore()
+    nonisolated(unsafe) static let shared = AppThemeStore()
     static let storageKey = "app.customThemes.v1"
     static let maximumThemes = 20
 

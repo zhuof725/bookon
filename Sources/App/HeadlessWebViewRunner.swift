@@ -6,7 +6,7 @@ import WebKit
 /// 引擎（Sources/Engine/HeadlessWeb.swift）只认协议，不直接依赖 WebKit：
 /// - App 启动时 `install()` 注入；
 /// - CI / 测试 harness 不注入 → 相关能力自动降级。
-final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning {
+final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning, @unchecked Sendable {
     static let shared = HeadlessWebViewRunner()
 
     static func install() {

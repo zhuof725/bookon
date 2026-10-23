@@ -468,7 +468,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
 
 /// java.getVerificationCode 的界面注入点：返回用户输入的验证码；没有注入时返回空串。
 enum SourceVerificationBridge {
-    static var handler: ((String) -> String)?
+    nonisolated(unsafe) static var handler: ((String) -> String)?
 }
 
 /// JS 里 java.toast / longToast 的消息出口：界面订阅 handler 即可显示；没有订阅者时只丢弃。
@@ -476,9 +476,9 @@ enum ToastCenter {
     /// 评论页等「打开网页」请求的统一入口。界面收到后弹半屏网页。
     /// content 是书源直接给的 HTML 页面内容（Legado 的 showBrowser(url, content) 语义）：
     /// 有内容就按内容渲染，没有内容才去请求 url。
-    private static var browserHandler: ((String, String, String?) -> Void)?
+    private nonisolated(unsafe) static var browserHandler: ((String, String, String?) -> Void)?
     static func setBrowserHandler(_ h: ((String, String, String?) -> Void)?) { lock.lock(); browserHandler = h; lock.unlock() }
-    private static var captures: [((String, String?) -> Void)] = []
+    private nonisolated(unsafe) static var captures: [((String, String?) -> Void)] = []
     static func pushBrowserCapture(_ f: @escaping (String, String?) -> Void) { lock.lock(); captures.append(f); lock.unlock() }
     static func popBrowserCapture() { lock.lock(); if !captures.isEmpty { captures.removeLast() }; lock.unlock() }
     static func openBrowser(_ url: String, _ title: String, _ content: String? = nil) {
@@ -488,7 +488,7 @@ enum ToastCenter {
         h?(url, title, content)
     }
     private static let lock = NSLock()
-    private static var handler: ((String) -> Void)?
+    private nonisolated(unsafe) static var handler: ((String) -> Void)?
     static func setHandler(_ h: ((String) -> Void)?) { lock.lock(); handler = h; lock.unlock() }
     static func post(_ message: String) {
         lock.lock(); let h = handler; lock.unlock()
@@ -496,7 +496,7 @@ enum ToastCenter {
     }
 }
 
-final class JSEngine {
+final class JSEngine: @unchecked Sendable {
     static let shared = JSEngine()
     private let session: URLSession
     private let responseTimeout: TimeInterval
@@ -520,7 +520,7 @@ final class JSEngine {
         })
 
     /// 当前正在执行的书源（供 JS 里的 `source` 对象使用）
-    static var currentSource: BookSource?
+    nonisolated(unsafe) static var currentSource: BookSource?
 
     /// 最近一次脚本异常（按线程保存）。调用方据此区分「脚本抛错」与「脚本返回空」：
     /// 抛错时可以退回规则的文本部分，而不是把整条规则判成空。

@@ -690,21 +690,24 @@ final class ReaderAloudController: NSObject, ObservableObject {
         }
     }
 
+    /// 同步取一个限速槽位：锁只在同步函数里加，Swift 6 不允许在 async 上下文直接用 NSLock。
+    private func reserveRateLimitSlot(_ interval: TimeInterval) -> TimeInterval {
+        rateLock.lock()
+        defer { rateLock.unlock() }
+        let now = Date()
+        let next = lastRequestAt.addingTimeInterval(interval)
+        guard next > now else {
+            lastRequestAt = now
+            return 0
+        }
+        lastRequestAt = next
+        return next.timeIntervalSince(now)
+    }
+
     private func waitForRateLimit(_ engine: HTTPTTS) async {
         let ms = engine.requestIntervalMilliseconds
         guard ms > 0 else { return }
-        let interval = TimeInterval(ms) / 1000
-        var wait: TimeInterval = 0
-        rateLock.lock()
-        let now = Date()
-        let next = lastRequestAt.addingTimeInterval(interval)
-        if next > now {
-            lastRequestAt = next
-            wait = next.timeIntervalSince(now)
-        } else {
-            lastRequestAt = now
-        }
-        rateLock.unlock()
+        let wait = reserveRateLimitSlot(TimeInterval(ms) / 1000)
         if wait > 0 {
             try? await Task.sleep(nanoseconds: UInt64(min(wait, 10) * 1_000_000_000))
         }

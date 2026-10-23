@@ -4,13 +4,14 @@ import Foundation
 /// 每行带 [mm:ss.SSS] 时间戳，与 Legado 原版调试页一致。
 enum DebugLog {
     private static let lock = NSLock()
-    private static var active = false
-    private static var entries: [String] = []
-    private static var startedAt = Date()
+    // 下面这些状态全部由 `lock` 保护，Swift 6 用 nonisolated(unsafe) 声明。
+    private nonisolated(unsafe) static var active = false
+    private nonisolated(unsafe) static var entries: [String] = []
+    private nonisolated(unsafe) static var startedAt = Date()
 
     /// 当前调试阶段：10 搜索/发现、20 详情、30 目录、40 正文（与原版 printLog state 一致）。
-    private static var stage = 0
-    private static var sources: [Int: String] = [:]
+    private nonisolated(unsafe) static var stage = 0
+    private nonisolated(unsafe) static var sources: [Int: String] = [:]
 
     static func begin() {
         lock.lock(); defer { lock.unlock() }
@@ -51,7 +52,7 @@ enum DebugLog {
 
     /// 阅读器的点击链路诊断（点评论气泡的每一步）：**一直记录**，不管有没有在调试。
     /// 只留最近 80 行，不含 Cookie/请求头。
-    private static var readerEntries: [String] = []
+    private nonisolated(unsafe) static var readerEntries: [String] = []
 
     static func readerAdd(_ message: String) {
         lock.lock(); defer { lock.unlock() }

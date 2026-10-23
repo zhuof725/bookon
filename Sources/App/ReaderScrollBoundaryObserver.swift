@@ -39,6 +39,7 @@ struct ReaderScrollBoundaryObserver: UIViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject {
         private var parent: ReaderScrollBoundaryObserver
         private weak var scrollView: UIScrollView?

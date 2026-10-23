@@ -193,7 +193,7 @@ enum ReadingStatsEngine {
 /// 阅读统计的页面模型：主线程缓存聚合结果，会话落盘后自动失效。
 /// UI 只读这里；计算全部交给 ReadingStatsEngine / ReadingStatsStore。
 final class ReadingStatsModel: ObservableObject {
-    static let shared = ReadingStatsModel()
+    nonisolated(unsafe) static let shared = ReadingStatsModel()
     let store: ReadingStatsStore
 
     @Published private(set) var revision = 0
@@ -252,7 +252,7 @@ final class ReadingStatsModel: ObservableObject {
 
 /// 落盘并聚合阅读会话。与 PersistentVariableStore 同思路：内存 + 防抖写盘，
 /// 应用退到后台时 flush。
-final class ReadingStatsStore {
+final class ReadingStatsStore: @unchecked Sendable {
     static let shared = ReadingStatsStore()
 
     private let fileURL: URL

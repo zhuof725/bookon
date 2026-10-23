@@ -47,9 +47,9 @@ enum CoverDecodeRuntime {
     typealias Loader = (URL, String) async -> Data?
     /// 普通封面（没有解密规则）：带书源请求头下载 → 返回图片字节；失败返回 nil。
     typealias PlainLoader = (URL, String) async -> Data?
-    static var needsDecode: NeedsDecode?
-    static var load: Loader?
-    static var loadPlain: PlainLoader?
+    nonisolated(unsafe) static var needsDecode: NeedsDecode?
+    nonisolated(unsafe) static var load: Loader?
+    nonisolated(unsafe) static var loadPlain: PlainLoader?
 }
 
 /// 远程封面加载：先看本机缓存（换网络/开 VPN 也显示得出来），没有再下载并落盘。

@@ -37,8 +37,8 @@ enum ReaderTextLayout {
 
     // UIKit 排版入口均在主线程；分页二分测量不重复解析字体。
     private struct FontKey: Hashable { let name: String; let size: CGFloat; let bubbleRevision: Int }
-    private static var fontCache: [FontKey: Fonts] = [:]
-    private static var cachedIdentity = ""
+    private nonisolated(unsafe) static var fontCache: [FontKey: Fonts] = [:]
+    private nonisolated(unsafe) static var cachedIdentity = ""
 
     static func metrics(fontSize: CGFloat, width: CGFloat? = nil) -> Metrics {
         let size = fontSize.isFinite ? max(fontSize, 1) : 19
@@ -363,7 +363,7 @@ enum ReaderTextLayout {
 
 /// TextKit 负责原生塑形、合法断行和附件；代理只固定混排基线，不改写逐字位置。
 /// NSLayoutManager.delegate 是弱引用，静态实例确保渲染器/分页器始终使用同一规则。
-private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate {
+private final class ReaderLineMetrics: NSObject, NSLayoutManagerDelegate, @unchecked Sendable {
     static let shared = ReaderLineMetrics()
 
     func layoutManager(_ layoutManager: NSLayoutManager,

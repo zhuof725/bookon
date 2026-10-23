@@ -18,7 +18,7 @@ struct BubbleStyle: Codable, Identifiable, Equatable {
 
 /// One atomic document; draft previews never change the selected runtime style.
 final class BubbleStyleStore: ObservableObject {
-    static let shared = BubbleStyleStore()
+    nonisolated(unsafe) static let shared = BubbleStyleStore()
     private struct Document: Codable { var styles: [BubbleStyle]; var selectedID: String? }
     private static let key = "reader.bubble.styles.v1"
     @Published private(set) var styles: [BubbleStyle] = []
@@ -79,8 +79,8 @@ final class BubbleStyleStore: ObservableObject {
 /// Layout and prepagination may run off-main; runtime snapshots are lock protected.
 enum BubbleStyleRuntime {
     private static let lock = NSLock()
-    private static var selected: BubbleStyle?
-    private static var version = 0
+    private nonisolated(unsafe) static var selected: BubbleStyle?
+    private nonisolated(unsafe) static var version = 0
     static var revision: Int { lock.lock(); defer { lock.unlock() }; return version }
     static func set(_ style: BubbleStyle?) { lock.lock(); selected = style; version += 1; lock.unlock() }
     static func snapshot() -> BubbleStyle? { lock.lock(); defer { lock.unlock() }; return selected }

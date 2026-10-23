@@ -5,7 +5,7 @@ import SwiftUI
 struct ReaderTocServices {
     var isCached: (BookChapter) async -> Bool
     var load: (_ chapter: BookChapter, _ nextChapterURL: String?) async throws -> Void
-    static let unavailable = ReaderTocServices(
+    nonisolated(unsafe) static let unavailable = ReaderTocServices(
         isCached: { _ in false },
         load: { _, _ in throw ReaderTocError.unavailable })
     enum ReaderTocError: LocalizedError {

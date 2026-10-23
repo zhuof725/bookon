@@ -67,7 +67,7 @@ final class InMemorySourceLoginBackingStore: SourceLoginBackingStore {
     }
 }
 
-final class SourceLoginStore {
+final class SourceLoginStore: @unchecked Sendable {
     /// 嵌套对象/数组值的处理方式，见文件头注释。
     enum NestedValuePolicy {
         /// 转成紧凑 JSON 文本（默认）。

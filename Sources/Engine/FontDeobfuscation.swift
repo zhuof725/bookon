@@ -200,9 +200,9 @@ final class SourceFont {
 /// queryTTF 返回给 JS 的字体对象注册表（JS 侧只持有整数句柄）。
 enum SourceFontRegistry {
     private static let lock = NSLock()
-    private static var fonts: [Int: SourceFont] = [:]
-    private static var nextID = 1
-    private static var byDigest: [String: Int] = [:]
+    private nonisolated(unsafe) static var fonts: [Int: SourceFont] = [:]
+    private nonisolated(unsafe) static var nextID = 1
+    private nonisolated(unsafe) static var byDigest: [String: Int] = [:]
 
     static func register(data: Data) -> Int? {
         guard let font = SourceFont(data: data) else { return nil }

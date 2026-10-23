@@ -36,7 +36,9 @@ struct HTTPResponseData: Sendable {
 }
 
 /// Parses Legado-style URLs: `https://x.com/search?q={{key}}&p={{page}},{"method":"POST","body":"k={{key}}","charset":"gbk","headers":{...}}`
-struct AnalyzeUrl {
+/// 一次请求的解析结果。`context` 是规则上下文（可变类），但请求本身只读它；
+/// 既有实现就是把整只请求交给后台任务执行，这里用 @unchecked Sendable 保持一致。
+struct AnalyzeUrl: @unchecked Sendable {
     var url: String
     var method: String = "GET"
     var body: String?

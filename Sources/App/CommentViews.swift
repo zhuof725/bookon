@@ -145,7 +145,7 @@ struct SVGWebView: UIViewRepresentable {
 /// with an extra triangle. Reference: 23pt body, @3x, 109x85px canvas;
 /// ink 103x79px, origin 3px after the preceding glyph advance, baseline -70px.
 enum CommentBubble {
-    private static var cache: [String: UIImage] = [:]
+    private nonisolated(unsafe) static var cache: [String: UIImage] = [:]
 
     static func attachmentBounds(fontSize: CGFloat) -> CGRect {
         if let style = BubbleStyleRuntime.snapshot() { return BubbleStyleRenderer.bounds(style: style, fontSize: fontSize) }
@@ -193,7 +193,7 @@ enum CommentBubble {
     }
 
     /// Two continuous contours, original units 0.1px, origin bottom-left.
-    private static let outline: CGPath = {
+    private nonisolated(unsafe) static let outline: CGPath = {
         let p = CGMutablePath()
         p.move(to: CGPoint(x: 340, y: 802))
         p.addCurve(to: CGPoint(x: 149, y: 689), control1: CGPoint(x: 253, y: 773), control2: CGPoint(x: 200, y: 742))

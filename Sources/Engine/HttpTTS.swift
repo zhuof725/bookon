@@ -150,7 +150,7 @@ enum HTTPTTSParser {
 
 /// 引擎列表存储：Application Support/LegadoReading/httpTTS.json。
 /// 与原版 Room 表对应：整份读写，写入时更新时间戳，读不到/损坏时视为空。
-final class HTTPTTSStore {
+final class HTTPTTSStore: @unchecked Sendable {
     static let shared = HTTPTTSStore(fileURL: HTTPTTSStore.defaultFileURL())
 
     let fileURL: URL

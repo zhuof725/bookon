@@ -20,7 +20,7 @@ struct ReaderBookmark: Codable, Identifiable, Equatable {
 }
 
 /// 书签列表落盘。与阅读会话统计使用同一个目录，退到后台时 flush。
-final class ReaderBookmarkStore {
+final class ReaderBookmarkStore: @unchecked Sendable {
     static let shared = ReaderBookmarkStore()
 
     private let fileURL: URL

@@ -569,7 +569,7 @@ enum WebBook {
 
     /// 书源 loginUi 是脚本时，里面常有 java.put('dev', …) 之类的初始化（Legado 打开登录页时才执行）。
     /// 正文规则会读取这些变量，所以抓取前先求值一次，把变量写进书源作用域。每个书源每次启动只执行一次。
-    private static var loginUiPrimed = Set<String>()
+    private nonisolated(unsafe) static var loginUiPrimed = Set<String>()
     private static let primeLock = NSLock()
     static func primeLoginUi(_ source: BookSource) {
         guard let ui = source.loginUi, !ui.isEmpty else { return }
@@ -658,7 +658,7 @@ enum WebBook {
     }
 
     private static let healLock = NSLock()
-    private static var healedSources = Set<String>()
+    private nonisolated(unsafe) static var healedSources = Set<String>()
 
     /// 取正文；规则空手而归时先跑一次详情页（写 java.put 变量）再重试一次。
     static func rawContentWithBookInfoHealing(source: BookSource, book: Book, chapter: BookChapter,

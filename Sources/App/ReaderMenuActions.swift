@@ -3,6 +3,7 @@ import UIKit
 
 /// 「字典」菜单项：调用系统词典（系统自带，不自绘界面）查询选中的词。
 enum ReaderDictionaryLookup {
+    @MainActor
     static func present(_ word: String) {
         let term = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return }
@@ -18,6 +19,7 @@ enum ReaderDictionaryLookup {
         presenter.present(responder, animated: true)
     }
 
+    @MainActor
     private static func topViewController() -> UIViewController? {
         let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows).first { $0.isKeyWindow }

@@ -7,7 +7,8 @@ import UIKit
 /// 通过 `CoverDecodeRuntime` 注入，使 BookCoverImage 不直接依赖 AppStore/引擎（测试工程不含这些文件）。
 enum RemoteCoverLoader {
     /// 内存缓存存「解密后的图片字节」，命中时不用重新编码。
-    private static let cache = NSCache<NSString, NSData>()
+    // NSCache 自身线程安全，Swift 6 下用 nonisolated(unsafe) 声明。
+    private nonisolated(unsafe) static let cache = NSCache<NSString, NSData>()
 
     static func install() {
         CoverDecodeRuntime.needsDecode = { origin in

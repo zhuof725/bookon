@@ -16,7 +16,7 @@ protocol HeadlessWebRunning: AnyObject {
 
 enum HeadlessWeb {
     /// 由 App 启动时注入；弱引用，避免与单例互相持有。
-    static weak var runner: HeadlessWebRunning?
+    nonisolated(unsafe) static weak var runner: HeadlessWebRunning?
 
     static var isAvailable: Bool { runner != nil }
 

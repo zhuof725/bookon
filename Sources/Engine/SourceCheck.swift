@@ -1,6 +1,32 @@
 import Foundation
 import Network
 
+/// 域名可达性探测的完成状态。回调用「只结算一次」的盒子保存，
+/// 避免在 @Sendable 闭包里改捕获的局部变量（Swift 6 不允许）。
+private final class TCPReachabilityProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private let connection: NWConnection
+    private let continuation: CheckedContinuation<Bool, Never>
+
+    init(connection: NWConnection, continuation: CheckedContinuation<Bool, Never>) {
+        self.connection = connection
+        self.continuation = continuation
+    }
+
+    func finish(_ reachable: Bool) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        lock.unlock()
+        connection.cancel()
+        continuation.resume(returning: reachable)
+    }
+}
+
 /// 书源批量校验（对齐 Legado 原版「校验书源」：CheckSource / CheckSourceService）。
 ///
 /// 语义与原版一致：
@@ -76,7 +102,7 @@ enum SourceCheck {
     }
 
     /// 取数钩子；回归测试离线注入，不动网络。
-    struct Hooks {
+    struct Hooks: @unchecked Sendable {
         var search: (BookSource, String) async throws -> [Book]
         var explore: (BookSource, String) async throws -> [Book]
         var bookInfo: (BookSource, Book) async throws -> Book
@@ -276,30 +302,21 @@ enum SourceCheck {
         let defaultPort = (comps.scheme?.lowercased() == "https") ? 443 : 80
         guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: comps.port ?? defaultPort)) else { return false }
         return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            let lock = NSLock()
-            var finished = false
             let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .tcp)
-            func finish(_ ok: Bool) {
-                lock.lock()
-                if finished { lock.unlock(); return }
-                finished = true
-                lock.unlock()
-                connection.cancel()
-                continuation.resume(returning: ok)
-            }
+            let probe = TCPReachabilityProbe(connection: connection, continuation: continuation)
             connection.stateUpdateHandler = { state in
                 switch state {
-                case .ready: finish(true)
-                case .failed, .cancelled: finish(false)
+                case .ready: probe.finish(true)
+                case .failed, .cancelled: probe.finish(false)
                 default: break
                 }
             }
             connection.start(queue: .global())
-            DispatchQueue.global().asyncAfter(deadline: .now() + 1.6) { finish(false) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 1.6) { probe.finish(false) }
         }
     }
 
-    private static func withTimeout<T>(_ seconds: TimeInterval, _ op: @escaping () async throws -> T) async throws -> T {
+    private static func withTimeout<T: Sendable>(_ seconds: TimeInterval, _ op: @escaping @Sendable () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask { try await op() }
             group.addTask {

@@ -5,8 +5,8 @@ import Foundation
 /// 这里把失败同时写进书源调试日志与进程内问题列表，便于在调试页/校验页定位。
 enum RegexLog {
     private static let lock = NSLock()
-    private static var issues: [String] = []
-    private static var seen = Set<String>()
+    private nonisolated(unsafe) static var issues: [String] = []
+    private nonisolated(unsafe) static var seen = Set<String>()
 
     static func compile(_ pattern: String,
                         options: NSRegularExpression.Options = []) -> NSRegularExpression? {

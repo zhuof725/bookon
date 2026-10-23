@@ -4,7 +4,7 @@ import Foundation
 /// `source.setVariable` / `source.getVariable` / `java.put` / `java.get` / `java.cache`
 /// 都落在 Application Support，重启应用后仍能读回（「段评开关」等设置因此记住）。
 /// 仅本机、不联网、不加密（原版存在缓存数据库，这里为 JSON 文件，内容与书源自身写入一致）。
-final class PersistentVariableStore {
+final class PersistentVariableStore: @unchecked Sendable {
     private let fileURL: URL
     private let lock = NSLock()
     private var values: [String: String]

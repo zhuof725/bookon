@@ -392,7 +392,7 @@ struct SpeakEngineList: View {
 
 /// 引擎列表数据：HTTPTTSStore 不是 ObservableObject，这里做薄包装。
 final class SpeakEngineModel: ObservableObject {
-    static let shared = SpeakEngineModel()
+    nonisolated(unsafe) static let shared = SpeakEngineModel()
     @Published var list: [HTTPTTS] = []
     func reload() { list = HTTPTTSStore.shared.engines }
 }

@@ -25,7 +25,7 @@ actor CoverLoadGate {
 }
 
 /// 发现页封面内存缓存。
-final class DiscoverCoverCache {
+final class DiscoverCoverCache: @unchecked Sendable {
     static let shared = DiscoverCoverCache()
     private let cache = NSCache<NSURL, UIImage>()
     private init() { cache.countLimit = 400 }

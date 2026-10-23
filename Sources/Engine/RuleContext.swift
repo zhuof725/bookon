@@ -73,11 +73,11 @@ final class RuleContext {
     }
 
     private static let lock = NSLock()
-    private static var sourceVariables: [String: [String: String]] = [:]
-    private static var bookVariables: [String: [String: String]] = [:]
-    private static var chapterVariables: [String: [String: String]] = [:]
+    private nonisolated(unsafe) static var sourceVariables: [String: [String: String]] = [:]
+    private nonisolated(unsafe) static var bookVariables: [String: [String: String]] = [:]
+    private nonisolated(unsafe) static var chapterVariables: [String: [String: String]] = [:]
     /// 已从磁盘读回的作用域（每个作用域每进程只读一次）。
-    private static var loadedScopes = Set<String>()
+    private nonisolated(unsafe) static var loadedScopes = Set<String>()
 
     /// 原版 source 级 java.put 存 CacheManager、book 级存 Book.variableMap（数据库），重启后仍在。
     /// 这里落到 JavaBridge.store（Application Support 的 JSON），避免重启后 `java.get('bid')`
@@ -99,7 +99,7 @@ final class RuleContext {
     }
 
     /// book.getVariable/putVariable 的独立存储，与规则变量表互不影响。
-    private static var bookVariableStore: [String: [String: String]] = [:]
+    private nonisolated(unsafe) static var bookVariableStore: [String: [String: String]] = [:]
 
     init(source: BookSource? = nil, book: Book? = nil, chapter: BookChapter? = nil) {
         self.source = source

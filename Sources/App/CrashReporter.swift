@@ -34,16 +34,16 @@ enum CrashReporter {
     private static let pendingSignalURL = directory.appendingPathComponent("pending-signal.txt")
 
     private static let lock = NSLock()
-    private static var crumbs: [String] = []
-    private static var installed = false
+    private nonisolated(unsafe) static var crumbs: [String] = []
+    private nonisolated(unsafe) static var installed = false
 
     // 信号处理里不能分配内存：路径与固定文本预先转成 C 数组，读文件用静态缓冲。
-    private static var pendingPath: [CChar] = []
-    private static var breadcrumbPath: [CChar] = []
-    private static var signalBuffer = [CChar](repeating: 0, count: 64 * 1024)
+    private nonisolated(unsafe) static var pendingPath: [CChar] = []
+    private nonisolated(unsafe) static var breadcrumbPath: [CChar] = []
+    private nonisolated(unsafe) static var signalBuffer = [CChar](repeating: 0, count: 64 * 1024)
     private static let signalPrefix: [CChar] = Array("signal=".utf8CString)
     private static let newlineByte: [CChar] = Array("\n".utf8CString)
-    private static var digitBuffer = [CChar](repeating: 0, count: 16)
+    private nonisolated(unsafe) static var digitBuffer = [CChar](repeating: 0, count: 16)
 
     // MARK: 安装
 

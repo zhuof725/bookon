@@ -22,7 +22,7 @@ struct ImportedReadingFont: Codable, Identifiable, Equatable {
 /// existing synchronous reader/font caches can use this object without an actor hop.
 /// Observe selectedPostScriptName to invalidate layout and repaginate the reader.
 final class ReadingFontManager: ObservableObject {
-    static let shared = ReadingFontManager()
+    nonisolated(unsafe) static let shared = ReadingFontManager()
     static let selectionKey = "readingFont.postscript.v1"
     private static let maximumBytes = 32 * 1_024 * 1_024
     private static let maximumFiles = 30
