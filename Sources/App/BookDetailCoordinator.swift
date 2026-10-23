@@ -49,6 +49,12 @@ struct BookDetailView: View {
             detectedKind = saved
             return
         }
+        // 书上/地址里自带的类型标记（聚合源把 tab=漫画 编在书地址里），不用联网。
+        if let inferred = BookKind.infer(source: source, book: book) {
+            BookKindStore.save(inferred, bookUrl: book.bookUrl)
+            detectedKind = inferred
+            return
+        }
         // 书源名/章节名能看出来（番茄漫画、七猫听书这类），不必抓正文。
         if let guess = BookKind.guess(source: source, chapters: chapters) {
             BookKindStore.save(guess, bookUrl: book.bookUrl)

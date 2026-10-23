@@ -3,10 +3,14 @@ import CryptoKit
 
 /// 一本书的阅读模式：文本 / 音频 / 漫画（图片）/ 文件 / 视频。
 ///
-/// 原版靠书源的 `bookSourceType` 决定进哪种阅读器；但实际书源里经常出现
-/// 「类型写成文本、正文其实是 `<img>` 图片列表」「类型没填、章节链接却是音频接口」
-/// 这类情况，光看类型会进错阅读器（漫画当文字排版、音频当正文抓）。
-/// 这里除了书源类型，还支持**从正文内容反推**模式，并按书缓存结果。
+/// 识别顺序参照两位「原版」：
+/// 1. **Legado**：书源类型（`bookSourceType` 0 文本 / 1 音频 / 2 图片 / 3 文件 / 4 视频），
+///    加书时把它记到书上，阅读器按书上的类型分派。
+/// 2. **Yuedu**：聚合源（一个源里同时有小说/听书/漫画）光看源类型不够，
+///    还会看这本书自带的标记 —— 书籍地址里的 `tab/type/media` 参数、
+///    地址里内嵌的 `data:;base64,…` JSON、书源的运行时变量、以及
+///    「当前模式：听书/漫画」这类文字。
+/// 我们再多一层兜底：书源名/章节名（第N话、第N集），最后才抓正文看内容。
 enum BookKind: String, CaseIterable {
     case text, audio, image, file, video, local
 
@@ -21,7 +25,7 @@ enum BookKind: String, CaseIterable {
         }
     }
 
-    /// 书源类型 → 模式。0/缺省表示「未声明」，返回 nil 交给正文识别。
+    /// 书源类型 → 模式。0/缺省表示「未声明」，返回 nil 交给后续信号。
     static func from(sourceType: Int?) -> BookKind? {
         switch sourceType ?? 0 {
         case 1: return .audio
@@ -32,9 +36,134 @@ enum BookKind: String, CaseIterable {
         }
     }
 
-    /// 不联网的快速判断：书源名称/分组、目录章节名。
-    /// 番茄漫画、七猫听书这类「一个书源只出一种书」的源，名字和章节名足够分辨，
-    /// 不用为了识别去抓正文。
+    // MARK: - Yuedu 式多信号推断
+
+    /// 书本身/书源里能直接读出来的模式（不需要联网、也不用抓正文）。
+    static func infer(source: BookSource?, book: Book?) -> BookKind? {
+        if let declared = from(sourceType: source?.bookSourceType), declared != .text {
+            return declared
+        }
+        for url in [book?.bookUrl, book?.tocUrl].compactMap({ $0 }) {
+            if let kind = kind(fromURL: url) { return kind }
+        }
+        let texts = [book?.kind, book?.originName, source?.bookSourceName,
+                     book?.intro, book?.lastChapter].compactMap { $0 }
+        for text in texts {
+            if let kind = kind(fromMetadataText: text) { return kind }
+        }
+        return nil
+    }
+
+    /// 地址里的模式标记：查询参数 `tab/type/media/mode/category`，
+    /// 或聚合源把整段 JSON 塞在地址里的 `data:;base64,…`。
+    static func kind(fromURL rawURL: String) -> BookKind? {
+        let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        for payload in dataURLPayloads(from: trimmed) {
+            if let kind = kind(fromJSONObject: payload) { return kind }
+        }
+        let requestURL = trimmed.split(separator: ",", maxSplits: 1).first.map(String.init) ?? trimmed
+        guard let components = URLComponents(string: requestURL) else { return nil }
+        let keys = ["tab", "type", "media", "mode", "category", "booktype", "contenttype"]
+        for item in components.queryItems ?? [] where keys.contains(item.name.lowercased()) {
+            if let kind = kind(fromStructuredValue: item.value) { return kind }
+        }
+        return nil
+    }
+
+    /// 「当前模式：听书 / 漫画」这类文字标记，以及等值的中英文类型名。
+    static func kind(fromMetadataText raw: String) -> BookKind? {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+        guard !normalized.isEmpty else { return nil }
+        let audioMarkers = ["当前模式：听书", "当前模式:听书", "模式：听书", "模式:听书", "当前模式：有声"]
+        let mangaMarkers = ["当前模式：漫画", "当前模式:漫画", "模式：漫画", "模式:漫画"]
+        if audioMarkers.contains(where: { normalized.contains($0) }) { return .audio }
+        if mangaMarkers.contains(where: { normalized.contains($0) }) { return .image }
+        return kind(fromStructuredValue: normalized)
+    }
+
+    /// 结构化取值：数字（Legado 的位标记 8 文本 / 32 音频 / 64 图片）、
+    /// 或字符串类型名。
+    static func kind(fromStructuredValue value: Any?) -> BookKind? {
+        guard let value else { return nil }
+        if let intValue = value as? Int { return kind(fromTypeNumber: intValue) }
+        if let doubleValue = value as? Double { return kind(fromTypeNumber: Int(doubleValue)) }
+        let text = String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if let intValue = Int(text) { return kind(fromTypeNumber: intValue) }
+        let normalized = text.lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        switch normalized {
+        case "听书", "聽書", "有声", "有聲", "audio", "audiobook": return .audio
+        case "漫画", "漫畫", "comic", "manga", "image": return .image
+        case "小说", "小說", "novel", "text", "文字": return .text
+        case "视频", "視頻", "video": return .video
+        case "文件", "file": return .file
+        default: return nil
+        }
+    }
+
+    static func kind(fromTypeNumber value: Int) -> BookKind? {
+        switch value {
+        case 0, 8: return .text
+        case 1, 32: return .audio
+        case 2, 64: return .image
+        case 3, 128: return .file
+        case 4: return .video
+        default: return nil
+        }
+    }
+
+    /// 聚合源常把 JSON（含 tab/type）编进书地址：`data:;base64,<base64>,<…>`。
+    static func dataURLPayloads(from text: String) -> [[String: Any]] {
+        let marker = "data:;base64,"
+        var payloads: [[String: Any]] = []
+        var searchStart = text.startIndex
+        while let range = text.range(of: marker, options: [.caseInsensitive],
+                                     range: searchStart..<text.endIndex) {
+            let base64Start = range.upperBound
+            let base64End = text[base64Start...].firstIndex(of: ",") ?? text.endIndex
+            let raw = String(text[base64Start..<base64End])
+            let decoded = raw.removingPercentEncoding ?? raw
+            if let data = Data(base64Encoded: decoded),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                payloads.append(json)
+            }
+            searchStart = base64End
+        }
+        return payloads
+    }
+
+    private static func kind(fromJSONObject object: Any) -> BookKind? {
+        if let dictionary = object as? [String: Any] {
+            for (key, value) in dictionary {
+                if isContentKindKey(key), let kind = kind(fromStructuredValue: value) { return kind }
+                if let kind = kind(fromJSONObject: value) { return kind }
+            }
+        } else if let array = object as? [Any] {
+            for value in array {
+                if let kind = kind(fromJSONObject: value) { return kind }
+            }
+        }
+        return nil
+    }
+
+    private static func isContentKindKey(_ key: String) -> Bool {
+        let normalized = key.lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        return ["tab", "type", "media", "mode", "category", "findtab", "booktype", "contenttype"]
+            .contains(normalized)
+    }
+
+    // MARK: - 名称/章节名（不联网）
+
+    /// 书源名称/分组、目录章节名。
+    /// 番茄漫画、七猫听书这类「一个书源只出一种书」的源，名字和章节名足够分辨。
     static func guess(source: BookSource?, chapters: [BookChapter]) -> BookKind? {
         let name = (source?.bookSourceName ?? "") + " " + (source?.bookSourceGroup ?? "")
         let lower = name.lowercased()
@@ -56,6 +185,8 @@ enum BookKind: String, CaseIterable {
         if Double(audio) / total >= 0.6, audio > text { return .audio }
         return nil
     }
+
+    // MARK: - 正文内容
 
     /// 从正文规则的结果反推模式。
     /// - 音频：整段结果就是一条播放地址（或多段地址的 JSON 数组）；

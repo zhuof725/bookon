@@ -54,6 +54,28 @@ enum BookKindRegression {
         let mixed = (0..<10).map { BookChapter(url: "https://m/\($0)", title: $0 < 3 ? "第\($0 + 1)话" : "第\($0 + 1)章", index: $0) }
         check(BookKind.guess(source: textSource, chapters: mixed) == nil, "话/章混用不硬猜")
 
+        // 书本身/地址里的标记（照 Yuedu 的 OnlineBookContentInference）。
+        check(BookKind.kind(fromURL: "https://agg.example/api?tab=%E6%BC%AB%E7%94%BB") == .image,
+              "地址参数 tab=漫画")
+        check(BookKind.kind(fromURL: "https://agg.example/api?type=2&id=1") == .image, "地址参数 type=2")
+        check(BookKind.kind(fromURL: "https://agg.example/api?media=audio") == .audio, "地址参数 media=audio")
+        check(BookKind.kind(fromURL: "https://agg.example/api?id=1") == nil, "没有类型参数不猜")
+        let payload = try JSONSerialization.data(withJSONObject: ["tab": "听书", "id": 7])
+        let embedded = "data:;base64," + payload.base64EncodedString() + ",其他"
+        check(BookKind.kind(fromURL: embedded) == .audio, "地址里内嵌 base64 JSON")
+        check(BookKind.kind(fromMetadataText: "当前模式：漫画") == .image, "简介里的当前模式标记")
+        check(BookKind.kind(fromMetadataText: "当前模式：听书 第1集") == .audio, "简介里的听书标记")
+        check(BookKind.kind(fromMetadataText: "漫画") == .image, "等值类型名")
+        check(BookKind.kind(fromTypeNumber: 32) == .audio, "Legado 位标记 32 = 音频")
+        check(BookKind.kind(fromTypeNumber: 64) == .image, "Legado 位标记 64 = 图片")
+        check(BookKind.kind(fromTypeNumber: 8) == .text, "Legado 位标记 8 = 文本")
+
+        var aggBook = Book(bookUrl: "https://agg.example/play?id=1&tab=%E6%BC%AB%E7%94%BB", name: "测试", origin: "agg")
+        check(BookKind.infer(source: textSource, book: aggBook) == .image, "书地址里的 tab 决定漫画")
+        aggBook.bookUrl = "https://agg.example/play?id=1"
+        check(BookKind.infer(source: textSource, book: aggBook) == nil, "没有信号时不硬猜")
+        check(BookKind.infer(source: comicSource, book: aggBook) == nil, "书源名不参与 infer（交给 guess）")
+
         // 每本书的识别结果缓存。
         let suite = "book-kind-test-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!

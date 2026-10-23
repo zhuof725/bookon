@@ -1018,6 +1018,19 @@ struct ReaderView: View {
             BookKindStore.save(.audio, bookUrl: book.bookUrl)
             return false
         }
+        // 书上/地址里自带的类型标记（聚合源把 tab=漫画 编在书地址里）。
+        if let inferred = BookKind.infer(source: source, book: book) {
+            BookKindStore.save(inferred, bookUrl: book.bookUrl)
+            mangaMode = inferred == .image
+            if mangaMode { return false }
+            if inferred == .audio {
+                index = first
+                await beginAudioChapter(first, source: source)
+                loading = false
+                return true
+            }
+            return false
+        }
         // 书源名/章节名能看出来（番茄漫画、七猫听书这类），不联网就能定模式。
         if let guess = BookKind.guess(source: source, chapters: chapters) {
             BookKindStore.save(guess, bookUrl: book.bookUrl)
