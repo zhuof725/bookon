@@ -234,6 +234,21 @@ enum CustomDiscoverRegression {
               "模板：isUnlimited 能识别不限数量")
         check(!DiscoverTemplate.isUnlimited(20), "模板：20 不是 unlimited")
 
+        // 12c. 截断语义：「添加模板」预览页靠 count 控制数量，
+        // 传进去的 cards 必须按 limit 截断，否则预览会一律铺满。
+        // 这里用纯函数复算一遍：limit 以内的截断结果 = limit，unlimited 时保留全部。
+        func previewSlice(cards: Int, count: Int) -> Int {
+            let limit = curve.clampedCount(count)
+            if DiscoverTemplate.isUnlimited(limit) { return cards }
+            return min(cards, max(limit, 0))
+        }
+        check(previewSlice(cards: 12, count: 4) == 4, "预览：大封面 12 本只显示 4 个")
+        check(previewSlice(cards: 12, count: 6) == 6, "预览：三列书架显示 6 个（两行）")
+        check(previewSlice(cards: 12, count: 6) == 6, "预览：瀑布流显示 6 个")
+        check(previewSlice(cards: 10, count: 20) == 10, "预览：数量超出库存时按库存显示")
+        check(previewSlice(cards: 12, count: DiscoverTemplate.unlimited) == 12,
+              "预览：unlimited 不做截断")
+
         // 13. 换模板：数量不再被强行改（上下限统一 20）
         var wide = CustomDiscoverEntry(sourceUrl: "u1", sourceName: "甲",
                                        kindTitle: "榜", kindUrl: "/a",

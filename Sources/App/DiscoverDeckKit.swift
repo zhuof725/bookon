@@ -969,7 +969,13 @@ struct DiscoverTemplateView: View {
     }
 
     private var deckItems: [DeckItem] {
-        if !cards.isEmpty { return cards }
+        // cards 也要按 limit 截断：模板展示库靠 count 控制预览数量，
+        // 如果这里原样返回全部 cards，预览就会一律铺满（大封面 12 个、圆点 12 个）。
+        // limit == unlimited 时表示「全部」，不截。
+        if !cards.isEmpty {
+            guard limit != DiscoverTemplate.unlimited else { return cards }
+            return Array(cards.prefix(max(limit, 0)))
+        }
         return Array(books.prefix(limit)).map { DeckItem(book: $0) }
     }
 
