@@ -22,6 +22,10 @@ struct CustomDiscoverEditorPage: View {
     /// 空配置时先让用户从展示库挑一个模板；选完才进「添加栏目」。
     @State private var pickedTemplate: DiscoverTemplateKind?
 
+    /// 打开时直接进「添加模板」（从首页「开始配置」/ 空页面进来）。
+    var startAdding: Bool = false
+    @State private var didAutoOpenPicker = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -65,7 +69,7 @@ struct CustomDiscoverEditorPage: View {
                     }
                 }
             }
-            .navigationTitle(draft.entries.isEmpty ? "添加模板" : "首页预览")
+            .navigationTitle(draft.entries.isEmpty ? "添加模板" : model.pages.current.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -127,6 +131,11 @@ struct CustomDiscoverEditorPage: View {
                 guard !loaded else { return }
                 loaded = true
                 draft = model.config
+                // 已有板块但用户是来「添加」的：直接弹挑选模板
+                if startAdding, !draft.entries.isEmpty {
+                    didAutoOpenPicker = true
+                    showTemplatePicker = true
+                }
             }
         }
     }

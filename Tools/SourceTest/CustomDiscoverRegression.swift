@@ -382,5 +382,60 @@ enum CustomDiscoverRegression {
             check(orbs.allSatisfy { $0.r > 0.05 && $0.r < 0.25 },
                   "预览：\(sample.title) 装饰圆半径合理")
         }
+
+        // 23. 多页面：默认一页、增删切、落盘往返、老格式迁移
+        var book = CustomDiscoverPages()
+        check(book.pages.count == 1, "页面：默认只有一个页面")
+        check(book.current.id == book.pages[0].id, "页面：默认选中第一页")
+        check(book.current.name == "空白页面", "页面：默认名字")
+        check(book.current.componentCount == 0, "页面：默认没有组件")
+
+        let firstID = book.currentID
+        let added = book.addPage()
+        check(book.pages.count == 2, "页面：能添加页面")
+        check(book.currentID == added.id, "页面：添加后自动切到新页")
+        check(book.pages.filter { $0.name == added.name }.count == 1,
+              "页面：同名会自动加序号")
+
+        book.setCurrent(firstID)
+        check(book.currentID == firstID, "页面：能切回原来的页")
+        book.setCurrent("不存在的 id")
+        check(book.currentID == firstID, "页面：切到不存在的 id 不生效")
+
+        // 每页的配置是独立的
+        var cfgA = CustomDiscoverConfig()
+        cfgA.upsert(CustomDiscoverEntry(sourceUrl: "u1", sourceName: "甲",
+                                        kindTitle: "榜", kindUrl: "/a"))
+        book.saveCurrentConfig(cfgA)
+        check(book.current.componentCount == 1, "页面：组件写回当前页")
+        check(book.pages.first { $0.id == added.id }?.componentCount == 0,
+              "页面：另一页不受影响")
+
+        // 不能删到一页都不剩
+        book.removePage(added.id)
+        check(book.pages.count == 1, "页面：能删除页面")
+        book.removePage(firstID)
+        check(book.pages.count == 1, "页面：最后一页不能删")
+
+        // 落盘往返
+        let pagesTmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("pages-\(UUID().uuidString).json")
+        check(CustomDiscoverStore.savePages(book, to: pagesTmp), "页面：写盘成功")
+        let reloadedPages = CustomDiscoverStore.loadPages(from: pagesTmp)
+        check(reloadedPages.pages.count == book.pages.count, "页面：读回页数一致")
+        check(reloadedPages.currentID == book.currentID, "页面：读回当前页一致")
+        check(reloadedPages.currentConfig.entries.count == 1, "页面：读回组件一致")
+        try? FileManager.default.removeItem(at: pagesTmp)
+
+        // 老格式（顶层就是一份 config）会被包成单个页面
+        let legacyData = Data(#"{"entries":[{"sourceUrl":"u1","kindUrl":"/a"}],"carouselHidden":true}"#.utf8)
+        let migrated = CustomDiscoverStore.decodePages(legacyData)
+        check(migrated.pages.count == 1, "页面：老格式迁移成单页")
+        check(migrated.current.componentCount == 1, "页面：老配置的板块保留")
+        check(migrated.current.config.carouselHidden, "页面：老配置的轮播开关保留")
+
+        // 坏数据不崩
+        check(CustomDiscoverStore.decodePages(Data("not json".utf8)).pages.count == 1,
+              "页面：坏 JSON 回落单页")
     }
 }

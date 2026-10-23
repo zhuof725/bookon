@@ -12,6 +12,10 @@ struct CustomDiscoverView: View {
     @ObservedObject private var model = DiscoverBoardStore.shared
 
     @State private var showSettings = false
+    /// 打开编辑页时直接进「添加模板」，而不是先看板块预览。
+    @State private var openEditorAdding = false
+    /// 左上角按钮：页面管理
+    @State private var showPageManager = false
     @State private var selectedBook: Book?
     @State private var fullPage: CustomDiscoverEntry?
     @State private var categoryIndex = 0
@@ -38,30 +42,52 @@ struct CustomDiscoverView: View {
         .navigationTitle("首页")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showSettings = true } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(palette.primary)
-                        .frame(width: 34, height: 34)
-                        .background {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Circle().strokeBorder(palette.primary.opacity(0.10),
-                                                          lineWidth: 0.5)
-                                }
-                        }
+            // 只有左上角一个入口：当前页面（图标 + 名字），点开是页面管理。
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showPageManager = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(model.pages.current.icon)
+                            .font(.system(size: 15))
+                        Text(model.pages.current.name)
+                            .appFont(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(palette.primary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 11)
+                    .frame(height: 34)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Capsule().strokeBorder(palette.primary.opacity(0.10),
+                                                       lineWidth: 0.5)
+                            }
+                    }
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("customdiscover.settings")
+                .accessibilityIdentifier("home.pageSwitch")
+                .accessibilityLabel("页面管理：\(model.pages.current.name)")
             }
         }
         // 编辑页改成全屏：板块预览要按真实宽度铺开，sheet 的圆角和留白会打断观感。
         .fullScreenCover(isPresented: $showSettings) {
-            CustomDiscoverEditorPage()
+            CustomDiscoverEditorPage(startAdding: openEditorAdding)
                 .environmentObject(store)
                 .environmentObject(model)
+        }
+        .sheet(isPresented: $showPageManager) {
+            PageManagerView { pageID in
+                model.selectPage(pageID)
+                // 空页面直接进编辑，能立刻加组件
+                if model.pages.currentConfig.isEmpty {
+                    openEditorAdding = true
+                    showSettings = true
+                }
+            }
+            .environmentObject(store)
+            .environmentObject(model)
         }
         .navigationDestination(item: $selectedBook) { book in
             BookDetailView(book: book)
@@ -291,7 +317,10 @@ struct CustomDiscoverView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 44)
 
-            Button { showSettings = true } label: {
+            Button {
+                openEditorAdding = true
+                showSettings = true
+            } label: {
                 Text("开始配置")
                     .appFont(.system(size: 16, weight: .semibold))
                     .foregroundStyle(palette.onAccent)

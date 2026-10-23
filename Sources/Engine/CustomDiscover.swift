@@ -511,4 +511,45 @@ enum CustomDiscoverStore {
             return false
         }
     }
+
+    // MARK: 多页面
+
+    /// 读全部页面。老格式（顶层就是一份 config）会被包成单个「首页」。
+    static func loadPages(from url: URL? = nil) -> CustomDiscoverPages {
+        guard let file = url ?? Optional(fileURL),
+              let data = try? Data(contentsOf: file) else { return CustomDiscoverPages() }
+        return decodePages(data)
+    }
+
+    static func decodePages(_ data: Data) -> CustomDiscoverPages {
+        (try? JSONDecoder().decode(CustomDiscoverPages.self, from: data))
+            ?? CustomDiscoverPages()
+    }
+
+    /// 写全部页面：既写新格式，也把当前页的配置平铺到顶层给老版本读。
+    @discardableResult
+    static func savePages(_ pages: CustomDiscoverPages, to url: URL? = nil) -> Bool {
+        guard let data = encodePages(pages) else { return false }
+        do {
+            try data.write(to: url ?? fileURL, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func encodePages(_ pages: CustomDiscoverPages) -> Data? {
+        guard let base = try? JSONEncoder().encode(pages),
+              var object = (try? JSONSerialization.jsonObject(with: base)) as? [String: Any]
+        else { return nil }
+        // 老版本 App 不认识 pages，只读顶层字段；把当前页平铺出去保证能降级打开。
+        if let current = try? JSONEncoder().encode(pages.currentConfig),
+           let flat = (try? JSONSerialization.jsonObject(with: current)) as? [String: Any] {
+            for (key, value) in flat { object[key] = value }
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? JSONSerialization.data(withJSONObject: object,
+                                           options: [.prettyPrinted, .sortedKeys])
+    }
 }

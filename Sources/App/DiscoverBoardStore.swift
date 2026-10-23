@@ -87,6 +87,9 @@ final class DiscoverBoardStore: ObservableObject {
     @Published private(set) var historyItems: [HistoryItem] = []
     @Published private(set) var config = CustomDiscoverConfig()
 
+    /// 全部首页页面 + 当前选中的那一页。
+    @Published private(set) var pages = CustomDiscoverPages()
+
     /// 预计算好，给视图直接用。
     @Published private(set) var categories: [String] = []
     /// 分类名 → 该分类下的板块。切分类时不用再过滤。
@@ -109,18 +112,81 @@ final class DiscoverBoardStore: ObservableObject {
     // MARK: 配置
 
     func reloadConfig() {
-        config = CustomDiscoverStore.load()
-        config.refreshNames(from: appStore.sources)
+        pages = CustomDiscoverStore.loadPages()
+        var current = pages.currentConfig
+        current.refreshNames(from: appStore.sources)
+        pages.saveCurrentConfig(current)
+        config = current
         rebuild()
         revision &+= 1
     }
 
+    /// 保存当前页的配置，并把整份页面表写盘。
     func save(_ next: CustomDiscoverConfig) {
         var updated = next
         updated.refreshNames(from: appStore.sources)
-        CustomDiscoverStore.save(updated)
+        pages.saveCurrentConfig(updated)
+        CustomDiscoverStore.savePages(pages)
         config = updated
         rebuild()
+        revision &+= 1
+    }
+
+    // MARK: 多页面
+
+    /// 切到某一页。
+    func selectPage(_ id: String) {
+        guard id != pages.currentID else { return }
+        pages.setCurrent(id)
+        var current = pages.currentConfig
+        current.refreshNames(from: appStore.sources)
+        pages.saveCurrentConfig(current)
+        CustomDiscoverStore.savePages(pages)
+        config = current
+        // 切页等于换了一整套板块，把运行时状态清干净再重建
+        sections = []
+        loadingIDs.removeAll()
+        rebuild()
+        revision &+= 1
+        Task { await loadCarousel(force: true) }
+    }
+
+    /// 加一个空白自定义页面并切过去。
+    func addPage() {
+        let page = pages.addPage()
+        config = page.config
+        sections = []
+        loadingIDs.removeAll()
+        CustomDiscoverStore.savePages(pages)
+        rebuild()
+        revision &+= 1
+        Task { await loadCarousel(force: true) }
+    }
+
+    func removePage(_ id: String) {
+        pages.removePage(id)
+        var current = pages.currentConfig
+        current.refreshNames(from: appStore.sources)
+        pages.saveCurrentConfig(current)
+        CustomDiscoverStore.savePages(pages)
+        config = current
+        sections = []
+        loadingIDs.removeAll()
+        rebuild()
+        revision &+= 1
+        Task { await loadCarousel(force: true) }
+    }
+
+    /// 改页面本身（名字 / 图标）。
+    func renamePage(_ page: CustomDiscoverPage) {
+        pages.update(page)
+        CustomDiscoverStore.savePages(pages)
+        revision &+= 1
+    }
+
+    func movePages(fromOffsets source: IndexSet, toOffset destination: Int) {
+        pages.move(fromOffsets: source, toOffset: destination)
+        CustomDiscoverStore.savePages(pages)
         revision &+= 1
     }
 
