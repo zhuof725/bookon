@@ -180,31 +180,29 @@ struct BookDetailScreen: View {
                 .accessibilityIdentifier("detail.author")
             DetailTagLayout(spacing: 7) {
                 if let wordCount = nonempty(book.wordCount) {
-                    tag(wordCount, tone: .accent).accessibilityIdentifier("detail.wordCount")
+                    tag(wordCount).accessibilityIdentifier("detail.wordCount")
                 }
-                tag(categoryText, tone: .accent).accessibilityIdentifier("detail.category")
-                tag(hasStarted ? "在读" : "未读", tone: hasStarted ? .green : .muted)
-                    .accessibilityIdentifier("detail.status")
+                tag(categoryText).accessibilityIdentifier("detail.category")
+                tag(hasStarted ? "在读" : "未读").accessibilityIdentifier("detail.status")
             }
             if !kindTags.isEmpty {
                 DetailTagLayout(spacing: 7) {
-                    ForEach(kindTags, id: \.self) { tag($0, tone: .purple) }
+                    ForEach(kindTags, id: \.self) { tag($0) }
                 }
             }
         }
     }
 
-    /// 彩色胶囊标签：浅色底 + 同色文字（参考图里字数/分类是蓝、状态是绿、题材是紫）。
-    private func tag(_ text: String, tone: DetailTagTone) -> some View {
-        let color = tone.color(palette)
-        return Text(text)
+    /// 胶囊标签：只用主题色（accent 文字 + selection 底色），不做红/绿/紫的多色。
+    private func tag(_ text: String) -> some View {
+        Text(text)
             .appFont(.system(size: 13, weight: .medium))
-            .foregroundStyle(color)
+            .foregroundStyle(palette.accent)
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
-            .background(Capsule().fill(color.opacity(0.12)))
+            .background(Capsule().fill(palette.selection))
     }
 
     // MARK: - 开始阅读 / 加入书架
@@ -533,21 +531,6 @@ struct BookDetailScreen: View {
             return "\(parts[1])/\(parts[2])"
         }
         return head
-    }
-}
-
-// MARK: - 标签配色
-
-private enum DetailTagTone {
-    case accent, green, purple, muted
-
-    func color(_ palette: ResolvedAppPalette) -> Color {
-        switch self {
-        case .accent: return palette.accent
-        case .green: return .green
-        case .purple: return .purple
-        case .muted: return palette.secondary
-        }
     }
 }
 
