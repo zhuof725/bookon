@@ -33,6 +33,8 @@ enum BookKindRegression {
         check(BookKind.detect(inContent: #"["https://cdn.example/1.mp3","https://cdn.example/2.mp3"]"#) == .audio,
               "音频地址数组")
         check(BookKind.detect(inContent: "https://cdn.example/book/1.html") == .text, "网页地址仍是文本")
+        check(BookKind.detect(inContent: "https://cdn.example/play/index.php?id=1") == .text, "php 页面不算音频")
+        check(BookKind.detect(inContent: "本章内容请到 https://cdn.example/a.m4a 收听") == .text, "正文里提到音频地址仍是文本")
         check(BookKind.detect(inContent: "") == .text, "空正文按文本")
         check(BookKind.imageTagCount("<img src=a><IMG src=b><imgs src=c>") == 2, "只数 <img 标签")
         check(BookKind.strippedText("<p>你好&nbsp;世界</p>") == "你好 世界", "去标签并还原 nbsp")

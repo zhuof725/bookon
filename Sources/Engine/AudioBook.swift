@@ -83,6 +83,17 @@ enum AudioChapter {
         return []
     }
 
+    /// 从内容反推「这像不像音频地址」：有音频扩展名，或无扩展名的 http 接口
+    /// （音频源常用 `getAudio?id=` 这类地址）。网页/JSON/文本文件不算。
+    static func looksLikeAudioURL(_ raw: String) -> Bool {
+        if isDirectAudioURL(raw) { return true }
+        let lower = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard lower.hasPrefix("http://") || lower.hasPrefix("https://") else { return false }
+        let pageMarks = [".html", ".htm", ".php", ".asp", ".aspx", ".jsp", ".shtml",
+                         ".json", ".xml", ".txt", ".css", ".js"]
+        return !pageMarks.contains(where: { lower.contains($0) })
+    }
+
     /// 音频播放地址：http(s) 即可（很多接口地址没有 .mp3 后缀）。
     static func isPlayableURL(_ raw: String) -> Bool {
         let url = raw.trimmingCharacters(in: .whitespacesAndNewlines)
