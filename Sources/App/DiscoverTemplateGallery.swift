@@ -82,10 +82,11 @@ struct DiscoverTemplateLibrary: View {
     private func previewCount(for kind: DiscoverTemplateKind) -> Int {
         switch kind {
         case .largeCard, .compactCard, .featureCard, .deck, .curve: return 6
-        case .threeColumn, .badgeGrid, .waterfall: return 9
         case .dualRow, .covers: return 12
         case .fixedList, .updateFeed: return 5
         case .history: return 4
+        // 三列 / 大封面 / 榜单 / 瀑布默认多放几本；新增模板也走这里，不会漏分支。
+        default: return 9
         }
     }
 
