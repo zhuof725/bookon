@@ -20,9 +20,11 @@ enum BookKindRegression {
         check(BookKind.detect(inContent: "<p>只有一张图</p><img src=\"https://img.example/1.jpg\">") == .text,
               "文字插图不算漫画")
         check(BookKind.detect(inContent: "正文第一段。\n正文第二段。") == .text, "纯文字是文本")
-        let illustrated = String(repeating: "这是一段很长的正文内容，讲了很多事情。", count: 6)
+        let longText = String(repeating: "这是一段很长的正文内容，讲了很多事情。", count: 30)
+        let illustrated = longText
             + "<img src=\"https://img.example/a.jpg\"><img src=\"https://img.example/b.jpg\">"
             + "<img src=\"https://img.example/c.jpg\">"
+        check(longText.count > 500, "样例正文足够长")
         check(BookKind.detect(inContent: illustrated) == .text, "长篇正文里的插图不算漫画")
 
         // 正文识别：整段就是音频地址（或地址数组）→ 音频。
