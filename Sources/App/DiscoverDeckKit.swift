@@ -570,40 +570,70 @@ struct DeckCarousel<Card: View>: View {
 }
 
 /// 一张卡在轨道里的形态。`distance` 0 = 正中，±1 = 相邻一格。
+///
+/// 两种形态都算成同一组数值（转角、额外位移、缩放、透明度）再统一套用，
+/// 不在 body 里用 switch 返回不同视图类型——那样 `some View` 推不出类型。
 private struct DeckTrackGeometry: ViewModifier {
     let distance: CGFloat
     let style: DeckTrackStyle
     let arcRadius: CGFloat
     let arcStep: CGFloat
 
-    func body(content: Content) -> some View {
+    /// 弧度制角度（弧形走廊按它转，叠卡只要一点点歪）
+    private var radians: Double {
+        let clamped = max(-3.4, min(3.4, distance))
+        return Double(clamped) * 12.0 * Double.pi / 180
+    }
+
+    /// 卡片自身的转角
+    private var angle: Double {
+        let clamped = max(-3.4, min(3.4, distance))
         switch style {
         case .arc:
-            // 真的贴在圆上：圆心在卡片正下方 R 处。
-            // 第 n 格的位置是 (R·sinθ, R−R·cosθ)，θ = n × 12°；
-            // 布局按固定步长摆，所以这里要把「圆周位置 − 步长位置」的差值补回来，
-            // 否则格数一大卡片就飘出圆弧（3 格时会偏 13pt）。
-            let clamped = max(-3.4, min(3.4, distance))
-            let radians = Double(clamped) * 12.0 * Double.pi / 180
-            let arcX = arcRadius * CGFloat(sin(radians))
-            let arcY = arcRadius * CGFloat(1 - cos(radians))
-            // 布局已经给了 clamped × step 的横向位置，这里只补差
-            let correctionX = arcX - clamped * arcStep
-            return content
-                .rotationEffect(.degrees(Double(clamped) * 12))
-                .offset(x: correctionX, y: arcY)
-                .scaleEffect(1 - min(abs(clamped), 3) * 0.035)
-                .opacity(1 - min(abs(clamped), 3.4) * 0.14)
-
+            return Double(clamped) * 12
         case .deck:
-            // 一叠牌：克制到几乎只有层次，不做翻转——大幅 3D 翻会晃眼。
-            // 中间那张永远是正的、完整的，两侧只是缩小一点、压暗一点。
-            let clamped = max(-2.4, min(2.4, distance))
-            return content
-                .scaleEffect(1 - min(abs(clamped), 2) * 0.05)
-                .rotationEffect(.degrees(Double(clamped) * 1.5))
-                .opacity(1 - min(abs(clamped), 2.4) * 0.09)
+            let limited = max(-2.4, min(2.4, distance))
+            return Double(limited) * 1.5
         }
+    }
+
+    /// 横向补正：布局按固定步长摆，圆弧要的是 R·sinθ，差值在这里补。
+    private var offsetX: CGFloat {
+        guard style == .arc else { return 0 }
+        let clamped = max(-3.4, min(3.4, distance))
+        return arcRadius * CGFloat(sin(radians)) - clamped * arcStep
+    }
+
+    /// 纵向：圆弧按弦高下沉 R·(1−cosθ)，叠卡不额外下沉。
+    private var offsetY: CGFloat {
+        guard style == .arc else { return 0 }
+        return arcRadius * CGFloat(1 - cos(radians))
+    }
+
+    private var scale: CGFloat {
+        switch style {
+        case .arc:
+            return 1 - min(abs(distance), 3) * 0.035
+        case .deck:
+            return 1 - min(abs(distance), 2) * 0.05
+        }
+    }
+
+    private var opacity: Double {
+        switch style {
+        case .arc:
+            return 1 - Double(min(abs(distance), 3.4)) * 0.14
+        case .deck:
+            return 1 - Double(min(abs(distance), 2.4)) * 0.09
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(angle))
+            .offset(x: offsetX, y: offsetY)
+            .scaleEffect(scale)
+            .opacity(opacity)
     }
 }
 
