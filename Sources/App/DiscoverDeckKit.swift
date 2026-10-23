@@ -606,121 +606,6 @@ struct DiscoverCurveSection: View {
     }
 }
 
-// MARK: - U3 扇形展开
-
-/// 九张卡以底部为轴心扇形摊开，像手里捏着一叠牌。
-/// 只有中间那张正面显示书名。
-struct DiscoverFanSection: View {
-    @ThemePalette private var palette
-    let title: String
-    let moreTitle: String
-    let items: [DeckItem]
-    var onMore: (() -> Void)? = nil
-    var onSelect: (DeckItem, Int) -> Void = { _, _ in }
-
-    @State private var index = 0
-
-    private let cardWidth: CGFloat = 96
-    private let cardHeight: CGFloat = 130
-    private let stageHeight: CGFloat = 214
-    /// 每档旋转角度
-    private let stepAngle: Double = 11
-
-    private var current: DeckItem? {
-        items.indices.contains(index) ? items[index] : nil
-    }
-
-    /// 当前卡前后各 5 张的渲染窗口。
-    private var visibleRange: Range<Int> {
-        let lower = max(0, index - 5)
-        let upper = min(items.count, index + 6)
-        return lower..<max(lower, upper)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-                .padding(.horizontal, 20)
-
-            ZStack {
-                ForEach(visibleRange, id: \.self) { itemIndex in
-                    let pair = (offset: itemIndex, element: items[itemIndex])
-                    let offset = Double(pair.offset - index)
-                    let distance = abs(pair.offset - index)
-
-                    DeckCard(radius: 10,
-                             showCaption: pair.offset == index,
-                             title: pair.element.title) {
-                        DeckCoverImage(url: pair.element.cover)
-                    }
-                    .frame(width: cardWidth, height: cardHeight)
-                    // 绕底边旋转：anchor .bottom
-                    .rotationEffect(.degrees(offset * stepAngle), anchor: .bottom)
-                    // 越靠边略微下沉，形成扇形外沿
-                    .offset(y: CGFloat(min(distance, 4)) * 7)
-                    .opacity(distance > 4 ? 0 : 1 - Double(min(distance, 4)) * 0.06)
-                    .zIndex(-Double(distance))
-                    .onTapGesture { onSelect(pair.element, pair.offset) }
-                    .allowsHitTesting(pair.offset == index)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: stageHeight)
-            .contentShape(Rectangle())
-            .gesture(swipe)
-
-            if let current {
-                VStack(spacing: 3) {
-                    Text(current.title)
-                        .appFont(.system(size: 14, weight: .bold))
-                        .foregroundStyle(palette.primary)
-                        .lineLimit(1)
-                    if !current.caption.isEmpty {
-                        Text(current.caption)
-                            .appFont(.system(size: 10.5))
-                            .foregroundStyle(palette.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 6)
-                .animation(.easeInOut(duration: 0.2), value: index)
-            }
-        }
-        .padding(.bottom, 16)
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .appFont(.system(size: 20, weight: .bold))
-                .foregroundStyle(palette.primary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            if let onMore {
-                Button(action: onMore) {
-                    Text(moreTitle)
-                        .appFont(.system(size: 13))
-                        .foregroundStyle(palette.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.bottom, 6)
-    }
-
-    private var swipe: some Gesture {
-        DragGesture()
-            .onEnded { value in
-                var next = index
-                if value.translation.width < -36, index < items.count - 1 { next = index + 1 }
-                if value.translation.width > 36, index > 0 { next = index - 1 }
-                guard next != index else { return }
-                withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) { index = next }
-            }
-    }
-}
-
 // MARK: - U 卡片堆叠
 
 /// 中央卡在前完整显示，左右各两张向后旋转、缩小、压暗。
@@ -1153,16 +1038,6 @@ struct DiscoverTemplateView: View {
             )
         case .curve:
             DiscoverCurveSection(
-                title: title,
-                moreTitle: moreTitle,
-                items: deckItems,
-                onMore: onMore,
-                onSelect: { _, index in
-                    if books.indices.contains(index) { onSelectBook(books[index]) }
-                }
-            )
-        case .fan:
-            DiscoverFanSection(
                 title: title,
                 moreTitle: moreTitle,
                 items: deckItems,

@@ -18,7 +18,6 @@ enum DiscoverTemplateIcon {
         case .rankRow: return "list.number"
         case .waterfall: return "rectangle.grid.2x2"
         case .curve: return "rectangle.on.rectangle.angled"
-        case .fan: return "fan.fill"
         case .deck: return "square.stack.3d.down.right"
         case .history: return "clock.arrow.circlepath"
         }

@@ -87,34 +87,34 @@ struct EntryEditor: View {
 
     private var templateSection: some View {
         Section {
-            ForEach(DiscoverTemplate.all) { template in
-                Button {
-                    entry.applyTemplate(template.kind)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: DiscoverTemplateIcon.symbol(template.kind))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(palette.accent)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(template.title).appFont(.body)
-                            Text(template.detail)
-                                .appFont(.caption2)
-                                .foregroundStyle(palette.secondary)
-                                .lineLimit(2)
-                        }
-                        Spacer(minLength: 4)
-                        if entry.template == template.kind {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(palette.accent)
-                        }
-                    }
+            NavigationLink {
+                DiscoverTemplateLibrary(current: entry.template) { kind in
+                    entry.applyTemplate(kind)
                 }
-                .buttonStyle(.plain)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: DiscoverTemplateIcon.symbol(entry.template))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.template.title).appFont(.body)
+                        Text(entry.template.detail)
+                            .appFont(.caption2)
+                            .foregroundStyle(palette.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Text("展示库")
+                        .appFont(.caption.weight(.semibold))
+                        .foregroundStyle(palette.accent)
+                }
             }
+            .accessibilityIdentifier("entry.template.library")
         } header: {
             Text("模板")
+        } footer: {
+            Text("展示库里每个模板按真实尺寸铺开，点一个就换过来。")
         }
     }
 

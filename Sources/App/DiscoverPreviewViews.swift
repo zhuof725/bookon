@@ -380,8 +380,8 @@ struct DiscoverTemplateThumbnail: View {
                 }
             }
 
-        case .curve, .fan, .deck:
-            // 三种立体版式用同一套「叠放」示意，靠角度区分
+        case .curve, .deck:
+            // 立体版式用同一套「叠放」示意，靠角度区分
             ZStack {
                 ForEach(0..<3, id: \.self) { index in
                     let sample = samples[index]
@@ -427,7 +427,6 @@ struct DiscoverTemplateThumbnail: View {
 
     private func rotation(for index: Int) -> Double {
         switch kind {
-        case .fan: return Double(index - 1) * 16
         case .curve: return Double(index - 1) * 10
         default: return 0
         }
@@ -435,16 +434,12 @@ struct DiscoverTemplateThumbnail: View {
 
     private func offsetX(for index: Int, unit: CGFloat) -> CGFloat {
         switch kind {
-        case .fan: return CGFloat(index - 1) * 8 * unit
         case .curve: return CGFloat(index - 1) * 23 * unit
         default: return CGFloat(index - 1) * 20 * unit
         }
     }
 
     private func offsetY(for index: Int, unit: CGFloat) -> CGFloat {
-        switch kind {
-        case .fan: return CGFloat(abs(index - 1)) * 4 * unit
-        default: return CGFloat(abs(index - 1)) * 3 * unit
-        }
+        CGFloat(abs(index - 1)) * 3 * unit
     }
 }

@@ -62,63 +62,61 @@ struct AddBoardPage: View {
         .task { await preloadFirstSource() }
     }
 
-    // MARK: 模板（左图右文）
+    // MARK: 模板（当前选择 + 展示库入口）
 
     private var templateSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("选择模板")
 
-            VStack(spacing: 10) {
-                ForEach(DiscoverTemplate.all) { item in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { template = item.kind }
-                    } label: {
-                        HStack(spacing: 12) {
-                            // 左：缩略预览
-                            DiscoverTemplateThumbnail(kind: item.kind)
-                                .frame(width: 104, height: 78)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .strokeBorder(
-                                            template == item.kind ? palette.accent : .clear,
-                                            lineWidth: 1.5
-                                        )
-                                }
-
-                            // 右：名称与说明
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(item.title)
-                                    .appFont(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(palette.primary)
-                                Text(item.detail)
-                                    .appFont(.system(size: 11.5))
-                                    .foregroundStyle(palette.secondary)
-                                    .lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 0)
-
-                            if template == item.kind {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 17))
-                                    .foregroundStyle(palette.accent)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
+            NavigationLink {
+                DiscoverTemplateLibrary(current: template) { kind in
+                    withAnimation(.easeInOut(duration: 0.2)) { template = kind }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    // 左：当前模板的缩略预览
+                    DiscoverTemplateThumbnail(kind: template)
+                        .frame(width: 104, height: 78)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(palette.accent, lineWidth: 1.5)
                         }
-                        .padding(9)
-                        .background {
-                            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                .fill(template == item.kind
-                                      ? palette.accent.opacity(0.07)
-                                      : palette.primary.opacity(0.028))
-                        }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(template.title)
+                            .appFont(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(palette.primary)
+                        Text(template.detail)
+                            .appFont(.system(size: 11.5))
+                            .foregroundStyle(palette.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("add.template.\(item.kind.rawValue)")
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: 3) {
+                        Text("展示库")
+                            .appFont(.system(size: 12, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(palette.accent)
+                }
+                .padding(9)
+                .background {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(palette.accent.opacity(0.07))
                 }
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("add.template.library")
+
+            Text("展示库里每个模板都按真实尺寸铺开，点一个就换过来。")
+                .appFont(.system(size: 11))
+                .foregroundStyle(palette.secondary)
+                .padding(.leading, 2)
         }
     }
 

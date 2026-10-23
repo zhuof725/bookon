@@ -127,12 +127,29 @@ final class DeckCoverCache {
 /// 板块内统一封面：内存缓存 → 磁盘缓存 → 网络，失败保持占位色。
 ///
 /// 首帧先同步取内存里的图，避免每次滚动回来都闪一下灰色占位。
+/// `preview://书名` 这种地址不走网络，直接现画渐变封面——模板展示库靠它
+/// 在完全离线的状态下也能呈现出真实观感。
 struct DeckCoverImage: View {
     let url: URL?
 
     @State private var image: UIImage?
 
+    /// 自绘封面的书名（`preview://cover?title=书名` 才有值）。
+    private var previewTitle: String? {
+        guard let url, url.scheme == "preview" else { return nil }
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        return components?.queryItems?.first { $0.name == "title" }?.value
+    }
+
     var body: some View {
+        if let previewTitle {
+            PreviewCoverArt(title: previewTitle, showTitle: false, corner: 0)
+        } else {
+            placeholderCover
+        }
+    }
+
+    private var placeholderCover: some View {
         // 用 Color.clear + overlay 撑尺寸，比 GeometryReader 省：后者在滚动中
         // 每次尺寸变化都会重新求值 body，一屏几十张封面就是持续的布局开销。
         Color.clear

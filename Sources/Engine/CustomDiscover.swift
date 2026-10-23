@@ -33,8 +33,6 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     case waterfall
     /// 弧形走廊：卡片沿弧线排开，中间最大最亮。
     case curve
-    /// 扇形展开：以底边为轴心摊开，像手里捏着一叠牌。
-    case fan
     /// 卡片堆叠：中央卡在前，左右各两张向后旋转压暗。
     case deck
     /// 继续阅读：大图 + 进度条 + 最后阅读时间。
@@ -57,7 +55,6 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .rankRow: return "竖排榜单"
         case .waterfall: return "错位瀑布"
         case .curve: return "弧形走廊"
-        case .fan: return "扇形展开"
         case .deck: return "卡片堆叠"
         case .history: return "继续阅读"
         }
@@ -77,7 +74,6 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .rankRow: return "大号斜体排名 + 小封面"
         case .waterfall: return "双列不等高，大小卡错落排下去"
         case .curve: return "卡片沿弧线排开，中间最大最亮"
-        case .fan: return "以底边为轴心扇形摊开"
         case .deck: return "中央卡在前完整显示，两侧向后压暗"
         case .history: return "大图铺满 + 进度条 + 最后阅读时间"
         }
@@ -94,15 +90,30 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     /// 卡片型（本身是翻看交互，按实际数量自己排），其余是列表型（一直往下铺）。
     var isCardStage: Bool {
         switch self {
-        case .curve, .fan, .deck: return true
+        case .curve, .deck: return true
         default: return false
         }
     }
 
+    /// 展示库里的分组归属。
+    var family: DiscoverTemplateFamily {
+        switch self {
+        case .largeCard, .compactCard, .threeColumn, .dualRow,
+             .fixedList, .featureCard, .updateFeed:
+            return .layout
+        case .badgeGrid, .covers, .rankRow, .waterfall, .curve, .deck:
+            return .visual
+        case .history:
+            return .record
+        }
+    }
+
     /// 解码容错：未知模板回落卡片堆叠，不让一条坏配置拖垮整页。
+    /// `fan`（扇形展开）已下线，老配置落到最接近的弧形走廊。
     static func normalized(_ raw: String?) -> DiscoverTemplateKind {
-        guard let raw, let value = DiscoverTemplateKind(rawValue: raw) else { return .deck }
-        return value
+        guard let raw else { return .deck }
+        if raw == "fan" { return .curve }
+        return DiscoverTemplateKind(rawValue: raw) ?? .deck
     }
 }
 
@@ -112,6 +123,39 @@ enum DiscoverTemplateDataSource: String, Codable {
     case bookList
     /// 书架里每本书的阅读进度。
     case readingProgress
+}
+
+/// 展示库里的分组：同组成员排在一起，说明也按组写。
+enum DiscoverTemplateFamily: String, CaseIterable, Identifiable {
+    /// 版式线：白卡 + 大圆角 + 留白优先。
+    case layout
+    /// 视觉线：封面主导的 3D / 大图排布。
+    case visual
+    /// 记录线：吃书架阅读进度。
+    case record
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .layout: return "版式"
+        case .visual: return "视觉"
+        case .record: return "阅读记录"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .layout: return "白卡 + 大圆角 + 留白优先，像原生书城的推荐位"
+        case .visual: return "封面主导：网格、横滑、榜单、3D 排布"
+        case .record: return "用书架里的阅读进度铺成板块"
+        }
+    }
+
+    /// 这一组里的模板，顺序沿用枚举顺序。
+    var templates: [DiscoverTemplate] {
+        DiscoverTemplate.all.filter { $0.kind.family == self }
+    }
 }
 
 /// 模板的静态描述：给设置界面用，不依赖任何视图类型。

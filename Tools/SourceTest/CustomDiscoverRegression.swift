@@ -16,6 +16,18 @@ enum CustomDiscoverRegression {
               && decoded.entries[0].sourceName == "",
               "自定义发现：缺 template 回落卡片堆叠，缺书名不崩")
 
+        // 1.1 已下线的扇形展开不能让老配置变空板块
+        check(DiscoverTemplateKind.normalized("fan") == .curve,
+              "模板：扇形展开的旧配置迁移到弧形走廊")
+        check(DiscoverTemplateKind.normalized(nil) == .deck,
+              "模板：缺模板键回落卡片堆叠")
+        check(DiscoverTemplateKind.normalized("notATemplate") == .deck,
+              "模板：未知模板回落卡片堆叠")
+        let fanJSON = Data(#"{"entries":[{"sourceUrl":"u1","kindUrl":"/a","template":"fan"}]}"#.utf8)
+        let fanConfig = CustomDiscoverStore.decode(fanJSON)
+        check(fanConfig.entries.count == 1 && fanConfig.entries[0].template == .curve,
+              "模板：扇形展开的老配置能正常读成弧形走廊")
+
         // 2. 增删与去重
         var config = CustomDiscoverConfig()
         let entryA = CustomDiscoverEntry(sourceUrl: "u1", sourceName: "书源甲",
@@ -23,9 +35,9 @@ enum CustomDiscoverRegression {
         config.upsert(entryA)
         check(config.entries.count == 1, "自定义发现：首次添加写入一条")
         var entryADup = entryA
-        entryADup.template = .fan
+        entryADup.template = .curve
         config.upsert(entryADup)
-        check(config.entries.count == 1 && config.entries[0].template == .fan,
+        check(config.entries.count == 1 && config.entries[0].template == .curve,
               "自定义发现：同一书源同一分类重复添加只更新模板")
         let entryB = CustomDiscoverEntry(sourceUrl: "u2", sourceName: "书源乙",
                                          kindTitle: "月票榜", kindUrl: "/b", template: .curve)
@@ -148,14 +160,14 @@ enum CustomDiscoverRegression {
         check(CustomDiscoverConfig().isEmpty, "自定义发现：空配置可识别")
         check(!config.isEmpty, "自定义发现：有板块不是空配置")
 
-        // 11. 模板表：十五个模板都注册了，且数据源归属正确
+        // 11. 模板表：十四个模板都注册了，且数据源归属正确
         check(DiscoverTemplate.all.count == DiscoverTemplateKind.allCases.count,
               "模板：列表长度等于枚举数量")
         check(DiscoverTemplateKind.allCases.map(\.rawValue)
               == ["largeCard", "compactCard", "threeColumn", "dualRow", "fixedList",
                   "featureCard", "updateFeed",
-                  "badgeGrid", "covers", "rankRow", "waterfall", "curve", "fan", "deck", "history"],
-              "模板：十五个模板的稳定键")
+                  "badgeGrid", "covers", "rankRow", "waterfall", "curve", "deck", "history"],
+              "模板：十四个模板的稳定键")
         for kind in DiscoverTemplateKind.allCases {
             check(DiscoverTemplate.template(for: kind).kind == kind,
                   "模板：\(kind.title) 能按枚举取回")
@@ -175,11 +187,25 @@ enum CustomDiscoverRegression {
               && DiscoverTemplateKind.rankRow.dataSource == .bookList
               && DiscoverTemplateKind.waterfall.dataSource == .bookList
               && DiscoverTemplateKind.curve.dataSource == .bookList
-              && DiscoverTemplateKind.fan.dataSource == .bookList
               && DiscoverTemplateKind.deck.dataSource == .bookList,
-              "模板：七种书籍布局都吃书籍列表")
+              "模板：六种书籍布局都吃书籍列表")
         check(DiscoverTemplateKind.history.dataSource == .readingProgress,
               "模板：继续阅读吃阅读进度")
+
+        // 11.1 展示库分组：三组都能列全，不重不漏
+        let families = DiscoverTemplateFamily.allCases
+        check(families.map(\.title) == ["版式", "视觉", "阅读记录"],
+              "展示库：三组按固定顺序排列")
+        check(families.allSatisfy { !$0.detail.isEmpty }, "展示库：每组都有说明")
+        let grouped = families.flatMap { $0.templates }
+        check(grouped.count == DiscoverTemplate.all.count,
+              "展示库：分组覆盖全部模板")
+        check(Set(grouped.map(\.kind)) == Set(DiscoverTemplateKind.allCases),
+              "展示库：分组不重复、不遗漏任何模板")
+        check(DiscoverTemplateFamily.record.templates.map(\.kind) == [.history],
+              "展示库：阅读记录组只有继续阅读")
+        check(families.reduce(0) { $0 + $1.templates.count } == DiscoverTemplate.all.count,
+              "展示库：各组模板数之和等于总数")
 
         // 12. 数量钳制：上限统一 20，下限统一 1
         let curve = DiscoverTemplate.template(for: .curve)
@@ -205,8 +231,8 @@ enum CustomDiscoverRegression {
         var wide = CustomDiscoverEntry(sourceUrl: "u1", sourceName: "甲",
                                        kindTitle: "榜", kindUrl: "/a",
                                        template: .curve, count: 20)
-        wide.applyTemplate(.fan)
-        check(wide.template == .fan && wide.count == 20,
+        wide.applyTemplate(.waterfall)
+        check(wide.template == .waterfall && wide.count == 20,
               "模板：统一上限后换模板不改数量")
         wide.count = 999
         wide.applyTemplate(.deck)
@@ -310,6 +336,14 @@ enum CustomDiscoverRegression {
         check(orbsA.allSatisfy { $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 },
               "预览：装饰圆坐标在 0...1")
         check(DiscoverPreviewCatalog.cards(count: 5).count == 5, "预览：可只取前 N 张卡片")
+        let sampleCards = DiscoverPreviewCatalog.cards(count: 3)
+        check(sampleCards.allSatisfy { $0.cover?.scheme == "preview" },
+              "预览：卡片带自绘封面地址，不联网")
+        check(DiscoverPreviewCatalog.previewURL(for: "西游记")?.scheme == "preview"
+              && DiscoverPreviewCatalog.previewURL(for: "西游记")?.query?.contains("title=") == true,
+              "预览：封面地址能带上书名")
+        check(sampleCards.map(\.title) == DiscoverPreviewCatalog.samples.prefix(3).map(\.title),
+              "预览：卡片顺序与书目一致")
 
         // 22. 缩略图素材够用：每种模板都要能取到至少 6 本
         check(DiscoverPreviewCatalog.heroSamples(count: 6).count == 6,

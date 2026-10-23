@@ -48,8 +48,15 @@ enum DiscoverPreviewCatalog {
             DeckItem(id: "preview://\(sample.title)",
                      title: sample.title,
                      caption: sample.author,
-                     cover: nil)   // 封面由 DiscoverPreviewCover 现画
+                     cover: previewURL(for: sample.title))   // 自绘封面，不请求网络
         }
+    }
+
+    /// 自绘封面的地址：`preview://cover?title=书名`。
+    /// 只有 scheme 是 preview 时 `DeckCoverImage` 才会走现画分支。
+    static func previewURL(for title: String) -> URL? {
+        let encoded = title.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return URL(string: "preview://cover?title=\(encoded)")
     }
 
     /// 一批用于轮播大图的示例（标题 + 副标题）。
