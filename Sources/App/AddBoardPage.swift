@@ -54,7 +54,7 @@ struct AddBoardPage: View {
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .navigationTitle("添加板块")
+        .navigationTitle("添加栏目")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             addBar
@@ -113,7 +113,7 @@ struct AddBoardPage: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("add.template.library")
 
-            Text("展示库里每个模板都按真实尺寸铺开，点一个就换过来。")
+            Text("展示库里每个模板按真实尺寸铺开，点一个就换过来。")
                 .appFont(.system(size: 11))
                 .foregroundStyle(palette.secondary)
                 .padding(.leading, 2)

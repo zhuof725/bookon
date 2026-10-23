@@ -189,7 +189,8 @@ struct DiscoverWaterfallSection: View {
         .contentShape(Rectangle())
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -204,6 +205,7 @@ struct DiscoverWaterfallSection: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
         }
     }
 }
@@ -291,7 +293,8 @@ struct DiscoverBadgeGridSection: View {
         .contentShape(Rectangle())
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -306,6 +309,7 @@ struct DiscoverBadgeGridSection: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
         }
     }
 }
@@ -368,7 +372,8 @@ struct DiscoverCoversSection: View {
         .padding(.bottom, 18)
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -383,6 +388,7 @@ struct DiscoverCoversSection: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
         }
     }
 }
@@ -453,7 +459,8 @@ struct DiscoverRankRowSection: View {
         .contentShape(Rectangle())
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -468,6 +475,7 @@ struct DiscoverRankRowSection: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
         }
     }
 }
@@ -568,7 +576,8 @@ struct DiscoverCurveSection: View {
         .padding(.bottom, 16)
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -585,6 +594,7 @@ struct DiscoverCurveSection: View {
             }
         }
         .padding(.bottom, 6)
+        }
     }
 
     private var swipe: some Gesture {
@@ -702,7 +712,8 @@ struct DiscoverDeckSection: View {
         }
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if !title.isEmpty || onMore != nil {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .appFont(.system(size: 20, weight: .bold))
@@ -719,6 +730,7 @@ struct DiscoverDeckSection: View {
             }
         }
         .padding(.bottom, 6)
+        }
     }
 
     private var swipe: some Gesture {
@@ -747,6 +759,7 @@ struct DiscoverHistorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
+            if !title.isEmpty || onMore != nil {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .appFont(.system(size: 20, weight: .bold))
@@ -760,6 +773,7 @@ struct DiscoverHistorySection: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
             }
 
             if items.isEmpty {

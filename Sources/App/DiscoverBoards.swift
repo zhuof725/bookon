@@ -11,19 +11,23 @@ struct BoardHeader: View {
     var onMore: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title)
-                .appFont(.system(size: 19, weight: .bold))
-                .foregroundStyle(palette.primary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            if let onMore {
-                Button(action: onMore) {
-                    Text(moreTitle)
-                        .appFont(.system(size: 13))
-                        .foregroundStyle(palette.secondary)
+        // 标题为空时整块收起：模板展示库里每个模板下面已经有居中的名字，
+        // 这里再顶一行空标题只会多出一段空白。
+        if !title.isEmpty || onMore != nil {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .appFont(.system(size: 19, weight: .bold))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let onMore {
+                    Button(action: onMore) {
+                        Text(moreTitle)
+                            .appFont(.system(size: 13))
+                            .foregroundStyle(palette.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }

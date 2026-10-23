@@ -2,176 +2,99 @@ import SwiftUI
 
 // MARK: - 模板展示库
 
-/// 模板展示库：一页往下滑，按「版式 / 视觉 / 阅读记录」分成几块，
-/// 每个模板都按**真实尺寸**渲染一遍——看到什么样，加到首页就是什么样。
+/// 模板展示库：一页往下滑，每个模板都按**真实尺寸**整屏铺开一遍，
+/// 模板名称居中写在它下面。就是「加到首页会长什么样」的直接预览。
 ///
-/// 点任意一个模板就选中它并返回，回到「添加板块」继续选书源和分类。
+/// 点任意一个模板立刻用它添加板块——和参考图一样的分组成列浏览方式。
 struct DiscoverTemplateLibrary: View {
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
 
     /// 当前已选的模板，用来打勾。
     var current: DiscoverTemplateKind = .deck
-    /// 选中某个模板。
+    /// 选中某个模板（调用方负责据此添加板块）。
     var onPick: (DiscoverTemplateKind) -> Void = { _ in }
 
     /// 预览用的书：公版书目，不联网、不涉及第三方素材。
-    private let samples = DiscoverPreviewCatalog.cards(count: 5)
+    private let samples = DiscoverPreviewCatalog.cards(count: 12)
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 30) {
-                intro
-                ForEach(DiscoverTemplateFamily.allCases) { family in
-                    module(family)
+            LazyVStack(spacing: 0) {
+                ForEach(DiscoverTemplate.all) { template in
+                    section(template)
                 }
-                footer
+                footNote
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 48)
+            .padding(.bottom, 40)
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .navigationTitle("模板展示库")
+        .navigationTitle("添加栏目")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("template.library")
     }
 
-    // MARK: 页首说明
+    // MARK: 一个模板 = 一块真实预览 + 居中名字
 
-    private var intro: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(DiscoverTemplate.all.count) 个模板")
-                .appFont(.system(size: 22, weight: .bold))
-            Text("每个模板按真实尺寸铺开。点任意一个，就用它去添加板块。")
-                .appFont(.system(size: 12.5))
-                .foregroundStyle(palette.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var footer: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "hand.tap")
-                .font(.system(size: 11))
-            Text("模板只决定排版，内容仍然来自你选的书源分类。")
-                .appFont(.system(size: 11.5))
-        }
-        .foregroundStyle(palette.secondary)
-        .padding(.top, 4)
-    }
-
-    // MARK: 一个模块（一组模板）
-
-    private func module(_ family: DiscoverTemplateFamily) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(family.title)
-                        .appFont(.system(size: 17, weight: .bold))
-                    Text("\(family.templates.count)")
-                        .appFont(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(palette.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
-                        .background(palette.primary.opacity(0.06), in: Capsule())
-                    Spacer(minLength: 0)
-                }
-                Text(family.detail)
-                    .appFont(.system(size: 11.5))
-                    .foregroundStyle(palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            ForEach(Array(family.templates.enumerated()), id: \.element.id) { pair in
-                card(pair.element, number: pair.offset + 1)
-            }
-        }
-    }
-
-    // MARK: 一个模板
-
-    private func card(_ template: DiscoverTemplate, number: Int) -> some View {
+    private func section(_ template: DiscoverTemplate) -> some View {
         let picked = template.kind == current
         return Button {
             onPick(template.kind)
             dismiss()
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    Text(String(format: "%02d", number))
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(picked ? palette.onAccent : palette.secondary)
-                        .frame(width: 24, height: 20)
-                        .background {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(picked ? palette.accent : palette.primary.opacity(0.07))
-                        }
-                        .padding(.top, 1)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(template.title)
-                            .appFont(.system(size: 15, weight: .semibold))
-                        Text(template.detail)
-                            .appFont(.system(size: 11.5))
-                            .foregroundStyle(palette.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    if picked {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 17))
-                            .foregroundStyle(palette.accent)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 13)
-
-                // 真身渲染：就是首页里那块板块的样子（不加额外内缩，宽度与首页一致）
+            VStack(spacing: 0) {
+                // 真身：与首页里那一块完全一致，标题留空（名字在下面居中显示）
                 DiscoverTemplateView(
                     kind: template.kind,
-                    title: previewTitle(for: template.kind),
-                    moreTitle: "全部",
-                    cards: samples,
+                    title: "",
+                    moreTitle: "",
+                    cards: previewCards(for: template.kind),
                     history: historySamples,
-                    count: 5,
-                    onMore: {},
-                    onSelectBook: { _ in },
-                    onSelectHistory: { _ in }
+                    count: previewCount(for: template.kind)
                 )
-                .padding(.top, 10)
-                .padding(.bottom, 4)
                 .allowsHitTesting(false)
+                .padding(.top, 18)
+
+                // 模板名：居中，选中时略加粗并用强调色
+                Text(template.title)
+                    .appFont(.system(size: 17, weight: picked ? .semibold : .regular))
+                    .foregroundStyle(picked ? palette.accent : palette.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 14)
+                    .padding(.bottom, 26)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(palette.primary.opacity(picked ? 0.055 : 0.03))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(picked ? palette.accent.opacity(0.7) : palette.primary.opacity(0.06),
-                                  lineWidth: picked ? 1.5 : 0.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("library.template.\(template.kind.rawValue)")
         .accessibilityLabel("\(template.title)，\(template.detail)")
     }
 
-    /// 预览里板块的假标题：像首页那样有个栏目名，才看得出排版节奏。
-    private func previewTitle(for kind: DiscoverTemplateKind) -> String {
+    /// 卡片型模板（弧形 / 堆叠）自带一行「书名 + 作者」说明，
+    /// 展示库里它紧挨着居中的模板名，读起来会串行，所以这里把说明清空。
+    private func previewCards(for kind: DiscoverTemplateKind) -> [DeckItem] {
+        guard kind.isCardStage else { return samples }
+        return samples.map { DeckItem(id: $0.id, title: $0.title, caption: "", cover: $0.cover) }
+    }
+
+    /// 预览里放几本：卡片型排太多会挤出屏，列表型多给几本才看得出节奏。
+    private func previewCount(for kind: DiscoverTemplateKind) -> Int {
         switch kind {
-        case .updateFeed: return "最近更新"
-        case .history: return "继续阅读"
-        case .rankRow: return "本周热榜"
-        default: return "热门推荐"
+        case .largeCard, .compactCard, .featureCard, .deck, .curve: return 6
+        case .threeColumn, .badgeGrid, .waterfall: return 9
+        case .dualRow, .covers: return 12
+        case .fixedList, .updateFeed: return 5
+        case .history: return 4
         }
+    }
+
+    private var footNote: some View {
+        Text("点任意一个模板，就用它添加栏目")
+            .appFont(.system(size: 11.5))
+            .foregroundStyle(palette.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
     }
 
     /// 记录模板要的进度数据，用同一批示例书编出来。
