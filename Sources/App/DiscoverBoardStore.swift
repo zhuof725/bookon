@@ -57,6 +57,12 @@ final class DiscoverSectionModel: ObservableObject, Identifiable {
         errorText = nil
     }
 
+    /// 请求被取消：不算失败，只是没拿到结果。
+    /// 保留已有的书（刷新失败时不要把上一屏内容清空），退出加载态即可。
+    func endLoadingWithoutResult() {
+        loading = false
+    }
+
     /// 把书转成卡片，一次算好。数量上限在配置里，这里截断避免模板自己 prefix。
     private func rebuildCards() {
         let limit = entry.count
@@ -90,6 +96,10 @@ final class DiscoverBoardStore: ObservableObject {
     @Published private(set) var revision = 0
 
     private var loadingIDs: Set<String> = []
+
+    /// 编辑页预览用：草稿里的条目还没保存，不在 sections 里，
+    /// 这里单独维护「条目 id → 运行时模型」，让预览也能拉到真实书单。
+    @Published private(set) var previewSections: [String: DiscoverSectionModel] = [:]
     /// 章节数缓存：bookUrl → 章数（nil 表示查过但没有目录缓存）
     private var chapterCountCache: [String: Int?] = [:]
     private var appStore: AppStore { AppStore.shared }
@@ -270,8 +280,15 @@ final class DiscoverBoardStore: ObservableObject {
             DiscoverBlockCache.store(source: model.entry.sourceUrl,
                                      url: model.entry.kindUrl,
                                      books: list)
+        } catch is CancellationError {
+            // 滚动 / 下拉刷新会把正在跑的请求取消掉。这不是书源出错，
+            // 界面上不该出现「Swift.CancellationError error 1」这种话，
+            // 退出加载态让它下次正常重试即可。
+            model.endLoadingWithoutResult()
+        } catch let error as URLError where error.code == .cancelled {
+            model.endLoadingWithoutResult()
         } catch {
-            model.setFailed(error.localizedDescription)
+            model.setFailed(Self.readableMessage(error))
         }
         await BlockRequestGate.shared.release()
         loadingIDs.remove(model.id)
@@ -299,9 +316,54 @@ final class DiscoverBoardStore: ObservableObject {
         chapterCountCache.removeAll()
         revision &+= 1
         refreshHistoryIfNeeded(force: true)
+        // 上一轮可能还有请求在飞（比如刚滚过一圈），不清掉的话
+        // force 刷新会在 load() 开头被 loadingIDs 直接挡回来，看起来像「刷新没用」。
+        loadingIDs.removeAll()
         let list = category.flatMap { sectionsByCategory[$0] } ?? sections
         for model in list {
             await load(model, force: true)
         }
+    }
+
+    // MARK: 编辑页预览
+
+    /// 草稿里某条板块的运行时模型（没有就现建一个，并自动开始拉数据）。
+    func sectionFor(_ entry: CustomDiscoverEntry) -> DiscoverSectionModel? {
+        previewSections[entry.id]
+    }
+
+    /// 给没加载过的草稿板块拉一次数据。重复调用无副作用。
+    func loadLive(_ entry: CustomDiscoverEntry) async {
+        if previewSections[entry.id] == nil {
+            previewSections[entry.id] = DiscoverSectionModel(entry: entry)
+        }
+        guard let model = previewSections[entry.id] else { return }
+        model.update(entry: entry)
+        await load(model)
+    }
+
+    /// 草稿里删掉一条板块时同步清掉它的预览模型。
+    func dropPreview(_ entryID: String) {
+        previewSections.removeValue(forKey: entryID)
+    }
+
+    /// 把底层错误翻成人话：原始 NSError 描述里带着类型名和 error 编号，
+    /// 直接铺在界面上既看不懂也不知道该做什么。
+    static func readableMessage(_ error: Error) -> String {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "网络连接已断开"
+            case .timedOut:
+                return "请求超时，书源没有响应"
+            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return "连不上这个书源"
+            default:
+                return "请求失败（\(urlError.code.rawValue)）"
+            }
+        }
+        let text = error.localizedDescription
+        if text.contains("CancellationError") { return "请求被中断" }
+        return text
     }
 }
