@@ -197,10 +197,10 @@ enum CustomDiscoverRegression {
         check(families.map(\.title) == ["版式", "视觉", "阅读记录"],
               "展示库：三组按固定顺序排列")
         check(families.allSatisfy { !$0.detail.isEmpty }, "展示库：每组都有说明")
-        let grouped = families.flatMap { $0.templates }
-        check(grouped.count == DiscoverTemplate.all.count,
+        let groupedKinds = families.flatMap { $0.templates }
+        check(groupedKinds.count == DiscoverTemplate.all.count,
               "展示库：分组覆盖全部模板")
-        check(Set(grouped.map(\.kind)) == Set(DiscoverTemplateKind.allCases),
+        check(Set(groupedKinds.map(\.kind)) == Set(DiscoverTemplateKind.allCases),
               "展示库：分组不重复、不遗漏任何模板")
         check(DiscoverTemplateFamily.record.templates.map(\.kind) == [.history],
               "展示库：阅读记录组只有继续阅读")
