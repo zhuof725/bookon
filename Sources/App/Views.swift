@@ -1054,9 +1054,9 @@ struct ReaderView: View {
             guard let index = readableIndex(from: first + offset, direction: 1) else { break }
             guard chapters.indices.contains(index) else { break }
             // 直接问书源（不走章节缓存）：早前失败时缓存下来的「无法获取漫画内容」
-            // 这类文本不该决定这本书的模式。
-            guard let raw = try? await WebBook.rawContent(source: source, chapter: chapters[index],
-                                                          book: book) else { continue }
+            // 这类文本不该决定这本书的模式；规则依赖详情页 init 变量时自动补跑一次。
+            guard let raw = try? await WebBook.rawContentWithBookInfoHealing(
+                source: source, book: book, chapter: chapters[index]) else { continue }
             let scanned = BookKind.detect(inContent: raw)
             if scanned != .text {
                 kind = scanned; matched = index; matchedRaw = raw
