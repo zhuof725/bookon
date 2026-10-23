@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// 有声书「音色」面板：音色来自书源自己（例如番茄源的 jsLib `_getTones()`）。
+/// 书源音色列表：音色来自书源自己（例如番茄源 jsLib `_getTones()`）。
 ///
-/// 书源没有这套约定时只显示当前音色 + 「打开书源设置」入口。
-/// 换音色后需要重新取一次本章音频，由 `onApplied` 交给阅读器处理。
-struct SourceToneSheet: View {
+/// 既用在有声书播放器的「音色」面板，也嵌在朗读播放器的音色面板里（列出所有
+/// 带音色表的书源）。书源没有这套约定时只显示当前音色 + 「打开书源设置」。
+struct SourceToneList: View {
     let source: BookSource
-    var onApplied: () -> Void
+    /// 换音色后的回调（有声书播放器用来重新取本章音频）。
+    var onApplied: (() -> Void)? = nil
 
     @ThemePalette private var palette
-    @Environment(\.dismiss) private var dismiss
     @State private var tones: [SourceTone.Item] = []
     @State private var currentName = ""
     @State private var currentValue = ""
@@ -19,80 +19,68 @@ struct SourceToneSheet: View {
     @State private var showSourceSettings = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
+        List {
+            Section {
+                HStack(spacing: 10) {
+                    Text(currentName.isEmpty ? "默认音色" : currentName)
+                        .appFont(.body)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    if !currentValue.isEmpty {
+                        Text(currentValue)
+                            .appFont(.caption).foregroundStyle(palette.secondary)
+                    }
+                }
+                .accessibilityIdentifier("tone.current")
+            } header: {
+                Text("当前音色")
+            }
+
+            Section {
+                if loading {
                     HStack(spacing: 10) {
-                        Text(currentName.isEmpty ? "默认音色" : currentName)
-                            .appFont(.body)
-                            .lineLimit(2)
-                        Spacer(minLength: 8)
-                        if !currentValue.isEmpty {
-                            Text(currentValue)
-                                .appFont(.caption).foregroundStyle(palette.secondary)
-                        }
+                        ProgressView()
+                        Text("正在读取书源音色…").appFont(.footnote).foregroundStyle(palette.secondary)
                     }
-                    .accessibilityIdentifier("tone.current")
-                } header: {
-                    Text("当前音色")
-                }
-
-                Section {
-                    if loading {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("正在读取书源音色…").appFont(.footnote).foregroundStyle(palette.secondary)
-                        }
-                    } else if tones.isEmpty {
-                        Text("这个书源没有提供音色列表。\n可以打开「书源设置」切换朗读音色，切完重新进入本章。")
-                            .appFont(.footnote).foregroundStyle(palette.secondary)
-                    } else {
-                        ForEach(tones) { tone in
-                            toneRow(tone)
-                        }
-                    }
-                } header: {
-                    Text("可选音色")
-                } footer: {
-                    if !tones.isEmpty {
-                        Text("音色由书源提供；切换后会重新加载本章音频。")
+                } else if tones.isEmpty {
+                    Text("这个书源没有提供音色列表。\n可以打开「书源设置」切换朗读音色，切完重新进入本章。")
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
+                } else {
+                    ForEach(tones) { tone in
+                        toneRow(tone)
                     }
                 }
-
-                Section {
-                    Button { showSourceSettings = true } label: {
-                        HStack(spacing: 12) {
-                            Label("打开书源设置", systemImage: "slider.horizontal.3")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption).foregroundStyle(palette.secondary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("tone.sourceSettings")
-                }
-
-                if let message {
-                    Section {
-                        Text(message).appFont(.footnote).foregroundStyle(.red)
-                    }
+            } header: {
+                Text("可选音色")
+            } footer: {
+                if !tones.isEmpty {
+                    Text("音色由书源提供；有声书切换后会重新加载本章音频。")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle("音色")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                        .accessibilityIdentifier("tone.close")
+
+            Section {
+                Button { showSourceSettings = true } label: {
+                    HStack(spacing: 12) {
+                        Label("打开书源设置", systemImage: "slider.horizontal.3")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption).foregroundStyle(palette.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("tone.sourceSettings")
+            }
+
+            if let message {
+                Section {
+                    Text(message).appFont(.footnote).foregroundStyle(.red)
                 }
             }
-            .task { await load() }
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .scrollContentBackground(.hidden)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .task { await load() }
         .sheet(isPresented: $showSourceSettings) {
             SourceLoginView(source: source)
         }
@@ -143,8 +131,34 @@ struct SourceToneSheet: View {
             }
             currentName = tone.name
             currentValue = tone.value
-            onApplied()
-            dismiss()
+            onApplied?()
         }
+    }
+}
+
+/// 有声书的「音色」面板：包一层导航栏，读完自动关闭。
+struct SourceToneSheet: View {
+    let source: BookSource
+    var onApplied: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SourceToneList(source: source, onApplied: {
+                onApplied()
+                dismiss()
+            })
+            .navigationTitle("音色")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .accessibilityIdentifier("tone.close")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }

@@ -363,23 +363,11 @@ struct AloudPlayerView: View {
     private var playerCard: some View {
         VStack(spacing: 4) {
             progressBlock
+                .padding(.horizontal, 24)
             controlsRow
+                .padding(.horizontal, 12)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(palette.surface)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(palette.border.opacity(0.6), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
+        .padding(.top, 8)
         .padding(.bottom, 6)
     }
 

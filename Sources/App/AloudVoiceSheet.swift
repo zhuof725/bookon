@@ -8,6 +8,7 @@ import SwiftUI
 struct AloudVoiceSheet: View {
     @ObservedObject var aloud: ReaderAloudController
     @ObservedObject var engines = SpeakEngineModel.shared
+    @ObservedObject private var store = AppStore.shared
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var voices: [AloudVoiceConfig.Option] = []
@@ -16,6 +17,16 @@ struct AloudVoiceSheet: View {
     private var selectedEngineID: String { AloudTTSConfig.selectedEngineID }
     private var isSystem: Bool {
         selectedEngineID.isEmpty || selectedEngineID == "0" || AloudTTSConfig.selectedEngine == nil
+    }
+
+    /// 带音色表的书源（例如番茄源的 jsLib 里有 _getTones）。
+    private var toneSources: [BookSource] {
+        store.sources.filter { ($0.jsLib ?? "").contains("_getTones") }
+    }
+
+    private func toneLabel(_ source: BookSource) -> String {
+        let current = SourceTone.current(source: source)
+        return current.name.isEmpty ? "默认音色" : current.name
     }
 
     var body: some View {
@@ -52,6 +63,32 @@ struct AloudVoiceSheet: View {
                     } footer: {
                         Text("更多音色：系统设置 → 辅助功能 → 朗读内容 → 声音 → 中文，下载后回到这里选择。")
                     }
+                }
+
+                Section {
+                    if toneSources.isEmpty {
+                        Text("没有书源提供音色表（目前只有番茄源这类带 _getTones 的源）。")
+                            .appFont(.footnote).foregroundStyle(palette.secondary)
+                    } else {
+                        ForEach(toneSources) { source in
+                            NavigationLink {
+                                SourceToneList(source: source)
+                                    .navigationTitle(source.bookSourceName)
+                                    .navigationBarTitleDisplayMode(.inline)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(source.bookSourceName).appFont(.body).lineLimit(1)
+                                    Text(toneLabel(source))
+                                        .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
+                                }
+                            }
+                            .accessibilityIdentifier("aloud.voice.source.\(source.bookSourceUrl)")
+                        }
+                    }
+                } header: {
+                    Text("书源音色")
+                } footer: {
+                    Text("书源自带的朗读音色（如番茄源的几十个 tone）。这些音色只在该书源的有声书里生效。")
                 }
 
                 Section {

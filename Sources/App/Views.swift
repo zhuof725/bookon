@@ -413,8 +413,7 @@ struct ReaderView: View {
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: { dismiss() },
-                                 onTOC: { showToc = true },
-                                 onSettings: { showSettings = true })
+                                 onTOC: { showToc = true })
             } else if settings.pageMode == 1 {
                 pagedBody
             } else {

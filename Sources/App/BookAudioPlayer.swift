@@ -542,7 +542,6 @@ struct AudioChapterView: View {
     let onNext: () -> Void
     let onBack: () -> Void
     let onTOC: () -> Void
-    let onSettings: () -> Void
 
     @ThemePalette private var palette
     @State private var showTone = false
@@ -749,8 +748,6 @@ struct AudioChapterView: View {
                 bottomItem(title: "音色", symbol: "waveform",
                            id: "reader.audio.voice") { showTone = true }
             }
-            bottomItem(title: "设置", symbol: "gearshape",
-                       id: "reader.audio.settings") { onSettings() }
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 7)
