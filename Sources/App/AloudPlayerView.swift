@@ -16,7 +16,7 @@ struct AloudPlayerView: View {
     @AppStorage("reader.aloud.player.mode.v1") private var mode = 0
     @State private var showToc = false
     @State private var showQueue = false
-    @State private var showSettings = false
+    @State private var showVoice = false
     /// 拖动进度条时的临时值；松手才真正 seek，避免播放回调打架。
     @State private var scrub: Double?
     /// 松手后到播放器真正到位之前的显示值：进度条不会先弹回旧位置再跳过去。
@@ -57,7 +57,9 @@ struct AloudPlayerView: View {
         }
         .sheet(isPresented: $showToc) { tocSheet.modifier(AppThemeRoot()) }
         .sheet(isPresented: $showQueue) { queueSheet.modifier(AppThemeRoot()) }
-        .sheet(isPresented: $showSettings, onDismiss: { aloud.refreshEngineLabel() }) { settingsSheet.modifier(AppThemeRoot()) }
+        .sheet(isPresented: $showVoice, onDismiss: { aloud.refreshEngineLabel() }) {
+            AloudVoiceSheet(aloud: aloud).modifier(AppThemeRoot())
+        }
         .overlay(alignment: .bottom) { noticeToast }
     }
 
@@ -367,7 +369,8 @@ struct AloudPlayerView: View {
         .padding(.top, 12)
         .padding(.bottom, 4)
         .background {
-            AppGlassSurface(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), tint: palette.surface)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(palette.surface)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -565,8 +568,8 @@ struct AloudPlayerView: View {
             }
             .accessibilityLabel("定时")
             .accessibilityIdentifier("reader.aloud.timer")
-            bottomItem(title: "设置", symbol: "gearshape",
-                       id: "reader.aloud.settings") { showSettings = true }
+            bottomItem(title: "音色", symbol: "waveform",
+                       id: "reader.aloud.voice") { showVoice = true }
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 7)
@@ -687,69 +690,6 @@ struct AloudPlayerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { showQueue = false }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private var settingsSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    NavigationLink {
-                        SpeakEngineList(aloud: aloud)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "waveform.badge.mic").frame(width: 24)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("朗读引擎").appFont(.subheadline)
-                                Text(aloud.engineName).appFont(.caption).foregroundStyle(palette.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").appFont(.caption).foregroundStyle(palette.secondary)
-                        }
-                        .padding(.horizontal, 16).padding(.vertical, 14)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .modifier(SettingsGlassSurface())
-                    .accessibilityIdentifier("reader.aloud.engines")
-
-                    AloudPreloadCard()
-
-                    Button {
-                        aloud.stop()
-                        showSettings = false
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "stop.circle").frame(width: 24)
-                            Text("停止朗读").appFont(.subheadline)
-                            Spacer()
-                        }
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 16).padding(.vertical, 14)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .modifier(SettingsGlassSurface())
-                    .accessibilityIdentifier("reader.aloud.stop")
-
-                    Text("「返回」只收起播放器，朗读会在后台继续；想结束请在这里停止。")
-                        .appFont(.footnote).foregroundStyle(palette.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                }
-                .padding(16)
-            }
-            .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle("朗读设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { showSettings = false }
-                        .accessibilityIdentifier("reader.aloud.settings.close")
                 }
             }
         }

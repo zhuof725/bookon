@@ -534,6 +534,10 @@ struct AudioChapterView: View {
     let chapterCount: Int
     /// 下一章标题（显示成「下一章 · xxx」；nil 表示已是最后一章）。
     var nextChapterTitle: String? = nil
+    /// 书源：有声书的音色由书源提供（番茄源的 tone_id），没有时音色按钮不显示。
+    var source: BookSource? = nil
+    /// 换音色后重新取一次本章音频。
+    var onReloadAudio: (() -> Void)? = nil
     let onPrevious: () -> Void
     let onNext: () -> Void
     let onBack: () -> Void
@@ -541,6 +545,7 @@ struct AudioChapterView: View {
     let onSettings: () -> Void
 
     @ThemePalette private var palette
+    @State private var showTone = false
 
     private let speedPresets: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
@@ -573,6 +578,12 @@ struct AudioChapterView: View {
         .tint(palette.accent)
         .background { playerBackground }
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
+        .sheet(isPresented: $showTone) {
+            if let source {
+                SourceToneSheet(source: source, onApplied: { onReloadAudio?() })
+                    .modifier(AppThemeRoot())
+            }
+        }
     }
 
     private var playerBackground: some View {
@@ -734,6 +745,10 @@ struct AudioChapterView: View {
             }
             .accessibilityLabel("定时")
             .accessibilityIdentifier("reader.audio.timer")
+            if source != nil {
+                bottomItem(title: "音色", symbol: "waveform",
+                           id: "reader.audio.voice") { showTone = true }
+            }
             bottomItem(title: "设置", symbol: "gearshape",
                        id: "reader.audio.settings") { onSettings() }
         }

@@ -67,6 +67,14 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
     /// 整个收听会话复用一个播放器（音频图只建一次，段间只换源文件）。
     private var player: AloudAudioPlayer?
+    /// 换成另一个系统音色：立刻用新声部重读当前段（暂停中则下次播放生效）。
+    func applyVoiceChange() {
+        guard isRunning, playbackEngine == .system else { return }
+        cancelUnitPlayback()
+        isBuffering = false
+        if isPlaying { playUnit() }
+    }
+
     /// 播放器当前载入的章节/段落；resume 只恢复同段的暂停。
     private var playerLoadedUnit: (chapter: Int, unit: Int)?
     /// 跨段定位后，等新段音频载入时从这个秒数开始（拖进度条 / ±15 秒用）。
@@ -524,7 +532,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     private func speakSystemUnit(_ speak: String) {
         let utterance = AVSpeechUtterance(string: speak)
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        utterance.voice = AloudVoiceConfig.speechVoice
         utterance.rate = ReaderAloudController.utteranceRate(speed)
         utterance.preUtteranceDelay = 0.08
         currentUtterance = utterance

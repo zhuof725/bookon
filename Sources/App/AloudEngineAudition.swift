@@ -73,7 +73,7 @@ final class AloudEngineAudition: NSObject, ObservableObject {
             let synthesizer = AVSpeechSynthesizer()
             systemSynthesizer = synthesizer
             let utterance = AVSpeechUtterance(string: Self.sampleText)
-            utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+            utterance.voice = AloudVoiceConfig.speechVoice
             utterance.rate = ReaderAloudController.utteranceRate(AloudTTSConfig.speechRate)
             synthesizer.speak(utterance)
             isPlaying = true

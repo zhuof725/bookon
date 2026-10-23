@@ -408,6 +408,8 @@ struct ReaderView: View {
                                  chapterCount: chapters.count,
                                  nextChapterTitle: chapters.indices.contains(index + 1)
                                      ? chapters[index + 1].title : nil,
+                                 source: store.source(for: book.origin),
+                                 onReloadAudio: { reloadAudioChapter() },
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
                                  onBack: { dismiss() },
@@ -1809,6 +1811,20 @@ struct ReaderView: View {
             guard chapters.indices.contains(target), index == target else { return }
             bookAudio.stop()
             self.error = "音频加载失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
+    private func reloadAudioChapter() {
+        guard bookAudio.chapterURL != nil,
+              chapters.indices.contains(index),
+              let source = store.source(for: book.origin) else { return }
+        let target = index
+        AudioProgress.clear(bookUrl: book.bookUrl)
+        Task { @MainActor in
+            bookAudio.stop()
+            error = nil
+            await beginAudioChapter(target, source: source)
         }
     }
 
