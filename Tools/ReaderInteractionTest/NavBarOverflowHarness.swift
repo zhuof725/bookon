@@ -20,14 +20,42 @@ struct NavBarOverflowHarnessView: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    NavTextButton(title: "登录", symbol: "person.crop.circle", tint: .accentColor) {}
-                        .accessibilityIdentifier("harness.nav.login")
-                    NavTextButton(title: "分类", symbol: "square.grid.2x2", tint: .accentColor) {}
-                        .accessibilityIdentifier("harness.nav.category")
-                }
+                // 与生产代码一致：登录 / 分类各自成组（iOS 26 隐藏共享玻璃底），
+                // 每个按钮自带胶囊，不再被并进同一个按键。
+                loginItem
+                categoryItem
             }
             .accessibilityIdentifier("harness.nav.root")
         }
+    }
+
+    @ToolbarContentBuilder
+    private var loginItem: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .navigationBarTrailing) { loginButton }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigationBarTrailing) { loginButton }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var categoryItem: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .navigationBarTrailing) { categoryButton }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigationBarTrailing) { categoryButton }
+        }
+    }
+
+    private var loginButton: some View {
+        NavTextButton(title: "登录", symbol: "person.crop.circle", tint: .accentColor, pill: true) {}
+            .accessibilityIdentifier("harness.nav.login")
+    }
+
+    private var categoryButton: some View {
+        NavTextButton(title: "分类", symbol: "square.grid.2x2", tint: .accentColor, pill: true) {}
+            .accessibilityIdentifier("harness.nav.category")
     }
 }

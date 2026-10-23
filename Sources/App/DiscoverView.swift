@@ -143,20 +143,10 @@ struct DiscoverSourceView: View {
         .navigationTitle(source.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // 用 ToolbarItemGroup 而不是「一个 ToolbarItem 里套 HStack」：
-            // 后者在标题很长时会把整组压窄，两个标签被挤成竖排、压在标题上。
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if hasLogin {
-                    NavTextButton(title: "登录", symbol: "person.crop.circle", tint: palette.accent) {
-                        activeSheet = .login
-                    }
-                    .accessibilityIdentifier("discover.source.login")
-                }
-                NavTextButton(title: "分类", symbol: "square.grid.2x2", tint: palette.accent) {
-                    activeSheet = .category
-                }
-                .accessibilityIdentifier("discover.source.category")
-            }
+            // 登录 / 分类各自成一个工具栏分组：iOS 26 默认把同一组按钮并进
+            // 一个共享玻璃胶囊（看起来像一个按键），隐藏共享底后由按钮自画胶囊。
+            if hasLogin { loginToolbarItem }
+            categoryToolbarItem
         }
         .task(id: reloadToken) { await load() }
         .sheet(item: $activeSheet) { sheet in
@@ -175,6 +165,41 @@ struct DiscoverSourceView: View {
     }
 
     // MARK: 导航栏右上：登录 / 分类
+
+    /// 登录 / 分类各占一个工具栏分组（互不合并成同一个胶囊）。
+    @ToolbarContentBuilder
+    private var loginToolbarItem: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .navigationBarTrailing) { loginButton }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigationBarTrailing) { loginButton }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var categoryToolbarItem: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .navigationBarTrailing) { categoryButton }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigationBarTrailing) { categoryButton }
+        }
+    }
+
+    private var loginButton: some View {
+        NavTextButton(title: "登录", symbol: "person.crop.circle", tint: palette.accent, pill: true) {
+            activeSheet = .login
+        }
+        .accessibilityIdentifier("discover.source.login")
+    }
+
+    private var categoryButton: some View {
+        NavTextButton(title: "分类", symbol: "square.grid.2x2", tint: palette.accent, pill: true) {
+            activeSheet = .category
+        }
+        .accessibilityIdentifier("discover.source.category")
+    }
 
     /// 书源配了登录才显示「登录」按钮（没配登录的只显示「分类」）。
     private var hasLogin: Bool { SourceLoginForm.hasLogin(source) }

@@ -12,6 +12,10 @@ struct NavTextButton: View {
     let title: String
     let symbol: String
     var tint: Color = .accentColor
+    /// 自带玻璃胶囊底。iOS 26 工具栏默认把同一组按钮并进一个共享胶囊，
+    /// 用 `.sharedBackgroundVisibility(.hidden)` 拆开后由按钮自己画底，
+    /// 两个按钮才算「独立按键」。
+    var pill: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -26,7 +30,13 @@ struct NavTextButton: View {
             }
             .foregroundStyle(tint)
             .fixedSize(horizontal: true, vertical: false)
-            .frame(height: 44)
+            .padding(.horizontal, pill ? 11 : 0)
+            .frame(height: pill ? 34 : 44)
+            .background {
+                if pill {
+                    AppGlassSurface(shape: Capsule(), tint: Color(uiColor: .secondarySystemBackground))
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

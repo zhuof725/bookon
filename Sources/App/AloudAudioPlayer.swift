@@ -120,6 +120,12 @@ final class AloudAudioPlayer {
         scheduleStartFrame = 0
     }
 
+    /// 段内跳转：从指定秒数重新排程（播放中继续播，暂停则只定位）。
+    func seek(to time: TimeInterval) {
+        guard hasAudio else { return }
+        restart(at: time)
+    }
+
     // MARK: - 内部
 
     /// 从当前位置重新排程并播放（配置变化恢复用）。

@@ -49,6 +49,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var fallbackTried = false
     private var downloadTask: Task<Void, Never>?
     private var lastReportedSecond: TimeInterval = -1
+    /// 刚发出的 seek 目标：AVPlayer 在跳转完成前还会吐几个旧时刻，
+    /// 这段时间内忽略「离目标很远」的回调，进度条才不会先弹回原处。
+    private var seekTarget: (time: TimeInterval, at: Date)?
     private var playerStatusObserver: NSKeyValueObservation?
     private var sleepTask: Task<Void, Never>?
     private var sleepSecondsLeft = 0
@@ -266,6 +269,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         guard let player, chapterURL != nil else { return }
         let clamped = min(max(seconds, 0), max(duration, 0))
         currentTime = clamped
+        seekTarget = (clamped, Date())
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600),
                     toleranceBefore: .zero, toleranceAfter: .zero)
     }
@@ -406,7 +410,18 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self, let currentItem = self.player?.currentItem else { return }
-                self.currentTime = time.seconds.isFinite ? max(time.seconds, 0) : 0
+                let reported = time.seconds.isFinite ? max(time.seconds, 0) : 0
+                // seek 刚发出时还会收到旧时刻：离目标太远就跳过，避免进度条弹回去。
+                if let target = self.seekTarget {
+                    let stale = abs(reported - target.time) > 1.0
+                        && Date().timeIntervalSince(target.at) < 1.2
+                    if stale {
+                        self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                        return
+                    }
+                    self.seekTarget = nil
+                }
+                self.currentTime = reported
                 let total = currentItem.duration.seconds
                 if total.isFinite, total > 0 { self.duration = total }
                 self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate
@@ -678,6 +693,9 @@ struct AudioControlsPanel: View {
 
     @ThemePalette private var palette
     @State private var scrub: Double?
+    /// 松手后到播放器真正到位之前的显示值：进度条不会先弹回旧位置再跳过去。
+    @State private var pendingSeek: Double?
+    @State private var pendingSeekTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -713,24 +731,43 @@ struct AudioControlsPanel: View {
         return min(max(audio.currentTime / audio.duration, 0), 1)
     }
 
+    /// 进度条显示值：拖动中 → 松手后等待到位 → 真实进度。
+    private var displayedFraction: Double { scrub ?? pendingSeek ?? fraction }
+
+    private var displayedSeconds: TimeInterval {
+        guard audio.duration > 0 else { return audio.currentTime }
+        return displayedFraction * audio.duration
+    }
+
     private var progressBlock: some View {
         VStack(spacing: 0) {
-            Slider(value: Binding(get: { scrub ?? fraction },
+            Slider(value: Binding(get: { displayedFraction },
                                   set: { scrub = $0 }), in: 0...1) { editing in
-                if !editing, let value = scrub {
-                    scrub = nil
-                    audio.seek(toSeconds: value * audio.duration)
+                guard !editing, let value = scrub else { return }
+                scrub = nil
+                pendingSeek = value
+                pendingSeekTask?.cancel()
+                pendingSeekTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    guard !Task.isCancelled else { return }
+                    if pendingSeek == value { pendingSeek = nil }
                 }
+                audio.seek(toSeconds: value * audio.duration)
             }
             .tint(palette.accent)
             .disabled(audio.duration <= 0)
+            .onChange(of: fraction) { value in
+                guard let target = pendingSeek, abs(value - target) < 0.01 else { return }
+                pendingSeek = nil
+            }
+            .onDisappear { pendingSeekTask?.cancel() }
             .accessibilityIdentifier("reader.audio.slider")
             .accessibilityLabel("播放进度")
             HStack {
-                Text(PlaybackTimeText.string(audio.currentTime))
+                Text(PlaybackTimeText.string(displayedSeconds))
                     .accessibilityIdentifier("reader.audio.timeCurrent")
                 Spacer()
-                Text("-" + PlaybackTimeText.string(max(audio.duration - audio.currentTime, 0)))
+                Text("-" + PlaybackTimeText.string(max(audio.duration - displayedSeconds, 0)))
                     .accessibilityIdentifier("reader.audio.timeRemaining")
             }
             .appFont(.caption)

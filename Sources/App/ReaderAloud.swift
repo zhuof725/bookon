@@ -69,6 +69,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var player: AloudAudioPlayer?
     /// 播放器当前载入的章节/段落；resume 只恢复同段的暂停。
     private var playerLoadedUnit: (chapter: Int, unit: Int)?
+    /// 跨段定位后，等新段音频载入时从这个秒数开始（拖进度条 / ±15 秒用）。
+    private var pendingUnitOffset: TimeInterval?
     private var audioTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var chapterTask: Task<Void, Never>?
@@ -227,6 +229,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         expectStop()
         player?.stop()
         playerLoadedUnit = nil
+        pendingUnitOffset = nil
         units = []
         unitList = []
         chapterIndex = -1
@@ -306,14 +309,22 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     /// 进度条/队列定位：跳到本章第 index 段；暂停时只定位不播放。
-    func seekUnit(_ index: Int) {
+    /// - Parameter seconds: 跨段定位时在目标段内的起始秒数（音频载入后 seek 到这里）。
+    func seekUnit(_ index: Int, inside seconds: TimeInterval? = nil) {
         guard isRunning, units.indices.contains(index), index != unitIndex else { return }
         cancelUnitPlayback()
+        pendingUnitOffset = seconds
         unitIndex = index
         unitTotal = units.count
         unitText = units[index].text
         host?.follow(chapterIndex, units[index].offset)
         updateChapterProgress()
+        if let seconds, seconds > 0 {
+            let model = chapterTimeline()
+            if model.starts.indices.contains(index) {
+                chapterPlayed = min(model.starts[index] + seconds, model.total)
+            }
+        }
         updateNowPlaying()
         if isPlaying { playUnit() }
     }
@@ -321,6 +332,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     // MARK: 本章播放进度
 
     /// 拖动本章进度条：按比例定位到对应时间段所在的段。
+    /// 目标落在当前段、而这一段已经有真实音频时，直接在段内 seek ——
+    /// 长段落里拖进度条不会「先弹回段首」，松手就是松手的位置。
     func seekChapterProgress(_ fraction: Double) {
         guard isRunning, !units.isEmpty else { return }
         let model = chapterTimeline()
@@ -328,7 +341,54 @@ final class ReaderAloudController: NSObject, ObservableObject {
         let target = min(max(fraction, 0), 1) * model.total
         var index = 0
         for i in model.starts.indices where model.starts[i] <= target { index = i }
-        seekUnit(index)
+        if index == unitIndex, canSeekInsideLoadedUnit, let player {
+            let inside = min(max(target - model.starts[index], 0), player.duration)
+            player.seek(to: inside)
+            chapterPlayed = model.starts[index] + inside
+            updateNowPlaying()
+            return
+        }
+        // 跨段：新段音频载入后再跳到段内目标秒数，精度到秒。
+        seekUnit(index, inside: max(target - model.starts[index], 0))
+    }
+
+    /// 播放器载入的就是当前段，且这段有真实音频（在线引擎）。
+    private var canSeekInsideLoadedUnit: Bool {
+        guard playbackEngine == .http,
+              let player, player.hasAudio, player.duration > 0,
+              let loaded = playerLoadedUnit else { return false }
+        return loaded.chapter == chapterIndex && loaded.unit == unitIndex
+    }
+
+    /// 前进/后退若干秒：在线引擎按真实音频时间跳，系统语音按估算时间轴跳；
+    /// 目标还落在同一段（段落很长或已到头）时至少走一段，避免按了没反应。
+    func skip(seconds delta: TimeInterval) {
+        guard isRunning, !units.isEmpty else { return }
+        let model = chapterTimeline()
+        guard model.total > 0 else {
+            if delta < 0 { previousUnit() } else { nextUnit() }
+            return
+        }
+        let start = model.starts.indices.contains(unitIndex) ? model.starts[unitIndex] : 0
+        let base = chapterPlayed > 0 ? chapterPlayed : start
+        let target = min(max(base + delta, 0), model.total)
+        // 目标还在当前段、这段有真实音频：直接在段内跳，精度到秒。
+        if canSeekInsideLoadedUnit, let player, target - start <= player.duration {
+            let inside = min(max(target - start, 0), player.duration)
+            player.seek(to: inside)
+            chapterPlayed = start + inside
+            updateNowPlaying()
+            return
+        }
+        var index = 0
+        for i in model.starts.indices where model.starts[i] <= target { index = i }
+        if index != unitIndex {
+            seekUnit(index, inside: max(target - model.starts[index], 0))
+        } else if delta < 0 {
+            previousUnit()
+        } else {
+            nextUnit()
+        }
     }
 
     /// 记录当前段的音频时长并刷新本章进度（在线引擎；系统语音没有时间概念）。
@@ -431,6 +491,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         expectStop()
         player?.stop()
         playerLoadedUnit = nil
+        pendingUnitOffset = nil
         isBuffering = false
     }
 
@@ -516,6 +577,11 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 return
             }
             audio.rate = playbackRate(for: engine)
+            // 跨段定位：音频载入后先跳到段内目标秒数再播。
+            if let offset = pendingUnitOffset {
+                pendingUnitOffset = nil
+                audio.seek(to: offset)
+            }
             playerLoadedUnit = (chapterIndex, unitIndex)
             expectingFinish = true
             guard audio.play() else {

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 全屏听书播放器：参照听书 App 的样式 — 顶部「封面/正文」分段，
 /// 封面模式大封面 + 当前句 + 进度；正文模式跟随文本，当前段主题色高亮。
-/// ⏮/⏭ 15 秒图标对应上一章/下一章，‖◄ ►‖ 对应上一句/下一句。
+/// ⏮/⏭ 对应上一章/下一章，两侧 15 秒按钮对应后退/前进 15 秒。
 /// 返回只关闭播放器，朗读在后台继续（进阅读页底栏可再次打开）。
 struct AloudPlayerView: View {
     @ObservedObject var aloud: ReaderAloudController
@@ -19,6 +19,9 @@ struct AloudPlayerView: View {
     @State private var showSettings = false
     /// 拖动进度条时的临时值；松手才真正 seek，避免播放回调打架。
     @State private var scrub: Double?
+    /// 松手后到播放器真正到位之前的显示值：进度条不会先弹回旧位置再跳过去。
+    @State private var pendingSeek: Double?
+    @State private var pendingSeekTask: Task<Void, Never>?
 
     private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
     /// 与 0…45 语速值整数映射完全对齐的倍速档位（v = 倍速×10 − 5）。
@@ -35,17 +38,22 @@ struct AloudPlayerView: View {
             } else {
                 textBody
             }
-            Rectangle().fill(palette.border).frame(height: 0.5)
             bottomBar
         }
         .foregroundStyle(palette.primary)
         .tint(palette.accent)
-        .background { AppThemeCanvas().ignoresSafeArea() }
+        .background { playerBackground }
         .statusBarHidden(false)
         // 打开播放器未启动即自动开始；中途重新打开不打断正在读的。
         .onAppear {
             if !aloud.isRunning { aloud.openCurrent() }
             aloud.refreshEngineLabel()
+        }
+        .onDisappear { pendingSeekTask?.cancel() }
+        // 播放器真正走到目标位置后，把「等待到位」的显示值撤掉。
+        .onChange(of: aloud.chapterPlayed) { _ in
+            guard let target = pendingSeek else { return }
+            if abs(actualFraction - target) < 0.015 { pendingSeek = nil }
         }
         .sheet(isPresented: $showToc) { tocSheet.modifier(AppThemeRoot()) }
         .sheet(isPresented: $showQueue) { queueSheet.modifier(AppThemeRoot()) }
@@ -53,29 +61,72 @@ struct AloudPlayerView: View {
         .overlay(alignment: .bottom) { noticeToast }
     }
 
+    /// 主题画布 + 一团主题色柔光：封面背后有一点光晕，不跟随封面色走（浅色主题也成立）。
+    private var playerBackground: some View {
+        ZStack {
+            AppThemeCanvas()
+            RadialGradient(colors: [palette.accent.opacity(0.14), palette.accent.opacity(0)],
+                           center: UnitPoint(x: 0.5, y: 0.44),
+                           startRadius: 8, endRadius: 330)
+                .opacity(mode == 0 ? 1 : 0.55)
+        }
+        .ignoresSafeArea()
+    }
+
     // MARK: 顶栏
 
     private var topBar: some View {
         ZStack {
             modeSwitch
-            HStack {
-                Button { dismiss() } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                        Text("返回").appFont(.body)
-                    }
-                    .foregroundStyle(palette.accent)
-                    .padding(.vertical, 8).padding(.trailing, 12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("reader.aloud.player.back")
-                Spacer()
+            HStack(spacing: 8) {
+                backButton
+                Spacer(minLength: 0)
+                moreButton
             }
         }
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        .frame(height: 56)
+    }
+
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            HStack(spacing: 2) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("返回").appFont(.subheadline)
+            }
+            .foregroundStyle(palette.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background { AppGlassSurface(shape: Capsule(), tint: palette.surface) }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("返回")
+        .accessibilityIdentifier("reader.aloud.player.back")
+    }
+
+    private var moreButton: some View {
+        Menu {
+            Button { showQueue = true } label: {
+                Label("朗读队列", systemImage: "list.bullet")
+            }
+            .accessibilityIdentifier("reader.aloud.queue")
+            Divider()
+            Button(role: .destructive) { aloud.stop() } label: {
+                Label("停止朗读", systemImage: "stop.circle")
+            }
+            .accessibilityIdentifier("reader.aloud.stop")
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(palette.primary)
+                .frame(width: 34, height: 34)
+                .background { AppGlassSurface(shape: Circle(), tint: palette.surface) }
+                .contentShape(Circle())
+        }
+        .accessibilityLabel("更多")
+        .accessibilityIdentifier("reader.aloud.more")
     }
 
     private var modeSwitch: some View {
@@ -88,93 +139,156 @@ struct AloudPlayerView: View {
     }
 
     private func modeButton(title: String, index: Int, id: String) -> some View {
-        Button {
+        let selected = mode == index
+        return Button {
             withAnimation(.easeInOut(duration: 0.15)) { mode = index }
         } label: {
             Text(title)
-                .appFont(.subheadline.weight(mode == index ? .semibold : .regular))
-                .foregroundStyle(mode == index ? palette.onAccent : palette.secondary)
-                .frame(width: 86, height: 32)
-                .background(Capsule().fill(mode == index ? palette.accent : Color.clear))
+                .appFont(.subheadline.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? palette.background : palette.secondary)
+                .frame(width: 78, height: 32)
+                .background(Capsule().fill(selected ? palette.primary : Color.clear))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
-        .accessibilityValue(mode == index ? "已选中" : "未选中")
+        .accessibilityValue(selected ? "已选中" : "未选中")
     }
 
     // MARK: 封面模式
 
     private var coverBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(book.name)
-                    .appFont(.title3.bold())
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !book.author.isEmpty {
-                    Text(book.author).appFont(.subheadline).foregroundStyle(palette.secondary)
-                }
-                Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
-                    .appFont(.subheadline).foregroundStyle(palette.secondary).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.top, 10)
+            coverHeader
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 10)
             HStack {
-                Spacer()
-                BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900, origin: book.origin)
-                    .frame(width: 240, height: 320)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)
-                    .accessibilityIdentifier("reader.aloud.cover")
-                Spacer()
+                Spacer(minLength: 0)
+                coverArt
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 10)
 
-            Text(aloud.unitText.isEmpty ? " " : aloud.unitText)
-                .appFont(.title3)
-                .lineSpacing(6)
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            sentenceBlock
                 .padding(.horizontal, 24)
-                .accessibilityIdentifier("reader.aloud.unit")
 
-            chapterCountLabel
-                .padding(.horizontal, 24)
-                .padding(.top, 6)
             progressBlock
                 .padding(.horizontal, 24)
-                .padding(.top, 6)
-            controlsRow(unitButtons: false)
-                .padding(.top, 10)
-            Spacer(minLength: 6)
+                .padding(.top, 8)
+
+            controlsRow
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+
+            Spacer(minLength: 2)
         }
+    }
+
+    private var coverHeader: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(book.name)
+                .appFont(.title2.bold())
+                .lineLimit(1)
+            if !book.author.isEmpty {
+                Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
+            }
+            HStack(spacing: 8) {
+                Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
+                    .appFont(.subheadline)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(chapterCountText)
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .fixedSize()
+                    .accessibilityIdentifier("reader.aloud.chapterProgress")
+            }
+            .padding(.top, 5)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 4)
+    }
+
+    private var coverArt: some View {
+        BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 900, origin: book.origin)
+            .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            .frame(maxWidth: 230, maxHeight: 306)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.22), radius: 22, x: 0, y: 12)
+            .overlay(alignment: .bottomTrailing) {
+                speakingBadge.padding(10)
+            }
+            .accessibilityIdentifier("reader.aloud.cover")
+    }
+
+    /// 封面右下角的小胶囊：正在读 / 已暂停。
+    private var speakingBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "waveform")
+                .font(.system(size: 10, weight: .bold))
+            Text(aloud.isPlaying ? "朗读中" : "已暂停")
+                .appFont(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.black.opacity(0.52)))
+        .accessibilityHidden(true)
+    }
+
+    /// 当前句：正在读的句子加粗高亮，下一句压暗放在后面（读过亮、没读淡）。
+    private var sentenceBlock: some View {
+        Group {
+            if aloud.unitText.isEmpty {
+                Text(aloud.isBuffering ? "正在加载正文…" : "准备朗读…")
+                    .foregroundStyle(palette.secondary)
+            } else {
+                sentenceText
+            }
+        }
+        .appFont(.title3)
+        .lineSpacing(6)
+        .lineLimit(2)
+        .truncationMode(.tail)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .accessibilityIdentifier("reader.aloud.unit")
+    }
+
+    private var sentenceText: Text {
+        let current = Text(aloud.unitText)
+            .fontWeight(.semibold)
+            .foregroundColor(palette.primary)
+        guard let next = nextUnitText else { return current }
+        return current
+            + Text(" ")
+            + Text(next).foregroundColor(palette.secondary.opacity(0.62))
+    }
+
+    private var nextUnitText: String? {
+        let next = aloud.unitIndex + 1
+        guard aloud.unitList.indices.contains(next) else { return nil }
+        let text = aloud.unitList[next].text
+        return text.isEmpty ? nil : text
     }
 
     // MARK: 正文模式
 
     private var textBody: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                BookCoverImage(url: BookCoverLocation.url(for: book), pixelSize: 200, origin: book.origin)
-                    .frame(width: 54, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(book.name).appFont(.headline).lineLimit(2)
-                    if !book.author.isEmpty {
-                        Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
-                    }
-                    Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
-                        .appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(aloud.chapterTitle.isEmpty ? " " : aloud.chapterTitle)
+                    .appFont(.title3.bold())
+                    .lineLimit(1)
+                Text(bookLine)
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 2)
             .padding(.bottom, 8)
 
             ScrollViewReader { proxy in
@@ -199,10 +313,12 @@ struct AloudPlayerView: View {
                 .onChange(of: aloud.chapterIndex) { _ in scrollToCurrent(proxy, aloud.unitIndex) }
             }
 
-            chapterCountLabel
-                .padding(.horizontal, 24)
             playerCard
         }
+    }
+
+    private var bookLine: String {
+        book.author.isEmpty ? book.name : "\(book.name) · \(book.author)"
     }
 
     /// 正文段落：正在朗读的段落带主题色高亮底 + 左侧竖条标识，
@@ -218,7 +334,7 @@ struct AloudPlayerView: View {
             .padding(.vertical, 7)
             .background {
                 if current {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(palette.highlight)
                 }
             }
@@ -240,58 +356,88 @@ struct AloudPlayerView: View {
         }
     }
 
+    /// 正文模式底部悬浮的播放卡片（进度条 + 控制行）。
     private var playerCard: some View {
-        VStack(spacing: 10) {
-            Capsule().fill(palette.secondary.opacity(0.3))
-                .frame(width: 40, height: 4)
-                .padding(.top, 8)
+        VStack(spacing: 4) {
             progressBlock
-            controlsRow(unitButtons: true)
+            controlsRow
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 10)
-        .padding(.top, 4)
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
         .background {
-            ThemeSurface(shape: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 24, topTrailing: 24),
-                                                       style: .continuous), isCard: true)
-                .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -4)
+            AppGlassSurface(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), tint: palette.surface)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(palette.border.opacity(0.6), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
     }
 
     // MARK: 进度
 
-    private var chapterCountLabel: some View {
-        Text(aloud.chapterIndex >= 0
-            ? "\(aloud.chapterIndex + 1)/\(chapters.count)章"
-            : "-/\(chapters.count)章")
-            .appFont(.caption).foregroundStyle(palette.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("reader.aloud.chapterProgress")
+    private var chapterCountText: String {
+        guard aloud.chapterIndex >= 0, !chapters.isEmpty else { return "- / \(chapters.count) 章" }
+        return "\(aloud.chapterIndex + 1) / \(chapters.count) 章"
+    }
+
+    /// 播放器真实进度（0…1）。
+    private var actualFraction: Double {
+        guard aloud.chapterDuration > 0 else { return 0 }
+        return min(max(aloud.chapterPlayed / aloud.chapterDuration, 0), 1)
+    }
+
+    /// 进度条显示值：拖动中 → 松手后等待到位 → 真实进度。
+    private var displayedFraction: Double {
+        scrub ?? pendingSeek ?? actualFraction
+    }
+
+    private var displayedPlayed: TimeInterval {
+        guard aloud.chapterDuration > 0 else { return aloud.chapterPlayed }
+        return displayedFraction * aloud.chapterDuration
+    }
+
+    private var timeSliderValue: Binding<Double> {
+        Binding(get: { displayedFraction }, set: { scrub = $0 })
+    }
+
+    /// 松手：先记住目标值把滑块按住，等播放器真的走到那里再交还给真实进度。
+    private func commitSeek(_ value: Double) {
+        pendingSeek = value
+        pendingSeekTask?.cancel()
+        pendingSeekTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            if pendingSeek == value { pendingSeek = nil }
+        }
+        aloud.seekChapterProgress(value)
     }
 
     private var progressBlock: some View {
         VStack(spacing: 0) {
             if aloud.chapterDuration > 0 {
                 // 在线引擎：本章播放进度（各段音频时长累计 + 当前段进度）。
-                Slider(value: Binding(
-                        get: { scrub ?? min(max(aloud.chapterPlayed / aloud.chapterDuration, 0), 1) },
-                        set: { scrub = $0 }), in: 0...1) { editing in
-                    if !editing, let value = scrub {
-                        scrub = nil
-                        aloud.seekChapterProgress(value)
-                    }
+                Slider(value: timeSliderValue, in: 0...1) { editing in
+                    guard !editing, let value = scrub else { return }
+                    scrub = nil
+                    commitSeek(value)
                 }
                 .tint(palette.accent)
                 .accessibilityIdentifier("reader.aloud.slider")
                 .accessibilityLabel("本章播放进度")
                 HStack {
-                    Text(AloudPlayerView.timeString(aloud.chapterPlayed))
+                    Text(AloudPlayerView.timeString(displayedPlayed))
                         .accessibilityIdentifier("reader.aloud.timeCurrent")
                     Spacer()
-                    Text("-" + AloudPlayerView.timeString(max(aloud.chapterDuration - aloud.chapterPlayed, 0)))
+                    Text("-" + AloudPlayerView.timeString(max(aloud.chapterDuration - displayedPlayed, 0)))
                         .accessibilityIdentifier("reader.aloud.timeRemaining")
                 }
-                .appFont(.caption)
+                .appFont(.caption2)
                 .monospacedDigit()
                 .foregroundStyle(palette.secondary)
             } else {
@@ -300,10 +446,9 @@ struct AloudPlayerView: View {
                         get: { scrub ?? Double(aloud.unitIndex) },
                         set: { scrub = $0 }),
                     in: 0...Double(max(aloud.unitTotal - 1, 1)), step: 1) { editing in
-                    if !editing, let value = scrub {
-                        scrub = nil
-                        aloud.seekUnit(Int(value.rounded()))
-                    }
+                    guard !editing, let value = scrub else { return }
+                    scrub = nil
+                    aloud.seekUnit(Int(value.rounded()))
                 }
                 .tint(palette.accent)
                 .disabled(aloud.unitTotal <= 1)
@@ -316,7 +461,7 @@ struct AloudPlayerView: View {
                     Text(remainingTimeLabel)
                         .accessibilityIdentifier("reader.aloud.timeRemaining")
                 }
-                .appFont(.caption)
+                .appFont(.caption2)
                 .monospacedDigit()
                 .foregroundStyle(palette.secondary)
             }
@@ -340,47 +485,26 @@ struct AloudPlayerView: View {
 
     // MARK: 控制行
 
-    /// unitButtons=true：⏮15(上一章) ⏮(上一句) 播放 ⏭(下一句) ⏭15(下一章)；
-    /// false（封面模式）：队列 ⏮15 播放 ⏭15 倍速。
-    private func controlsRow(unitButtons: Bool) -> some View {
+    /// ⏮(上一章) 后退15秒 播放 前进15秒 ⏭(下一章)；和参考图一致，播放键在正中。
+    private var controlsRow: some View {
         HStack(spacing: 0) {
-            if unitButtons {
-                chapterButton(direction: -1)
-                unitButton(direction: -1)
-                playButton
-                unitButton(direction: 1)
-                chapterButton(direction: 1)
-            } else {
-                queueButton
-                chapterButton(direction: -1)
-                playButton
-                chapterButton(direction: 1)
-                // 倍速只在底栏显示；右侧留同宽占位，播放键保持居中。
-                Color.clear.frame(maxWidth: .infinity, minHeight: 72)
-            }
+            chapterButton(direction: -1)
+            skipButton(direction: -1)
+            playButton
+            skipButton(direction: 1)
+            chapterButton(direction: 1)
         }
     }
 
     private func controlFrame<V: View>(_ content: V) -> some View {
-        content.frame(maxWidth: .infinity, minHeight: 72).contentShape(Rectangle())
-    }
-
-    private var queueButton: some View {
-        Button { showQueue = true } label: {
-            controlFrame(Image(systemName: "list.bullet")
-                .font(.system(size: 22)).foregroundStyle(palette.primary))
-        }
-        .buttonStyle(.plain)
-        .disabled(aloud.unitList.isEmpty)
-        .accessibilityLabel("朗读队列")
-        .accessibilityIdentifier("reader.aloud.queue")
+        content.frame(maxWidth: .infinity, minHeight: 74).contentShape(Rectangle())
     }
 
     private func chapterButton(direction: Int) -> some View {
         let previous = direction < 0
         return Button { aloud.manualChapter(direction: direction) } label: {
-            controlFrame(Image(systemName: previous ? "gobackward.15" : "goforward.15")
-                .font(.system(size: 26))
+            controlFrame(Image(systemName: previous ? "backward.end.fill" : "forward.end.fill")
+                .font(.system(size: 22))
                 .foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
@@ -389,32 +513,34 @@ struct AloudPlayerView: View {
         .accessibilityIdentifier(previous ? "reader.aloud.prevChapter" : "reader.aloud.nextChapter")
     }
 
-    private func unitButton(direction: Int) -> some View {
+    /// 在线引擎按真实音频时间跳 15 秒；系统语音按估算时间轴跳（至少走一段）。
+    private func skipButton(direction: Int) -> some View {
         let previous = direction < 0
-        return Button { previous ? aloud.previousUnit() : aloud.nextUnit() } label: {
-            controlFrame(Image(systemName: previous ? "backward.end.fill" : "forward.end.fill")
-                .font(.system(size: 26)).foregroundStyle(palette.primary))
+        return Button { aloud.skip(seconds: previous ? -15 : 15) } label: {
+            controlFrame(Image(systemName: previous ? "gobackward.15" : "goforward.15")
+                .font(.system(size: 27))
+                .foregroundStyle(palette.primary))
         }
         .buttonStyle(.plain)
         .disabled(!aloud.isRunning)
-        .accessibilityLabel(previous ? "上一句" : "下一句")
-        .accessibilityIdentifier(previous ? "reader.aloud.prev" : "reader.aloud.next")
+        .accessibilityLabel(previous ? "后退 15 秒" : "前进 15 秒")
+        .accessibilityIdentifier(previous ? "reader.aloud.back15" : "reader.aloud.forward15")
     }
 
     private var playButton: some View {
         Button { aloud.togglePlay() } label: {
             ZStack {
-                Circle().fill(palette.accent).frame(width: 74, height: 74)
+                Circle().fill(palette.primary).frame(width: 74, height: 74)
                 if aloud.isBuffering {
-                    ProgressView().tint(palette.onAccent)
+                    ProgressView().tint(palette.background)
                 } else {
                     Image(systemName: aloud.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(palette.onAccent)
+                        .foregroundStyle(palette.background)
                         .offset(x: aloud.isPlaying ? 0 : 3)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 72)
+            .frame(maxWidth: .infinity, minHeight: 74)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -441,7 +567,17 @@ struct AloudPlayerView: View {
             bottomItem(title: "设置", symbol: "gearshape",
                        id: "reader.aloud.settings") { showSettings = true }
         }
-        .padding(.top, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 7)
+        .background {
+            AppGlassSurface(shape: Capsule(), tint: palette.surface)
+        }
+        .overlay {
+            Capsule().strokeBorder(palette.border.opacity(0.55), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         .padding(.bottom, 4)
     }
 
@@ -454,12 +590,12 @@ struct AloudPlayerView: View {
     }
 
     private func bottomLabel(title: String, symbol: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 22))
-            Text(title).appFont(.caption)
+        VStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 20))
+            Text(title).appFont(.caption2)
         }
         .foregroundStyle(palette.primary)
-        .frame(maxWidth: .infinity, minHeight: 52)
+        .frame(maxWidth: .infinity, minHeight: 46)
         .contentShape(Rectangle())
     }
 
