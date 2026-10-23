@@ -375,8 +375,20 @@ struct ReaderView: View {
     /// 有声书播放器同样是整页界面，自带返回/目录/倍速/设置；
     /// 阅读器的上下栏叠上去会盖住播放键（还会出现两条进度条）。
     /// 正文照常显示、音频在后台播（书源音色 →「正文照常显示」开关）。
+    /// 长按喇叭键时临时打开一次听书界面（forceAudioPlayer）。
+    @State private var forceAudioPlayer = false
+    /// 后台音频的正文高亮（按音频进度估算，和朗读高亮互不干扰）。
+    @State private var toneHighlight = AloudHighlightModel()
+    @State private var lastToneHighlightOffset = -1
+
+    private var activeHighlight: AloudHighlightModel? {
+        sourceToneBackground ? toneHighlight : aloud.highlight
+    }
+
     private var sourceToneBackground: Bool {
-        SourceToneAudio.backgroundPlayback && SourceToneAudio.isActive(bookUrl: book.bookUrl)
+        SourceToneAudio.backgroundPlayback
+            && SourceToneAudio.isActive(bookUrl: book.bookUrl)
+            && !forceAudioPlayer
     }
 
     private var audioReaderMounted: Bool {
@@ -424,7 +436,9 @@ struct ReaderView: View {
                                  onLoadParagraphs: { await audioChapterParagraphs() },
                                  onPrevious: audioPreviousChapter,
                                  onNext: audioNextChapter,
-                                 onBack: { dismiss() },
+                                 onBack: {
+                                     if forceAudioPlayer { forceAudioPlayer = false } else { dismiss() }
+                                 },
                                  onTOC: { showToc = true })
             } else if settings.pageMode == 1 {
                 pagedBody
@@ -458,7 +472,11 @@ struct ReaderView: View {
                     onSpeech: {
                         if bookAudio.chapterURL != nil { bookAudio.toggle() } else { showAloudPanel = true }
                     },
-                    onSearch: { showReaderSearch = true }, onSettings: { showSettings = true })
+                    onSearch: { showReaderSearch = true }, onSettings: { showSettings = true },
+                    onSpeechLongPress: {
+                        guard bookAudio.chapterURL != nil else { return }
+                        forceAudioPlayer = true
+                    })
                     .transition(.opacity)
             }
         }
@@ -671,10 +689,21 @@ struct ReaderView: View {
         .onChange(of: loading) { value in if !value { syncMenuProgress() } }
         .onChange(of: index) { _ in
             aloud.highlight.clear()
+            toneHighlight.clear()
+            lastToneHighlightOffset = -1
             syncMenuProgress()
         }
         .onChange(of: aloud.isRunning) { running in
             if !running { aloud.highlight.clear() }
+        }
+        .onChange(of: bookAudio.currentTime) { _ in
+            followSourceToneAudio()
+        }
+        .onChange(of: bookAudio.chapterURL) { url in
+            if url == nil {
+                toneHighlight.clear()
+                lastToneHighlightOffset = -1
+            }
         }
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
@@ -1543,7 +1572,7 @@ struct ReaderView: View {
                 topMargin: settings.topMargin, bottomMargin: settings.bottomMargin,
                 volumeTitle: chapter?.isVolume == true ? chapter?.title : nil,
                 showsChapterTitle: chapter?.isVolume != true,
-                aloudHighlight: aloud.highlight, aloudChapter: target).ignoresSafeArea())
+                aloudHighlight: activeHighlight, aloudChapter: target).ignoresSafeArea())
         }
     }
 
@@ -1665,7 +1694,7 @@ struct ReaderView: View {
                                     onTextTap: { toggleBars() },
                                     selection: textSelectionActions,
                                     highlightColor: ReaderAloudHighlightStyle.color(forBackground: UIColor(theme.bg)),
-                                    aloudHighlight: chapter == nil ? nil : aloud.highlight,
+                                    aloudHighlight: chapter == nil ? nil : activeHighlight,
                                     aloudChapter: chapter,
                                     aloudBlock: blockIndex,
                                     onTap: { commentTapped(url) })
@@ -1986,6 +2015,38 @@ struct ReaderView: View {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
         return index == target && !loading
+    }
+
+    /// 后台音频（书源音色）的正文高亮：按「已播比例 × 总字数」估算当前段落，
+    /// 只有换段时才更新，避免每 0.5 秒重绘整章。番茄音频没有逐句时间戳，只能估。
+    private func followSourceToneAudio() {
+        guard sourceToneBackground, chapters.indices.contains(index), !loading else { return }
+        guard bookAudio.duration > 0 else { return }
+        let units = aloudUnits(from: readerBlocks)
+        guard !units.isEmpty else { return }
+        let total = units.reduce(0) { $0 + max($1.text.count, 1) }
+        guard total > 0 else { return }
+        let fraction = min(max(bookAudio.currentTime / bookAudio.duration, 0), 1)
+        let target = Int(Double(total) * fraction)
+        var acc = 0
+        var offset = units[0].offset
+        for unit in units {
+            acc += max(unit.text.count, 1)
+            if target <= acc { offset = unit.offset; break }
+            offset = unit.offset
+        }
+        guard offset != lastToneHighlightOffset else { return }
+        lastToneHighlightOffset = offset
+        let highlight = settings.pageMode == 1
+            ? AloudHighlightLocator.locateInPages(offset: offset, chapter: index,
+                                                   pages: pages, blocks: readerBlocks)
+            : AloudHighlightLocator.locate(offset: offset, chapter: index, blocks: readerBlocks)
+        toneHighlight.update(highlight)
+        if settings.pageMode == 1 {
+            guard !pages.isEmpty else { return }
+            let pageTarget = Paginator.pageIndex(containing: offset, in: pages)
+            if pageTarget != pageIndex, pages.indices.contains(pageTarget) { pageIndex = pageTarget }
+        }
     }
 
     /// 朗读进度播报：翻页模式直接跳到含本段的页；滚动模式滚动到本段（节流），

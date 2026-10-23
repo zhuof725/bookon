@@ -174,6 +174,16 @@ enum SourceToneAudio {
         }
     }
 
+    /// 用书源自己的规则探测音色（书山这类聚合源没有番茄的 /api/content 接口）：
+    /// 临时把音色写进源变量，按音频模式取一次本章地址，再恢复原值。
+    static func probeViaRule(tone: SourceTone.Item, group: SourceTone.Group,
+                             source: BookSource, book: Book, chapter: BookChapter) async -> Bool {
+        let original = SourceTone.currentValue(group: group, source: source)
+        SourceTone.setValue(tone.value, group: group, source: source)
+        defer { SourceTone.setValue(original, group: group, source: source) }
+        return await audioURL(source: source, book: book, chapter: chapter) != nil
+    }
+
     // MARK: 接口地址
 
     private static func contentAPIURL(source: BookSource, itemID: String, tone: String) -> URL? {

@@ -15,10 +15,15 @@ struct SourceToneList: View {
     /// 音色可用性探测（按当前书的章节，结果由调用方缓存）。
     struct Probe {
         var cached: (String) -> Bool?
-        var run: (String) async -> Bool
+        /// (分组, 音色) → 是否可用
+        var run: (SourceTone.Group, SourceTone.Item) async -> Bool
         var reset: () -> Void = {}
+        /// 打开列表就自动检测（书山这类聚合源只能手动重测）。
+        var auto: Bool = true
     }
     var probe: Probe? = nil
+    /// 当前这本书（「搜真人版」用书名搜索；没有时不显示这个入口）。
+    var currentBook: Book? = nil
 
     @ThemePalette private var palette
     @State private var groups: [SourceTone.Group] = []
@@ -30,6 +35,20 @@ struct SourceToneList: View {
     @State private var availability: [String: Bool] = [:]
     @State private var checking: Set<String> = []
     @State private var probeTask: Task<Void, Never>?
+    @State private var sheet: ToneSheetKind?
+    @State private var searchResults: [Book] = []
+    @State private var searching = false
+
+    private enum ToneSheetKind: Identifiable {
+        case search
+        case book(Book)
+        var id: String {
+            switch self {
+            case .search: return "search"
+            case .book(let book): return book.bookUrl
+            }
+        }
+    }
 
     var body: some View {
         List {
@@ -61,7 +80,7 @@ struct SourceToneList: View {
                             toneRow(tone, group: group)
                         }
                     } header: {
-                        Text(group.title)
+                        Text(sectionTitle(group))
                     }
                 }
             }
@@ -77,6 +96,28 @@ struct SourceToneList: View {
                          ? "音色由书源提供；有声书切换后会重新加载本章音频。"
                          : "选中后会用这个音色直接播这本书（书源按音色合成音频，不改书源的全局模式）。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
+                }
+            }
+
+            if currentBook != nil {
+                Section {
+                    Button {
+                        searchRealPerson()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label("搜真人版", systemImage: "person.wave.2")
+                            Spacer()
+                            if searching { ProgressView() }
+                            Image(systemName: "chevron.right")
+                                .font(.caption).foregroundStyle(palette.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(searching)
+                    .accessibilityIdentifier("tone.searchHost")
+                } footer: {
+                    Text("按书名搜这个书源，找作者里带「主播」的真人录播版本；点结果打开那本书。")
                 }
             }
 
@@ -106,6 +147,39 @@ struct SourceToneList: View {
             await load()
             startProbing()
         }
+        .sheet(item: $sheet) { kind in
+            switch kind {
+            case .search:
+                NavigationStack {
+                    List(searchResults) { book in
+                        Button {
+                            sheet = .book(book)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(book.name).appFont(.body).lineLimit(2)
+                                Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .scrollContentBackground(.hidden)
+                    .background { AppThemeCanvas().ignoresSafeArea() }
+                    .navigationTitle("真人版")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { sheet = nil }
+                        }
+                    }
+                }
+            case .book(let book):
+                BookDetailView(book: book)
+                    .environmentObject(AppStore.shared)
+                    .modifier(AppThemeRoot())
+            }
+        }
         .toolbar {
             if probe != nil {
                 ToolbarItem(placement: .topBarLeading) {
@@ -113,7 +187,7 @@ struct SourceToneList: View {
                         probe?.reset()
                         availability.removeAll()
                         checking.removeAll()
-                        startProbing()
+                        startProbing(force: true)
                     }
                     .accessibilityIdentifier("tone.retest")
                 }
@@ -166,37 +240,55 @@ struct SourceToneList: View {
 
     // MARK: 可用性探测
 
-    private func startProbing() {
+    private func startProbing(force: Bool = false) {
         guard let probe else { return }
-        var queue: [SourceTone.Item] = []
+        if !force, !probe.auto { return }
+        var queue: [(SourceTone.Group, SourceTone.Item)] = []
         for group in groups {
             for tone in group.tones where !tone.value.isEmpty {
-                if let cached = probe.cached(tone.value) {
+                if !force, let cached = probe.cached(tone.value) {
                     availability[tone.value] = cached
-                } else if availability[tone.value] == nil {
-                    queue.append(tone)
+                } else if availability[tone.value] == nil || force {
+                    queue.append((group, tone))
                 }
             }
         }
         guard !queue.isEmpty else { return }
         probeTask?.cancel()
         probeTask = Task { @MainActor in
-            await withTaskGroup(of: (String, Bool).self) { group in
+            await withTaskGroup(of: (String, Bool).self) { taskGroup in
                 var iterator = queue.makeIterator()
                 var active = 0
                 func launchNext() -> Bool {
-                    guard let tone = iterator.next() else { return false }
-                    checking.insert(tone.value)
-                    group.addTask { (tone.value, await probe.run(tone.value)) }
+                    guard let entry = iterator.next() else { return false }
+                    checking.insert(entry.1.value)
+                    taskGroup.addTask { (entry.1.value, await probe.run(entry.0, entry.1)) }
                     return true
                 }
                 while active < 3, launchNext() { active += 1 }
-                while let result = await group.next() {
+                while let result = await taskGroup.next() {
                     availability[result.0] = result.1
                     checking.remove(result.0)
                     if !launchNext() { active -= 1 }
                 }
             }
+        }
+    }
+
+    private func sectionTitle(_ group: SourceTone.Group) -> String {
+        let name = source.bookSourceName
+        return name.contains(group.title) ? group.title : "\(name)：\(group.title)"
+    }
+
+    private func searchRealPerson() {
+        guard let book = currentBook else { return }
+        searching = true
+        Task {
+            let results = (try? await WebBook.search(source: source, key: book.name)) ?? []
+            let hosts = results.filter { $0.author.contains("主播") }
+            searchResults = hosts.isEmpty ? results : hosts
+            searching = false
+            sheet = .search
         }
     }
 

@@ -78,6 +78,31 @@ enum SourceTone {
         return groups
     }
 
+    /// 当前分组已选的音色值。
+    static func currentValue(group: Group, source: BookSource) -> String {
+        let config = configDictionary(source: source)
+        switch group.kind {
+        case .legacy: return string(config["tone"])
+        case .declared(let key): return string(config[key])
+        }
+    }
+
+    /// 静默写入音色（探测用，不提示、不刷新）。
+    static func setValue(_ value: String, group: Group, source: BookSource) {
+        switch group.kind {
+        case .legacy:
+            writeConfig(source: source) { dict in
+                dict["tone"] = value
+                dict["tone_cn"] = value
+            }
+        case .declared(let key):
+            let prefersArray = scriptText(source).contains("JSON.stringify([")
+            writeConfig(source: source, prefersArray: prefersArray) { dict in
+                dict[key] = value
+            }
+        }
+    }
+
     /// 应用一个音色（函数式优先跑书源自己的 setVoice）。
     @discardableResult
     static func apply(_ item: Item, in group: Group, source: BookSource) -> Bool {

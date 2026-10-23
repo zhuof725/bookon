@@ -101,6 +101,9 @@ struct ReaderBottomChrome: View {
     let onSpeech: () -> Void
     let onSearch: () -> Void
     let onSettings: () -> Void
+    /// 长按喇叭键：打开听书界面（后台播放时用）。
+    var onSpeechLongPress: (() -> Void)? = nil
+    @State private var longPressHandled = false
 
     @ScaledMetric(relativeTo: .footnote) private var headerSize: CGFloat = 13
     @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 17
@@ -111,7 +114,8 @@ struct ReaderBottomChrome: View {
          background: Color, foreground: Color, onScrub: @escaping (Bool) -> Void,
          onPrevious: @escaping () -> Void, onNext: @escaping () -> Void,
          onTOC: @escaping () -> Void, onSpeech: @escaping () -> Void,
-         onSearch: @escaping () -> Void, onSettings: @escaping () -> Void) {
+         onSearch: @escaping () -> Void, onSettings: @escaping () -> Void,
+         onSpeechLongPress: (() -> Void)? = nil) {
         self.chapter = chapter
         self.positionLabel = positionLabel
         self._progress = progress
@@ -128,6 +132,7 @@ struct ReaderBottomChrome: View {
         self.onSpeech = onSpeech
         self.onSearch = onSearch
         self.onSettings = onSettings
+        self.onSpeechLongPress = onSpeechLongPress
     }
 
     private var safeProgress: Double {
@@ -173,8 +178,8 @@ struct ReaderBottomChrome: View {
 
             HStack(spacing: 0) {
                 toolButton("目录", id: "reader.toc", symbol: "list.bullet", action: onTOC)
-                toolButton(isSpeaking ? "朗读中" : "听书", id: "reader.speech",
-                           symbol: "speaker.wave.2", action: onSpeech)
+                speechButton(isSpeaking ? "朗读中" : "听书", id: "reader.speech",
+                             symbol: "speaker.wave.2", action: onSpeech)
                     .accessibilityValue(isSpeaking ? "正在朗读" : "未朗读")
                 toolButton("搜索正文", id: "reader.search", symbol: "magnifyingglass", action: onSearch)
                 toolButton("阅读设置，字体大小", id: "reader.settings", symbol: nil, action: onSettings)
@@ -216,6 +221,32 @@ struct ReaderBottomChrome: View {
                 .contentShape(Rectangle())
         }
         .disabled(!enabled)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+    }
+
+    /// 喇叭键：点按播放/暂停；长按打开听书界面（后台播放时用）。
+    private func speechButton(_ label: String, id: String, symbol: String?,
+                              action: @escaping () -> Void) -> some View {
+        Button {
+            if longPressHandled { longPressHandled = false; return }
+            action()
+        } label: {
+            Group {
+                if let symbol {
+                    Image(systemName: symbol)
+                } else {
+                    Text("大小")
+                }
+            }
+            .font(.system(size: min(iconSize, 30), weight: .regular))
+            .frame(minWidth: 44, maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            longPressHandled = true
+            onSpeechLongPress?()
+        })
         .accessibilityLabel(label)
         .accessibilityIdentifier(id)
     }

@@ -30,16 +30,24 @@ struct AloudVoiceSheet: View {
     private func sourceProbe(for source: BookSource) -> SourceToneList.Probe? {
         guard let book = currentBook, book.origin == source.bookSourceUrl,
               let chapter = currentChapter, SourceToneAudio.canProbe(source: source) else { return nil }
+        let canProbe = SourceToneAudio.canProbe(source: source)
         return SourceToneList.Probe(
             cached: { tone in
                 SourceToneAudio.cachedAvailability(bookUrl: book.bookUrl, tone: tone)
             },
-            run: { tone in
-                let ok = await SourceToneAudio.probe(tone: tone, source: source, chapter: chapter)
-                SourceToneAudio.storeAvailability(ok, bookUrl: book.bookUrl, tone: tone)
+            run: { group, tone in
+                let ok: Bool
+                if canProbe {
+                    ok = await SourceToneAudio.probe(tone: tone.value, source: source, chapter: chapter)
+                } else {
+                    ok = await SourceToneAudio.probeViaRule(tone: tone, group: group,
+                                                            source: source, book: book, chapter: chapter)
+                }
+                SourceToneAudio.storeAvailability(ok, bookUrl: book.bookUrl, tone: tone.value)
                 return ok
             },
-            reset: { SourceToneAudio.clearAvailability(bookUrl: book.bookUrl) })
+            reset: { SourceToneAudio.clearAvailability(bookUrl: book.bookUrl) },
+            auto: canProbe)
     }
 
     /// 只有当前这本书所属的书源，才提供「用这个音色听这本书」。
@@ -98,7 +106,8 @@ struct AloudVoiceSheet: View {
                             NavigationLink {
                                 SourceToneList(source: source,
                                                onUseForBook: useSourceToneHandler(for: source),
-                                               probe: sourceProbe(for: source))
+                                               probe: sourceProbe(for: source),
+                                               currentBook: currentBook)
                                     .navigationTitle(source.bookSourceName)
                                     .navigationBarTitleDisplayMode(.inline)
                             } label: {
