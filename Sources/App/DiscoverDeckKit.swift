@@ -480,100 +480,6 @@ struct DiscoverRankRowSection: View {
     }
 }
 
-// MARK: - 3D 翻转景深的卡片轨道
-
-/// 一行可以左右滑的卡片。
-///
-/// **为什么用原生 ScrollView 而不是自己写 DragGesture**：
-///  - 手指落在卡片上往下滑时，自定义拖拽手势会吃掉这次触摸，外层竖向 ScrollView
-///    就再也收不到，页面卡住不动；原生横向滚动是 UIKit 的嵌套滚动，
-///    横向归它、竖向自动交给外层，两边都不抢；
-///  - 自己算位移时，快速甩动会先跟手、再弹回原位（松手才决定翻不翻页），
-///    看着就是「回弹」。原生滚动有惯性和吸附，不存在这个问题。
-///
-/// 3D 翻转景深用 `scrollTransition(.interactive)` 完成：它拿到的 phase 是每一帧
-/// 卡片相对视口中心的实时进度（-1…1），所以拖动过程中卡片就在连续翻转、缩小、
-/// 后退、变淡，停下来再吸附到位。
-struct DeckCarousel<Card: View>: View {
-    let count: Int
-    /// 卡片本体宽度
-    let cardWidth: CGFloat
-    /// 相邻卡片的槽位宽度（小于卡宽就会互相叠压）
-    let step: CGFloat
-    let stageHeight: CGFloat
-    /// 偏离中心时的最大翻转角度（度），越大景深越强
-    var flipDegrees: Double = 62
-    /// 偏离中心时缩小到的比例
-    var scaleFloor: Double = 0.74
-    /// 偏离中心时下移的点数（弧形走廊靠它弯下来）
-    var yDrift: CGFloat = 0
-    /// 偏离中心时淡到的不透明度
-    var opacityFloor: Double = 0.42
-    /// 叠牌模式：卡片绕**底边**旋转、并向两侧散开，像手里捏着一叠牌摊开；
-    /// 关闭时绕中心旋转，是一条平直的卡片带（弧形走廊用）。
-    var fanOut: Bool = false
-    /// 叠牌模式下的最大错位（pt），每偏离一格增加这么多
-    var fanSpread: CGFloat = 0
-    /// 弧形走廊的平面倾斜角（度）：两侧卡片立起来一点，弧线感更强
-    var arcTilt: Double = 0
-    /// 当前居中的卡片下标（滑动时更新，用于底部书名与圆点）
-    @Binding var index: Int?
-    @ViewBuilder var card: (Int) -> Card
-
-    var body: some View {
-        GeometryReader { proxy in
-            // 两端留出半个槽位的空位，第一张和最后一张也能停在正中
-            let side = max((proxy.size.width - step) / 2, 0)
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(0..<max(count, 0), id: \.self) { i in
-                        // 槽位比卡窄：画面宽度按 step 算，卡本身按 cardWidth 画，
-                        // 于是相邻两张自然叠压在一起，像一叠真卡片
-                        card(i)
-                            .frame(width: cardWidth, height: stageHeight)
-                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                                // 相邻卡片也要有明显角度，所以先把相位放大再夹到 0…1
-                                let depth = min(abs(phase.value) * 2.2, 1)
-                                // 注意：VisualEffect 里没有 zIndex/offset 这类布局修饰符，
-                                // 只有 transform 类（rotation3DEffect / scaleEffect / opacity /
-                                // offset(y:) 属于 geometryEffect 可用）。层级靠外面的静态值排。
-                                return content
-                                    // 两种模板的转法不一样：
-                                    //  · 叠牌：绕底边做 3D 翻转，像把牌扇开
-                                    //  · 弧形走廊：绕竖轴轻微转一个角度 + 沿弧线下沉，
-                                    //    看着像卡片贴在一条弯道上
-                                    .rotation3DEffect(.degrees(Double(-phase.value) * flipDegrees),
-                                                      axis: fanOut ? (x: 0, y: 1, z: 0) : (x: 0.25, y: 1, z: 0),
-                                                      anchor: fanOut ? .bottom : .center,
-                                                      perspective: fanOut ? 0.8 : 0.35)
-                                    .rotationEffect(.degrees(fanOut ? 0 : Double(phase.value) * arcTilt))
-                                    .scaleEffect(1 - (1 - scaleFloor) * depth)
-                                    // 叠牌还有额外的一层横向散开
-                                    .offset(x: fanOut ? phase.value * fanSpread : 0,
-                                            y: yDrift * depth)
-                                    .opacity(1 - (1 - opacityFloor) * depth)
-                            }
-                            .frame(width: step, height: stageHeight)
-                            // 层级用静态下标算：正中的卡压在最上层，越往两边越往后，
-                            // 这样叠压时中间那张不会被侧卡盖住
-                            .zIndex(-Double(abs(i - (index ?? 0))))
-                            .id(i)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-            // 内容装得下时不回弹；甩动由系统惯性接管，不会弹回原卡
-            .scrollBounceBehavior(.basedOnSize)
-            .contentMargins(.horizontal, side, for: .scrollContent)
-            .scrollPosition(id: $index)
-            .frame(height: stageHeight)
-        }
-        .frame(height: stageHeight)
-    }
-}
-
 // MARK: - U2 弧形走廊
 
 /// 卡片沿一条向上弯的弧线排列：中间最大最亮，向两侧逐渐缩小、下移、后退。
@@ -604,17 +510,13 @@ struct DiscoverCurveSection: View {
             header
                 .padding(.horizontal, 20)
 
-            DeckCarousel(count: items.count,
-                         cardWidth: cardWidth,
-                         step: step,
-                         stageHeight: stageHeight,
-                         flipDegrees: 52,
-                         scaleFloor: 0.80,
-                         yDrift: 12,
-                         opacityFloor: 0.45,
-                         // 弧形走廊：绕竖轴轻转 + 沿弧线下沉，保持「一条弯道」
-                         arcTilt: 7,
-                         index: $index) { itemIndex in
+            DeckPagingView(count: items.count,
+                           cardWidth: cardWidth,
+                           cardHeight: cardHeight,
+                           step: step,
+                           stageHeight: stageHeight,
+                           style: .arc,
+                           index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
                          showCaption: false,
@@ -675,111 +577,6 @@ struct DiscoverCurveSection: View {
     }
 }
 
-// MARK: - 卡片堆叠轨道
-
-/// 「卡片堆叠」专用的横向轨道。
-///
-/// **为什么不用 scrollTransition**：那个相位是相对整个视口的，
-/// 卡片叠得越紧，相位越小；实测叠到 0.56 倍卡宽时几乎为 0，
-/// 于是滑起来「没有动画」。这里直接读滚动偏移，按「离中心几格」逐帧算，
-/// 拖动多少就转多少，因此每一帧都在动。
-///
-/// 形态：中间的卡正对屏幕，两侧依次绕竖轴转开、缩小、上浮、压暗，
-/// 像一叠牌被手指拨开。
-struct DeckStackTrack<Card: View>: View {
-    let count: Int
-    let cardWidth: CGFloat
-    let cardHeight: CGFloat
-    /// 槽位宽度：小于卡宽就互相叠压
-    let step: CGFloat
-    let stageHeight: CGFloat
-    @Binding var index: Int?
-    @ViewBuilder var card: (Int) -> Card
-
-    /// 滚动偏移（pt）：内容左边缘相对视口左边缘的位移
-    @State private var offset: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = max((proxy.size.width - step) / 2, 0)
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(0..<max(count, 0), id: \.self) { i in
-                        let distance = offset / max(step, 1) - CGFloat(i)
-                        card(i)
-                            .frame(width: cardWidth, height: cardHeight)
-                            .modifier(DeckStackGeometry(distance: distance))
-                            .frame(width: step, height: stageHeight)
-                            // 正中的卡压在最上面
-                            .zIndex(-Double(abs(distance)))
-                            .id(i)
-                    }
-                }
-                .scrollTargetLayout()
-                .background {
-                    GeometryReader { inner in
-                        Color.clear.preference(
-                            key: DeckStackOffsetKey.self,
-                            value: side - inner.frame(in: .named(Self.space)).minX)
-                    }
-                }
-            }
-            .coordinateSpace(name: Self.space)
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-            .scrollBounceBehavior(.basedOnSize)
-            .contentMargins(.horizontal, side, for: .scrollContent)
-            .scrollPosition(id: $index)
-            .onPreferenceChange(DeckStackOffsetKey.self) { value in
-                guard abs(value - offset) > 0.5 else { return }
-                offset = value
-            }
-            .frame(height: stageHeight)
-        }
-        .frame(height: stageHeight)
-    }
-
-    private static var space: String { "deck.stack" }
-}
-
-/// 一张卡在「叠牌」里的形态。`distance` 0 = 正中，±1 = 相邻一格。
-private struct DeckStackGeometry: ViewModifier {
-    let distance: CGFloat
-
-    /// 只看左右各 2.5 格，再远的没意义（也看不见）
-    private var clamped: CGFloat { max(-2.5, min(2.5, distance)) }
-    private var depth: CGFloat { abs(clamped) }
-
-    /// 转角随距离衰减：正中 0°、相邻 38°，再往外只多几度。
-    /// 直接用「距离 × 45°」会让第 2 格转到 90°（完全侧对屏幕，看不见封面），
-    /// 所以用带饱和的曲线。
-    private var degrees: Double {
-        let sign = clamped < 0 ? -1.0 : 1.0
-        return sign * 52 * tanh(Double(depth) * 0.95)
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .rotation3DEffect(.degrees(degrees),
-                              axis: (x: 0, y: 1, z: 0),
-                              anchor: .center,
-                              perspective: 0.65)
-            // 近大远小
-            .scaleEffect(1 - min(depth, 2) * 0.10)
-            // 两侧稍微上浮，形成弧顶
-            .offset(y: -min(depth, 2) * 5)
-            // 越远越暗
-            .opacity(1 - Double(min(depth, 2.5)) * 0.17)
-    }
-}
-
-private struct DeckStackOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - U 卡片堆叠
 
 /// 中央卡在前完整显示，左右各两张向后翻转、缩小、压暗。
@@ -810,11 +607,12 @@ struct DiscoverDeckSection: View {
             header
                 .padding(.horizontal, 20)
 
-            DeckStackTrack(count: items.count,
+            DeckPagingView(count: items.count,
                            cardWidth: cardWidth,
                            cardHeight: cardHeight,
                            step: step,
                            stageHeight: stageHeight,
+                           style: .stack,
                            index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
