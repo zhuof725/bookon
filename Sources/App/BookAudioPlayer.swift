@@ -112,7 +112,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         queueIndex = 0
         chapterURL = urls[0]
         activateSession()
-        let created = AVPlayer(playerItem: makeItem(urls[0]))
+        // queue[0] 可能是已缓存的本地文件，直接播它。
+        let created = AVPlayer(playerItem: makeItem(queue[0]))
         // 音频书起播优先：不等「缓冲到不易卡顿」的默认策略，拿到数据就开始。
         created.automaticallyWaitsToMinimizeStalling = false
         player = created
