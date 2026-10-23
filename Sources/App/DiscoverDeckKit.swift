@@ -480,127 +480,9 @@ struct DiscoverRankRowSection: View {
     }
 }
 
-// MARK: - 通用横向卡片轨道
-
-/// 一行可以左右滑的卡片：**交给原生横向 ScrollView**，不再自己接管 DragGesture。
-///
-/// 为什么要换成 ScrollView：
-///  - 手指落在封面上往下滑时，自定义 DragGesture 会把这次触摸判成「横向翻卡」，
-///    外层竖向 ScrollView 就收不到，页面卡住不动；
-///  - 原生滚动由 UIScrollView 驱动，逐帧跟手、有惯性、有吸附，比手动改 offset 顺得多。
-///
-/// 卡片之间的 3D 弧度、缩放、上下错位全部按「离中心几格」逐帧算：
-/// 滑动时 offset 每帧更新，卡片跟着连续变化，不是松手才跳一下。
-struct DeckCarousel<Card: View>: View {
-    let count: Int
-    /// 卡片本体宽度
-    let cardWidth: CGFloat
-    /// 相邻两张卡的水平间距（小于卡宽就有叠压效果）
-    let step: CGFloat
-    let stageHeight: CGFloat
-    /// 每偏离一格旋转的角度（度）
-    var rotation: Double = 19
-    /// 每偏离一格缩小的比例
-    var scaleStep: Double = 0.055
-    /// 每偏离一格下移的点数（弧形走廊靠它弯下去）
-    var yStep: CGFloat = 0
-    /// 每偏离一格降低的不透明度
-    var opacityStep: Double = 0.09
-    /// 当前居中的卡片下标（双向绑定：滑动会更新它，设置它会滚过去）
-    @Binding var index: Int?
-    @ViewBuilder var card: (Int) -> Card
-
-    /// 滚动偏移（pt）。由 ScrollView 内容的位置算出来，逐帧更新。
-    @State private var offset: CGFloat = 0
-
-    private var overlap: CGFloat { max(cardWidth - step, 0) }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = max((proxy.size.width - cardWidth) / 2, 0)
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: -overlap) {
-                    ForEach(0..<max(count, 0), id: \.self) { i in
-                        card(i)
-                            .frame(width: cardWidth)
-                            .modifier(CarouselStep(
-                                distance: steps(from: i),
-                                rotation: rotation,
-                                scaleStep: scaleStep,
-                                yStep: yStep,
-                                opacityStep: opacityStep))
-                            .id(i)
-                    }
-                }
-                .scrollTargetLayout()
-                .background {
-                    GeometryReader { inner in
-                        Color.clear.preference(
-                            key: CarouselOffsetKey.self,
-                            value: side - inner.frame(in: .named(Self.space)).minX)
-                    }
-                }
-            }
-            .coordinateSpace(name: Self.space)
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-            .contentMargins(.horizontal, side, for: .scrollContent)
-            .scrollPosition(id: $index)
-            .onPreferenceChange(CarouselOffsetKey.self) { value in
-                guard abs(value - offset) > 0.2 else { return }
-                offset = value
-            }
-            .frame(height: stageHeight)
-        }
-        .frame(height: stageHeight)
-    }
-
-    private static var space: String { "deck.carousel" }
-
-    /// 第 i 张卡离视口中心差几格：0 = 正中，±1 = 相邻。
-    private func steps(from i: Int) -> CGFloat {
-        guard step > 0 else { return 0 }
-        return offset / step - CGFloat(i)
-    }
-}
-
-/// 一张卡在轨道里的变换：离中心越远越小、越斜、越靠后。
-///
-/// 抽成独立的小类型，是为了让 `ForEach` 里那几行别太长——
-/// SwiftUI 的类型检查器在超长的 modifier 链上会慢得离谱，甚至超时。
-private struct CarouselStep: ViewModifier {
-    let distance: CGFloat
-    let rotation: Double
-    let scaleStep: Double
-    let yStep: CGFloat
-    let opacityStep: Double
-
-    private var clamped: CGFloat { min(abs(distance), 4) }
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(1 - clamped * scaleStep)
-            .rotation3DEffect(.degrees(Double(distance) * -rotation),
-                              axis: (x: 0, y: 1, z: 0),
-                              anchor: .center,
-                              perspective: 0.55)
-            .offset(y: clamped * yStep)
-            .opacity(clamped > 4.4 ? 0 : 1 - clamped * opacityStep)
-            // 越靠中心越靠前：两侧的卡压在中间卡后面，不会盖住它
-            .zIndex(-Double(clamped))
-    }
-}
-
-private struct CarouselOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - U2 弧形走廊
 
-/// 卡片沿一条向上弯的弧线排列：中间最大最亮，向两侧逐渐缩小、下移、后退。
+/// 卡片沿一条向上弯的弧线排列：中间最大最亮，向两侧逐渐缩小、上移、后退。
 /// 只有当前卡显示书名，其余卡不显示文字（避免侧卡挡住名字）。
 struct DiscoverCurveSection: View {
     @ThemePalette private var palette
@@ -610,7 +492,9 @@ struct DiscoverCurveSection: View {
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
-    @State private var index: Int? = 0
+    @State private var index = 0
+    /// 拖拽过程中的实时位移，松手归零
+    @State private var dragX: CGFloat = 0
 
     private let cardWidth: CGFloat = 112
     private let cardHeight: CGFloat = 150
@@ -619,7 +503,14 @@ struct DiscoverCurveSection: View {
     private let stageHeight: CGFloat = 208
 
     private var current: DeckItem? {
-        items.indices.contains(index ?? 0) ? items[index ?? 0] : nil
+        items.indices.contains(index) ? items[index] : nil
+    }
+
+    /// 当前卡前后各 5 张的渲染窗口。
+    private var visibleRange: Range<Int> {
+        let lower = max(0, index - 5)
+        let upper = min(items.count, index + 6)
+        return lower..<max(lower, upper)
     }
 
     var body: some View {
@@ -627,25 +518,38 @@ struct DiscoverCurveSection: View {
             header
                 .padding(.horizontal, 20)
 
-            DeckCarousel(count: items.count,
-                         cardWidth: cardWidth,
-                         step: step,
-                         stageHeight: stageHeight,
-                         rotation: 17,
-                         scaleStep: 0.055,
-                         yStep: 11,
-                         opacityStep: 0.09,
-                         index: $index) { itemIndex in
-                let item = items[itemIndex]
-                DeckCard(radius: 10,
-                         showCaption: itemIndex == (index ?? 0),
-                         title: item.title) {
-                    DeckCoverImage(url: item.cover)
+            ZStack {
+                // 只渲染当前卡附近的一个窗口：20 本时渲染 20 个 3D 视图会明显掉帧，
+                // 而实际上只有左右各 4 张以内能被看到。
+                ForEach(visibleRange, id: \.self) { itemIndex in
+                    let pair = (offset: itemIndex, element: items[itemIndex])
+                    let offset = CGFloat(pair.offset - index) + dragX / step
+                    let distance = abs(offset)
+
+                    DeckCard(radius: 10,
+                             showCaption: pair.offset == index,
+                             title: pair.element.title) {
+                        DeckCoverImage(url: pair.element.cover)
+                    }
+                    .frame(width: cardWidth, height: cardHeight)
+                    .scaleEffect(1 - min(distance, 4) * 0.055)
+                    .rotation3DEffect(.degrees(Double(offset) * -17),
+                                      axis: (x: 0, y: 1, z: 0),
+                                      anchor: .center,
+                                      perspective: 0.55)
+                    .offset(x: offset * step, y: distance * 11)
+                    .opacity(distance > 4.4 ? 0 : 1 - Double(min(distance, 4)) * 0.09)
+                    .zIndex(-Double(distance))
+                    .onTapGesture { onSelect(pair.element, pair.offset) }
+                    // 只让正中的卡接收点击：用下标判断而不是拖动中的 offset，
+                    // 否则拖到一半 hit-testing 会跳变，手势被打断
+                    .allowsHitTesting(pair.offset == index)
                 }
-                .frame(width: cardWidth, height: cardHeight)
-                .onTapGesture { onSelect(item, itemIndex) }
-                .accessibilityIdentifier("curve.card.\(item.id)")
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: stageHeight)
+            .contentShape(Rectangle())
+            .simultaneousGesture(swipe)
 
             // 当前书名单独放下面，宽度不受卡片限制
             if let current {
@@ -667,7 +571,7 @@ struct DiscoverCurveSection: View {
             }
 
             if items.count > 1 {
-                DeckDots(count: items.count, index: index ?? 0)
+                DeckDots(count: items.count, index: index)
                     .padding(.top, 9)
             }
         }
@@ -676,23 +580,50 @@ struct DiscoverCurveSection: View {
 
     @ViewBuilder private var header: some View {
         if !title.isEmpty || onMore != nil {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .appFont(.system(size: 20, weight: .bold))
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if let onMore {
-                    Button(action: onMore) {
-                        Text(moreTitle)
-                            .appFont(.system(size: 13))
-                            .foregroundStyle(palette.secondary)
-                    }
-                    .buttonStyle(.plain)
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .appFont(.system(size: 20, weight: .bold))
+                .foregroundStyle(palette.primary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let onMore {
+                Button(action: onMore) {
+                    Text(moreTitle)
+                        .appFont(.system(size: 13))
+                        .foregroundStyle(palette.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 6)
+        }
+    }
+
+    private var swipe: some Gesture {
+        // 只在横向明显时跟手；纵向留给外层 ScrollView，否则手指落在卡上就滑不动页面。
+        // 跟手比例取 1.0：手指拖多少，整条卡片就挪多少，弧度/缩放/淡出都跟着连续变，
+        // 不是拖的时候只轻轻动一下、松手才跳一格。
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                dragX = value.translation.width
+            }
+            .onEnded { value in
+                let moved = value.translation.width
+                let vertical = abs(value.translation.height)
+                var next = index
+                // 位移超过一格的三分之一就翻页，也可以按速度甩
+                let projected = moved + value.predictedEndTranslation.width - moved > 0
+                    ? max(moved, value.predictedEndTranslation.width)
+                    : min(moved, value.predictedEndTranslation.width)
+                let span = abs(projected) > abs(moved) ? projected : moved
+                if abs(span) > vertical, span < -step / 3, index < items.count - 1 { next = index + 1 }
+                if abs(span) > vertical, span > step / 3, index > 0 { next = index - 1 }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    index = next
+                    dragX = 0
                 }
             }
-            .padding(.bottom, 6)
-        }
     }
 }
 
@@ -708,41 +639,33 @@ struct DiscoverDeckSection: View {
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
-    @State private var index: Int? = 0
+    @State private var index = 0
+    /// 拖拽过程中的实时位移，松手归零
+    @State private var dragX: CGFloat = 0
 
     private let cardWidth: CGFloat = 124
     private let cardHeight: CGFloat = 166
     private let stageHeight: CGFloat = 224
 
     private var current: DeckItem? {
-        items.indices.contains(index ?? 0) ? items[index ?? 0] : nil
+        items.indices.contains(index) ? items[index] : nil
     }
+
+    /// 单侧的层数上限（左右各两张）
+    private let maxDepth = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 20)
 
-            DeckCarousel(count: items.count,
-                         cardWidth: cardWidth,
-                         step: cardWidth * 0.56,
-                         stageHeight: stageHeight,
-                         rotation: 19,
-                         scaleStep: 0.09,
-                         yStep: 0,
-                         opacityStep: 0.05,
-                         index: $index) { itemIndex in
-                let item = items[itemIndex]
-                DeckCard(radius: 10,
-                         showCaption: itemIndex == (index ?? 0),
-                         title: item.title,
-                         number: itemIndex == (index ?? 0) ? itemIndex + 1 : nil) {
-                    DeckCoverImage(url: item.cover)
-                }
-                .frame(width: cardWidth, height: cardHeight)
-                .onTapGesture { onSelect(item, itemIndex) }
-                .accessibilityIdentifier("deck.card.\(item.id)")
+            ZStack {
+                deck
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: stageHeight)
+            .contentShape(Rectangle())
+            .simultaneousGesture(swipe)
 
             if let current {
                 VStack(spacing: 3) {
@@ -761,34 +684,96 @@ struct DiscoverDeckSection: View {
                 .padding(.top, 2)
                 .animation(.easeInOut(duration: 0.2), value: index)
             }
-
-            if items.count > 1 {
-                DeckDots(count: items.count, index: index ?? 0)
-                    .padding(.top, 9)
-            }
         }
         .padding(.bottom, 16)
     }
 
+    @ViewBuilder private var deck: some View {
+        // 只渲染当前左右各两张，够用又不会因为书太多把卡片压成一条线。
+        // 拖动时把 dragX 折成一格的比例加进去，卡片是连续滑到下一个位置的，
+        // 不是松手才瞬移。
+        ForEach(-maxDepth...maxDepth, id: \.self) { slot in
+            let itemIndex = index + slot
+            if items.indices.contains(itemIndex) {
+                let shift = dragX / (cardWidth * 0.56)
+                let live = CGFloat(slot) + shift
+                let slotDistance = abs(live)
+                let item = items[itemIndex]
+
+                DeckCard(radius: 10,
+                         showCaption: abs(live) < 0.5,
+                         title: item.title,
+                         number: abs(live) < 0.5 ? itemIndex + 1 : nil) {
+                    DeckCoverImage(url: item.cover)
+                }
+                .frame(width: cardWidth, height: cardHeight)
+                .scaleEffect(1 - min(slotDistance, 2) * 0.09)
+                .rotation3DEffect(.degrees(Double(live) * -19),
+                                  axis: (x: 0, y: 1, z: 0),
+                                  anchor: .center,
+                                  perspective: 0.6)
+                .offset(x: live * (cardWidth * 0.56))
+                .opacity(slotDistance > 2.6 ? 0 : max(0.55, 1 - Double(min(slotDistance, 2)) * 0.11))
+                .zIndex(-Double(slotDistance))
+                .onTapGesture {
+                    if slot == 0 {
+                        onSelect(item, itemIndex)
+                    } else {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                            index = itemIndex
+                        }
+                    }
+                }
+                .accessibilityIdentifier("deck.card.\(item.id)")
+            }
+        }
+    }
+
     @ViewBuilder private var header: some View {
         if !title.isEmpty || onMore != nil {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .appFont(.system(size: 20, weight: .bold))
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if let onMore {
-                    Button(action: onMore) {
-                        Text(moreTitle)
-                            .appFont(.system(size: 13))
-                            .foregroundStyle(palette.secondary)
-                    }
-                    .buttonStyle(.plain)
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .appFont(.system(size: 20, weight: .bold))
+                .foregroundStyle(palette.primary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let onMore {
+                Button(action: onMore) {
+                    Text(moreTitle)
+                        .appFont(.system(size: 13))
+                        .foregroundStyle(palette.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 6)
+        }
+    }
+
+    private var swipe: some Gesture {
+        // 横向才翻卡，纵向交还给外层 ScrollView（手指落在书上也能上下滑页面）。
+        // 拖拽时正中的卡跟着手指平移并轻微倾斜，松手弹簧归位到下一张。
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                dragX = value.translation.width
+            }
+            .onEnded { value in
+                let moved = value.translation.width
+                guard abs(moved) > abs(value.translation.height) else {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { dragX = 0 }
+                    return
+                }
+                let projected = abs(value.predictedEndTranslation.width) > abs(moved)
+                    ? value.predictedEndTranslation.width : moved
+                var next = index
+                if projected < -(cardWidth / 3), index < items.count - 1 { next = index + 1 }
+                if projected > (cardWidth / 3), index > 0 { next = index - 1 }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    index = next
+                    dragX = 0
                 }
             }
-            .padding(.bottom, 6)
-        }
     }
 }
 
