@@ -70,6 +70,7 @@ struct BookDetailView: View {
         defer { detectingKind = false }
         var kind: BookKind = .text
         for chapter in readable {
+            // 不走章节缓存：识别要的是「书源现在返回什么」，不是早前失败留下的文本。
             guard let raw = try? await WebBook.rawContent(source: source, chapter: chapter, book: book),
                   !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             let scanned = BookKind.detect(inContent: raw)
