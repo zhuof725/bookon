@@ -642,6 +642,44 @@ enum WebBook {
         return text
     }
 
+    private static let healLock = NSLock()
+    private static var healedSources = Set<String>()
+
+    /// 取正文；规则空手而归时先跑一次详情页（写 java.put 变量）再重试一次。
+    static func rawContentWithBookInfoHealing(source: BookSource, book: Book, chapter: BookChapter,
+                                              nextChapterURL: String? = nil,
+                                              fallbackToAutoDetect: Bool = true,
+                                              followNextPage: Bool = true,
+                                              normalizeText: Bool = true) async throws -> String {
+        func load() async throws -> String {
+            try await rawContent(source: source, chapter: chapter, nextChapterUrl: nextChapterURL,
+                                 book: book, fallbackToAutoDetect: fallbackToAutoDetect,
+                                 followNextPage: followNextPage, normalizeText: normalizeText)
+        }
+        let first = try await load()
+        guard contentNeedsBookInfo(first),
+              let initRule = source.ruleBookInfo?.`init`,
+              !initRule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return first }
+        healLock.lock()
+        let already = healedSources.contains(source.bookSourceUrl)
+        if !already { healedSources.insert(source.bookSourceUrl) }
+        healLock.unlock()
+        guard !already else { return first }
+        DebugLog.add("≡正文为空，先执行详情页初始化规则再重试")
+        _ = try? await bookInfo(source: source, book: book)
+        return (try? await load()) ?? first
+    }
+
+    /// 正文规则依赖「详情页 init 里 java.put 的变量」（番茄聚合源靠 `book_id`）：
+    /// 直接从书架进阅读器时详情页可能没跑过，规则就会空手而归。
+    /// 这里做一次自愈：先按规则跑详情页把变量写进去，再重试一次正文。
+    static func contentNeedsBookInfo(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return true }
+        // 书源自己的错误占位文案（「无法获取漫画内容」「无法获取音频」等）。
+        return text.count <= 40 && (text.contains("无法获取") || text.contains("获取失败"))
+    }
+
     /// 正文段落「排版」对所有书源一致：把「句末标点（可带闭引号/括号）+ 全角空格」
     /// 这种只写在 U+3000 里的段界还原成换行。按行处理，避免误伤：
     /// 含 CR 的行、没有 U+3000 的行、以及一行内命中不足两处的行一律原样返回；

@@ -14,8 +14,9 @@ enum ChapterContentLoader {
         let raw = try await ChapterContentCache.shared.content(for: key, priority: priority) {
             if let legacy = legacyContent(chapterURL: chapter.url) { return legacy }
             // 缓存原始正文，段评标签留给阅读器排版；不在预读时执行 UIKit 分页。
-            return try await WebBook.rawContent(source: source, chapter: chapter,
-                                                nextChapterUrl: nextChapterURL, book: book)
+            return try await WebBook.rawContentWithBookInfoHealing(source: source, chapter: chapter,
+                                                                  book: book,
+                                                                  nextChapterURL: nextChapterURL)
         }
         // 漫画（图片源）的正文是 <img> 图片列表，不做文字段落归一化；
         // 图片地址由阅读器用 MangaBook.imageURLs 提取。

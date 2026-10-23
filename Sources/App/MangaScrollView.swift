@@ -157,6 +157,41 @@ final class MangaImageLoader {
         }
     }
 
+    /// 预取后面几页（原版 Glide 的 preload 效果）：提前下载+解码进内存/磁盘，
+    /// 往下滑时就不用等。
+    func prefetch(_ urls: [String]) {
+        for url in urls {
+            if cache.object(forKey: url as NSString) != nil { continue }
+            if tasks[url] != nil { continue }
+            guard let requestURL = URL(string: url) else { continue }
+            if let cached = MangaImageDiskCache.data(for: url) {
+                Task { [weak self] in
+                    let target = await MainActor.run { MangaImageLoader.shared.targetPixelWidth }
+                    guard let image = await Self.downsample(data: cached, targetPixelWidth: target) else { return }
+                    self?.store(image, for: url)
+                }
+                continue
+            }
+            let headers = requestHeaders
+            let decodeScript = imageDecodeScript
+            let decodeBookSource = decodeSource
+            tasks[url] = Task { [weak self] in
+                let result = await Self.fetch(requestURL: requestURL, headers: headers,
+                                              decodeScript: decodeScript, decodeSource: decodeBookSource) { _ in }
+                if case .success(let image) = result { self?.store(image, for: url) }
+                self?.tasks[url] = nil
+            }
+        }
+    }
+
+    /// 只入内存缓存（预取用，不发回调）。
+    private func store(_ image: UIImage, for url: String) {
+        let cost = Int(image.size.width * image.scale * image.size.height * image.scale * 4)
+        cache.setObject(image, forKey: url as NSString, cost: cost)
+        aspects[url] = CGSize(width: image.size.width * image.scale,
+                              height: image.size.height * image.scale)
+    }
+
     /// 用户在失败图上点按重试。
     func retry(url: String) {
         lastFailed[url] = nil
@@ -186,8 +221,8 @@ final class MangaImageLoader {
                                           decodeScript: String?, decodeSource: BookSource?,
                                           progress: @escaping (Double) -> Void) async -> Result<UIImage, Error> {
         do {
-            let (data, response) = try await downloadWithProgress(requestURL: requestURL,
-                                                                  headers: headers, progress: progress)
+            let (data, response) = try await downloadData(requestURL: requestURL,
+                                                          headers: headers, progress: progress)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw URLError(.badServerResponse)
             }
@@ -208,49 +243,15 @@ final class MangaImageLoader {
         }
     }
 
-    /// URLSessionDownloadTask 自带 Progress，可以在下载过程中回报百分比（原版显示百分比）。
-    private nonisolated static func downloadWithProgress(requestURL: URL, headers: [String: String],
-                                                         progress: @escaping (Double) -> Void) async throws -> (Data, URLResponse) {
-        final class TaskBox: @unchecked Sendable {
-            var task: URLSessionDownloadTask?
-            var observation: NSKeyValueObservation?
-        }
-        let box = TaskBox()
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                var request = URLRequest(url: requestURL)
-                for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
-                let task = URLSession.shared.downloadTask(with: request) { fileURL, response, error in
-                    defer { box.observation = nil }
-                    if let error {
-                        continuation.resume(throwing: error)
-                        return
-                    }
-                    guard let fileURL, let response else {
-                        continuation.resume(throwing: URLError(.badServerResponse))
-                        return
-                    }
-                    defer { try? FileManager.default.removeItem(at: fileURL) }
-                    do {
-                        let data = try Data(contentsOf: fileURL)
-                        continuation.resume(returning: (data, response))
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-                box.task = task
-                var lastReported: Double = -1
-                box.observation = task.progress.observe(\.fractionCompleted, options: [.new]) { _, change in
-                    guard let value = change.newValue, value.isFinite else { return }
-                    guard value - lastReported >= 0.02 || value >= 1 else { return }
-                    lastReported = value
-                    progress(value)
-                }
-                task.resume()
-            }
-        } onCancel: {
-            box.task?.cancel()
-        }
+    /// 直接取数据：URLSessionDownloadTask 会把整张图先写临时文件再读回来，
+    /// 条漫一屏好几张时这笔磁盘 IO 就是「加载慢」的主因。
+    private nonisolated static func downloadData(requestURL: URL, headers: [String: String],
+                                                 progress: @escaping (Double) -> Void) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: requestURL, timeoutInterval: 30)
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        progress(1)
+        return (data, response)
     }
 
     /// 按目标宽度降采样（保持宽高比），避免原图整张进内存。
@@ -654,7 +655,20 @@ extension MangaScrollController: UICollectionViewDataSource, UICollectionViewDel
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         if let cell = cell as? MangaPageCell {
             cell.startLoadingIfNeeded()
+            prefetchAhead(from: indexPath.item)
         }
+    }
+
+    /// 预取当前页之后最多 3 张（同章内），让快速下滑不卡在等图上。
+    private func prefetchAhead(from index: Int) {
+        var urls: [String] = []
+        var cursor = index + 1
+        while cursor < items.count, urls.count < 3 {
+            if case .page(_, _, _, let url) = items[cursor].kind { urls.append(url) }
+            cursor += 1
+        }
+        guard !urls.isEmpty else { return }
+        MangaImageLoader.shared.prefetch(urls)
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {

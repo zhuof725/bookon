@@ -167,11 +167,9 @@ enum AudioChapter {
         }
         // 音频源没有正文可分页，也不该走「自动识别正文容器」兜底。
         do {
-            let raw = try await WebBook.rawContent(source: source, chapter: chapter,
-                                                   nextChapterUrl: nil, book: book,
-                                                   fallbackToAutoDetect: false,
-                                                   followNextPage: false,
-                                                   normalizeText: false)
+            let raw = try await WebBook.rawContentWithBookInfoHealing(
+                source: source, book: book, chapter: chapter,
+                fallbackToAutoDetect: false, followNextPage: false, normalizeText: false)
             let urls = playURLs(fromContent: raw).compactMap { absolute($0, base: chapterURL) }
             if !urls.isEmpty {
                 var seen = Set<String>()

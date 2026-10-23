@@ -468,7 +468,6 @@ struct AudioChapterView: View {
     let onSettings: () -> Void
 
     @ThemePalette private var palette
-    @State private var scrub: Double?
 
     private let speedPresets: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     private let timerPresets = [0, 5, 10, 15, 30, 45, 60, 90, 180]
@@ -484,10 +483,10 @@ struct AudioChapterView: View {
                 .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)
                 .accessibilityIdentifier("reader.audio.cover")
             Spacer(minLength: 8)
-            statusLine
-            chapterCountLabel
-            progressBlock
-            controlsRow
+            // 播放状态/进度单独成视图：时间每 0.5 秒刷新，只重绘这一块，
+            // 不再整页（封面、标题、底栏）跟着重排，拖进度条也就不会卡。
+            AudioControlsPanel(audio: audio, positionLabel: positionLabel,
+                               onPrevious: onPrevious, onNext: onNext)
             Spacer(minLength: 6)
             Rectangle().fill(palette.border).frame(height: 0.5)
             bottomBar
@@ -536,6 +535,26 @@ struct AudioChapterView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
         .padding(.top, 10)
+    }
+
+
+/// 播放状态 + 进度 + 控制键。单独成视图，时间刷新只重绘这一块。
+struct AudioControlsPanel: View {
+    @ObservedObject var audio: BookAudioPlayer
+    let positionLabel: String
+    let onPrevious: () -> Void
+    let onNext: () -> Void
+
+    @ThemePalette private var palette
+    @State private var scrub: Double?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            statusLine
+            chapterCountLabel
+            progressBlock
+            controlsRow
+        }
     }
 
     /// 缓冲/错误状态放在听书播放器「当前句」的位置。
@@ -642,6 +661,10 @@ struct AudioChapterView: View {
         .accessibilityLabel(audio.isPlaying ? "暂停" : "播放")
         .accessibilityIdentifier("reader.audio.play")
     }
+
+        }
+    }
+}
 
     // MARK: 底栏
 
