@@ -36,6 +36,9 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profil
                     profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
                     search.tabItem { item(.search) }.tag(LibraryTab.search)
                 }
+                // 下滑时底栏收成一个：iOS 26 的 TabView 原生支持，交给系统做，
+                // 自己写一套只会和系统玻璃背景打架。
+                .tabBarMinimizeBehavior(.onScrollDown)
                 // No custom material/background/UITabBarAppearance: retain native glass.
             } else {
                 Group {
