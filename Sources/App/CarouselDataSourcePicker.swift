@@ -129,7 +129,8 @@ struct CarouselDataSourcePicker: View {
 
             Section {
                 NavigationLink {
-                    DiscoverTemplateLibrary(current: config.carouselTemplate) { kind in
+                    DiscoverTemplateLibrary(current: config.carouselTemplate,
+                                            dismissOnPick: false) { kind in
                         config.carouselTemplate = kind
                     }
                     .environmentObject(store)

@@ -15,6 +15,9 @@ struct DiscoverTemplateLibrary: View {
     var current: DiscoverTemplateKind = .deck
     /// 选中某个模板（调用方负责据此添加板块）。
     var onPick: (DiscoverTemplateKind) -> Void = { _ in }
+    /// 选中后是否自动关闭。嵌在别的页面里用时传 false，
+    /// 否则 dismiss() 会把调用方的整页（比如编辑首页的 sheet）一起关掉。
+    var dismissOnPick: Bool = true
 
     /// 展示库用的书：优先书架里的真实书籍（连封面一起），书架太空才回落到公版书目。
     ///
@@ -39,7 +42,7 @@ struct DiscoverTemplateLibrary: View {
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .navigationTitle("添加栏目")
+        .navigationTitle("添加模板")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("template.library")
     }
@@ -50,7 +53,7 @@ struct DiscoverTemplateLibrary: View {
         let picked = template.kind == current
         return Button {
             onPick(template.kind)
-            dismiss()
+            if dismissOnPick { dismiss() }
         } label: {
             VStack(spacing: 0) {
                 // 真身：与首页里那一块完全一致，标题留空（名字在下面居中显示）

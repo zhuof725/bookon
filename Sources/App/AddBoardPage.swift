@@ -11,8 +11,10 @@ struct AddBoardPage: View {
 
     /// 添加成功回调（由编辑页写入草稿）
     var onAdd: ([CustomDiscoverEntry]) -> Void
-    /// 从展示库进来时预选的模板；不传就是卡片堆叠。
-    var initialTemplate: DiscoverTemplateKind = .deck
+    /// 从模板库进来时已经选好的模板。
+    /// 有值时这一页只负责选书源和分类（模板那一段整块隐藏）；
+    /// 为 nil 时才需要在这里挑模板。
+    var initialTemplate: DiscoverTemplateKind?
 
     @State private var template: DiscoverTemplateKind = .deck
     @State private var templateReady = false
@@ -45,7 +47,9 @@ struct AddBoardPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                templateSection
+                if initialTemplate == nil {
+                    templateSection
+                }
                 if template.dataSource == .bookList {
                     sourceSection
                     kindSection
@@ -57,7 +61,7 @@ struct AddBoardPage: View {
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .navigationTitle("添加栏目")
+        .navigationTitle(initialTemplate == nil ? "添加栏目" : "选择分类")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             addBar
@@ -65,7 +69,7 @@ struct AddBoardPage: View {
         .task {
             if !templateReady {
                 templateReady = true
-                template = initialTemplate
+                if let initialTemplate { template = initialTemplate }
             }
             await preloadFirstSource()
         }
@@ -78,7 +82,7 @@ struct AddBoardPage: View {
             sectionTitle("选择模板")
 
             NavigationLink {
-                DiscoverTemplateLibrary(current: template) { kind in
+                DiscoverTemplateLibrary(current: template, dismissOnPick: false) { kind in
                     withAnimation(.easeInOut(duration: 0.2)) { template = kind }
                 }
             } label: {

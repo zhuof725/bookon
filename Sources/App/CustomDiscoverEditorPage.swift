@@ -28,12 +28,12 @@ struct CustomDiscoverEditorPage: View {
                 ScrollView {
                     if draft.entries.isEmpty {
                         // 空配置：第一屏就是模板展示库，点一个模板直接开始配置
-                        DiscoverTemplateLibrary(current: pickedTemplate ?? .largeCard) { kind in
+                        DiscoverTemplateLibrary(current: pickedTemplate ?? .largeCard,
+                                                dismissOnPick: false) { kind in
                             pickedTemplate = kind
                             showAddPage = true
                         }
                         .environmentObject(store)
-                        carouselEntries
                     } else {
                         VStack(spacing: 0) {
                             boardList
@@ -44,36 +44,62 @@ struct CustomDiscoverEditorPage: View {
                     }
                 }
 
-                // 底部圆形加号
-                VStack {
-                    Spacer()
-                    Button {
-                        showAddPage = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 26, weight: .medium))
-                            .foregroundStyle(palette.primary)
-                            .frame(width: 64, height: 64)
-                            .background {
-                                Circle().fill(Color(uiColor: .systemBackground))
-                                    .shadow(color: .black.opacity(0.10), radius: 12, x: 0, y: 4)
-                            }
+                // 底部圆形加号：空配置时整屏就是模板库，不需要再加号
+                if !draft.entries.isEmpty {
+                    VStack {
+                        Spacer()
+                        Button {
+                            // 手点加号：先去模板库挑模板
+                            pickedTemplate = nil
+                            showAddPage = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 26, weight: .medium))
+                                .foregroundStyle(palette.primary)
+                                .frame(width: 64, height: 64)
+                                .background {
+                                    Circle().fill(Color(uiColor: .systemBackground))
+                                        .shadow(color: .black.opacity(0.10), radius: 12, x: 0, y: 4)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, 26)
+                        .accessibilityIdentifier("editor.add")
                     }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 26)
-                    .accessibilityIdentifier("editor.add")
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            showCarouselPicker = true
+                        } label: {
+                            Label("轮播数据与模板", systemImage: "rectangle.stack")
+                        }
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                draft.carouselHidden.toggle()
+                            }
+                        } label: {
+                            Label(draft.carouselHidden ? "打开顶部轮播" : "关闭顶部轮播",
+                                  systemImage: draft.carouselHidden ? "eye" : "eye.slash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .accessibilityIdentifier("editor.menu")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { save() }
                         .fontWeight(.semibold)
                 }
             }
             .navigationDestination(isPresented: $showAddPage) {
-                AddBoardPage(initialTemplate: pickedTemplate ?? .deck) { entries in
+                // 从模板库点进来时模板已经定了，这一页只管选书源和分类。
+                AddBoardPage(initialTemplate: pickedTemplate) { entries in
                     for entry in entries { draft.upsert(entry) }
                 }
                 .environmentObject(store)
@@ -88,43 +114,6 @@ struct CustomDiscoverEditorPage: View {
                 draft = model.config
             }
         }
-    }
-
-    // MARK: 空配置时的轮播入口
-
-    /// 空配置首屏是模板展示库，这里只留一行轮播开关，不打断浏览。
-    private var carouselEntries: some View {
-        VStack(spacing: 0) {
-            entryRow(draft.carouselHidden ? "打开顶部轮播" : "关闭顶部轮播", enabled: true) {
-                withAnimation(.easeInOut(duration: 0.2)) { draft.carouselHidden.toggle() }
-            }
-            entryRow("轮播用哪个模板", enabled: true) { showCarouselPicker = true }
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 40)
-    }
-
-    private func entryRow(_ title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        entryRow(systemImage: nil, title, enabled: enabled, action: action)
-    }
-
-    private func entryRow(systemImage: String?, _ title: String, enabled: Bool,
-                          action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .medium))
-                }
-                Text(title)
-                    .appFont(.system(size: 16))
-            }
-            .foregroundStyle(enabled ? palette.primary : palette.secondary.opacity(0.55))
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
     }
 
     // MARK: 已有板块

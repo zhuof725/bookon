@@ -249,21 +249,50 @@ struct CustomDiscoverView: View {
         }
     }
 
+    /// 空首页：四宫格图标 + 标题 + 说明 + 胶囊按钮，整块垂直居中。
     private var emptyState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 9) {
-                Text("还没有配置首页").appFont(.headline)
-                Text("点右上角，从书源发现分类里挑几条板块，各选一个模板，加上自己的分类标题。")
-                    .appFont(.footnote)
-                    .foregroundStyle(palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("开始配置") { showSettings = true }
-                    .appFont(.footnote.weight(.semibold))
-                    .padding(.top, 3)
+        VStack(spacing: 0) {
+            // 2×2 圆角方块组成的占位图标
+            VStack(spacing: 7) {
+                ForEach(0..<2, id: \.self) { row in
+                    HStack(spacing: 7) {
+                        ForEach(0..<2, id: \.self) { col in
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(palette.secondary.opacity(0.42))
+                                .frame(width: 27, height: 27)
+                        }
+                    }
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
+            .padding(.bottom, 24)
+
+            Text("还没有配置首页")
+                .appFont(.system(size: 20, weight: .bold))
+                .foregroundStyle(palette.primary)
+                .padding(.bottom, 10)
+
+            Text("从书源的发现分类里挑几个板块，各选一个模板，再起个标题。")
+                .appFont(.system(size: 13))
+                .foregroundStyle(palette.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 44)
+
+            Button { showSettings = true } label: {
+                Text("开始配置")
+                    .appFont(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .padding(.horizontal, 34)
+                    .frame(height: 44)
+                    .background(palette.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 26)
+            .accessibilityIdentifier("home.startConfig")
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 40)          // 视觉重心略高于正中，和参考图一致
     }
 }
 
