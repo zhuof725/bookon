@@ -571,7 +571,14 @@ enum WebBook {
         }
     }
 
-    static func rawContent(source: BookSource, chapter: BookChapter, nextChapterUrl: String? = nil, book: Book? = nil) async throws -> String {
+    /// - Parameters:
+    ///   - fallbackToAutoDetect: 规则结果为空时是否用「自动识别正文容器」兜底。
+    ///     音频源的规则结果是一条地址，兜底出来的正文没有意义，传 false。
+    ///   - followNextPage: 是否按翻页规则合并多页（音频接口没有分页）。
+    ///   - normalizeText: 是否做正文净化/段界还原（会把地址当正文处理，音频传 false）。
+    static func rawContent(source: BookSource, chapter: BookChapter, nextChapterUrl: String? = nil, book: Book? = nil,
+                           fallbackToAutoDetect: Bool = true, followNextPage: Bool = true,
+                           normalizeText: Bool = true) async throws -> String {
         primeLoginUi(source)
         guard let rule = source.ruleContent else { return "" }
         var visited = Set<String>()
@@ -588,7 +595,8 @@ enum WebBook {
             let ar = AnalyzeRule(content: body, baseUrl: url, jsLib: source.jsLib, context: context)
             var text = ar.getString(rule.content)
             // 正文规则整段失效（含依赖 document 的脚本跑不起来）：自动识别正文容器
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            if fallbackToAutoDetect,
+               text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                let doc = AnalyzeRule.parse(body, baseUrl: url) as? Document {
                 let auto = AutoDetect.content(in: doc)
                 if !auto.isEmpty {
@@ -601,6 +609,10 @@ enum WebBook {
         }
         let first = try await loadPage(chapter.url)
         parts.append(first.0)
+        guard followNextPage else {
+            let single = parts.joined(separator: "\n")
+            return normalizeText ? normalizeParagraphBoundaries(single) : single
+        }
         // 与 Legado BookContent 一致：下一页地址若是下一章则停止；
         // 只有一个地址时沿链追到末页；多个地址时按顺序各取一页，不再继续追链。
         let pending = first.1.filter { $0 != nextChapterUrl && !visited.contains($0) }
@@ -619,6 +631,7 @@ enum WebBook {
             }
         }
         var text = parts.joined(separator: "\n")
+        guard normalizeText else { return text }
         if let rr = rule.replaceRegex, !rr.isEmpty {
             // 替换规则直接作用在正文字符串上：走 HTML 解析再序列化会把段间换行并成空格。
             text = AnalyzeRule(content: text, baseUrl: chapter.url, jsLib: source.jsLib, context: RuleContext(source: source, book: book, chapter: chapter)).getReplacementString(rr, from: text)

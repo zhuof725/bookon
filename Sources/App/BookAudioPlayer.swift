@@ -30,6 +30,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     var onPlaybackFailed: (() -> Void)?
 
     private var player: AVPlayer?
+    /// 一章可能由多段音频组成（原版正文规则返回 JSON 数组时按段拼播）。
+    private var queue: [URL] = []
+    private var queueIndex = 0
     private var album = ""
     private var timeObserver: Any?
     private var itemEndObserver: NSObjectProtocol?
@@ -75,8 +78,18 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     // MARK: 播放控制
 
     func play(url rawURL: String, title: String, album: String) {
-        let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), url.scheme?.lowercased().hasPrefix("http") == true else {
+        play(urls: [rawURL], title: title, album: album)
+    }
+
+    /// 播放一章（可能是多段）。地址按顺序播完，最后一段结束才回调 onFinish。
+    func play(urls rawURLs: [String], title: String, album: String) {
+        let urls = rawURLs.compactMap { raw -> URL? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: trimmed),
+                  url.scheme?.lowercased().hasPrefix("http") == true else { return nil }
+            return url
+        }
+        guard !urls.isEmpty else {
             pushMessage("音频地址无效")
             return
         }
@@ -84,19 +97,17 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         failureNotified = false
         chapterTitle = title
         self.album = album
-        chapterURL = url
+        queue = urls
+        queueIndex = 0
+        chapterURL = urls[0]
         activateSession()
-        let item = AVPlayerItem(url: url)
-        // 变速时保持音调（音频书倍速的关键设置）。
-        item.audioTimePitchAlgorithm = .spectral
-        let created = AVPlayer(playerItem: item)
+        let created = AVPlayer(playerItem: makeItem(urls[0]))
         // 音频书起播优先：不等「缓冲到不易卡顿」的默认策略，拿到数据就开始。
         created.automaticallyWaitsToMinimizeStalling = false
         player = created
         currentTime = 0
         duration = 0
         isBuffering = true
-        registerItemObservers(item)
         startTimeObserver(created)
         // 缓冲状态用 KVO 更新：周期性时间回调在卡住/失败时不可靠，界面会永远停在「正在缓冲」。
         playerStatusObserver = created.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
@@ -107,6 +118,43 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         created.playImmediately(atRate: Float(speed))
         isPlaying = true
         updateNowPlaying()
+    }
+
+    /// 建条目并按当前倍速保持音调（音频书倍速的关键设置）。
+    private func makeItem(_ url: URL) -> AVPlayerItem {
+        // 多段播放会换条目：旧条目的结束/失败通知必须先摘掉，
+        // 否则上一段播完会再触发一次「播完」。
+        removeItemObservers()
+        let item = AVPlayerItem(url: url)
+        item.audioTimePitchAlgorithm = .spectral
+        registerItemObservers(item)
+        return item
+    }
+
+    /// 一段播完：还有后续段就接着放，最后一段才算整章结束。
+    private func advanceOrFinish() {
+        if queueIndex + 1 < queue.count {
+            queueIndex += 1
+            let next = makeItem(queue[queueIndex])
+            currentTime = 0
+            duration = 0
+            isBuffering = true
+            if let player {
+                player.replaceCurrentItem(with: next)
+                player.playImmediately(atRate: Float(speed))
+            } else {
+                let created = AVPlayer(playerItem: next)
+                created.automaticallyWaitsToMinimizeStalling = false
+                player = created
+                startTimeObserver(created)
+                created.playImmediately(atRate: Float(speed))
+            }
+            updateNowPlaying()
+            return
+        }
+        isPlaying = false
+        updateNowPlaying()
+        onFinish?()
     }
 
     func toggle() {
@@ -123,8 +171,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     func resume() {
         guard !isPlaying, let queuePlayer = player else { return }
         // 失败过的条目不能原地续播：按同一地址重建再播（等链接刷新后重试也走这里）。
-        if let failedURL = chapterURL, queuePlayer.currentItem?.status == .failed {
-            play(url: failedURL.absoluteString, title: chapterTitle, album: album)
+        if queuePlayer.currentItem?.status == .failed,
+           queue.indices.contains(queueIndex) {
+            let remaining = queue[queueIndex...].map(\.absoluteString)
+            play(urls: remaining, title: chapterTitle, album: album)
             return
         }
         queuePlayer.playImmediately(atRate: Float(speed))
@@ -143,6 +193,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         sleepMinutesLeft = 0
         player?.pause()
         player = nil
+        queue = []
+        queueIndex = 0
         chapterURL = nil
         chapterTitle = ""
         album = ""
@@ -183,9 +235,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                                              object: item, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isPlaying else { return }
-                self.isPlaying = false
-                self.updateNowPlaying()
-                self.onFinish?()
+                self.advanceOrFinish()
             }
         }
         itemFailureObserver = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime,

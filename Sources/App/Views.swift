@@ -1661,13 +1661,34 @@ struct ReaderView: View {
     // MARK: 音频书章节（喜马拉雅等音频源）
 
     /// 开始播放音频章节；播完自动进下一章，锁屏上下曲同样跳章。
-    private func beginAudioChapter(_ target: Int) {
+    ///
+    /// 播放地址与原版一致：书源有正文规则时跑规则取结果（音频源常常把真正的
+    /// m4a 地址藏在接口 JSON 里，章节链接只是个页面），没有正文规则才直接用
+    /// 章节链接。规则可能返回多段地址，播放器按顺序播完才算整章结束。
+    private func beginAudioChapter(_ target: Int, source: BookSource) async {
+        guard chapters.indices.contains(target) else { return }
         let chapter = chapters[target]
         bookAudio.onFinish = { audioNextChapter() }
         bookAudio.onRemoteNext = { audioNextChapter() }
         bookAudio.onRemotePrevious = { audioPreviousChapter() }
         bookAudio.onPlaybackFailed = { audioPlaybackFailed() }
-        bookAudio.play(url: chapter.url, title: chapter.title, album: book.name)
+        do {
+            let urls = try await AudioChapter.playURLs(source: source, book: book, chapter: chapter)
+            try Task.checkCancellation()
+            guard chapters.indices.contains(target), index == target else { return }
+            guard !urls.isEmpty else {
+                bookAudio.stop()
+                error = "没取到音频地址：书源的正文规则没有返回可播放的链接"
+                return
+            }
+            bookAudio.play(urls: urls, title: chapter.title, album: book.name)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard chapters.indices.contains(target), index == target else { return }
+            bookAudio.stop()
+            self.error = "音频加载失败：\(error.localizedDescription)"
+        }
     }
 
     /// 喜马拉雅类音频直链带时间签名，书架缓存目录里的旧链接会 403。
@@ -1690,7 +1711,7 @@ struct ReaderView: View {
             retryTarget = nil
             error = nil
             store.updateProgress(book, index: index, title: chapters[index].title)
-            beginAudioChapter(index)
+            await beginAudioChapter(index, source: source)
         }
     }
 
@@ -1849,7 +1870,7 @@ struct ReaderView: View {
             ChapterPrecacheManager.shared.updateCurrentIndex(target)
             retryTarget = nil
             error = nil
-            beginAudioChapter(target)
+            await beginAudioChapter(target, source: source)
             store.updateProgress(book, index: target, title: chapter.title)
             noteReadingChapter(target)
             store.updateScrollPosition(book, permille: 0)

@@ -38,6 +38,30 @@ enum AudioChapterRegression {
                                                                 nextChapterURL: nil)
         check(volumeText == "第一卷", "卷标题仍按本地展示")
 
+        // 播放地址：正文规则为空时就是章节链接（原版 getContentAwait 的短路）。
+        var noRule = audio
+        noRule.ruleContent = ContentRule(content: "  ")
+        check(AudioChapter.hasContentRule(noRule) == false, "空正文规则视为没有规则")
+        let directURLs = try await AudioChapter.playURLs(source: noRule, book: book, chapter: chapter)
+        check(directURLs == [chapter.url], "没有正文规则时播放地址 = 章节链接")
+        check(AudioChapter.hasContentRule(audio) == false, "缺省书源没有正文规则")
+
+        // 有正文规则时，规则结果是播放地址（原版 durPlayUrl = content.trim()）。
+        check(AudioChapter.playURLs(fromContent: " https://cdn.example/a.m4a?sign=1 \n")
+              == ["https://cdn.example/a.m4a?sign=1"], "单行地址去空白")
+        check(AudioChapter.playURLs(fromContent: "https://cdn.example/api/getAudio?id=9")
+              == ["https://cdn.example/api/getAudio?id=9"], "无扩展名的接口地址也算可播放")
+        check(AudioChapter.playURLs(fromContent: #"["https://cdn.example/1.mp3","https://cdn.example/2.mp3"]"#)
+              == ["https://cdn.example/1.mp3", "https://cdn.example/2.mp3"], "JSON 数组按段播放")
+        check(AudioChapter.playURLs(fromContent: #"{"code":0,"data":{"audioUrl":"https://cdn.example/a.m4a"}}"#)
+              == ["https://cdn.example/a.m4a"], "JSON 对象取 audioUrl")
+        check(AudioChapter.playURLs(fromContent: #"{"data":[{"url":"https://cdn.example/x.mp3"}]}"#)
+              == ["https://cdn.example/x.mp3"], "JSON 嵌套数组取 url")
+        check(AudioChapter.playURLs(fromContent: "第一行说明\nhttps://cdn.example/b.mp3\n第三行")
+              == ["https://cdn.example/b.mp3"], "多行里挑音频直链")
+        check(AudioChapter.playURLs(fromContent: "").isEmpty, "空正文解析不出地址")
+        check(AudioChapter.playURLs(fromContent: "未获取到资源链接").isEmpty, "提示文字不当地址")
+
         // 刷新目录后按标题重定位（音频直链每次抓取都会重新签名，URL 必然变化）。
         let refreshed = [
             BookChapter(url: "https://vod.xmcdn.com/x.m4a?sign=new1", title: "第1集", index: 0),
