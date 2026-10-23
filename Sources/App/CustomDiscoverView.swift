@@ -41,35 +41,16 @@ struct CustomDiscoverView: View {
         .foregroundStyle(palette.primary)
         .navigationTitle("首页")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // 只有左上角一个入口：当前页面（图标 + 名字），点开是页面管理。
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showPageManager = true
-                } label: {
-                    HStack(spacing: 7) {
-                        Text(model.pages.current.icon)
-                            .font(.system(size: 15))
-                        Text(model.pages.current.name)
-                            .appFont(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(palette.primary)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 11)
-                    .frame(height: 34)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                Capsule().strokeBorder(palette.primary.opacity(0.10),
-                                                       lineWidth: 0.5)
-                            }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("home.pageSwitch")
-                .accessibilityLabel("页面管理：\(model.pages.current.name)")
-            }
+        // 首页的导航栏只用来承载「返回」按钮，自身不显示标题和背景，
+        // 让左上角的页面胶囊直接贴在内容上（参考图的形态）。
+        .toolbarBackground(.hidden, for: .navigationBar)
+        // 左上角的页面按钮直接画在内容上，不走 toolbar。
+        // 首页在 TabView 里，而 NavigationStack 包的是整个 TabView，
+        // 单个 tab 的 ToolbarItem 在这种结构下不会渲染出来。
+        .overlay(alignment: .topLeading) {
+            pageSwitchButton
+                .padding(.leading, 16)
+                .padding(.top, 6)
         }
         // 编辑页改成全屏：板块预览要按真实宽度铺开，sheet 的圆角和留白会打断观感。
         .fullScreenCover(isPresented: $showSettings) {
@@ -192,7 +173,38 @@ struct CustomDiscoverView: View {
                 .padding(.bottom, 28)
             }
             .refreshable { await model.refresh(category: currentCategory); await model.loadCarousel(force: true) }
+            // 悬浮的页面胶囊浮在内容之上，滚动时内容会从它下面穿过，
+            // 这里只在顶部留一条窄边距，不整块挤占。
+            .contentMargins(.top, 44, for: .scrollContent)
         }
+    }
+
+    /// 左上角：当前页面的图标 + 名字，点开「页面管理」。
+    private var pageSwitchButton: some View {
+        Button {
+            showPageManager = true
+        } label: {
+            HStack(spacing: 7) {
+                Text(model.pages.current.icon)
+                    .font(.system(size: 15))
+                Text(model.pages.current.name)
+                    .appFont(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 11)
+            .frame(height: 34)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule().strokeBorder(palette.primary.opacity(0.10), lineWidth: 0.5)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.pageSwitch")
+        .accessibilityLabel("页面管理：\(model.pages.current.name)")
     }
 
     /// 顶部轮播：把「轮播数据源」当成一个板块，用它选的模板画。
