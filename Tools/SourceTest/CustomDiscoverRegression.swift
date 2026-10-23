@@ -311,9 +311,9 @@ enum CustomDiscoverRegression {
         templateConfig.carouselTemplate = .threeColumn
         check(templateConfig.effectiveCarouselTemplate == .threeColumn,
               "轮播模板：书籍模板原样使用")
-        let legacyJSON = Data(#"{"carouselSourceUrl":"u1","carouselKindUrl":"/a"}"#.utf8)
-        let legacyConfig = CustomDiscoverStore.decode(legacyJSON)
-        check(legacyConfig.carouselTemplate == .largeCard,
+        let oldCarouselJSON = Data(#"{"carouselSourceUrl":"u1","carouselKindUrl":"/a"}"#.utf8)
+        let oldCarouselConfig = CustomDiscoverStore.decode(oldCarouselJSON)
+        check(oldCarouselConfig.carouselTemplate == .largeCard,
               "轮播模板：老配置没有该字段时回落到大卡片")
         let retiredJSON = Data(#"{"carouselSourceUrl":"u1","carouselKindUrl":"/a","carouselTemplate":"fan"}"#.utf8)
         check(CustomDiscoverStore.decode(retiredJSON).carouselTemplate == .curve,
