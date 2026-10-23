@@ -49,6 +49,12 @@ struct BookDetailView: View {
             detectedKind = saved
             return
         }
+        // 书源名/章节名能看出来（番茄漫画、七猫听书这类），不必抓正文。
+        if let guess = BookKind.guess(source: source, chapters: chapters) {
+            BookKindStore.save(guess, bookUrl: book.bookUrl)
+            detectedKind = guess
+            return
+        }
         // 开篇常是「片花/序章/公告」这类文字章，只看第一章会误判成文本；
         // 取前三个可读章节里第一个识别为非文本的结果。
         let readable = chapters.filter { !$0.isVolume && !$0.url.isEmpty }.prefix(3)

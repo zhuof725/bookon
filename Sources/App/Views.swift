@@ -1018,6 +1018,19 @@ struct ReaderView: View {
             BookKindStore.save(.audio, bookUrl: book.bookUrl)
             return false
         }
+        // 书源名/章节名能看出来（番茄漫画、七猫听书这类），不联网就能定模式。
+        if let guess = BookKind.guess(source: source, chapters: chapters) {
+            BookKindStore.save(guess, bookUrl: book.bookUrl)
+            mangaMode = guess == .image
+            if mangaMode { return false }
+            if guess == .audio {
+                index = first
+                await beginAudioChapter(first, source: source)
+                loading = false
+                return true
+            }
+            return false
+        }
         // 开篇常常是「片花/序章/公告」这类文字章，光看第一章会把漫画/音频书误判成文本；
         // 取前几章里第一个能识别的非文本结果。
         var kind: BookKind = .text

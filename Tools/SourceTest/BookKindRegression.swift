@@ -39,6 +39,21 @@ enum BookKindRegression {
         check(BookKind.imageTagCount("<img src=a><IMG src=b><imgs src=c>") == 2, "只数 <img 标签")
         check(BookKind.strippedText("<p>你好&nbsp;世界</p>") == "你好 世界", "去标签并还原 nbsp")
 
+        // 不联网的快速判断：书源名 + 目录章节名。
+        let comicSource = BookSource(bookSourceUrl: "https://comic.example", bookSourceName: "番茄漫画")
+        check(BookKind.guess(source: comicSource, chapters: []) == .image, "书源名带「漫画」直接判漫画")
+        let audioSource = BookSource(bookSourceUrl: "https://audio.example", bookSourceName: "七猫听书[官方]m1.1")
+        check(BookKind.guess(source: audioSource, chapters: []) == .audio, "书源名带「听书」直接判音频")
+        let textSource = BookSource(bookSourceUrl: "https://text.example", bookSourceName: "书山聚合")
+        let comicChapters = (0..<10).map { BookChapter(url: "https://c/\($0)", title: "第\($0 + 1)话 剧情", index: $0) }
+        check(BookKind.guess(source: textSource, chapters: comicChapters) == .image, "章节名「第N话」判漫画")
+        let audioChapters = (0..<10).map { BookChapter(url: "https://a/\($0)", title: "第\($0 + 1)集 口播", index: $0) }
+        check(BookKind.guess(source: textSource, chapters: audioChapters) == .audio, "章节名「第N集」判音频")
+        let textChapters = (0..<10).map { BookChapter(url: "https://t/\($0)", title: "第\($0 + 1)章 正文", index: $0) }
+        check(BookKind.guess(source: textSource, chapters: textChapters) == nil, "普通章节名不猜")
+        let mixed = (0..<10).map { BookChapter(url: "https://m/\($0)", title: $0 < 3 ? "第\($0 + 1)话" : "第\($0 + 1)章", index: $0) }
+        check(BookKind.guess(source: textSource, chapters: mixed) == nil, "话/章混用不硬猜")
+
         // 每本书的识别结果缓存。
         let suite = "book-kind-test-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!

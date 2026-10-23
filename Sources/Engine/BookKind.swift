@@ -32,6 +32,31 @@ enum BookKind: String, CaseIterable {
         }
     }
 
+    /// 不联网的快速判断：书源名称/分组、目录章节名。
+    /// 番茄漫画、七猫听书这类「一个书源只出一种书」的源，名字和章节名足够分辨，
+    /// 不用为了识别去抓正文。
+    static func guess(source: BookSource?, chapters: [BookChapter]) -> BookKind? {
+        let name = (source?.bookSourceName ?? "") + " " + (source?.bookSourceGroup ?? "")
+        let lower = name.lowercased()
+        if lower.contains("漫画") || lower.contains("comic") || lower.contains("manga") {
+            return .image
+        }
+        if lower.contains("听书") || lower.contains("有声") || lower.contains("音频")
+            || lower.contains("评书") || lower.contains(" 听 ") {
+            return .audio
+        }
+        let titles = chapters.filter { !$0.isVolume && !$0.title.isEmpty }
+            .prefix(30).map(\.title)
+        guard titles.count >= 3 else { return nil }
+        let comic = titles.filter { $0.contains("话") || $0.contains("話") }.count
+        let audio = titles.filter { $0.contains("集") || $0.contains("期") }.count
+        let text = titles.filter { $0.contains("章") }.count
+        let total = Double(titles.count)
+        if Double(comic) / total >= 0.6, comic > text { return .image }
+        if Double(audio) / total >= 0.6, audio > text { return .audio }
+        return nil
+    }
+
     /// 从正文规则的结果反推模式。
     /// - 音频：整段结果就是一条播放地址（或多段地址的 JSON 数组）；
     /// - 漫画：正文里是成组的 `<img>`，几乎没有文字；
