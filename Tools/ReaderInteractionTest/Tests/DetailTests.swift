@@ -61,6 +61,29 @@ final class DetailTests: XCTestCase {
         }
     }
 
+    /// 版式对齐参考图：封面卡 → 阅读/书架 → 分组·类型·更新 → 简介 → 目录 → 来源。
+    func testReferenceLayoutSections() {
+        launch()
+        let read = app.buttons["detail.read"]
+        let shelf = app.buttons["detail.shelfAction"]
+        // 两个 56pt 胶囊按钮：阅读占满剩余宽度，书架按内容宽度收窄，互不重叠。
+        XCTAssertEqual(read.frame.height, 56, accuracy: 2)
+        XCTAssertEqual(shelf.frame.height, 56, accuracy: 2)
+        XCTAssertGreaterThan(read.frame.width, shelf.frame.width)
+        XCTAssertLessThanOrEqual(read.frame.maxX, shelf.frame.minX + 0.5)
+        // 分组 / 类型 / 更新 三栏（分组可点，值就是当前分类）。
+        XCTAssertTrue(app.buttons["detail.changeCategory"].label.contains("随笔"),
+                      app.buttons["detail.changeCategory"].label)
+        XCTAssertEqual(app.staticTexts["detail.type.value"].label, "本地")
+        XCTAssertEqual(app.staticTexts["detail.update.value"].label, "未知")
+        // 来源卡显示书源名 + 换源。
+        let source = app.buttons["detail.changeSource"]
+        reveal(source)
+        XCTAssertTrue(source.label.contains("本地书籍"), source.label)
+        XCTAssertTrue(source.label.contains("换源"), source.label)
+        capture("detail-08-reference-layout")
+    }
+
     func testSourceBooksNeverOfferIntroEditing() {
         for flags in [["--detail-source-book", "--detail-off-shelf"], ["--detail-source-book"]] {
             launch(flags)

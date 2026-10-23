@@ -57,7 +57,7 @@ struct DetailHarnessView: View {
         BookDetailScreen(
             book: fixtureBook, onShelf: !arguments.contains("--detail-off-shelf"),
             category: missing ? "" : "随笔", chapters: missing ? [] : DetailFixture.chapters,
-            loading: false, message: nil,
+            loading: false, message: nil, sourceType: "本地",
             onBack: { record("back") }, onMore: { record("more") },
             onRead: { record("read") }, onCategory: { record("category") },
             onSource: { record("source") }, onShelfAction: { record("remove") },

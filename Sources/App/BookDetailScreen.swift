@@ -2,6 +2,10 @@ import SwiftUI
 import UIKit
 
 /// Presentation only: the caller owns navigation, loading and all mutations.
+///
+/// 版式对齐参考图（「作品详情」）：
+/// 1) 封面 + 书名/作者/彩色标签  2) 开始阅读 + 加入书架  3) 分组 / 类型 / 更新 三栏
+/// 4) 简介（超过 4 行可展开）     5) 目录                6) 来源 + 换源
 struct BookDetailScreen: View {
     @ThemePalette private var palette
     let book: Book
@@ -10,6 +14,8 @@ struct BookDetailScreen: View {
     let chapters: [BookChapter]
     let loading: Bool
     let message: String?
+    /// 「类型」栏：文本 / 音频 / 漫画 / 文件 / 视频（由书源类型决定，缺省按文本）。
+    let sourceType: String
     let onBack: () -> Void
     let onMore: () -> Void
     let onRead: () -> Void
@@ -20,12 +26,12 @@ struct BookDetailScreen: View {
     let onTOC: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .caption2) private var actionDiameter: CGFloat = 52
-    /// `<useweb>` 简介：WebView 内容高度（由网页回调更新）。
-    @State private var richIntroHeight: CGFloat = 0
+    /// 长简介默认收起 4 行，点「展开全文」再看全。
+    @State private var introExpanded = false
 
     init(book: Book, onShelf: Bool, category: String, chapters: [BookChapter],
-         loading: Bool, message: String?, onBack: @escaping () -> Void,
+         loading: Bool, message: String?, sourceType: String = "文本",
+         onBack: @escaping () -> Void,
          onMore: @escaping () -> Void, onRead: @escaping () -> Void,
          onCategory: @escaping () -> Void, onSource: @escaping () -> Void,
          onShelfAction: @escaping () -> Void, onEditIntro: @escaping () -> Void,
@@ -36,6 +42,7 @@ struct BookDetailScreen: View {
         self.chapters = chapters
         self.loading = loading
         self.message = message
+        self.sourceType = sourceType
         self.onBack = onBack
         self.onMore = onMore
         self.onRead = onRead
@@ -57,27 +64,47 @@ struct BookDetailScreen: View {
             .compactMap { nonempty($0) }
             .filter { seen.insert($0).inserted }
     }
+    private var categoryText: String { nonempty(category) ?? "未分类" }
+    private var sourceText: String {
+        if let name = nonempty(book.originName) { return name }
+        return book.origin == "local" ? "本地书籍" : "未知来源"
+    }
+    /// 「更新」栏：只有目录里真带了章节更新时间才显示日期，否则如实写「未知」。
+    private var updateText: String {
+        guard let raw = nonempty(readableChapters.last?.updateTime) else { return "未知" }
+        return Self.shortDate(raw)
+    }
+    private var intro: BookIntro? { BookIntro.parse(book.intro) }
+    private var introIsCollapsible: Bool {
+        guard let intro, !intro.kind.isRich else { return false }
+        return intro.plainText.count > 85
+    }
 
     var body: some View {
         VStack(spacing: 12) {
             navigationHeader
             ScrollView {
-                VStack(spacing: 16) {
-                    primaryCard
+                VStack(spacing: 12) {
+                    summaryCard
+                    actionRow
+                    infoStrip
                     introCard
                     tocCard
+                    sourceCard
                     feedback
                 }
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 18)
-                .padding(.top, 4)
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
                 .padding(.bottom, 28)
             }
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
     }
+
+    // MARK: - 顶栏
 
     private var navigationHeader: some View {
         HStack(spacing: 12) {
@@ -109,41 +136,29 @@ struct BookDetailScreen: View {
         .accessibilityIdentifier(id)
     }
 
-    private var primaryCard: some View {
-        VStack(alignment: .leading, spacing: 22) {
+    // MARK: - 封面 / 书名 / 标签
+
+    private var summaryCard: some View {
+        Group {
             if typeSize.isAccessibilitySize {
-                stackedSummary
+                VStack(alignment: .leading, spacing: 16) {
+                    cover
+                    metadata
+                }
             } else {
                 HStack(alignment: .top, spacing: 14) {
                     cover
                     metadata.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    readButton(inline: true)
-                    secondaryActions
-                }
-                VStack(spacing: 14) {
-                    readButton(inline: false)
-                    secondaryActions.frame(maxWidth: .infinity)
-                }
-            }
         }
         .modifier(DetailCardSurface())
-    }
-
-    private var stackedSummary: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            cover
-            metadata
-        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var cover: some View {
         ShelfCoverImage(url: BookCoverLocation.url(for: book), origin: book.origin)
             .frame(width: 100, height: 145)
-            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
             .accessibilityElement(children: .ignore)
             .accessibilityHidden(false)
@@ -152,7 +167,7 @@ struct BookDetailScreen: View {
     }
 
     private var metadata: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(book.name)
                 .appFont(.title2.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
@@ -165,100 +180,168 @@ struct BookDetailScreen: View {
                 .accessibilityIdentifier("detail.author")
             DetailTagLayout(spacing: 7) {
                 if let wordCount = nonempty(book.wordCount) {
-                    pill(wordCount).accessibilityIdentifier("detail.wordCount")
+                    tag(wordCount, tone: .accent).accessibilityIdentifier("detail.wordCount")
                 }
-                pill(nonempty(category) ?? "未分类").accessibilityIdentifier("detail.category")
-                pill(hasStarted ? "在读" : "未读")
+                tag(categoryText, tone: .accent).accessibilityIdentifier("detail.category")
+                tag(hasStarted ? "在读" : "未读", tone: hasStarted ? .green : .muted)
                     .accessibilityIdentifier("detail.status")
             }
             if !kindTags.isEmpty {
                 DetailTagLayout(spacing: 7) {
-                    ForEach(kindTags, id: \.self) { tag in pill(tag) }
+                    ForEach(kindTags, id: \.self) { tag($0, tone: .purple) }
                 }
             }
         }
     }
 
-    private func pill(_ text: String) -> some View {
-        Text(text)
-            .appFont(.caption)
-            .foregroundStyle(palette.accent)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 10)
+    /// 彩色胶囊标签：浅色底 + 同色文字（参考图里字数/分类是蓝、状态是绿、题材是紫）。
+    private func tag(_ text: String, tone: DetailTagTone) -> some View {
+        let color = tone.color(palette)
+        return Text(text)
+            .appFont(.system(size: 13, weight: .medium))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 11)
             .padding(.vertical, 5)
-            .appGlass(in: Capsule(), tint: palette.selection)
+            .background(Capsule().fill(color.opacity(0.12)))
     }
 
-    private func readButton(inline: Bool) -> some View {
+    // MARK: - 开始阅读 / 加入书架
+
+    private var actionRow: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 10) {
+                    readButton
+                    shelfButton
+                }
+            } else {
+                HStack(spacing: 10) {
+                    readButton
+                    shelfButton.fixedSize(horizontal: true, vertical: false)
+                }
+            }
+        }
+    }
+
+    private var readButton: some View {
         Button(action: onRead) {
-            Label(hasStarted ? "继续阅读" : "开始阅读", systemImage: "book")
-                .appFont(.headline)
-                .fixedSize(horizontal: inline, vertical: true)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 15)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .foregroundStyle(palette.primary)
-                .appGlass(in: Capsule(), tint: palette.accent)
-                .contentShape(Capsule())
+            HStack(spacing: 8) {
+                Image(systemName: "book.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                Text(hasStarted ? "继续阅读" : "开始阅读")
+                    .appFont(.headline)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(palette.onAccent)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Capsule().fill(palette.accent))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("detail.read")
     }
 
-    private var secondaryActions: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(spacing: 10) { actionControls }
-            } else {
-                HStack(spacing: 7) { actionControls }
+    private var shelfButton: some View {
+        Button(action: onShelfAction) {
+            HStack(spacing: 6) {
+                Image(systemName: onShelf ? "minus" : "plus")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(onShelf ? "移除书架" : "加入书架")
+                    .appFont(.headline)
+                    .lineLimit(1)
             }
-        }
-    }
-
-    @ViewBuilder private var actionControls: some View {
-        actionButton("切换类型", symbol: "arrow.left.arrow.right", id: "detail.changeCategory", action: onCategory)
-        actionButton("换源", symbol: "arrow.triangle.2.circlepath", id: "detail.changeSource", action: onSource)
-        actionButton(onShelf ? "移除书架" : "加入书架", symbol: onShelf ? "minus.circle" : "plus.circle",
-                     id: "detail.shelfAction", action: onShelfAction)
-    }
-
-    private func actionButton(_ title: String, symbol: String, id: String,
-                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Group {
-                if typeSize.isAccessibilitySize {
-                    Label(title, systemImage: symbol)
-                        .appFont(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .appGlass(in: Capsule(), tint: palette.surface)
-                        .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
-                } else {
-                    VStack(spacing: 3) {
-                        Image(systemName: symbol).font(.title3)
-                        Text(title).appFont(.caption2).fixedSize()
-                    }
-                    .frame(width: actionDiameter, height: actionDiameter)
-                    .appGlass(in: Circle(), tint: palette.surface)
-                    .overlay(Circle().strokeBorder(palette.border, lineWidth: 1))
-                }
-            }
-            .contentShape(Rectangle())
+            .foregroundStyle(palette.accent)
+            .padding(.horizontal, 20)
+            .frame(minHeight: 56)
+            .background(Capsule().fill(palette.surface))
+            .overlay(Capsule().strokeBorder(palette.accent.opacity(0.35), lineWidth: 1.2))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier(id)
+        .accessibilityLabel(onShelf ? "移除书架" : "加入书架")
+        .accessibilityIdentifier("detail.shelfAction")
     }
 
+    // MARK: - 分组 / 类型 / 更新
+
+    private var infoStrip: some View {
+        HStack(spacing: 0) {
+            infoColumn(icon: "folder.fill", title: "分组", value: categoryText,
+                       valueID: "detail.group.value", id: "detail.changeCategory", action: onCategory)
+            stripDivider
+            infoColumn(icon: "doc.text.fill", title: "类型", value: sourceType,
+                       valueID: "detail.type.value", id: nil, action: nil)
+            stripDivider
+            infoColumn(icon: "bell.fill", title: "更新", value: updateText,
+                       valueID: "detail.update.value", id: nil, action: nil)
+        }
+        .modifier(DetailCardSurface(padding: 14))
+    }
+
+    private var stripDivider: some View {
+        Rectangle()
+            .fill(palette.border)
+            .frame(width: 1, height: 46)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func infoColumn(icon: String, title: String, value: String,
+                            valueID: String, id: String?, action: (() -> Void)?) -> some View {
+        let content = VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(palette.accent)
+            Text(title)
+                .appFont(.subheadline)
+                .foregroundStyle(palette.primary)
+            Text(value)
+                .appFont(.caption)
+                .foregroundStyle(palette.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .accessibilityIdentifier(valueID)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+
+        if let action, let id {
+            Button(action: action) { content }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(id)
+        } else {
+            content
+        }
+    }
+
+    // MARK: - 简介
+
     private var introCard: some View {
-        let intro = BookIntro.parse(book.intro)
-        return VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("简介")
                 .appFont(.title2.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
-            introBody(intro)
+            introBody
+            if introIsCollapsible {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { introExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(introExpanded ? "收起" : "展开全文")
+                        Image(systemName: introExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .appFont(.subheadline.weight(.medium))
+                    .foregroundStyle(palette.accent)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("detail.introExpand")
+            }
             // Book.origin == "local" is the persisted imported-book marker.
             // Source books remain read-only, including after joining the shelf.
             if book.origin == "local" {
@@ -282,7 +365,7 @@ struct BookDetailScreen: View {
     /// 书源简介可以是 `<useweb>`／`<usehtml>` 包裹的 HTML（原版用 WebView 渲染，支持 CSS），
     /// 其余按纯文本显示。
     @ViewBuilder
-    private func introBody(_ intro: BookIntro?) -> some View {
+    private var introBody: some View {
         if let intro, intro.kind.isRich {
             RichIntroWebView(html: intro.renderBody,
                              textColor: palette.primary,
@@ -297,15 +380,20 @@ struct BookDetailScreen: View {
                 .appFont(.body)
                 .foregroundStyle(text.isEmpty ? palette.secondary : palette.primary)
                 .lineSpacing(7)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(introIsCollapsible && !introExpanded ? 4 : nil)
+                .fixedSize(horizontal: false, vertical: introIsCollapsible && !introExpanded)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("detail.intro")
         }
     }
 
+    @State private var richIntroHeight: CGFloat = 0
+
+    // MARK: - 目录
+
     private var tocCard: some View {
         Button(action: onTOC) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
                         tocHeading.fixedSize()
@@ -351,18 +439,65 @@ struct BookDetailScreen: View {
     }
 
     private var tocCount: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 3) {
             // Empty input can mean the catalog has not loaded. Do not claim zero.
             if !readableChapters.isEmpty {
                 Text("共 \(readableChapters.count) 章")
                     .accessibilityIdentifier("detail.count")
             }
-            Image(systemName: "chevron.right").accessibilityHidden(true)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .accessibilityHidden(true)
         }
         .appFont(.subheadline)
         .foregroundStyle(palette.accent)
         .fixedSize(horizontal: false, vertical: true)
     }
+
+    private func pill(_ text: String) -> some View {
+        Text(text)
+            .appFont(.caption)
+            .foregroundStyle(palette.accent)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(palette.accent.opacity(0.12)))
+    }
+
+    // MARK: - 来源
+
+    private var sourceCard: some View {
+        Button(action: onSource) {
+            VStack(alignment: .leading, spacing: 9) {
+                Label("来源", systemImage: "globe")
+                    .appFont(.subheadline)
+                    .foregroundStyle(palette.secondary)
+                HStack(spacing: 10) {
+                    Image(systemName: "books.vertical.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(palette.accent)
+                    Text(sourceText)
+                        .appFont(.body)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 2) {
+                        Text("换源").appFont(.subheadline)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(palette.accent)
+                }
+            }
+            .modifier(DetailCardSurface(padding: 16))
+            .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("detail.changeSource")
+        .accessibilityLabel("换源")
+        .accessibilityHint("选择其他书源")
+    }
+
+    // MARK: - 反馈
 
     @ViewBuilder private var feedback: some View {
         if loading || nonempty(message) != nil {
@@ -388,15 +523,44 @@ struct BookDetailScreen: View {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// "2026/10/22 21:15:21" / "2026-10-22 21:15" → "10/22"；解析不了就原样返回。
+    private static func shortDate(_ raw: String) -> String {
+        let head = raw.replacingOccurrences(of: "-", with: "/")
+            .split(separator: " ", maxSplits: 1)
+            .first.map(String.init) ?? raw
+        let parts = head.split(separator: "/")
+        if parts.count >= 3, parts[0].count == 4 {
+            return "\(parts[1])/\(parts[2])"
+        }
+        return head
+    }
 }
+
+// MARK: - 标签配色
+
+private enum DetailTagTone {
+    case accent, green, purple, muted
+
+    func color(_ palette: ResolvedAppPalette) -> Color {
+        switch self {
+        case .accent: return palette.accent
+        case .green: return .green
+        case .purple: return .purple
+        case .muted: return palette.secondary
+        }
+    }
+}
+
+// MARK: - 卡片与标签布局
 
 private struct DetailCardSurface: ViewModifier {
     @ThemePalette private var palette
-    @Environment(\.colorScheme) private var scheme
+    var padding: CGFloat = 18
 
     func body(content: Content) -> some View {
         content
-            .padding(18)
+            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 let shape = RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous)

@@ -21,6 +21,19 @@ struct BookDetailView: View {
         store.isOnShelf(book)
     }
 
+    /// 「类型」栏：由书源类型决定（文本/音频/漫画/文件/视频），本地书标「本地」。
+    private var sourceTypeLabel: String {
+        if book.origin == AppStore.localOrigin { return "本地" }
+        guard let source = store.source(for: book.origin) else { return "文本" }
+        switch source.bookSourceType ?? 0 {
+        case 1: return "音频"
+        case 2: return "漫画"
+        case 3: return "文件"
+        case 4: return "视频"
+        default: return "文本"
+        }
+    }
+
     private var current: Book {
         guard let shelf = store.books.first(where: { $0.bookUrl == book.bookUrl }) else {
             var current = book
@@ -39,7 +52,7 @@ struct BookDetailView: View {
     var body: some View {
         BookDetailScreen(book: current, onShelf: onCurrentShelf,
             category: BookDetailMetadata.category(for: book), chapters: chapters,
-            loading: loading, message: message,
+            loading: loading, message: message, sourceType: sourceTypeLabel,
             onBack: { dismiss() }, onMore: { showingMore = true },
             onRead: { showingReader = true }, onCategory: { showingCategory = true },
             onSource: { showingSources = true },
