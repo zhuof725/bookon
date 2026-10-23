@@ -15,6 +15,7 @@ enum DiscoverTemplateIcon {
         case .covers: return "rectangle.split.3x1"
         case .rankRow: return "list.number"
         case .waterfall: return "rectangle.grid.2x2"
+        case .multiRank: return "list.number.rtl"
         case .curve: return "rectangle.on.rectangle.angled"
         case .deck: return "square.stack.3d.down.right"
         case .history: return "clock.arrow.circlepath"

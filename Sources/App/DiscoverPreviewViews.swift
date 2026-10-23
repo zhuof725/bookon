@@ -125,6 +125,30 @@ struct DiscoverTemplateThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
+    /// 瀑布缩略图里的单张卡：封面统一 3:4 + 书名（可选两行）+ 作者。
+    private func thumbnailCard(_ sample: DiscoverPreviewCatalog.Sample,
+                               unit: CGFloat,
+                               extraLine: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2 * unit) {
+            PreviewCoverArt(title: sample.title, corner: 3 * unit)
+                .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            Text(sample.title)
+                .font(.system(size: 5.4 * unit, weight: .semibold))
+                .foregroundStyle(palette.primary)
+                .lineLimit(1)
+            if extraLine {
+                Text(sample.title)
+                    .font(.system(size: 5.4 * unit, weight: .semibold))
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(1)
+            }
+            Text("作者")
+                .font(.system(size: 4.8 * unit))
+                .foregroundStyle(palette.secondary)
+                .lineLimit(1)
+        }
+    }
+
     @ViewBuilder private func content(unit: CGFloat) -> some View {
         // 所有尺寸乘 unit：从 104pt 宽的大预览到 78pt 的小格子都按比例缩
         let gap = 6 * unit
@@ -301,18 +325,57 @@ struct DiscoverTemplateThumbnail: View {
             }
 
         case .waterfall:
+            // 封面统一 3:4，错落来自文字行数（和正式视图一致）
             HStack(alignment: .top, spacing: gap) {
                 VStack(spacing: gap) {
-                    PreviewCoverArt(title: samples[0].title, corner: 4 * unit)
-                        .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                    PreviewCoverArt(title: samples[1].title, corner: 4 * unit)
-                        .aspectRatio(1, contentMode: .fit)
+                    thumbnailCard(samples[0], unit: unit, extraLine: true)
+                    thumbnailCard(samples[1], unit: unit, extraLine: false)
                 }
                 VStack(spacing: gap) {
-                    PreviewCoverArt(title: samples[2].title, corner: 4 * unit)
-                        .aspectRatio(1, contentMode: .fit)
-                    PreviewCoverArt(title: samples[3].title, corner: 4 * unit)
-                        .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                    thumbnailCard(samples[2], unit: unit, extraLine: true)
+                    thumbnailCard(samples[3], unit: unit, extraLine: false)
+                }
+            }
+
+        case .multiRank:
+            // 分类标签 + 三条竖排榜
+            VStack(alignment: .leading, spacing: 4 * unit) {
+                HStack(spacing: 3 * unit) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Text(["月票", "畅销", "阅读"][i])
+                            .font(.system(size: 5.4 * unit, weight: i == 0 ? .semibold : .regular))
+                            .foregroundStyle(i == 0 ? .white : palette.primary)
+                            .padding(.horizontal, 4 * unit)
+                            .frame(height: 9 * unit)
+                            .background {
+                                Capsule().fill(i == 0 ? palette.accent : palette.primary.opacity(0.08))
+                            }
+                    }
+                    Spacer(minLength: 0)
+                }
+                ForEach(0..<3, id: \.self) { i in
+                    HStack(spacing: 4 * unit) {
+                        PreviewCoverArt(title: samples[i].title, corner: 2 * unit)
+                            .frame(width: 12 * unit, height: 16 * unit)
+                        VStack(alignment: .leading, spacing: 1.5 * unit) {
+                            Text(samples[i].title)
+                                .font(.system(size: 6 * unit, weight: .semibold))
+                                .foregroundStyle(palette.primary)
+                                .lineLimit(1)
+                            Text("作者")
+                                .font(.system(size: 5 * unit))
+                                .foregroundStyle(palette.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Text("\(i + 1)")
+                            .font(.system(size: 5.5 * unit, weight: .bold))
+                            .foregroundStyle(i < 2 ? .white : palette.secondary)
+                            .frame(width: 10 * unit, height: 10 * unit)
+                            .background {
+                                RoundedRectangle(cornerRadius: 2.5 * unit)
+                                    .fill(i < 2 ? palette.accent : palette.primary.opacity(0.08))
+                            }
+                    }
                 }
             }
 

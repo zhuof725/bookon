@@ -172,8 +172,8 @@ enum CustomDiscoverRegression {
         check(DiscoverTemplateKind.allCases.map(\.rawValue)
               == ["largeCard", "compactCard", "curve", "deck", "history",
                   "threeColumn", "dualRow", "featureCard",
-                  "badgeGrid", "covers", "rankRow", "waterfall"],
-              "模板：十二个模板的稳定键与展示顺序")
+                  "badgeGrid", "covers", "rankRow", "waterfall", "multiRank"],
+              "模板：十三个模板的稳定键与展示顺序")
         check(DiscoverTemplateKind.allCases.map(\.rawValue).prefix(5)
               == ["largeCard", "compactCard", "curve", "deck", "history"],
               "模板：弧形走廊 / 卡片堆叠 / 继续阅读 在第 3、4、5 位")
@@ -233,6 +233,27 @@ enum CustomDiscoverRegression {
         check(DiscoverTemplate.isUnlimited(DiscoverTemplate.unlimited),
               "模板：isUnlimited 能识别不限数量")
         check(!DiscoverTemplate.isUnlimited(20), "模板：20 不是 unlimited")
+
+        // 12b. 多分类竖排榜：勾选的分类要能存进配置、读回来还在
+        let multiEntry = CustomDiscoverEntry(
+            sourceUrl: "https://multi.test", sourceName: "多分类源",
+            kindTitle: "月票榜单", kindUrl: "/yuepiao",
+            template: .multiRank, count: 20,
+            multiKinds: [MultiRankKind(title: "月票榜单", url: "/yuepiao"),
+                         MultiRankKind(title: "畅销榜单", url: "/hotsales"),
+                         MultiRankKind(title: "阅读榜单", url: "/readindex")])
+        let encoded = try JSONEncoder().encode(multiEntry)
+        let decodedEntry = try JSONDecoder().decode(CustomDiscoverEntry.self, from: encoded)
+        check(decodedEntry.template == .multiRank, "多分类：模板能往返")
+        check(decodedEntry.multiKinds.map(\.title) == ["月票榜单", "畅销榜单", "阅读榜单"],
+              "多分类：勾选的分类按顺序往返")
+        check(decodedEntry.multiKinds.map(\.url) == ["/yuepiao", "/hotsales", "/readindex"],
+              "多分类：分类地址往返")
+        // 老配置没有这个字段时不能崩
+        let legacyEntry = Data(#"{"sourceUrl":"u","kindUrl":"/a","template":"deck"}"#.utf8)
+        let legacyDecoded = try JSONDecoder().decode(CustomDiscoverEntry.self, from: legacyEntry)
+        check(legacyDecoded.multiKinds.isEmpty, "多分类：老配置缺字段回落空数组")
+        check(DiscoverTemplateKind.multiRank.dataSource == .bookList, "多分类：吃书籍列表")
 
         // 12c. 截断语义：「添加模板」预览页靠 count 控制数量，
         // 传进去的 cards 必须按 limit 截断，否则预览会一律铺满。

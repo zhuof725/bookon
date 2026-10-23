@@ -218,7 +218,9 @@ struct CustomDiscoverEditorPage: View {
                     scale: entry.scale,
                     corner: entry.corner,
                     showNumber: entry.showNumber,
-                    onSelectBook: { _ in }
+                    onSelectBook: { _ in },
+                    multiKinds: entry.multiKinds,
+                    source: store.source(for: entry.sourceUrl)
                 )
                 .allowsHitTesting(false)
             } else {

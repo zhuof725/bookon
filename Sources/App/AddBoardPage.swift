@@ -610,18 +610,37 @@ struct AddBoardPage: View {
             return
         }
         guard let source = selectedSource else { return }
-        let entries = selectableKinds
-            .filter { picked.contains($0.url ?? "") }
-            .map { item in
-                CustomDiscoverEntry(
-                    sourceUrl: source.bookSourceUrl,
-                    sourceName: source.bookSourceName,
-                    kindTitle: item.title,
-                    kindUrl: item.url ?? "",
-                    template: template,
-                    count: DiscoverTemplate.template(for: template).defaultCount
-                )
-            }
+        // 按勾选顺序取，而不是按书源原始顺序——用户先点哪个，标签就排在前面。
+        let chosen = selectableKinds.filter { picked.contains($0.url ?? "") }
+
+        // 多分类竖排榜：勾选的多个分类合成**一个**板块（标签页切换），
+        // 而不是每个分类各加一个板块。
+        if template == .multiRank {
+            guard let first = chosen.first else { return }
+            let entry = CustomDiscoverEntry(
+                sourceUrl: source.bookSourceUrl,
+                sourceName: source.bookSourceName,
+                kindTitle: first.title,
+                kindUrl: first.url ?? "",
+                template: .multiRank,
+                count: DiscoverTemplate.template(for: .multiRank).defaultCount,
+                multiKinds: chosen.map { MultiRankKind(title: $0.title, url: $0.url ?? "") }
+            )
+            onAdd([entry])
+            dismiss()
+            return
+        }
+
+        let entries = chosen.map { item in
+            CustomDiscoverEntry(
+                sourceUrl: source.bookSourceUrl,
+                sourceName: source.bookSourceName,
+                kindTitle: item.title,
+                kindUrl: item.url ?? "",
+                template: template,
+                count: DiscoverTemplate.template(for: template).defaultCount
+            )
+        }
         guard !entries.isEmpty else { return }
         onAdd(entries)
         dismiss()

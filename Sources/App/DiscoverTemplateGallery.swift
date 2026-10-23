@@ -53,34 +53,35 @@ struct DiscoverTemplateLibrary: View {
 
     private func section(_ template: DiscoverTemplate) -> some View {
         let picked = template.kind == current
-        return Button {
-            onPick(template.kind)
-            if dismissOnPick { dismiss() }
-        } label: {
-            VStack(spacing: 0) {
-                // 真身：与首页里那一块完全一致，标题留空（名字在下面居中显示）
-                DiscoverTemplateView(
-                    kind: template.kind,
-                    title: "",
-                    moreTitle: "",
-                    cards: previewCards(for: template.kind),
-                    history: historySamples,
-                    count: previewCount(for: template.kind)
-                )
-                .allowsHitTesting(false)
-                .padding(.top, 18)
+        return VStack(spacing: 0) {
+            // 真身：与首页里那一块完全一致，标题留空（名字在下面居中显示）。
+            // 注意不能用 allowsHitTesting(false)：那样预览里的横向滑动也会失效。
+            // 这里保留可交互，卡片自己的点按交给空回调（预览不跳转）。
+            DiscoverTemplateView(
+                kind: template.kind,
+                title: "",
+                moreTitle: "",
+                cards: previewCards(for: template.kind),
+                history: historySamples,
+                count: previewCount(for: template.kind)
+            )
+            .padding(.top, 18)
 
-                // 模板名：居中，选中时略加粗并用强调色
+            // 模板名：居中，选中时略加粗并用强调色。点它才是「选择这个模板」。
+            Button {
+                onPick(template.kind)
+                if dismissOnPick { dismiss() }
+            } label: {
                 Text(template.title)
                     .appFont(.system(size: 17, weight: picked ? .semibold : .regular))
                     .foregroundStyle(picked ? palette.accent : palette.primary)
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                     .padding(.top, 14)
                     .padding(.bottom, 26)
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("library.template.\(template.kind.rawValue)")
         .accessibilityLabel("\(template.title)，\(template.detail)")
     }
@@ -105,6 +106,8 @@ struct DiscoverTemplateLibrary: View {
         case .threeColumn: return 6
         case .rankRow: return 4
         case .waterfall: return 6
+        // 多分类竖排榜是整块视图，靠多分类数据渲染，数量由勾选的分类数决定
+        case .multiRank: return 6
         case .largeCard, .compactCard, .featureCard, .deck, .curve: return 6
         case .dualRow: return 12
         case .history: return 4

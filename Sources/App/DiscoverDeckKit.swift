@@ -535,6 +535,8 @@ struct DeckCarousel<Card: View>: View {
     var fanSpread: CGFloat = 0
     /// 当前居中的卡片下标（滑动时更新，用于底部书名与圆点）
     @Binding var index: Int?
+    /// 记住位置的键；nil 表示不记忆（预览里的临时轨道）
+    var positionKey: String?
     @ViewBuilder var card: (Int) -> Card
 
     var body: some View {
@@ -577,6 +579,17 @@ struct DeckCarousel<Card: View>: View {
             .scrollBounceBehavior(.basedOnSize)
             .contentMargins(.horizontal, side, for: .scrollContent)
             .scrollPosition(id: $index)
+            // 恢复到上次停留的位置：板块重建、切页面、重启都不会跳回第一张。
+            .task {
+                guard let positionKey, let saved = DeckPositionStore.shared.position(for: positionKey) else { return }
+                // 数据可能变短了（书源更新、数量改了），越界就退回最后一张
+                let target = min(max(saved, 0), max(count - 1, 0))
+                index = target
+            }
+            .onChange(of: index) { _, newValue in
+                guard let positionKey, let newValue else { return }
+                DeckPositionStore.shared.set(newValue, for: positionKey)
+            }
             .frame(height: stageHeight)
         }
         .frame(height: stageHeight)
@@ -594,6 +607,9 @@ struct DiscoverCurveSection: View {
     let items: [DeckItem]
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
+
+    /// 记住滑动位置的键（预览里可以不传）
+    var positionKey: String? = nil
 
     @State private var index: Int? = 0
 
@@ -621,7 +637,8 @@ struct DiscoverCurveSection: View {
                          scaleFloor: 0.78,
                          yDrift: 11,
                          opacityFloor: 0.45,
-                         index: $index) { itemIndex in
+                         index: $index,
+                         positionKey: positionKey) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
                          showCaption: false,
@@ -694,6 +711,9 @@ struct DiscoverDeckSection: View {
     var onMore: (() -> Void)? = nil
     var onSelect: (DeckItem, Int) -> Void = { _, _ in }
 
+    /// 记住滑动位置的键（预览里可以不传）
+    var positionKey: String? = nil
+
     @State private var index: Int? = 0
 
     private let cardWidth: CGFloat = 124
@@ -723,7 +743,8 @@ struct DiscoverDeckSection: View {
                          scaleFloor: 0.86,
                          yDrift: 0,
                          opacityFloor: 0.62,
-                         index: $index) { itemIndex in
+                         index: $index,
+                         positionKey: positionKey) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
                          showCaption: false,
@@ -982,6 +1003,13 @@ struct DiscoverTemplateView: View {
     var onMore: (() -> Void)? = nil
     var onSelectBook: (Book) -> Void = { _ in }
     var onSelectHistory: (HistoryItem) -> Void = { _ in }
+    /// 板块身份（书源 + 分类）：卡片类模板靠它记住滑到第几张。
+    /// 预览等临时场景不传，就不记忆。
+    var identity: DeckIdentity? = nil
+    /// 多分类竖排榜勾选的分类
+    var multiKinds: [MultiRankKind] = []
+    /// 多分类竖排榜要用哪个书源拉数据
+    var source: BookSource? = nil
 
     private var limit: Int {
         DiscoverTemplate.template(for: kind).clampedCount(count)
@@ -1090,7 +1118,8 @@ struct DiscoverTemplateView: View {
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }
-                }
+                },
+                positionKey: identity?.key(for: .curve)
             )
         case .deck:
             DiscoverDeckSection(
@@ -1100,8 +1129,30 @@ struct DiscoverTemplateView: View {
                 onMore: onMore,
                 onSelect: { _, index in
                     if books.indices.contains(index) { onSelectBook(books[index]) }
-                }
+                },
+                positionKey: identity?.key(for: .deck)
             )
+        case .multiRank:
+            if let source, !multiKinds.isEmpty {
+                DiscoverMultiRankSection(
+                    title: title,
+                    moreTitle: moreTitle,
+                    kinds: multiKinds,
+                    source: source,
+                    onMore: onMore,
+                    onSelect: { item, _ in
+                        if let book = books.first(where: { $0.bookUrl == item.id }) {
+                            onSelectBook(book)
+                        }
+                    }
+                )
+            } else {
+                // 预览或配置不全时给一句说明，不要空白
+                Text(multiKinds.isEmpty ? "多分类竖排榜需要先选择分类" : "书源不可用")
+                    .appFont(.system(size: 12))
+                    .foregroundStyle(palette.secondary)
+                    .padding(.horizontal, 20)
+            }
         case .history:
             DiscoverHistorySection(
                 title: title,

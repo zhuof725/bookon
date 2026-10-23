@@ -37,6 +37,8 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
     case rankRow
     /// 错位瀑布流：双列不等高。
     case waterfall
+    /// 多分类竖排榜：一排可切换的分类标签，下面是该分类的竖排榜单。
+    case multiRank
 
     var id: String { rawValue }
 
@@ -52,6 +54,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .covers: return "横滑封面"
         case .rankRow: return "竖排榜单"
         case .waterfall: return "错位瀑布"
+        case .multiRank: return "多分类竖排榜"
         case .curve: return "弧形走廊"
         case .deck: return "卡片堆叠"
         case .history: return "继续阅读"
@@ -69,6 +72,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .covers: return "一行大封面左右滑动"
         case .rankRow: return "大号斜体排名 + 小封面"
         case .waterfall: return "双列不等高，大小卡错落排下去"
+        case .multiRank: return "一排分类标签，切一下就换一份榜单"
         case .curve: return "卡片沿弧线排开，中间最大最亮"
         case .deck: return "中央卡在前完整显示，两侧向后压暗"
         case .history: return "大图铺满 + 进度条 + 最后阅读时间"
@@ -97,7 +101,7 @@ enum DiscoverTemplateKind: String, Codable, CaseIterable, Identifiable {
         case .largeCard, .compactCard, .threeColumn, .dualRow,
              .featureCard:
             return .layout
-        case .badgeGrid, .covers, .rankRow, .waterfall, .curve, .deck:
+        case .badgeGrid, .covers, .rankRow, .waterfall, .multiRank, .curve, .deck:
             return .visual
         case .history:
             return .record
@@ -216,6 +220,8 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
     var corner: Double
     /// 大封面序号角标是否显示
     var showNumber: Bool
+    /// 「多分类竖排榜」勾选的分类（按勾选顺序）。其它模板为空。
+    var multiKinds: [MultiRankKind]
 
     var id: String { Self.makeID(sourceUrl: sourceUrl, kindUrl: kindUrl) }
 
@@ -227,7 +233,8 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
          count: Int = DiscoverTemplate.countCeiling,
          scale: Double = 1,
          corner: Double = 8,
-         showNumber: Bool = true) {
+         showNumber: Bool = true,
+         multiKinds: [MultiRankKind] = []) {
         self.sourceUrl = sourceUrl
         self.sourceName = sourceName
         self.kindTitle = kindTitle
@@ -237,10 +244,12 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         self.scale = scale
         self.corner = corner
         self.showNumber = showNumber
+        self.multiKinds = multiKinds
     }
 
     enum CodingKeys: String, CodingKey {
         case sourceUrl, sourceName, kindTitle, kindUrl, template, count, scale, corner, showNumber
+        case multiKinds
     }
 
     init(from decoder: Decoder) throws {
@@ -257,6 +266,7 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         let r = (try? c.decodeIfPresent(Double.self, forKey: .corner)) ?? 8
         corner = r.isFinite ? min(max(r, 0), 20) : 8
         showNumber = (try? c.decodeIfPresent(Bool.self, forKey: .showNumber)) ?? true
+        multiKinds = (try? c.decodeIfPresent([MultiRankKind].self, forKey: .multiKinds)) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -270,6 +280,8 @@ struct CustomDiscoverEntry: Codable, Hashable, Identifiable {
         try c.encode(scale, forKey: .scale)
         try c.encode(corner, forKey: .corner)
         try c.encode(showNumber, forKey: .showNumber)
+        // 只有多分类竖排榜需要，空的就不写，老配置不会被塞字段
+        if !multiKinds.isEmpty { try c.encode(multiKinds, forKey: .multiKinds) }
     }
 
     /// 书源 + 分类决定唯一性（同一分类重复添加只保留第一次那条）。

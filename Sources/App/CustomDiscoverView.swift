@@ -256,7 +256,13 @@ struct CustomDiscoverView: View {
                 corner: section.entry.corner,
                 showNumber: section.entry.showNumber,
                 onMore: { fullPage = section.entry },
-                onSelectBook: { book in selectedBook = book }
+                onSelectBook: { book in selectedBook = book },
+                // 卡片类模板靠它记住滑到第几张
+                identity: DeckIdentity(sourceUrl: section.entry.sourceUrl,
+                                       kindUrl: section.entry.kindUrl),
+                // 多分类竖排榜：勾选的分类 + 拉数据用的书源
+                multiKinds: section.entry.multiKinds,
+                source: store.source(for: section.entry.sourceUrl)
             )
             .task { await model.load(section) }
         }
@@ -386,7 +392,9 @@ struct CustomDiscoverFullPage: View {
                 scale: entry.scale,
                 corner: entry.corner,
                 showNumber: entry.showNumber,
-                onSelectBook: { selectedBook = $0 }
+                onSelectBook: { selectedBook = $0 },
+                multiKinds: entry.multiKinds,
+                source: store.source(for: entry.sourceUrl)
             )
             .padding(.top, 8)
 

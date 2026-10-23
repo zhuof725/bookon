@@ -102,3 +102,13 @@ extension HistoryItem {
         }
     }
 }
+
+/// 「多分类竖排榜」里的一个分类：标题 + 发现地址。
+///
+/// 放在 Engine 层是因为它要被写进配置（`CustomDiscoverEntry`），
+/// 而配置的编解码在 Engine，回归测试也要能编译到它。
+struct MultiRankKind: Codable, Hashable, Identifiable {
+    var title: String
+    var url: String
+    var id: String { url }
+}
