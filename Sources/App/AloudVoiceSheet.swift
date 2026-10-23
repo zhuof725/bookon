@@ -13,20 +13,16 @@ struct AloudVoiceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var voices: [AloudVoiceConfig.Option] = []
     @State private var showEngineManager = false
+    @State private var toneSources: [BookSource] = []
+    @State private var toneSummaries: [String: String] = [:]
 
     private var selectedEngineID: String { AloudTTSConfig.selectedEngineID }
     private var isSystem: Bool {
         selectedEngineID.isEmpty || selectedEngineID == "0" || AloudTTSConfig.selectedEngine == nil
     }
 
-    /// 带音色表的书源（例如番茄源的 jsLib 里有 _getTones）。
-    private var toneSources: [BookSource] {
-        store.sources.filter { ($0.jsLib ?? "").contains("_getTones") }
-    }
-
     private func toneLabel(_ source: BookSource) -> String {
-        let current = SourceTone.current(source: source)
-        return current.name.isEmpty ? "默认音色" : current.name
+        toneSummaries[source.bookSourceUrl] ?? "默认音色"
     }
 
     var body: some View {
@@ -88,7 +84,7 @@ struct AloudVoiceSheet: View {
                 } header: {
                     Text("书源音色")
                 } footer: {
-                    Text("书源自带的朗读音色（如番茄源的几十个 tone）。这些音色只在该书源的有声书里生效。")
+                    Text("书源自带的朗读音色（番茄源的 _getTones、书山聚合这类源的 xxxTones 都能识别）。这些音色只在该书源的有声书里生效。")
                 }
 
                 Section {
@@ -133,7 +129,23 @@ struct AloudVoiceSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear { voices = AloudVoiceConfig.chineseVoices() }
+        .task { await loadToneSources() }
         .sheet(isPresented: $showEngineManager) { SpeakEngineList(aloud: aloud) }
+    }
+
+    /// 找出所有带音色表的书源（要扫脚本，放到后台做）。
+    private func loadToneSources() async {
+        let sources = store.sources
+        let result = await Task.detached { () -> ([BookSource], [String: String]) in
+            let matched = sources.filter { SourceTone.hasTones(source: $0) }
+            var summaries: [String: String] = [:]
+            for source in matched {
+                summaries[source.bookSourceUrl] = SourceTone.summary(source: source)
+            }
+            return (matched, summaries)
+        }.value
+        toneSources = result.0
+        toneSummaries = result.1
     }
 
     private func engineRow(title: String, detail: String, selected: Bool, id: String,

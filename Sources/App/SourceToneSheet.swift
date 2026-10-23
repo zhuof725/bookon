@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// 书源音色列表：音色来自书源自己（例如番茄源 jsLib `_getTones()`）。
+/// 书源音色列表：音色来自书源自己。
 ///
-/// 既用在有声书播放器的「音色」面板，也嵌在朗读播放器的音色面板里（列出所有
-/// 带音色表的书源）。书源没有这套约定时只显示当前音色 + 「打开书源设置」。
+/// - 函数式（番茄源）：jsLib `_getTones()` + `setVoice(n)`。
+/// - 声明式（书山聚合这类）：脚本里 `xxxTones = [{id,name}, …]`，写配置 `xxx_tts_tone`。
+///
+/// 既用在有声书播放器的「音色」面板，也嵌在朗读播放器的音色面板里。
 struct SourceToneList: View {
     let source: BookSource
     /// 换音色后的回调（有声书播放器用来重新取本章音频）。
     var onApplied: (() -> Void)? = nil
 
     @ThemePalette private var palette
-    @State private var tones: [SourceTone.Item] = []
-    @State private var currentName = ""
-    @State private var currentValue = ""
+    @State private var groups: [SourceTone.Group] = []
+    @State private var summary = ""
     @State private var loading = true
     @State private var applying = false
     @State private var message: String?
@@ -21,40 +22,42 @@ struct SourceToneList: View {
     var body: some View {
         List {
             Section {
-                HStack(spacing: 10) {
-                    Text(currentName.isEmpty ? "默认音色" : currentName)
-                        .appFont(.body)
-                        .lineLimit(2)
-                    Spacer(minLength: 8)
-                    if !currentValue.isEmpty {
-                        Text(currentValue)
-                            .appFont(.caption).foregroundStyle(palette.secondary)
-                    }
-                }
-                .accessibilityIdentifier("tone.current")
+                Text(summary.isEmpty ? "默认音色" : summary)
+                    .appFont(.body)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("tone.current")
             } header: {
                 Text("当前音色")
             }
 
-            Section {
-                if loading {
+            if loading {
+                Section {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("正在读取书源音色…").appFont(.footnote).foregroundStyle(palette.secondary)
                     }
-                } else if tones.isEmpty {
+                }
+            } else if groups.isEmpty {
+                Section {
                     Text("这个书源没有提供音色列表。\n可以打开「书源设置」切换朗读音色，切完重新进入本章。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
-                } else {
-                    ForEach(tones) { tone in
-                        toneRow(tone)
+                }
+            } else {
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(group.tones) { tone in
+                            toneRow(tone, group: group)
+                        }
+                    } header: {
+                        Text(group.title)
                     }
                 }
-            } header: {
-                Text("可选音色")
-            } footer: {
-                if !tones.isEmpty {
+            }
+
+            if !groups.isEmpty {
+                Section {
                     Text("音色由书源提供；有声书切换后会重新加载本章音频。")
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
                 }
             }
 
@@ -86,10 +89,10 @@ struct SourceToneList: View {
         }
     }
 
-    private func toneRow(_ tone: SourceTone.Item) -> some View {
-        let selected = tone.value == currentValue
+    private func toneRow(_ tone: SourceTone.Item, group: SourceTone.Group) -> some View {
+        let selected = !tone.value.isEmpty && tone.value == group.currentValue
         return Button {
-            apply(tone)
+            apply(tone, group: group)
         } label: {
             HStack(spacing: 10) {
                 Text(tone.name).appFont(.body)
@@ -102,41 +105,42 @@ struct SourceToneList: View {
         }
         .buttonStyle(.plain)
         .disabled(applying)
-        .accessibilityIdentifier("tone.option.\(tone.index)")
+        .accessibilityIdentifier("tone.option.\(group.id).\(tone.index)")
     }
 
     private func load() async {
         let src = source
-        let result = await Task.detached { () -> (tones: [SourceTone.Item], name: String, value: String) in
-            let tones = SourceTone.tones(source: src)
-            let current = SourceTone.current(source: src)
-            return (tones, current.name, current.value)
+        let result = await Task.detached { () -> ([SourceTone.Group], String) in
+            (SourceTone.groups(source: src), SourceTone.summary(source: src))
         }.value
-        tones = result.tones
-        currentName = result.name
-        currentValue = result.value
+        groups = result.0
+        summary = result.1
         loading = false
     }
 
-    private func apply(_ tone: SourceTone.Item) {
+    private func apply(_ tone: SourceTone.Item, group: SourceTone.Group) {
         let src = source
         applying = true
         message = nil
         Task {
-            let ok = await Task.detached { SourceTone.apply(tone, source: src) }.value
+            let ok = await Task.detached { SourceTone.apply(tone, in: group, source: src) }.value
             applying = false
             guard ok else {
                 message = "切换失败：书源脚本没有接受这个音色"
                 return
             }
-            currentName = tone.name
-            currentValue = tone.value
+            groups = groups.map { item in
+                guard item.id == group.id else { return item }
+                return SourceTone.Group(id: item.id, title: item.title, kind: item.kind,
+                                        tones: item.tones, currentValue: tone.value)
+            }
+            summary = SourceTone.summary(source: source)
             onApplied?()
         }
     }
 }
 
-/// 有声书的「音色」面板：包一层导航栏，读完自动关闭。
+/// 有声书的「音色」面板：包一层导航栏，选完自动关闭。
 struct SourceToneSheet: View {
     let source: BookSource
     var onApplied: () -> Void
