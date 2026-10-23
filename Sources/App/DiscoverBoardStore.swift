@@ -84,6 +84,8 @@ final class DiscoverBoardStore: ObservableObject {
     static let shared = DiscoverBoardStore()
 
     @Published private(set) var sections: [DiscoverSectionModel] = []
+    /// 刷新代号：每次下拉刷新加一，旧请求回来后据此丢弃结果。
+    private var refreshToken: Int = 0
     @Published private(set) var historyItems: [HistoryItem] = []
     @Published private(set) var config = CustomDiscoverConfig()
 
@@ -347,9 +349,17 @@ final class DiscoverBoardStore: ObservableObject {
 
         loadingIDs.insert(model.id)
         model.beginLoading()
+        let token = refreshToken
         await BlockRequestGate.shared.acquire()
         do {
             let list = try await SourceDiagnostics.explore(source: source, url: model.entry.kindUrl)
+            // 请求期间用户又下拉刷新了一次：这次结果已经过期，不能盖掉新的一轮
+            guard token == refreshToken else {
+                model.endLoadingWithoutResult()
+                await BlockRequestGate.shared.release()
+                loadingIDs.remove(model.id)
+                return
+            }
             model.setBooks(list)
             DiscoverBlockCache.store(source: model.entry.sourceUrl,
                                      url: model.entry.kindUrl,
@@ -384,19 +394,30 @@ final class DiscoverBoardStore: ObservableObject {
     }
 
     /// 下拉刷新：清缓存后重拉当前分类可见板块。
+    ///
+    /// 三个「转了圈但没动」的坑，这里逐个堵上：
+    ///  1. `loadingIDs` 里还挂着上一轮的请求（滚动时触发的），force 会在 load() 开头
+    ///     被直接挡回来 → 先清空，并让旧请求回来后自动失效；
+    ///  2. 书源发现脚本里 `java.refreshExplore()` 代表「配置变了、分类要重读」，
+    ///     分类缓存必须一起清，否则刷新拿到的还是旧分类；
+    ///  3. 板块的书单缓存清了，但轮播是单独存的，也要重拉。
     func refresh(category: String? = nil) async {
         DiscoverBlockCache.clear()
         DiscoverKindsCache.clear()
         chapterCountCache.removeAll()
-        revision &+= 1
         refreshHistoryIfNeeded(force: true)
         // 上一轮可能还有请求在飞（比如刚滚过一圈），不清掉的话
         // force 刷新会在 load() 开头被 loadingIDs 直接挡回来，看起来像「刷新没用」。
         loadingIDs.removeAll()
+        // 每次刷新换一个代号：旧请求回来时发现代号变了就不再写回界面，
+        // 避免「刷完了又被上一轮的旧数据盖回去」。
+        refreshToken &+= 1
+        revision &+= 1
         let list = category.flatMap { sectionsByCategory[$0] } ?? sections
         for model in list {
             await load(model, force: true)
         }
+        await loadCarousel(force: true)
     }
 
     // MARK: 编辑页预览

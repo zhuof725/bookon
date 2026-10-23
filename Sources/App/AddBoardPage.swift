@@ -28,6 +28,8 @@ struct AddBoardPage: View {
     /// 书源自己的筛选控件（性别 / 模式 / 源站 / 晋江标签…）与当前值
     @State private var controls = SourceControlSet()
     @State private var applyingControl = false
+    /// 改筛选后的说明（书源没跟着变时给一句提示）
+    @State private var controlNote: String?
     @State private var showLogin = false
     @State private var searchRequest: SourceSearchRequest?
 
@@ -230,6 +232,14 @@ struct AddBoardPage: View {
                         .fill(palette.primary.opacity(0.028))
                 }
                 .disabled(applyingControl)
+
+                if let controlNote {
+                    Text(controlNote)
+                        .appFont(.system(size: 11.5))
+                        .foregroundStyle(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 2)
+                }
             }
         }
     }
@@ -267,6 +277,7 @@ struct AddBoardPage: View {
         guard let source = selectedSource, !applyingControl else { return }
         controls.values[control.title] = value
         applyingControl = true
+        let previousKinds = kinds
         // 闭包里只带值类型，别把整个 View 拖进 detached 任务
         let snapshot = controls.values
         Task {
@@ -275,6 +286,13 @@ struct AddBoardPage: View {
             }.value
             if let ui { handle(ui) }
             await loadKinds(force: true, keepSelection: true)
+            // 书源脚本有可能忽略这次改动（例如书山聚合只按「源站」切分类，
+            // 单独改「模式」不会换分类）。分类一条没变时说清楚，别让人以为没生效。
+            if kinds == previousKinds {
+                controlNote = "「\(DiscoverCatalog.controlTitle(control.title))」已记为 \(value)，但这个书源的分类没有因此变化——它的脚本可能只在某些组合下才换分类。"
+            } else {
+                controlNote = nil
+            }
             applyingControl = false
         }
     }

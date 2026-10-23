@@ -509,6 +509,13 @@ struct DeckCarousel<Card: View>: View {
     var yDrift: CGFloat = 0
     /// 偏离中心时淡到的不透明度
     var opacityFloor: Double = 0.42
+    /// 叠牌模式：卡片绕**底边**旋转、并向两侧散开，像手里捏着一叠牌摊开；
+    /// 关闭时绕中心旋转，是一条平直的卡片带（弧形走廊用）。
+    var fanOut: Bool = false
+    /// 叠牌模式下的最大错位（pt），每偏离一格增加这么多
+    var fanSpread: CGFloat = 0
+    /// 弧形走廊的平面倾斜角（度）：两侧卡片立起来一点，弧线感更强
+    var arcTilt: Double = 0
     /// 当前居中的卡片下标（滑动时更新，用于底部书名与圆点）
     @Binding var index: Int?
     @ViewBuilder var card: (Int) -> Card
@@ -531,12 +538,19 @@ struct DeckCarousel<Card: View>: View {
                                 // 只有 transform 类（rotation3DEffect / scaleEffect / opacity /
                                 // offset(y:) 属于 geometryEffect 可用）。层级靠外面的静态值排。
                                 return content
+                                    // 两种模板的转法不一样：
+                                    //  · 叠牌：绕底边做 3D 翻转，像把牌扇开
+                                    //  · 弧形走廊：绕竖轴轻微转一个角度 + 沿弧线下沉，
+                                    //    看着像卡片贴在一条弯道上
                                     .rotation3DEffect(.degrees(Double(-phase.value) * flipDegrees),
-                                                      axis: (x: 0, y: 1, z: 0),
-                                                      anchor: .center,
-                                                      perspective: 0.55)
+                                                      axis: fanOut ? (x: 0, y: 1, z: 0) : (x: 0.25, y: 1, z: 0),
+                                                      anchor: fanOut ? .bottom : .center,
+                                                      perspective: fanOut ? 0.8 : 0.35)
+                                    .rotationEffect(.degrees(fanOut ? 0 : Double(phase.value) * arcTilt))
                                     .scaleEffect(1 - (1 - scaleFloor) * depth)
-                                    .offset(y: yDrift * depth)
+                                    // 叠牌还有额外的一层横向散开
+                                    .offset(x: fanOut ? phase.value * fanSpread : 0,
+                                            y: yDrift * depth)
                                     .opacity(1 - (1 - opacityFloor) * depth)
                             }
                             .frame(width: step, height: stageHeight)
@@ -594,10 +608,12 @@ struct DiscoverCurveSection: View {
                          cardWidth: cardWidth,
                          step: step,
                          stageHeight: stageHeight,
-                         flipDegrees: 58,
-                         scaleFloor: 0.78,
-                         yDrift: 11,
+                         flipDegrees: 52,
+                         scaleFloor: 0.80,
+                         yDrift: 12,
                          opacityFloor: 0.45,
+                         // 弧形走廊：绕竖轴轻转 + 沿弧线下沉，保持「一条弯道」
+                         arcTilt: 7,
                          index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
@@ -693,10 +709,13 @@ struct DiscoverDeckSection: View {
                          cardWidth: cardWidth,
                          step: step,
                          stageHeight: stageHeight,
-                         flipDegrees: 66,
-                         scaleFloor: 0.72,
+                         flipDegrees: 74,
+                         scaleFloor: 0.70,
                          yDrift: 0,
-                         opacityFloor: 0.38,
+                         opacityFloor: 0.36,
+                         // 卡片堆叠：绕底边转、向两侧摊开，像一叠牌
+                         fanOut: true,
+                         fanSpread: 26,
                          index: $index) { itemIndex in
                 let item = items[itemIndex]
                 DeckCard(radius: 10,
