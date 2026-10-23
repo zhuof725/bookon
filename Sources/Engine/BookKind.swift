@@ -39,12 +39,21 @@ enum BookKind: String, CaseIterable {
     // MARK: - Yuedu 式多信号推断
 
     /// 书本身/书源里能直接读出来的模式（不需要联网、也不用抓正文）。
-    static func infer(source: BookSource?, book: Book?) -> BookKind? {
+    ///
+    /// - Parameter sourceVariables: `source.getVariable()` 的原始字符串。
+    ///   聚合源（如「小六项目番茄书源」）把当前模式存在这里（`type: "漫画模式"`），
+    ///   一本书自己的地址里没有任何标记，只能看源变量。
+    static func infer(source: BookSource?, book: Book?, sourceVariables: String? = nil) -> BookKind? {
         if let declared = from(sourceType: source?.bookSourceType), declared != .text {
             return declared
         }
         for url in [book?.bookUrl, book?.tocUrl].compactMap({ $0 }) {
             if let kind = kind(fromURL: url) { return kind }
+        }
+        // 源变量里的模式：「漫画模式 / 听书模式」是用户明确选的，直接采信；
+        // 「小说模式」不强制（同一书源里也可能有漫画书），交给后面的判断。
+        if let runtime = kind(fromRuntimeVariables: sourceVariables), runtime != .text {
+            return runtime
         }
         let texts = [book?.kind, book?.originName, source?.bookSourceName,
                      book?.intro, book?.lastChapter].compactMap { $0 }
@@ -52,6 +61,62 @@ enum BookKind: String, CaseIterable {
             if let kind = kind(fromMetadataText: text) { return kind }
         }
         return nil
+    }
+
+    /// 解析源变量 JSON：`type/tab/media/mode/contentType/find_tab` 等键。
+    static func kind(fromRuntimeVariables raw: String?) -> BookKind? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        return kind(fromRuntimeObject: object, depth: 0)
+    }
+
+    private static func kind(fromRuntimeObject object: Any, depth: Int) -> BookKind? {
+        guard depth < 3 else { return nil }
+        if let dictionary = object as? [String: Any] {
+            for (key, value) in dictionary {
+                let normalizedKey = key.lowercased()
+                    .replacingOccurrences(of: "_", with: "")
+                    .replacingOccurrences(of: "-", with: "")
+                let isKindKey = ["tab", "type", "media", "mode", "category",
+                                 "findtab", "booktype", "contenttype"].contains(normalizedKey)
+                if isKindKey, let kind = kind(fromModeText: value) { return kind }
+                if let kind = kind(fromRuntimeObject: value, depth: depth + 1) { return kind }
+            }
+        } else if let array = object as? [Any] {
+            for value in array {
+                if let kind = kind(fromRuntimeObject: value, depth: depth + 1) { return kind }
+            }
+        }
+        return nil
+    }
+
+    /// 「漫画模式」「听书模式」「小说模式」这类取值：短字符串按包含判断，
+    /// 否则按数字/等值类型名。
+    static func kind(fromModeText value: Any?) -> BookKind? {
+        guard let value else { return nil }
+        if let intValue = value as? Int { return kind(fromTypeNumber: intValue) }
+        if let doubleValue = value as? Double { return kind(fromTypeNumber: Int(doubleValue)) }
+        let text = String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.count <= 16 else { return nil }
+        let normalized = text.lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        if normalized.contains("漫画") || normalized.contains("漫畫")
+            || normalized.contains("comic") || normalized.contains("manga") {
+            return .image
+        }
+        if normalized.contains("听书") || normalized.contains("聽書")
+            || normalized.contains("有声") || normalized.contains("有聲")
+            || normalized.contains("audio") {
+            return .audio
+        }
+        if normalized.contains("小说") || normalized.contains("小說")
+            || normalized.contains("novel") {
+            return .text
+        }
+        return kind(fromStructuredValue: normalized)
     }
 
     /// 地址里的模式标记：查询参数 `tab/type/media/mode/category`，

@@ -50,7 +50,8 @@ struct BookDetailView: View {
             return
         }
         // 书上/地址里自带的类型标记（聚合源把 tab=漫画 编在书地址里），不用联网。
-        if let inferred = BookKind.infer(source: source, book: book) {
+        if let inferred = BookKind.infer(source: source, book: book,
+                                         sourceVariables: SourceVariable.get(source.bookSourceUrl)) {
             BookKindStore.save(inferred, bookUrl: book.bookUrl)
             detectedKind = inferred
             return

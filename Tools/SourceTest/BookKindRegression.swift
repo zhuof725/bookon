@@ -76,6 +76,20 @@ enum BookKindRegression {
         check(BookKind.infer(source: textSource, book: aggBook) == nil, "没有信号时不硬猜")
         check(BookKind.infer(source: comicSource, book: aggBook) == nil, "书源名不参与 infer（交给 guess）")
 
+        // 聚合源把当前模式存在源变量里（小六项目番茄书源：type=漫画模式）。
+        check(BookKind.kind(fromRuntimeVariables: #"{"type":"漫画模式","module":"8"}"#) == .image,
+              "源变量 type=漫画模式")
+        check(BookKind.kind(fromRuntimeVariables: #"{"type":"听书模式"}"#) == .audio, "源变量 type=听书模式")
+        check(BookKind.kind(fromRuntimeVariables: #"{"type":"小说模式","module":"3"}"#) == .text,
+              "源变量 type=小说模式")
+        check(BookKind.kind(fromRuntimeVariables: #"{"more":{"tab":2}}"#) == .image, "源变量嵌套 tab=2")
+        check(BookKind.kind(fromRuntimeVariables: "不是 JSON") == nil, "源变量不是 JSON 时不猜")
+        var plainBook = Book(bookUrl: "data:;base64,MTIzNDU2Nzg5,{}", name: "测试", origin: "小六")
+        check(BookKind.infer(source: textSource, book: plainBook,
+                             sourceVariables: #"{"type":"漫画模式"}"#) == .image, "源变量能让无标记的书判成漫画")
+        check(BookKind.infer(source: textSource, book: plainBook,
+                             sourceVariables: #"{"type":"小说模式"}"#) == nil, "小说模式不强制（继续看正文）")
+
         // 每本书的识别结果缓存。
         let suite = "book-kind-test-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!

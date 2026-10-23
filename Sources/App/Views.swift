@@ -1019,7 +1019,8 @@ struct ReaderView: View {
             return false
         }
         // 书上/地址里自带的类型标记（聚合源把 tab=漫画 编在书地址里）。
-        if let inferred = BookKind.infer(source: source, book: book) {
+        if let inferred = BookKind.infer(source: source, book: book,
+                                         sourceVariables: SourceVariable.get(source.bookSourceUrl)) {
             BookKindStore.save(inferred, bookUrl: book.bookUrl)
             mangaMode = inferred == .image
             if mangaMode { return false }
