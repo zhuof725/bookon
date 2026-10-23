@@ -486,7 +486,7 @@ struct AudioChapterView: View {
             // 播放状态/进度单独成视图：时间每 0.5 秒刷新，只重绘这一块，
             // 不再整页（封面、标题、底栏）跟着重排，拖进度条也就不会卡。
             AudioControlsPanel(audio: audio, positionLabel: positionLabel,
-                               onPrevious: onPrevious, onNext: onNext)
+                               onPrevious: onPrevious, onNext: onNext, onTOC: onTOC)
             Spacer(minLength: 6)
             Rectangle().fill(palette.border).frame(height: 0.5)
             bottomBar
@@ -537,13 +537,94 @@ struct AudioChapterView: View {
         .padding(.top, 10)
     }
 
+    // MARK: 底栏（目录 / 倍速 / 定时 / 设置）
 
-/// 播放状态 + 进度 + 控制键。单独成视图，时间刷新只重绘这一块。
+    // MARK: 底栏
+
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            bottomItem(title: "目录", symbol: "list.bullet.rectangle",
+                       id: "reader.audio.toc") { onTOC() }
+            Menu { speedMenuItems } label: {
+                bottomLabel(title: speedText(audio.speed), symbol: "speedometer")
+            }
+            .accessibilityLabel("倍速")
+            .accessibilityIdentifier("reader.audio.speed")
+            Menu { timerMenuItems } label: {
+                bottomLabel(title: timerTitle, symbol: "stopwatch")
+            }
+            .accessibilityLabel("定时")
+            .accessibilityIdentifier("reader.audio.timer")
+            bottomItem(title: "设置", symbol: "gearshape",
+                       id: "reader.audio.settings") { onSettings() }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func bottomItem(title: String, symbol: String, id: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) { bottomLabel(title: title, symbol: symbol) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityIdentifier(id)
+    }
+
+    private func bottomLabel(title: String, symbol: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 22))
+            Text(title).appFont(.caption)
+        }
+        .foregroundStyle(palette.primary)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    private var timerTitle: String {
+        audio.sleepMinutesLeft > 0 ? "\(audio.sleepMinutesLeft)分钟" : "定时"
+    }
+
+    @ViewBuilder
+    private var speedMenuItems: some View {
+        ForEach(speedPresets.indices, id: \.self) { i in
+            Button {
+                audio.speed = speedPresets[i]
+            } label: {
+                if abs(audio.speed - speedPresets[i]) < 0.01 {
+                    Label(speedText(speedPresets[i]), systemImage: "checkmark")
+                } else {
+                    Text(speedText(speedPresets[i]))
+                }
+            }
+            .accessibilityIdentifier("reader.audio.speed.\(speedText(speedPresets[i]))")
+        }
+    }
+
+    @ViewBuilder
+    private var timerMenuItems: some View {
+        ForEach(timerPresets, id: \.self) { minutes in
+            if minutes == 0 {
+                Button("关闭定时") { audio.setSleepTimer(minutes: 0) }
+                    .accessibilityIdentifier("reader.audio.timer.0")
+            } else {
+                Button("\(minutes) 分钟") { audio.setSleepTimer(minutes: minutes) }
+                    .accessibilityIdentifier("reader.audio.timer.\(minutes)")
+            }
+        }
+    }
+
+    private func speedText(_ value: Double) -> String {
+        if value == value.rounded() { return String(format: "%.1fx", value) }
+        return String(format: "%gx", value)
+    }
+}
+
 struct AudioControlsPanel: View {
     @ObservedObject var audio: BookAudioPlayer
     let positionLabel: String
     let onPrevious: () -> Void
     let onNext: () -> Void
+    let onTOC: () -> Void
 
     @ThemePalette private var palette
     @State private var scrub: Double?
@@ -660,88 +741,5 @@ struct AudioControlsPanel: View {
         .buttonStyle(.plain)
         .accessibilityLabel(audio.isPlaying ? "暂停" : "播放")
         .accessibilityIdentifier("reader.audio.play")
-    }
-
-        }
-    }
-}
-
-    // MARK: 底栏
-
-    private var bottomBar: some View {
-        HStack(spacing: 0) {
-            bottomItem(title: "目录", symbol: "list.bullet.rectangle",
-                       id: "reader.audio.toc") { onTOC() }
-            Menu { speedMenuItems } label: {
-                bottomLabel(title: speedText(audio.speed), symbol: "speedometer")
-            }
-            .accessibilityLabel("倍速")
-            .accessibilityIdentifier("reader.audio.speed")
-            Menu { timerMenuItems } label: {
-                bottomLabel(title: timerTitle, symbol: "stopwatch")
-            }
-            .accessibilityLabel("定时")
-            .accessibilityIdentifier("reader.audio.timer")
-            bottomItem(title: "设置", symbol: "gearshape",
-                       id: "reader.audio.settings") { onSettings() }
-        }
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-    }
-
-    private func bottomItem(title: String, symbol: String, id: String,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) { bottomLabel(title: title, symbol: symbol) }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title)
-            .accessibilityIdentifier(id)
-    }
-
-    private func bottomLabel(title: String, symbol: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 22))
-            Text(title).appFont(.caption)
-        }
-        .foregroundStyle(palette.primary)
-        .frame(maxWidth: .infinity, minHeight: 52)
-        .contentShape(Rectangle())
-    }
-
-    private var timerTitle: String {
-        audio.sleepMinutesLeft > 0 ? "\(audio.sleepMinutesLeft)分钟" : "定时"
-    }
-
-    @ViewBuilder
-    private var speedMenuItems: some View {
-        ForEach(speedPresets.indices, id: \.self) { i in
-            Button {
-                audio.speed = speedPresets[i]
-            } label: {
-                if abs(audio.speed - speedPresets[i]) < 0.01 {
-                    Label(speedText(speedPresets[i]), systemImage: "checkmark")
-                } else {
-                    Text(speedText(speedPresets[i]))
-                }
-            }
-            .accessibilityIdentifier("reader.audio.speed.\(speedText(speedPresets[i]))")
-        }
-    }
-
-    @ViewBuilder
-    private var timerMenuItems: some View {
-        ForEach(timerPresets, id: \.self) { minutes in
-            if minutes == 0 {
-                Button("关闭定时") { audio.setSleepTimer(minutes: 0) }
-                    .accessibilityIdentifier("reader.audio.timer.0")
-            } else {
-                Button("\(minutes) 分钟") { audio.setSleepTimer(minutes: minutes) }
-                    .accessibilityIdentifier("reader.audio.timer.\(minutes)")
-            }
-        }
-    }
-
-    private func speedText(_ value: Double) -> String {
-        if value == value.rounded() { return String(format: "%.1fx", value) }
-        return String(format: "%gx", value)
     }
 }
