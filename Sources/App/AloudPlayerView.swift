@@ -187,8 +187,9 @@ struct AloudPlayerView: View {
     private var coverHeader: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(book.name)
-                .appFont(.title2.bold())
+                .appFont(.title.bold())
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
             if !book.author.isEmpty {
                 Text(book.author).appFont(.caption).foregroundStyle(palette.secondary)
             }

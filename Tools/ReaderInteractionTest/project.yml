@@ -26,6 +26,7 @@ targets:
       - path: CacheManagementHarness.swift
       - path: ../../Sources/App/CacheManagementView.swift
       - path: ../../Sources/Engine/AppCacheService.swift
+      - path: ../../Sources/Engine/MangaImageDiskCache.swift
       - path: ../../Sources/Engine/ChapterContentCache.swift
       - path: SearchHistoryHarness.swift
       - path: ../../Sources/Models/BookSearchHistory.swift
