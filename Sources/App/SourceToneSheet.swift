@@ -79,9 +79,15 @@ struct SourceToneList: View {
             } else {
                 ForEach(groups) { group in
                     Section {
-                        ForEach(group.tones) { tone in
-                            toneRow(tone, group: group)
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8),
+                                            GridItem(.flexible(), spacing: 8),
+                                            GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                            ForEach(group.tones) { tone in
+                                toneChip(tone, group: group)
+                            }
                         }
+                        .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                        .listRowBackground(Color.clear)
                     } header: {
                         Text(sectionTitle(group))
                     }
@@ -243,31 +249,40 @@ struct SourceToneList: View {
         return .unknown
     }
 
-    private func toneRow(_ tone: SourceTone.Item, group: SourceTone.Group) -> some View {
+    /// 音色网格：一排三个圆角标签，可用带绿点，不可用置灰且点不了。
+    private func toneChip(_ tone: SourceTone.Item, group: SourceTone.Group) -> some View {
         let selected = !tone.value.isEmpty && tone.value == group.currentValue
         let state = toneState(tone)
         return Button {
             apply(tone, group: group)
         } label: {
-            HStack(spacing: 8) {
-                Text(tone.name).appFont(.body)
-                Spacer(minLength: 8)
-                switch state {
-                case .checking:
-                    ProgressView().scaleEffect(0.65)
-                case .unavailable:
-                    Text("不可用").appFont(.caption2).foregroundStyle(palette.secondary)
-                case .available:
-                    Circle().fill(Color.green.opacity(0.7)).frame(width: 6, height: 6)
-                case .unknown:
-                    EmptyView()
+            HStack(spacing: 4) {
+                if state == .available {
+                    Circle().fill(Color.green.opacity(0.7)).frame(width: 5, height: 5)
                 }
+                Text(tone.name)
+                    .appFont(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 if selected {
-                    Image(systemName: "checkmark").foregroundStyle(palette.accent)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(palette.accent)
                 }
             }
-            .opacity(state == .unavailable ? 0.45 : 1)
-            .contentShape(Rectangle())
+            .foregroundStyle(selected ? palette.accent : palette.primary)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .background {
+                Capsule().fill(selected ? palette.accent.opacity(0.16) : palette.primary.opacity(0.06))
+            }
+            .overlay {
+                if selected {
+                    Capsule().strokeBorder(palette.accent.opacity(0.65), lineWidth: 1)
+                }
+            }
+            .opacity(state == .unavailable ? 0.4 : 1)
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(applying || state == .unavailable)

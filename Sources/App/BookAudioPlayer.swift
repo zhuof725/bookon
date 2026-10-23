@@ -687,14 +687,27 @@ struct AudioChapterView: View {
                     .padding(.top, 50)
                 Spacer(minLength: 0)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        ForEach(paragraphs.indices, id: \.self) { i in
-                            paragraphView(i)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            ForEach(paragraphs.indices, id: \.self) { i in
+                                paragraphView(i)
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                    }
+                    .onChange(of: estimatedParagraphIndex) { index in
+                        guard let index, paragraphs.indices.contains(index) else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(index, anchor: .center)
                         }
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
+                    .onChange(of: paragraphs) { _ in
+                        guard let index = estimatedParagraphIndex,
+                              paragraphs.indices.contains(index) else { return }
+                        proxy.scrollTo(index, anchor: .center)
+                    }
                 }
             }
 
@@ -771,6 +784,9 @@ struct AudioChapterView: View {
                 combined.append(middle)
                 combined.append(AttributedString(String(text[range.upperBound...])))
                 attributed = combined
+            } else {
+                // 估不出句子就整段高亮，至少不会「什么都没亮」。
+                attributed.backgroundColor = palette.highlight
             }
         }
         return Text(attributed)
