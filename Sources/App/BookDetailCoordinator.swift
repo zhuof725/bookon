@@ -109,6 +109,7 @@ struct BookDetailView: View {
             category: BookDetailMetadata.category(for: book), chapters: chapters,
             loading: loading, message: message, sourceType: sourceTypeLabel,
             onTypeChange: { kind in changeKind(kind) },
+            sourceUpstream: BookUpstream.name(for: book, toc: store.cachedToc(book)),
             onBack: { dismiss() }, onMore: { showingMore = true },
             onRead: { showingReader = true }, onCategory: { showingCategory = true },
             onSource: { showingSources = true },
@@ -431,7 +432,9 @@ struct BookDetailSourcePicker: View {
     /// 换源列表里把它拼在书源名后面，同一个聚合源的不同上游就能分别显示。
     private func sourceLabel(_ book: Book) -> String {
         let base = book.originName.isEmpty ? book.origin : book.originName
-        guard let upstream = upstreamName(book), !upstream.isEmpty else { return base }
+        guard let upstream = BookUpstream.name(for: book, toc: store.cachedToc(book)), !upstream.isEmpty else {
+            return base
+        }
         return base + " · " + upstream
     }
 

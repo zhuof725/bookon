@@ -406,8 +406,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
 
     private func startTimeObserver(_ player: AVPlayer) {
         removeTimeObserver()
-        // 0.25 秒一次：后台播放时的正文高亮跟得更紧（0.5 秒会明显慢半拍）。
-        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
+        // 0.5 秒一次：0.25 秒会让阅读页每 0.25 秒整体重绘，翻页会卡。
+        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self, let currentItem = self.player?.currentItem else { return }

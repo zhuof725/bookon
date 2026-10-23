@@ -26,6 +26,8 @@ struct BookDetailScreen: View {
     let onTOC: () -> Void
     /// 「类型」栏手动切换（文本 / 音频 / 漫画）；nil 时只显示不可点。
     var onTypeChange: ((BookKind) -> Void)? = nil
+    /// 聚合源的子源（如「番茄听书」），显示在来源卡片里。
+    var sourceUpstream: String? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 长简介默认收起 4 行，点「展开全文」再看全。
@@ -506,16 +508,39 @@ struct BookDetailScreen: View {
     private var sourceCard: some View {
         Button(action: onSource) {
             VStack(alignment: .leading, spacing: 9) {
-                Label("来源", systemImage: "globe")
-                    .appFont(.subheadline)
-                    .foregroundStyle(palette.secondary)
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Label("来源", systemImage: "globe")
+                        .appFont(.subheadline)
+                        .foregroundStyle(palette.secondary)
+                    Spacer(minLength: 8)
+                    Text("共 1 个来源")
+                        .appFont(.caption)
+                        .foregroundStyle(palette.secondary)
+                }
+                HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "books.vertical.fill")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(palette.accent)
-                    Text(sourceText)
-                        .appFont(.body)
-                        .lineLimit(1)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(sourceText)
+                                .appFont(.body)
+                                .lineLimit(1)
+                            Text("当前")
+                                .appFont(.system(size: 11, weight: .medium))
+                                .foregroundStyle(palette.accent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(palette.accent.opacity(0.14)))
+                        }
+                        if let upstream = nonempty(sourceUpstream) {
+                            Text(upstream + " ·")
+                                .appFont(.caption)
+                                .foregroundStyle(palette.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer(minLength: 8)
                     HStack(spacing: 2) {
                         Text("换源").appFont(.subheadline)

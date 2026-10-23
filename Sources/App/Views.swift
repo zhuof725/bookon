@@ -1277,7 +1277,8 @@ struct ReaderView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 10).background(theme.bg.opacity(0.96))
             } else if scrollTasks[target] != nil {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 4).allowsHitTesting(false)
+                // 不显示加载圈：滚动到底直接接上下一章，避免出现「加载中」的断层。
+                Color.clear.frame(height: 1)
             }
         }
     }
@@ -1338,6 +1339,8 @@ struct ReaderView: View {
                 if direction > 0 { scrollChapters.append(chapter) }
                 else { scrollChapters.insert(chapter, at: 0) }
                 trimScrollChapters()
+                // 接上后继续预读下一个方向，滚动到底时已经准备好。
+                loadScrollNeighbor(direction)
             } catch is CancellationError {
                 return
             } catch {
