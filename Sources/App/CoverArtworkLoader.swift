@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MediaPlayer
 
 /// 播放器取封面的统一入口：本机缓存 → 书源钩子（解密/带请求头下载）→ 系统请求。
 ///
@@ -72,4 +73,21 @@ enum CoverArtworkLoader {
         guard let image = downsample(data, maxPixel: side) else { return nil }
         return image.jpegData(compressionQuality: quality)
     }
+
+    /// 把 JPEG 字节包成锁屏封面。解码失败时返回 1×1 空白图：
+    /// `MPMediaItemArtwork` 的请求回调必须返回非可选 `UIImage`，不能返回 nil。
+    static func mediaArtwork(from data: Data, side: CGSize = CGSize(width: 512, height: 512)) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: side) { _ in
+            UIImage(data: data) ?? blankImage
+        }
+    }
+
+    /// 1×1 透明图，仅用于「字节坏了」的极端情况，避免锁屏那块区域留空。
+    private static let blankImage: UIImage = {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1))
+        return renderer.image { context in
+            UIColor.clear.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+    }()
 }

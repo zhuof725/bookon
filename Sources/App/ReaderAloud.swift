@@ -947,9 +947,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         if let artworkData = artworkData {
             // 回调是 @Sendable：只捕获 Data，解码放回调里。
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: CGSize(width: 512, height: 512)) { _ in
-                UIImage(data: artworkData)
-            }
+            info[MPMediaItemPropertyArtwork] = CoverArtworkLoader.mediaArtwork(from: artworkData)
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         loadArtworkIfNeeded(cover)

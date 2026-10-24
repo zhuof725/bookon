@@ -533,9 +533,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? speed : 0
         if let artworkData {
             // 回调是 @Sendable：只捕获 Data，解码在回调里做（UIImage 不是 Sendable）。
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: CGSize(width: 512, height: 512)) { size in
-                UIImage(data: artworkData)
-            }
+            info[MPMediaItemPropertyArtwork] = CoverArtworkLoader.mediaArtwork(from: artworkData)
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         syncActivity()
