@@ -27,6 +27,13 @@ private final class TCPReachabilityProbe: @unchecked Sendable {
     }
 }
 
+/// 校验过程中的可变书源快照：超时用的并发闭包只捕获这个盒子，
+/// 避免在 @Sendable 闭包里直接改局部 var（Swift 6 禁止）。
+private final class BookSourceBox: @unchecked Sendable {
+    var source: BookSource
+    init(_ source: BookSource) { self.source = source }
+}
+
 /// 书源批量校验（对齐 Legado 原版「校验书源」：CheckSource / CheckSourceService）。
 ///
 /// 语义与原版一致：
@@ -144,7 +151,7 @@ enum SourceCheck {
 
     /// 单个书源校验：超时→“校验超时”，脚本异常→“js失效”，其它→“网站失效”。
     static func checkOne(_ origin: BookSource, options: Options, hooks: Hooks = .live) async -> Result {
-        var source = origin
+        let box = BookSourceBox(origin)
         let started = Date()
         var success = false
         var group: String?
@@ -155,16 +162,16 @@ enum SourceCheck {
                 if options.checkInfo {
                     var info = book
                     if info.tocUrl?.isEmpty ?? true {
-                        info = try await hooks.bookInfo(source, info)
+                        info = try await hooks.bookInfo(box.source, info)
                     }
-                    if options.checkCategory, source.bookSourceType != 3 {
-                        let toc = try await hooks.chapters(source, info)
+                    if options.checkCategory, box.source.bookSourceType != 3 {
+                        let toc = try await hooks.chapters(box.source, info)
                         guard !toc.isEmpty else { throw CheckError.tocEmpty }
                         let usable = toc.filter { !($0.isVolume && $0.url.hasPrefix($0.title)) }
                         guard let first = usable.first else { throw CheckError.noUsableChapter }
                         let next = usable.count > 1 ? usable[1].url : first.url
                         if options.checkContent {
-                            let text = try await hooks.content(source, first, next, info)
+                            let text = try await hooks.content(box.source, first, next, info)
                             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 throw CheckError.contentEmpty
                             }
@@ -174,71 +181,71 @@ enum SourceCheck {
             } catch let e as CheckError {
                 switch e {
                 case .tocEmpty:
-                    source.addGroup("\(bookType)目录失效")
+                    box.source.addGroup("\(bookType)目录失效")
                     return
                 case .contentEmpty:
-                    source.addGroup("\(bookType)正文失效")
+                    box.source.addGroup("\(bookType)正文失效")
                     return
                 default:
                     throw e
                 }
             }
             // 检查成功（或按设置跳过）：清掉旧失效分组。
-            source.removeGroup("\(bookType)目录失效")
-            source.removeGroup("\(bookType)正文失效")
+            box.source.removeGroup("\(bookType)目录失效")
+            box.source.removeGroup("\(bookType)正文失效")
         }
 
-        func doCheck() async throws {
-            source.removeInvalidGroups()
-            if options.writeComment { source.removeErrorComment() }
+        @Sendable func doCheck() async throws {
+            box.source.removeInvalidGroups()
+            if options.writeComment { box.source.removeErrorComment() }
 
             if options.checkDomain {
-                let domain = source.bookSourceUrl
+                let domain = box.source.bookSourceUrl
                 guard domain.lowercased().hasPrefix("http") else {
-                    source.addGroup("域名失效")
+                    box.source.addGroup("域名失效")
                     throw CheckError.domainNotHTTP
                 }
                 if await hooks.domainReachable(domain) {
-                    source.removeGroup("域名失效")
+                    box.source.removeGroup("域名失效")
                 } else {
-                    source.addGroup("域名失效")
+                    box.source.addGroup("域名失效")
                     throw CheckError.domainUnreachable
                 }
             }
 
             if options.checkSearch {
-                let word = source.checkKeyword(fallback: options.keyword)
-                if source.searchUrl?.isEmpty == false {
-                    source.removeGroup("搜索链接规则为空")
-                    let books = try await hooks.search(source, word)
+                let word = box.source.checkKeyword(fallback: options.keyword)
+                if box.source.searchUrl?.isEmpty == false {
+                    box.source.removeGroup("搜索链接规则为空")
+                    let books = try await hooks.search(box.source, word)
                     if books.isEmpty {
-                        source.addGroup("搜索失效")
+                        box.source.addGroup("搜索失效")
                     } else {
-                        source.removeGroup("搜索失效")
+                        box.source.removeGroup("搜索失效")
                         try await checkBook(book: books[0], bookType: "搜索")
                     }
                 } else {
-                    source.addGroup("搜索链接规则为空")
+                    box.source.addGroup("搜索链接规则为空")
                 }
             }
 
-            if options.checkDiscovery, source.exploreUrl?.isEmpty == false {
-                let url = SourceDiagnostics.exploreKinds(source: source).first { !($0.url ?? "").isEmpty }?.url
+            if options.checkDiscovery, box.source.exploreUrl?.isEmpty == false {
+                let url = SourceDiagnostics.exploreKinds(source: box.source).first { !($0.url ?? "").isEmpty }?.url
                 if let url, !url.isEmpty {
-                    source.removeGroup("发现规则为空")
-                    let books = try await hooks.explore(source, url)
+                    box.source.removeGroup("发现规则为空")
+                    let books = try await hooks.explore(box.source, url)
                     if books.isEmpty {
-                        source.addGroup("发现失效")
+                        box.source.addGroup("发现失效")
                     } else {
-                        source.removeGroup("发现失效")
+                        box.source.removeGroup("发现失效")
                         try await checkBook(book: books[0], bookType: "发现")
                     }
                 } else {
-                    source.addGroup("发现规则为空")
+                    box.source.addGroup("发现规则为空")
                 }
             }
 
-            let invalid = source.invalidGroupNames
+            let invalid = box.source.invalidGroupNames
             if !invalid.isEmpty {
                 throw CheckError.invalidGroups(invalid.joined(separator: ","))
             }
@@ -252,7 +259,7 @@ enum SourceCheck {
             case .timeout:
                 group = "校验超时"
                 detail = e.errorDescription ?? "校验超时"
-                source.addGroup("校验超时")
+                box.source.addGroup("校验超时")
             case .invalidGroups(let names):
                 detail = names // 失效分组已在检查过程中写入，与原版 NoStackTraceException 分支一致
             case .domainNotHTTP, .domainUnreachable:
@@ -261,31 +268,31 @@ enum SourceCheck {
             case .tocEmpty, .contentEmpty, .noUsableChapter:
                 group = "网站失效"
                 detail = e.errorDescription ?? "网站失效"
-                source.addGroup("网站失效")
+                box.source.addGroup("网站失效")
             }
         } catch let e as LoginScriptError {
             group = "js失效"
             detail = e.message
-            source.addGroup("js失效")
+            box.source.addGroup("js失效")
         } catch {
             if Task.isCancelled { return cancelledResult(origin) } // 用户停止：不改写书源
             group = "网站失效"
             detail = error.localizedDescription
-            source.addGroup("网站失效")
+            box.source.addGroup("网站失效")
         }
         if Task.isCancelled { return cancelledResult(origin) } // 用户停止：不改写书源
 
         let elapsed = Int((Date().timeIntervalSince(started) * 1000).rounded())
-        source.respondTime = elapsed
-        if !success, options.writeComment { source.addErrorComment(detail) }
+        box.source.respondTime = elapsed
+        if !success, options.writeComment { box.source.addErrorComment(detail) }
         return Result(bookSourceUrl: origin.bookSourceUrl,
                       name: origin.bookSourceName,
                       success: success,
                       message: success ? "校验成功" : "校验失败:\(detail)",
                       group: group,
-                      groups: source.invalidGroupNames,
+                      groups: box.source.invalidGroupNames,
                       respondTime: elapsed,
-                      updatedSource: source)
+                      updatedSource: box.source)
     }
 
     private static func cancelledResult(_ origin: BookSource) -> Result {

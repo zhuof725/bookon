@@ -660,6 +660,14 @@ enum WebBook {
     private static let healLock = NSLock()
     private nonisolated(unsafe) static var healedSources = Set<String>()
 
+    /// 同步版「标记已自愈」：NSLock 不能直接在 async 函数里 lock/unlock。
+    /// 返回 true 表示是第一次（需要跑详情页初始化）。
+    private static func markContentHealed(_ url: String) -> Bool {
+        healLock.lock()
+        defer { healLock.unlock() }
+        return healedSources.insert(url).inserted
+    }
+
     /// 取正文；规则空手而归时先跑一次详情页（写 java.put 变量）再重试一次。
     static func rawContentWithBookInfoHealing(source: BookSource, book: Book, chapter: BookChapter,
                                               nextChapterURL: String? = nil,
@@ -675,11 +683,7 @@ enum WebBook {
         guard contentNeedsBookInfo(first),
               let initRule = source.ruleBookInfo?.`init`,
               !initRule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return first }
-        healLock.lock()
-        let already = healedSources.contains(source.bookSourceUrl)
-        if !already { healedSources.insert(source.bookSourceUrl) }
-        healLock.unlock()
-        guard !already else { return first }
+        guard markContentHealed(source.bookSourceUrl) else { return first }
         DebugLog.add("≡正文为空，先执行详情页初始化规则再重试")
         _ = try? await bookInfo(source: source, book: book)
         return (try? await load()) ?? first
