@@ -30,6 +30,7 @@ targets:
       - path: ../../Sources/Engine/ChapterContentCache.swift
       - path: ../../Sources/Engine/BookKind.swift
       - path: ../../Sources/Engine/AudioChapter.swift
+      - path: ../../Sources/Engine/SendableBox.swift
       - path: SearchHistoryHarness.swift
       - path: ../../Sources/Models/BookSearchHistory.swift
       - path: ../../Sources/App/BookSearchHistoryView.swift
