@@ -128,7 +128,7 @@ enum BookRequestRefreshRegression {
 
     private final class Transport: URLProtocol {
         private static let lock = NSLock()
-        private static var fixture: Fixture?
+        private nonisolated(unsafe) static var fixture: Fixture?
 
         static func install(_ fixture: Fixture) {
             lock.lock(); self.fixture = fixture; lock.unlock()

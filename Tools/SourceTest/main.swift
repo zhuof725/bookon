@@ -54,7 +54,7 @@ print("共 \(sources.count) 个书源，关键词：\(key)\n")
 
 struct Timeout: Error {}
 
-func withTimeout<T>(_ s: Double, _ op: @escaping () async throws -> T) async throws -> T {
+func withTimeout<T: Sendable>(_ s: Double, _ op: @escaping @Sendable () async throws -> T) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { g in
         g.addTask { try await op() }
         g.addTask { try await Task.sleep(nanoseconds: UInt64(s * 1e9)); throw Timeout() }

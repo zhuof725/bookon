@@ -7,7 +7,7 @@ import Foundation
 enum HTTPResponseRegression {
     private final class Transport: URLProtocol {
         private static let lock = NSLock()
-        private static var stopped: Set<String> = []
+        private nonisolated(unsafe) static var stopped: Set<String> = []
 
         static func wasStopped(_ path: String) -> Bool {
             lock.lock()

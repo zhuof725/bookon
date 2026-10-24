@@ -34,18 +34,17 @@ enum ShelfRefreshRegression {
         check(merged.bookUrl == "book-a" && merged.origin == "source-a", "书本身份不变")
 
         let books = (0..<9).map { Book(bookUrl: "book-\($0)", name: "书\($0)", origin: "source-a") }
-        let lock = NSLock()
-        var active = 0
-        var peak = 0
-        var finished: [String] = []
+        let state = TestConcurrencyState()
         let outcome = await ShelfRefresh.run(books, concurrency: 3) { book in
-            lock.lock(); active += 1; peak = max(peak, active); lock.unlock()
+            state.enter()
             try? await Task.sleep(nanoseconds: 15_000_000)
-            lock.lock(); active -= 1; lock.unlock()
+            state.leave()
             return ShelfRefresh.Result(bookUrl: book.bookUrl, book: book)
         } onResult: { result in
-            lock.lock(); finished.append(result.bookUrl); lock.unlock()
+            state.markResult(result.bookUrl)
         }
+        let finished = state.finished
+        let peak = state.peak
         check(outcome.updated == 9 && outcome.failed == 0,
               "全部刷新成功（\(outcome.updated) 成功 / \(outcome.failed) 失败）")
         check(finished.count == 9, "每本书都回调一次（实际 \(finished.count)）")

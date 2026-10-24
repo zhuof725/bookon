@@ -298,16 +298,12 @@ enum SourceCheckRegression {
         let many = (0..<5).map { i in
             makeSource("{\"bookSourceUrl\":\"https://many.invalid/\(i)\",\"bookSourceName\":\"源\(i)\",\"searchUrl\":\"https://many.invalid/s\"}")
         }
-        let lock = NSLock()
-        var active = 0
-        var peak = 0
-        var starts = 0
-        var results = 0
+        let state = TestConcurrencyState()
         let concHooks = SourceCheck.Hooks(
             search: { _, _ in
-                lock.lock(); active += 1; peak = max(peak, active); lock.unlock()
+                state.enter()
                 try? await Task.sleep(nanoseconds: 100_000_000)
-                lock.lock(); active -= 1; lock.unlock()
+                state.leave()
                 return [book]
             },
             explore: { _, _ in [] },
@@ -317,8 +313,11 @@ enum SourceCheckRegression {
             domainReachable: { _ in true }
         )
         let batch = await SourceCheck.runAll(many, options: concOptions, hooks: concHooks,
-                                             onStart: { _ in lock.lock(); starts += 1; lock.unlock() },
-                                             onResult: { _ in lock.lock(); results += 1; lock.unlock() })
+                                             onStart: { _ in state.markStart() },
+                                             onResult: { _ in state.markResult() })
+        let peak = state.peak
+        let starts = state.starts
+        let results = state.results
         check(batch.count == 5 && batch.allSatisfy { $0.success }, "runAll 全部完成且成功")
         check(results == 5 && starts == 5, "onStart/onResult 覆盖每个书源（实际 \(starts)/\(results)）")
         check(peak <= 2, "并发不超过配置上限（峰值 \(peak)）")

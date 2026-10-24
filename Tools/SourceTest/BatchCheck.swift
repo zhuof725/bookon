@@ -32,8 +32,8 @@ enum BatchCheckCLI {
             if let url = obj["bookSourceUrl"] as? String { rawByURL[url] = obj }
         }
 
-        var list = decoded.filter { !$0.bookSourceName.contains("魔丸") && $0.isEnabled }
-        if limit > 0 { list = Array(list.prefix(limit)) }
+        let enabled = decoded.filter { !$0.bookSourceName.contains("魔丸") && $0.isEnabled }
+        let list = limit > 0 ? Array(enabled.prefix(limit)) : enabled
         let checkedURLs = Set(list.map { $0.bookSourceUrl })
         let skipped = decoded.filter { !checkedURLs.contains($0.bookSourceUrl) }
         if list.isEmpty {
@@ -47,7 +47,7 @@ enum BatchCheckCLI {
         print("批量校验 \(list.count) 个书源（共 \(decoded.count) 个，跳过禁用/魔丸 \(skipped.count) 个）")
         print(options.summary)
 
-        var done = 0
+        let counter = TestConcurrencyState()
         let results = await SourceCheck.runAll(
             list,
             options: options,
@@ -55,7 +55,8 @@ enum BatchCheckCLI {
                 print("→ \(s.bookSourceName) \(s.bookSourceUrl)")
             },
             onResult: { r in
-                done += 1
+                counter.markResult()
+                let done = counter.results
                 let state = r.cancelled ? "取消" : (r.success ? "成功" : "失败")
                 print("[\(done)/\(list.count)] \(state) \(r.respondTime)ms \(r.name) — \(r.message)")
                 if !r.groups.isEmpty {
