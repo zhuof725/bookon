@@ -62,6 +62,17 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var messageTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
     private var remoteRegistered = false
+    /// 这本书封面的 JPEG 字节（锁屏封面与灵动岛共用），按封面地址缓存。
+    /// 存 Data 而不是 UIImage：MPMediaItemArtwork 的回调是 @Sendable，
+    /// Swift 6 下不能捕获非 Sendable 的 UIImage，解码放到回调里做。
+    private var artworkData: Data?
+    /// artworkData 对应的封面地址；换书才重新取图。
+    private var artworkKey: String?
+    private var artworkTask: Task<Void, Never>?
+    /// 书名（锁屏卡片与灵动岛显示用；album 是「有声书」这类副标题）。
+    private var bookTitle = ""
+    /// 本书封面地址；nil 表示没有封面。
+    private var coverURL: String?
 
     private static let speedKey = "reader.audio.speed.v1"
 
@@ -98,7 +109,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
 
     /// 播放一章（可能是多段）。地址按顺序播完，最后一段结束才回调 onFinish。
     /// - Parameter startAt: 上次听到的秒数（同一章才传，>0 时从那里续播）。
-    func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0) {
+    /// - Parameter coverUrl: 本书封面地址，用于锁屏 / 灵动岛封面；nil 时显示占位图标。
+    /// - Parameter origin: 书源地址，封面需要解密或带请求头时用。
+    func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0,
+              coverUrl: String? = nil, origin: String? = nil) {
         let urls = rawURLs.compactMap { raw -> URL? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: trimmed) else { return nil }
@@ -116,6 +130,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         fallbackTried = false
         chapterTitle = title
         self.album = album
+        bookTitle = album
+        coverURL = coverUrl
+        loadArtworkIfNeeded(coverUrl: coverUrl, origin: origin)
         remoteQueue = urls.map(\.absoluteString)
         // 已经缓存过的段直接播本地文件（原版 SimpleCache 的效果），其余走网络边播边存。
         queue = urls.map { AudioDiskCache.cachedFile(for: $0.absoluteString) ?? $0 }
@@ -228,7 +245,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         if queuePlayer.currentItem?.status == .failed,
            queue.indices.contains(queueIndex) {
             let remaining = queue[queueIndex...].map(\.absoluteString)
-            play(urls: remaining, title: chapterTitle, album: album)
+            play(urls: remaining, title: chapterTitle, album: album,
+                 coverUrl: coverURL)
             return
         }
         queuePlayer.playImmediately(atRate: Float(speed))
@@ -262,8 +280,16 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         isPlaying = false
         isBuffering = false
         message = nil
+        artworkTask?.cancel()
+        artworkTask = nil
+        // 封面跟着这次播放走：stop 意味着这本书不再播了。
+        artworkData = nil
+        artworkKey = nil
+        coverURL = nil
+        bookTitle = ""
         updateRemoteCommands(enabled: false)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        NowPlayingActivityController.shared.endImmediately()
         let session = AVAudioSession.sharedInstance()
         try? session.setActive(false, options: [.notifyOthersOnDeactivation])
     }
@@ -335,6 +361,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private func downloadThenPlay(_ raw: String, from seconds: TimeInterval) {
         downloadTask?.cancel()
         let title = chapterTitle, album = self.album
+        let cover = coverURL
         downloadTask = Task { @MainActor in
             guard let url = URL(string: raw) else { return }
             var request = URLRequest(url: url, timeoutInterval: 60)
@@ -354,7 +381,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                     throw URLError(.fileDoesNotExist)
                 }
                 guard !Task.isCancelled else { return }
-                play(urls: [file.absoluteString], title: title, album: album, startAt: seconds)
+                play(urls: [file.absoluteString], title: title, album: album, startAt: seconds,
+                     coverUrl: cover)
             } catch {
                 guard !Task.isCancelled else { return }
                 pushMessage("下载失败：\(error.localizedDescription)")
@@ -503,7 +531,52 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? speed : 0
+        if let artworkData {
+            // 回调是 @Sendable：只捕获 Data，解码在回调里做（UIImage 不是 Sendable）。
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: CGSize(width: 512, height: 512)) { size in
+                UIImage(data: artworkData)
+            }
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        syncActivity()
+    }
+
+    /// 同步灵动岛 / 锁屏实时活动卡片。封面只在换书时重新算，进度逐次更新。
+    private func syncActivity() {
+        guard chapterURL != nil else {
+            NowPlayingActivityController.shared.endImmediately()
+            return
+        }
+        NowPlayingActivityController.shared.start(
+            kind: .audio,
+            title: chapterTitle,
+            subtitle: album.isEmpty ? "有声书" : album,
+            isPlaying: isPlaying,
+            elapsed: currentTime,
+            duration: duration,
+            coverKey: coverURL,
+            coverData: artworkData
+        )
+    }
+
+    /// 取封面字节：先看缓存（同一本书翻章不重复下载），再走统一封面加载器。
+    private func loadArtworkIfNeeded(coverUrl: String?, origin: String?) {
+        artworkTask?.cancel()
+        guard let coverUrl, let url = URL(string: coverUrl), !coverUrl.isEmpty else {
+            artworkData = nil
+            artworkKey = nil
+            return
+        }
+        if artworkKey == coverUrl, artworkData != nil { return }
+        artworkKey = coverUrl
+        artworkData = nil
+        artworkTask = Task { @MainActor [weak self] in
+            let data = await CoverArtworkLoader.load(url: url, origin: origin, maxPixel: 600)
+            guard !Task.isCancelled, let self, self.artworkKey == coverUrl else { return }
+            self.artworkData = data
+            // 封面来得比播放晚：补一次，锁屏与灵动岛立刻换成真封面。
+            self.updateNowPlaying()
+        }
     }
 
     private func updateRemoteCommands(enabled: Bool) {

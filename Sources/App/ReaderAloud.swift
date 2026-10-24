@@ -15,6 +15,9 @@ struct ReaderAloudHost {
     var chapterCount: () -> Int = { 0 }
     var chapterTitle: (Int) -> String = { _ in "" }
     var bookLabel: () -> String = { "" }
+    /// 本书封面地址与书源地址：锁屏 / 灵动岛的封面从这里取（nil 表示没有封面）。
+    var coverURL: () -> String? = { nil }
+    var bookOrigin: () -> String? = { nil }
     /// 当前阅读位置的章节内字符偏移（朗读从这里开始）。
     var currentOffset: () -> Int = { 0 }
     /// 某章的朗读段落；章节未加载完成时返回 nil。
@@ -60,6 +63,11 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var host: ReaderAloudHost?
     private var units: [AloudUnit] = []
     private var engine: HTTPTTS?
+    /// 本书封面的 JPEG 字节与来源地址（锁屏封面 + 灵动岛共用），按地址缓存。
+    /// 存 Data 不存 UIImage：MPMediaItemArtwork 回调是 @Sendable，UIImage 不是 Sendable。
+    private var artworkData: Data?
+    private var artworkKey: String?
+    private var artworkTask: Task<Void, Never>?
     /// 本章各段已知的音频时长（在线引擎，随播放逐段记录），用于本章进度条。
     private var unitDurations: [Int: TimeInterval] = [:]
     var playbackEngine: PlaybackEngine { engine == nil ? .system : .http }
@@ -924,14 +932,59 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     private func updateNowPlaying() {
-        guard isRunning else { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil; return }
+        guard isRunning else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            NowPlayingActivityController.shared.endImmediately()
+            return
+        }
         guard let host else { return }
+        let bookName = host.bookLabel()
+        let cover = host.coverURL()
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = chapterTitle.isEmpty ? "朗读" : chapterTitle
-        info[MPMediaItemPropertyAlbumTitle] = host.bookLabel()
+        info[MPMediaItemPropertyAlbumTitle] = bookName
         info[MPMediaItemPropertyArtist] = engineName
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        if let artworkData = artworkData {
+            // 回调是 @Sendable：只捕获 Data，解码放回调里。
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: CGSize(width: 512, height: 512)) { _ in
+                UIImage(data: artworkData)
+            }
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        loadArtworkIfNeeded(cover)
+        NowPlayingActivityController.shared.start(
+            kind: .aloud,
+            title: chapterTitle.isEmpty ? "朗读" : chapterTitle,
+            subtitle: bookName,
+            isPlaying: isPlaying,
+            elapsed: chapterPlayed,
+            duration: chapterDuration,
+            coverKey: cover,
+            coverData: artworkData
+        )
+    }
+
+    /// 封面按地址缓存：同一本书朗读全程只取一次。
+    private func loadArtworkIfNeeded(_ coverUrl: String?) {
+        guard let coverUrl, !coverUrl.isEmpty, let url = URL(string: coverUrl) else {
+            artworkTask?.cancel()
+            artworkTask = nil
+            artworkData = nil
+            artworkKey = nil
+            return
+        }
+        if artworkKey == coverUrl, artworkData != nil { return }
+        artworkKey = coverUrl
+        artworkData = nil
+        let origin = host?.bookOrigin()
+        artworkTask?.cancel()
+        artworkTask = Task { @MainActor [weak self] in
+            let data = await CoverArtworkLoader.load(url: url, origin: origin, maxPixel: 600)
+            guard !Task.isCancelled, let self, self.artworkKey == coverUrl else { return }
+            self.artworkData = data
+            self.updateNowPlaying()
+        }
     }
 
     // MARK: 预期完成管理

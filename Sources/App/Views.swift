@@ -1877,7 +1877,8 @@ struct ReaderView: View {
             bookAudio.onProgress = { seconds in
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
-            bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume)
+            bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume,
+                           coverUrl: book.coverUrl, origin: book.origin)
         } catch is CancellationError {
             return
         } catch {
@@ -2009,6 +2010,8 @@ struct ReaderView: View {
         host.chapterCount = { chapters.count }
         host.chapterTitle = { i in chapters.indices.contains(i) ? chapters[i].title : "" }
         host.bookLabel = { book.name }
+        host.coverURL = { book.coverUrl }
+        host.bookOrigin = { book.origin }
         host.currentOffset = { currentReadOffset() }
         host.units = { i in i == index ? aloudUnits(from: readerBlocks) : nil }
         host.readableChapter = { i, direction in readableIndex(from: i, direction: direction) }
@@ -2170,7 +2173,8 @@ struct ReaderView: View {
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
             bookAudio.play(urls: urls, title: chapters[target].title,
-                           album: book.name, startAt: resume)
+                           album: book.name, startAt: resume,
+                           coverUrl: book.coverUrl, origin: book.origin)
             loading = false
             return true
         default:
