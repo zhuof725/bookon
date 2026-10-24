@@ -28,8 +28,12 @@ struct LibraryStatisticsView: View {
     @State private var range: StatsRange
     @State private var planChapterCounts: [String: Int] = [:]
 
-    init(initialRange: StatsRange = .week) {
+    /// 从「我的」进入时显示导航栏（带返回键）；作为独立页面使用时保持无栏的整页版式。
+    private let showsNavigationBar: Bool
+
+    init(initialRange: StatsRange = .week, showsNavigationBar: Bool = false) {
         _range = State(initialValue: initialRange)
+        self.showsNavigationBar = showsNavigationBar
     }
 
     private var todayReading: TimeInterval { stats.todayReadingSeconds }

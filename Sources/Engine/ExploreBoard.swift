@@ -261,9 +261,13 @@ enum ExploreBoardStore {
         if let boards = try? JSONDecoder().decode([ExploreBoard].self, from: data) {
             return boards
         }
-        struct Wrapper: Codable { var boards: [ExploreBoard] }
-        return (try? JSONDecoder().decode(Wrapper.self, from: data))?.boards
+        return (try? JSONDecoder().decode(ExploreBoardFile.self, from: data))?.boards
     }
+}
+
+/// 配置文件外层包装：`{"boards":[...]}`。
+private struct ExploreBoardFile: Codable {
+    var boards: [ExploreBoard]
 }
 
 /// 探索页的文本整理：分类字数、标签、元信息行。
@@ -286,9 +290,9 @@ enum ExploreFormat {
     }
 
     /// "都市异能 · 204万字"；其中之一缺失时不留下孤零零的点。
-    static func metaLine(kind: String?, wordCount: String?) -> String? {
+    static func metaLine(kind: String?, wordCount raw: String?) -> String? {
         let kindText = (kind ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let countText = wordCount(wordCount)
+        let countText = wordCount(raw)
         let parts = [kindText, countText].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

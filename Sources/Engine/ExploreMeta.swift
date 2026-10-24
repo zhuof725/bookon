@@ -119,7 +119,7 @@ enum ExploreMetaStore {
             throw ExploreMetaError.invalidJSON
         }
         let decoder = JSONDecoder()
-        if let map = try? decoder.decode([String: RawMeta].self, from: data) {
+        if let map = try? decoder.decode([String: ExploreMetaJSONEntry].self, from: data) {
             lock.lock()
             var store = loadedLocked()
             for (bookURL, raw) in map {
