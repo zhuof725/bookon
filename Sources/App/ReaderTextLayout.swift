@@ -1,4 +1,8 @@
-import UIKit
+// TextKit 1 的排版对象不要求主线程；但 `UITextView` 是 UIKit 的主线程 API，
+// 而分页/测量入口已经在主线程（调用方有 precondition(Thread.isMainThread)）。
+// Swift 6 把「把非 Sendable 的 NSTextContainer 传给主线程初始化器」当成错误，
+// 这里用预并发导入把它降级为警告，保持原有的主线程约定。
+@preconcurrency import UIKit
 import CoreText
 
 /// 渲染与分页共用 TextKit 1 的真实字形与换行；不拉伸字格、行距或更改原文。
@@ -270,8 +274,7 @@ enum ReaderTextLayout {
     }
 
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
-    @MainActor
-    static func makeTextView() -> CommentTextView {
+        static func makeTextView() -> CommentTextView {
         let storage = NSTextStorage()
         let manager = ReaderTextLayoutManager()
         manager.highlightView = nil
@@ -330,7 +333,6 @@ enum ReaderTextLayout {
     }
 
     /// 一个分页请求复用一个测量 UITextView；必须在主线程使用。
-    @MainActor
     final class Measurer {
         private let view: CommentTextView
         init() {

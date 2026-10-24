@@ -131,8 +131,7 @@ private enum LayoutAuditInspection {
     }
 
     /// Isolated attributed copies expose native line-break policy without mutating production.
-    @MainActor
-    private static func diagnosticBreaks(text: String, width: CGFloat, size: CGFloat) -> [String: [String]] {
+        private static func diagnosticBreaks(text: String, width: CGFloat, size: CGFloat) -> [String: [String]] {
         var result: [String: [String]] = [:]
         for (name, mode, clearsStrategy) in [
             ("word-production", NSLineBreakMode.byWordWrapping, false),
@@ -160,8 +159,7 @@ private enum LayoutAuditInspection {
         return result
     }
 
-    @MainActor
-    static func snapshot() -> String {
+        static func snapshot() -> String {
         precondition(Thread.isMainThread)
         let started = CFAbsoluteTimeGetCurrent()
         var cases = 0, rowsChecked = 0, sourceOK = true, attachmentsOK = true

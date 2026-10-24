@@ -127,8 +127,7 @@ private final class FontFixtureSession: ObservableObject {
         } catch { checks.error(error); report = checks.report(scenario) }
     }
 
-    @MainActor
-    func run() {
+        func run() {
         guard !ran || scenario == "ui" else { return }
         ran = true
         do {
@@ -292,8 +291,7 @@ private final class FontFixtureSession: ObservableObject {
         let bubble: Data?
     }
 
-    @MainActor
-    private func engine() throws {
+        private func engine() throws {
         let shared = ReadingFontManager.shared
         try checks.require(shared.importedFonts.isEmpty && shared.selectedPostScriptName.isEmpty,
                            "Shared resolver starts clean in isolated harness application")
@@ -367,8 +365,7 @@ private final class FontFixtureSession: ObservableObject {
         checks.details["commentAttachmentsPerState"] = counts.count
     }
 
-    @MainActor
-    private func snapshot(_ name: String, shared: ReadingFontManager, view: CommentTextView,
+        private func snapshot(_ name: String, shared: ReadingFontManager, view: CommentTextView,
                           measurer: ReaderTextLayout.Measurer, paragraphs: [String],
                           blocks: [ContentBlock], counts: [Int], urls: [String]) throws -> EngineSnapshot {
         try shared.select(name)

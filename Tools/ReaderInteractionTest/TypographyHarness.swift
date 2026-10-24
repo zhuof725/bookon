@@ -166,8 +166,7 @@ private enum TypographyInspection {
         }
     }
 
-    @MainActor
-    private static func naturalReport() -> [String: Any] {
+        private static func naturalReport() -> [String: Any] {
         let view = ReaderTextLayout.makeTextView(), reference = ReaderTextLayout.makeTextView()
         ReaderTextLayout.configure(view); ReaderTextLayout.configure(reference)
         reference.textContainer.widthTracksTextView = false
@@ -280,8 +279,7 @@ private enum TypographyInspection {
             "quoteGlyphs": quotes, "nativeRunsOK": nativeRuns, "shapingError": Double(shapingError)]
     }
 
-    @MainActor
-    private static func bubbleReport() -> [String: Any] {
+        private static func bubbleReport() -> [String: Any] {
         let view = ReaderTextLayout.makeTextView()
         ReaderTextLayout.configure(view)
         let source = "她说：“AVATAR、office、e\u{301}、👨‍👩‍👧‍👦都不能拆开。”"
@@ -325,8 +323,7 @@ private enum TypographyInspection {
             "bubbleBaselineError": Double(baselineError)]
     }
 
-    @MainActor
-    private static func pageReport() -> [String: Any] {
+        private static func pageReport() -> [String: Any] {
         // Paired ASCII dialogue crosses pages; a separate paragraph covers ZWJ and UTF-16.
         let rawDialogue = "\"报告，" + String(repeating: "他继续查看告示牌，保持平静。", count: 16) + "说完了。\""
         let texts = [rawDialogue, "“好。”", "AVATAR、office、e\u{301}、👨‍👩‍👧‍👦与中文混排。" + String(repeating: "山川风雨天地。", count: 7), "短尾段。"]
@@ -500,8 +497,7 @@ private enum TypographyInspection {
             "pageBoundaries": boundaries, "splitChecks": splitChecks, "pageComments": comments, "pageSamples": samples]
     }
 
-    @MainActor
-    private static func scrollHostReport() -> [String: Any] {
+        private static func scrollHostReport() -> [String: Any] {
         let controller = ReaderContinuousScrollController()
         controller.update(ReaderContinuousScrollView(chapters: [ReaderScrollChapter(id: 0,
             revision: "dialogue", content: AnyView(TypographyScrollParagraphs(size: 19, spacing: 8)))],
@@ -558,8 +554,7 @@ private enum TypographyInspection {
             "scrollBoundaries": boundaries, "scrollPairs": pairs, "scrollSourceOK": sourceOK, "scrollBubbleOK": bubbleOK]
     }
 
-    @MainActor
-    static func snapshot() -> String {
+        static func snapshot() -> String {
         precondition(Thread.isMainThread)
         let started = CFAbsoluteTimeGetCurrent()
         var report = naturalReport()
