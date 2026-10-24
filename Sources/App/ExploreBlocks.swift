@@ -275,7 +275,9 @@ struct ExploreBoardCard: View {
                     ExploreForYouCard(book: book,
                                       reason: ExploreBookText.reason(book),
                                       tags: ExploreBookText.tags(book, fallback: board.tags)) {
-                        store.hide(bookURL: book.bookUrl, in: board.id)
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            store.hide(bookURL: book.bookUrl, in: board.id)
+                        }
                     }
                 }
             }

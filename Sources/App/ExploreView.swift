@@ -7,9 +7,20 @@ struct ExploreView: View {
     @StateObject private var store: ExploreStore
     @State private var sheet: ExploreSheet?
 
-    private enum ExploreSheet: String, Identifiable {
-        case add, manage, metaImport
-        var id: String { rawValue }
+    private enum ExploreSheet: Identifiable {
+        case add
+        case manage
+        case metaImport
+        case edit(ExploreBoard)
+
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .manage: return "manage"
+            case .metaImport: return "meta"
+            case .edit(let board): return "edit-" + board.id
+            }
+        }
     }
 
     init() {
@@ -25,7 +36,7 @@ struct ExploreView: View {
                     ForEach(store.boards) { board in
                         ExploreBoardCard(store: store,
                                          board: board,
-                                         onEdit: { sheet = .manage },
+                                         onEdit: { sheet = .edit(board) },
                                          onDelete: { remove(board) })
                     }
                 }
@@ -57,6 +68,9 @@ struct ExploreView: View {
                 ExploreMetaImportSheet {
                     store.reloadMeta()
                 }
+            case .edit(let board):
+                ExploreBoardEditor(board: board) { store.update($0.first ?? board) }
+                    .environmentObject(appStore)
             }
         }
         .accessibilityIdentifier("explore.page")

@@ -71,6 +71,14 @@ struct ExploreBoardEditor: View {
                     }
                     TextField("标签，用逗号分隔（AI 未接入时的兜底）", text: $tagsText)
                         .appFont(.body)
+                    if draft.layout == .forYou, !draft.hiddenBookURLs.isEmpty {
+                        Button {
+                            draft.hiddenBookURLs.removeAll()
+                        } label: {
+                            Text("恢复 \(draft.hiddenBookURLs.count) 本被隐藏的书")
+                                .appFont(.body)
+                        }
+                    }
                 }
 
                 if isNew {
