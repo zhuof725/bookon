@@ -188,8 +188,11 @@ private struct ProgressRow: View {
 // MARK: - 封面读取缓存
 
 /// 共享容器的封面文件按文件名缓存，避免每条 timeline 都同步读盘。
-/// `nonisolated(unsafe)` + NSCache（线程安全）满足 Swift 6 的并发检查。
-private final class CoverImageStore {
+///
+/// `@unchecked Sendable` 的理由：这个类没有可变实例状态，
+/// 唯一的存储是 NSCache（Apple 明确保证线程安全），
+/// 加 @MainActor 反而会让 widget 的渲染路径被迫切主线程。
+private final class CoverImageStore: @unchecked Sendable {
     static let shared = CoverImageStore()
     private nonisolated(unsafe) static let cache = NSCache<NSString, UIImage>()
 
