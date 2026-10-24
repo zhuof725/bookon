@@ -73,10 +73,16 @@ struct ExploreBoardCard: View {
         case .bestseller, .coverGrid:
             ExploreCardHeader(title: board.displayTitle, more: board.moreCategory)
         case .rankColumns, .categoryFeed:
-            ExploreTabHeader(titles: categories.map(\.title),
-                             selection: activeTab,
-                             more: activeCategory) { index in
-                tab = index
+            VStack(alignment: .leading, spacing: 10) {
+                // 默认让第一个分类当标题（参考图那样）；用户改了名字就把名字显示在标签上方。
+                if !board.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ExploreCardHeader(title: board.displayTitle)
+                }
+                ExploreTabHeader(titles: categories.map(\.title),
+                                 selection: activeTab,
+                                 more: activeCategory) { index in
+                    tab = index
+                }
             }
         case .newBookRank:
             VStack(alignment: .leading, spacing: 12) {

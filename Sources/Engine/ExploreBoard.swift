@@ -188,6 +188,8 @@ struct ExploreBoard: Codable, Hashable, Identifiable {
     var displayTitle: String {
         let custom = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !custom.isEmpty { return custom }
+        // 新书榜的分类是筛选胶囊（第一个常是「全部」），标题不该跟着第一个分类走。
+        if layout == .newBookRank { return layout.title }
         if let first = categories.first, !first.title.isEmpty { return first.title }
         return layout.title
     }

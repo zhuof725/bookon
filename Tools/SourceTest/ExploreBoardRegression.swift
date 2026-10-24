@@ -26,6 +26,9 @@ enum ExploreBoardRegression {
         check(board.displayTitle == "穿越榜", "探索：空白自定义标题回退分类名")
         board.title = "  我的榜单  "
         check(board.displayTitle == "我的榜单", "探索：自定义标题去空白")
+        let allCategory = ExploreCategory(sourceURL: "https://s.invalid", url: "/all", title: "全部")
+        check(ExploreBoard(layout: .newBookRank, categories: [allCategory]).displayTitle == "新书榜",
+              "探索：新书榜默认标题不吃「全部」分类名")
         check(board.categories.count == 2 && board.visibleCategories.count == 2, "探索：分类列表")
         check(ExploreBoard(layout: .newBookRank).displaySubtitle == "霸榜好书销量高", "探索：新书榜默认副标题")
         var sub = ExploreBoard(layout: .newBookRank, categories: [rank])
