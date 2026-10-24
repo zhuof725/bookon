@@ -99,6 +99,7 @@ private enum PunctuationFlowInspection {
         }
         return output
     }
+    @MainActor
     private static func render(_ text: String, count: Int, width: CGFloat,
                                continuation: Bool = false) -> CommentTextView {
         let view = ReaderTextLayout.makeTextView()
@@ -275,6 +276,7 @@ private enum PunctuationFlowInspection {
                 "violations": violations]
     }
 
+    @MainActor
     static func snapshot() -> String {
         precondition(Thread.isMainThread)
         var cases: [[String: Any]] = [], pagesReport: [[String: Any]] = []

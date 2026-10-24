@@ -166,6 +166,7 @@ private enum TypographyInspection {
         }
     }
 
+    @MainActor
     private static func naturalReport() -> [String: Any] {
         let view = ReaderTextLayout.makeTextView(), reference = ReaderTextLayout.makeTextView()
         ReaderTextLayout.configure(view); ReaderTextLayout.configure(reference)
@@ -279,6 +280,7 @@ private enum TypographyInspection {
             "quoteGlyphs": quotes, "nativeRunsOK": nativeRuns, "shapingError": Double(shapingError)]
     }
 
+    @MainActor
     private static func bubbleReport() -> [String: Any] {
         let view = ReaderTextLayout.makeTextView()
         ReaderTextLayout.configure(view)
@@ -323,6 +325,7 @@ private enum TypographyInspection {
             "bubbleBaselineError": Double(baselineError)]
     }
 
+    @MainActor
     private static func pageReport() -> [String: Any] {
         // Paired ASCII dialogue crosses pages; a separate paragraph covers ZWJ and UTF-16.
         let rawDialogue = "\"报告，" + String(repeating: "他继续查看告示牌，保持平静。", count: 16) + "说完了。\""
@@ -497,6 +500,7 @@ private enum TypographyInspection {
             "pageBoundaries": boundaries, "splitChecks": splitChecks, "pageComments": comments, "pageSamples": samples]
     }
 
+    @MainActor
     private static func scrollHostReport() -> [String: Any] {
         let controller = ReaderContinuousScrollController()
         controller.update(ReaderContinuousScrollView(chapters: [ReaderScrollChapter(id: 0,
@@ -554,6 +558,7 @@ private enum TypographyInspection {
             "scrollBoundaries": boundaries, "scrollPairs": pairs, "scrollSourceOK": sourceOK, "scrollBubbleOK": bubbleOK]
     }
 
+    @MainActor
     static func snapshot() -> String {
         precondition(Thread.isMainThread)
         let started = CFAbsoluteTimeGetCurrent()
