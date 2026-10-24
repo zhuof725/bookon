@@ -65,9 +65,7 @@ struct DiscoverSettingsView: View {
                 } header: {
                     Text("布局")
                 } footer: {
-                    Text(pageLayout == .magazine
-                         ? "杂志布局把配置的所有榜单平铺成一屏。"
-                         : "列表布局是搜索框 + 书源筛选控件 + 分类列表，点分类看书单。")
+                    Text(pageLayout == .magazine ? "杂志布局把配置的所有榜单平铺成一屏。" : "列表布局是分类筛选 + 书卡列表。")
                 }
 
                 Section {
