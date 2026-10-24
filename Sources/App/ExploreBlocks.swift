@@ -318,22 +318,38 @@ struct ExploreBestsellerRow: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 5) {
-                    if let meta = ExploreBookText.meta(book) {
-                        Text(meta)
-                            .appFont(.system(size: 11.5))
-                            .foregroundStyle(palette.secondary)
-                            .lineLimit(1)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 5) {
+                        metaText
+                        Spacer(minLength: 6)
+                        tagPills
                     }
-                    Spacer(minLength: 4)
-                    ForEach(Array(tags.prefix(3).enumerated()), id: \.offset) { index, tag in
-                        ExploreTagPill(text: tag, kind: index == 0 ? .warm : .plain)
+                    VStack(alignment: .leading, spacing: 4) {
+                        metaText
+                        tagPills
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder private var metaText: some View {
+        if let meta = ExploreBookText.meta(book) {
+            Text(meta)
+                .appFont(.system(size: 11.5))
+                .foregroundStyle(palette.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var tagPills: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(tags.prefix(3).enumerated()), id: \.offset) { index, tag in
+                ExploreTagPill(text: tag, kind: index == 0 ? .warm : .plain)
+            }
+        }
     }
 }
 
@@ -426,16 +442,15 @@ struct ExploreForYouCard: View {
                                 .lineSpacing(1.5)
                                 .multilineTextAlignment(.leading)
                         }
-                        HStack(spacing: 5) {
-                            if let meta = ExploreBookText.meta(book) {
-                                Text(meta)
-                                    .appFont(.system(size: 11))
-                                    .foregroundStyle(palette.secondary)
-                                    .lineLimit(1)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 5) {
+                                metaText
+                                Spacer(minLength: 6)
+                                tagPills
                             }
-                            Spacer(minLength: 4)
-                            ForEach(Array(tags.prefix(2).enumerated()), id: \.offset) { index, tag in
-                                ExploreTagPill(text: tag, kind: index == 0 ? .warm : .plain)
+                            VStack(alignment: .leading, spacing: 4) {
+                                metaText
+                                tagPills
                             }
                         }
                     }
@@ -448,6 +463,23 @@ struct ExploreForYouCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
+        }
+    }
+
+    @ViewBuilder private var metaText: some View {
+        if let meta = ExploreBookText.meta(book) {
+            Text(meta)
+                .appFont(.system(size: 11))
+                .foregroundStyle(palette.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var tagPills: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(tags.prefix(2).enumerated()), id: \.offset) { index, tag in
+                ExploreTagPill(text: tag, kind: index == 0 ? .warm : .plain)
+            }
         }
     }
 }
