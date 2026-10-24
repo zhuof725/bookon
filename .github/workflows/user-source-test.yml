@@ -55,7 +55,7 @@ jobs:
           cp Sources/Engine/*.swift Sources/Models/*.swift $P/Sources/SourceTest/
           cp Tools/SourceTest/*.swift $P/Sources/SourceTest/
           cat > $P/Package.swift <<'EOF'
-          // swift-tools-version:5.9
+          // swift-tools-version:6.0
           import PackageDescription
           let package = Package(
             name: "SourceTest",
@@ -64,7 +64,8 @@ jobs:
               .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
               .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7")
             ],
-            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])]
+            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])],
+            swiftLanguageModes: [.v6]
           )
           EOF
           sed -i '' 's/^          //' $P/Package.swift
@@ -174,7 +175,7 @@ jobs:
           cp Sources/Engine/*.swift Sources/Models/*.swift $P/Sources/SourceTest/
           cp Tools/SourceTest/*.swift $P/Sources/SourceTest/
           cat > $P/Package.swift <<'EOF'
-          // swift-tools-version:5.9
+          // swift-tools-version:6.0
           import PackageDescription
           let package = Package(
             name: "SourceTest",
@@ -183,7 +184,8 @@ jobs:
               .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
               .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7")
             ],
-            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])]
+            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])],
+            swiftLanguageModes: [.v6]
           )
           EOF
           sed -i '' 's/^          //' $P/Package.swift

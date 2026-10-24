@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            xcrun --sdk macosx swiftc -swift-version 6 -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
               Sources/Models/TxtTocRule.swift Sources/Engine/LocalBook.swift Sources/Engine/ZipReader.swift \
               Tools/SourceTest/LocalBookRegression.swift Tools/TxtTocRuleTest/main.swift \
               -framework Foundation -lcompression -o "$RUNNER_TEMP/txt-toc-rule-regression"
@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            xcrun --sdk macosx swiftc -swift-version 6 -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
               Sources/Models/BodyReplaceRule.swift Tools/BodyReplaceTest/main.swift \
               -framework Foundation -o "$RUNNER_TEMP/body-replace-regression"
             "$RUNNER_TEMP/body-replace-regression"
@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            xcrun --sdk macosx swiftc -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            xcrun --sdk macosx swiftc -swift-version 6 -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
               Sources/Engine/ChapterContentCache.swift Sources/Engine/AppCacheService.swift \
               Tools/SourceTest/ChapterContentCacheRegression.swift Tools/CacheManagementTest/main.swift \
               -framework Foundation -framework CryptoKit -o "$RUNNER_TEMP/cache-management-regression"

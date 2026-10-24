@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           {
             swift --version
-            xcrun --sdk macosx swiftc \
+            xcrun --sdk macosx swiftc -swift-version 6 \
               -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
               Sources/Models/TxtTocRule.swift \
               Sources/Engine/LocalBook.swift \
