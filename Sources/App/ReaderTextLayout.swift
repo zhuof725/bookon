@@ -290,8 +290,9 @@ enum ReaderTextLayout {
         container.lineFragmentPadding = 0
         manager.addTextContainer(container)
         let slot = TextViewSlot()
+        let boxedContainer = SendableBox(container)
         MainActor.assumeIsolated {
-            slot.view = CommentTextView(frame: .zero, textContainer: container)
+            slot.view = CommentTextView(frame: .zero, textContainer: boxedContainer.value)
         }
         let view = slot.view!
         manager.highlightView = view
