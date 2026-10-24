@@ -64,7 +64,7 @@ func withTimeout<T: Sendable>(_ s: Double, _ op: @escaping @Sendable () async th
     }
 }
 
-func short(_ s: String?, _ n: Int = 80) -> String {
+@Sendable func short(_ s: String?, _ n: Int = 80) -> String {
     let t = (s ?? "").replacingOccurrences(of: "\n", with: "⏎")
     return t.count > n ? String(t.prefix(n)) + "…" : t
 }
