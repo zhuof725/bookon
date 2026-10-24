@@ -3,7 +3,6 @@ import UIKit
 
 /// Literal fragments and comment counts from the newly reported chapter 23, page 13/15.
 /// They are NOT a claim that this synthetic fixture has the same preceding 12 pages.
-@MainActor
 private enum PunctuationFixture {
     static let title = "第23章 鬼面王"
     static let texts = [

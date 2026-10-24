@@ -127,7 +127,6 @@ private final class FontFixtureSession: ObservableObject {
         } catch { checks.error(error); report = checks.report(scenario) }
     }
 
-    @MainActor
     func run() {
         guard !ran || scenario == "ui" else { return }
         ran = true
