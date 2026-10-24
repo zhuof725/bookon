@@ -157,7 +157,7 @@ enum SourceCheck {
         var group: String?
         var detail = ""
 
-        func checkBook(book: Book, bookType: String) async throws {
+        @Sendable func checkBook(book: Book, bookType: String) async throws {
             do {
                 if options.checkInfo {
                     var info = book
