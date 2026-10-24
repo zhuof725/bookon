@@ -150,15 +150,18 @@ final class AloudEngineAudition: NSObject, ObservableObject {
 
 extension AloudEngineAudition: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        // AVAudioPlayer 不是 Sendable：用对象标识跨到主线程比较。
+        let identity = ObjectIdentifier(player)
         Task { @MainActor [weak self] in
-            guard let self, self.player === player else { return }
+            guard let self, let current = self.player, ObjectIdentifier(current) == identity else { return }
             self.finish(message: flag ? nil : "试听失败：音频未能正常播放完毕")
         }
     }
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        let identity = ObjectIdentifier(player)
         Task { @MainActor [weak self] in
-            guard let self, self.player === player else { return }
+            guard let self, let current = self.player, ObjectIdentifier(current) == identity else { return }
             self.finish(message: "试听失败：音频解码失败，请检查引擎返回的音频格式")
         }
     }

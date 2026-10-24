@@ -129,8 +129,8 @@ enum SourceCheck {
 
     /// 批量校验：并发数与原版线程池一致可配；onStart / onResult 在调用方上下文里顺序回调。
     static func runAll(_ list: [BookSource], options: Options, hooks: Hooks = .live,
-                       onStart: ((BookSource) -> Void)? = nil,
-                       onResult: @escaping (Result) -> Void) async -> [Result] {
+                       onStart: (@Sendable (BookSource) -> Void)? = nil,
+                       onResult: @escaping @Sendable (Result) -> Void) async -> [Result] {
         var results: [Result] = []
         await withTaskGroup(of: Result.self) { group in
             var iterator = list.makeIterator()
