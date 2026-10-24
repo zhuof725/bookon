@@ -261,6 +261,7 @@ enum ReaderPaginator {
         return pages
     }
 
+    @MainActor
     private static func measured(measurer: ReaderTextLayout.Measurer, chars: [Character], start: Int,
                                  count: Int, commentCount: Int, width: CGFloat, fontSize: CGFloat,
                                  lineSpacing: CGFloat, continuation: Bool,
