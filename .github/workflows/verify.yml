@@ -1,0 +1,128 @@
+name: Verify
+
+# 一次跑完「编译 App + 跑全部离线回归」，避免分两次手动触发、也避免
+# 只看构建通过就以为代码是对的。任何一个环节红，整个 workflow 就是就失败。
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. 离线回归：不需要 Xcode 模拟器，跑得最快，先跑以便快速失败 ──
+  regression:
+    name: Regression
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_1[6-9]*.app /Applications/Xcode_2*.app 2>/dev/null | sort -V | tail -n 1)
+          [ -n "$X" ] && sudo xcode-select -s "$X"
+          swift --version
+
+      - name: Prepare package
+        run: |
+          P=$RUNNER_TEMP/pkg
+          mkdir -p $P/Sources/SourceTest
+          cp Sources/Engine/*.swift Sources/Models/*.swift $P/Sources/SourceTest/
+          cp Tools/SourceTest/*.swift $P/Sources/SourceTest/
+          cat > $P/Package.swift <<'EOF'
+          // swift-tools-version:6.0
+          import PackageDescription
+          let package = Package(
+            name: "SourceTest",
+            platforms: [.macOS(.v13)],
+            dependencies: [.package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"), .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7")],
+            targets: [.executableTarget(name: "SourceTest", dependencies: ["SwiftSoup", "Kanna"])],
+            swiftLanguageModes: [.v6]
+          )
+          EOF
+          sed -i '' 's/^          //' $P/Package.swift
+
+      - name: Build offline test binary
+        run: |
+          set -o pipefail
+          cd $RUNNER_TEMP/pkg
+          swift build -c release 2>&1 | tee regression-build.log
+
+      - name: Run all offline regressions
+        run: |
+          set -o pipefail
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --regression 2>&1 | tee regression.log
+
+      - name: Upload regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-log
+          path: |
+            regression.log
+            regression-build.log
+          if-no-files-found: ignore
+
+  # ── 2. 编译真机包：证明 App 层（SwiftUI）也能过 ──
+  build:
+    name: Build IPA
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          X=$(ls -d /Applications/Xcode_1[6-9]*.app /Applications/Xcode_2*.app 2>/dev/null | sort -V | tail -n 1)
+          echo "Using $X"
+          [ -n "$X" ] && sudo xcode-select -s "$X"
+          xcodebuild -version
+          python3 -c 'import subprocess; v=subprocess.check_output(["xcrun","--sdk","iphoneos","--show-sdk-version"],text=True); assert int(v.split(".")[0]) >= 26, "iOS26 SDK required"'
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project BookOn.xcodeproj -scheme BookOn
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project BookOn.xcodeproj \
+            -scheme BookOn \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee build.log | xcpretty || (tail -n 200 build.log; exit 1)
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          echo "APP=$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr BookOn-unsigned.ipa Payload
+          ls -la BookOn-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookOn-unsigned-ipa
+          path: BookOn-unsigned.ipa
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log

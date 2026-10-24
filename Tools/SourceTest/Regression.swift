@@ -190,6 +190,8 @@ enum RuleRegression {
         ReaderBookmarkRegression.run(check)
         SearchRankingRegression.run(check)
         try DiscoverRegression.run(check)
+        try CustomDiscoverRegression.run(check)
+        try DiscoverDeckRegression.run(check)
         do {
             var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
             let f = ISO8601DateFormatter()

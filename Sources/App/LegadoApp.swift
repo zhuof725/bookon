@@ -67,7 +67,7 @@ struct LegadoApp: App {
 }
 
 struct RootView: View {
-    @State private var selection: LibraryTab = .shelf
+    @State private var selection: LibraryTab = .home
     var body: some View {
         NavigationStack {
             LibraryTabContainer(selection: $selection) {
@@ -80,6 +80,8 @@ struct RootView: View {
                 LibraryProfileView()
             } search: {
                 SearchView()
+            } home: {
+                CustomDiscoverView()
             }
             .background { AppThemeCanvas().ignoresSafeArea() }
         }
