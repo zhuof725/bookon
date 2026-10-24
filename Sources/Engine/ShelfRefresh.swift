@@ -35,8 +35,8 @@ enum ShelfRefresh {
     /// 返回（成功数，失败数）。取消后不再启动新的书。
     @discardableResult
     static func run(_ books: [Book], concurrency: Int = 4,
-                    load: @escaping (Book) async -> Result,
-                    onResult: @escaping (Result) -> Void) async -> (updated: Int, failed: Int) {
+                    load: @escaping @MainActor @Sendable (Book) async -> Result,
+                    onResult: @escaping @MainActor @Sendable (Result) -> Void) async -> (updated: Int, failed: Int) {
         var updated = 0
         var failed = 0
         await withTaskGroup(of: Result.self) { group in
@@ -48,7 +48,7 @@ enum ShelfRefresh {
             for _ in 0..<max(1, concurrency) { addNext() }
             for await result in group {
                 if result.succeeded { updated += 1 } else { failed += 1 }
-                onResult(result)
+                await onResult(result)
                 addNext()
             }
         }

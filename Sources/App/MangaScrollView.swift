@@ -219,7 +219,7 @@ final class MangaImageLoader {
 
     private nonisolated static func fetch(requestURL: URL, headers: [String: String],
                                           decodeScript: String?, decodeSource: BookSource?,
-                                          progress: @escaping (Double) -> Void) async -> Result<UIImage, Error> {
+                                          progress: @escaping @Sendable (Double) -> Void) async -> Result<UIImage, Error> {
         do {
             let (data, response) = try await downloadData(requestURL: requestURL,
                                                           headers: headers, progress: progress)

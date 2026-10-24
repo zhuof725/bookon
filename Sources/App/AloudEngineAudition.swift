@@ -143,7 +143,7 @@ final class AloudEngineAudition: NSObject, ObservableObject {
     deinit {
         downloadTask?.cancel()
         systemTask?.cancel()
-        player?.stop()
+        // AVAudioPlayer 释放时自己会停止；deinit 是 nonisolated，不在这里碰 player。
         // 正常销毁前列表的 onDisappear 会 cancel；不在这里触碰共享音频会话。
     }
 }

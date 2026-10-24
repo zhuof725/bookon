@@ -92,7 +92,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var playErrorCount = 0
     private let rateLock = NSLock()
     private var lastRequestAt = Date.distantPast
-    private var noticeObservers: [NSObjectProtocol] = []
+    // 只在 init/deinit 里访问；deinit 是 nonisolated，不能读主 actor 隔离的属性。
+    private nonisolated(unsafe) var noticeObservers: [NSObjectProtocol] = []
 
     override init() {
         super.init()
@@ -856,14 +857,16 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func registerInterruptions() {
         let center = NotificationCenter.default
         let interrupt = center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notice in
+            // Notification 不是 Sendable：先把字段取成值类型，再进主线程任务。
+            let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let options = notice.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                guard let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
+                guard let type else { return }
                 switch type {
                 case AVAudioSession.InterruptionType.began.rawValue:
                     if isRunning && isPlaying { resumeAfterInterruption = true; pause() }
                 case AVAudioSession.InterruptionType.ended.rawValue:
-                    let options = notice.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
                     if resumeAfterInterruption, AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
                         resumeAfterInterruption = false
                         resume()
@@ -873,9 +876,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
         }
         let route = center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] notice in
+            let reason = notice.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             Task { @MainActor [weak self] in
-                guard let self, isPlaying else { return }
-                guard let reason = notice.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                guard let self, isPlaying, let reason,
                       reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue else { return }
                 pause()
             }
@@ -932,8 +935,11 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
 extension ReaderAloudController: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        // AVSpeechUtterance 不是 Sendable：用对象标识跨到主线程比较。
+        let identity = ObjectIdentifier(utterance)
         Task { @MainActor [weak self] in
-            guard let self, expectingFinish, currentUtterance === utterance else { return }
+            guard let self, expectingFinish, let current = currentUtterance,
+                  ObjectIdentifier(current) == identity else { return }
             currentUtterance = nil
             expectingFinish = false
             finishedUnit()
@@ -941,12 +947,15 @@ extension ReaderAloudController: AVSpeechSynthesizerDelegate {
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
+        // 同上：只把值类型的文本与对象标识带过并发域。
+        let identity = ObjectIdentifier(utterance)
+        let string = utterance.speechString
         Task { @MainActor [weak self] in
             guard let self, isRunning, isPlaying, playbackEngine == .system,
-                  currentUtterance === utterance, units.indices.contains(unitIndex) else { return }
+                  let current = currentUtterance, ObjectIdentifier(current) == identity,
+                  units.indices.contains(unitIndex) else { return }
             let unit = units[unitIndex]
             // AVSpeech 使用 UTF-16；阅读偏移是 Character。组合 Emoji 和前导空白要映射回原文。
-            let string = utterance.speechString
             let end = min(max(NSMaxRange(characterRange), 0), string.utf16.count)
             let spoken = (string as NSString).substring(to: end).count
             let leading = unit.text.prefix(while: { $0.isWhitespace }).count

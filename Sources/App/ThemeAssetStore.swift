@@ -25,7 +25,7 @@ final class ThemeAssetImageLoader: ObservableObject {
 
 /// Durable app-owned assets. Theme JSON contains only UUID.jpg identifiers.
 /// No method changes or deletes the user's original imported file.
-final class ThemeAssetStore {
+final class ThemeAssetStore: @unchecked Sendable {
     nonisolated(unsafe) static let shared = ThemeAssetStore()
     static let maximumInputBytes = 20 * 1024 * 1024
     static let maximumPixelSize = 2000

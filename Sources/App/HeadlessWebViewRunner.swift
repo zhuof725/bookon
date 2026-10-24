@@ -6,6 +6,19 @@ import WebKit
 /// 引擎（Sources/Engine/HeadlessWeb.swift）只认协议，不直接依赖 WebKit：
 /// - App 启动时 `install()` 注入；
 /// - CI / 测试 harness 不注入 → 相关能力自动降级。
+/// 无头 WebView 的结果盒子：主队列写、调用线程读，用锁保护。
+private final class WebOutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: String?
+    var value: String? {
+        lock.lock(); defer { lock.unlock() }
+        return stored
+    }
+    func set(_ value: String?) {
+        lock.lock(); stored = value; lock.unlock()
+    }
+}
+
 final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning, @unchecked Sendable {
     static let shared = HeadlessWebViewRunner()
 
@@ -20,23 +33,24 @@ final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning, @unchecked Send
     /// WebView 的回调是派到主队列的，主 RunLoop 一泵就会执行。
     func run(html: String?, url: String?, js: String, timeout: TimeInterval) -> String? {
         let semaphore = DispatchSemaphore(value: 0)
-        var output: String?
+        // 回调在主队列、等待在调用线程：用一个带锁的小盒子传递结果（信号量负责同步）。
+        let box = WebOutputBox()
         DispatchQueue.main.async {
             HeadlessWebSession(html: html, url: url, js: js, timeout: timeout) { value in
-                output = value
+                box.set(value)
                 semaphore.signal()
             }
         }
         if Thread.isMainThread {
             // 主线程：泵 RunLoop，让 WebView 的导航/求值回调有机会执行。
             let deadline = Date().addingTimeInterval(timeout + 2)
-            while output == nil, Date() < deadline {
+            while box.value == nil, Date() < deadline {
                 RunLoop.main.run(until: Date().addingTimeInterval(0.02))
             }
-            return output
+            return box.value
         }
         _ = semaphore.wait(timeout: .now() + timeout + 2)
-        return output
+        return box.value
     }
 }
 

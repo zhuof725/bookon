@@ -302,13 +302,15 @@ final class SourceCheckRunner: ObservableObject {
         self.store = store
         pending.removeAll()
         let started = Date()
-        task = Task.detached { [weak self] in
+        // 校验本身在 SourceCheck 的 task group 子任务里跑（不占主线程），
+        // 这里只做主 actor 上的状态维护，所以不用 detached。
+        task = Task { @MainActor [weak self] in
             _ = await SourceCheck.runAll(sources, options: options, onStart: { s in
                 Task { @MainActor in self?.markRunning(s) }
             }, onResult: { r in
                 Task { @MainActor in self?.apply(r, store: store) }
             })
-            await MainActor.run { self?.finish(started: started) }
+            self?.finish(started: started)
         }
     }
 

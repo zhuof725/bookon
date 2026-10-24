@@ -315,8 +315,9 @@ struct SourceToneList: View {
                 var pending: [String: Bool] = [:]
                 func launchNext() -> Bool {
                     guard let entry = iterator.next() else { return false }
+                    let boxedProbe = SendableBox(probe)
                     taskGroup.addTask {
-                        let ok = await Task.detached { await probe.run(entry.0, entry.1) }.value
+                        let ok = await Task.detached { await boxedProbe.value.run(entry.0, entry.1) }.value
                         return (entry.1.value, ok)
                     }
                     return true

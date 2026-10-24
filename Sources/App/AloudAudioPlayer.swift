@@ -65,8 +65,8 @@ final class AloudAudioPlayer {
     }
 
     deinit {
+        // AVAudioEngine 释放时自己会停止；deinit 是 nonisolated，不能碰引擎属性。
         NotificationCenter.default.removeObserver(self)
-        engine.stop()
     }
 
     /// 换源文件，保留音频图；准备从头播放。

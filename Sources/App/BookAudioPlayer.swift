@@ -55,7 +55,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var playerStatusObserver: NSKeyValueObservation?
     private var sleepTask: Task<Void, Never>?
     private var sleepSecondsLeft = 0
-    private var systemObservers: [NSObjectProtocol] = []
+    // 只在 init/deinit 里访问；deinit 是 nonisolated。
+    private nonisolated(unsafe) var systemObservers: [NSObjectProtocol] = []
     private var messageTask: Task<Void, Never>?
     private var resumeAfterInterruption = false
     private var remoteRegistered = false
@@ -445,14 +446,15 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         let center = NotificationCenter.default
         let interrupt = center.addObserver(forName: AVAudioSession.interruptionNotification,
                                            object: nil, queue: .main) { [weak self] notice in
+            // Notification 不是 Sendable：先取值，再进主线程任务。
+            let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let options = notice.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             Task { @MainActor [weak self] in
-                guard let self,
-                      let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
+                guard let self, let type else { return }
                 switch type {
                 case AVAudioSession.InterruptionType.began.rawValue:
                     if self.isPlaying { self.resumeAfterInterruption = true; self.pause() }
                 case AVAudioSession.InterruptionType.ended.rawValue:
-                    let options = notice.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
                     if self.resumeAfterInterruption,
                        AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
                         self.resumeAfterInterruption = false
@@ -464,9 +466,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         }
         let route = center.addObserver(forName: AVAudioSession.routeChangeNotification,
                                        object: nil, queue: .main) { [weak self] notice in
+            let reason = notice.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             Task { @MainActor [weak self] in
-                guard let self, self.isPlaying,
-                      let reason = notice.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                guard let self, self.isPlaying, let reason,
                       reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue else { return }
                 self.pause()
             }

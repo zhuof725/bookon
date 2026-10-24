@@ -95,13 +95,14 @@ final class ChapterPrecacheManager: ObservableObject {
         hasRefreshed = true
         let items = chapters.filter { !$0.isVolume && !$0.url.isEmpty }
         refreshTask?.cancel()
-        refreshTask = Task.detached { [weak self] in
+        // 只是查内存/磁盘缓存，不占 CPU：直接在主 actor 上跑，省掉跨域发送。
+        refreshTask = Task { @MainActor [weak self] in
             var found: Set<String> = []
             for chapter in items {
                 if Task.isCancelled { return }
                 if await services.isCached(chapter) { found.insert(chapter.id) }
             }
-            await MainActor.run { self?.cached = found }
+            self?.cached = found
         }
     }
 

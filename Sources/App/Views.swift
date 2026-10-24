@@ -1328,10 +1328,10 @@ struct ReaderView: View {
                       scrollNeighbor(direction) == target else { return }
                 let isVolume = chapters[target].isVolume
                 let replacement = bodyReplacement
-                let decode = imageDecodeHook(for: chapters[target])
+                let decode = SendableBox(imageDecodeHook(for: chapters[target]))
                 let chapter = await Task.detached(priority: .utility) {
                     let parsed = ReaderChapterParser.content(raw: raw, isVolume: isVolume, replacement: replacement,
-                                                            imageDecode: decode)
+                                                            imageDecode: decode.value)
                     return ScrollReaderChapter(id: target, text: parsed.text, blocks: parsed.blocks)
                 }.value
                 try Task.checkCancellation()

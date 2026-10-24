@@ -409,6 +409,7 @@ struct InAppBrowserSheet: View {
 }
 
 /// 内置浏览器的前进/后退/刷新状态；只持有 WebView 的弱引用。
+@MainActor
 final class BrowserNavigationModel: ObservableObject {
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false

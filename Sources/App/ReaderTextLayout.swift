@@ -270,6 +270,7 @@ enum ReaderTextLayout {
     }
 
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
+    @MainActor
     static func makeTextView() -> CommentTextView {
         let storage = NSTextStorage()
         let manager = ReaderTextLayoutManager()
