@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Per-test defaults persist across relaunches without touching production data.
 enum BodyRulesFixture {
-    static let defaults: UserDefaults = {
+    nonisolated(unsafe) static let defaults: UserDefaults = {
         let token = ProcessInfo.processInfo.environment["BODY_RULES_TEST_SUITE"] ?? "manual"
         let suite = "io.legado.readerharness.body-rules." + token
         guard let defaults = UserDefaults(suiteName: suite) else {

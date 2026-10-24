@@ -28,6 +28,7 @@ targets:
       - path: ../../Sources/Engine/AppCacheService.swift
       - path: ../../Sources/Engine/MangaImageDiskCache.swift
       - path: ../../Sources/Engine/ChapterContentCache.swift
+      - path: ../../Sources/Engine/BookKind.swift
       - path: SearchHistoryHarness.swift
       - path: ../../Sources/Models/BookSearchHistory.swift
       - path: ../../Sources/App/BookSearchHistoryView.swift

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A stable, test-owned suite survives relaunches, never touching user defaults.
 enum TocRulesFixture {
-    static let defaults: UserDefaults = {
+    nonisolated(unsafe) static let defaults: UserDefaults = {
         let token = ProcessInfo.processInfo.environment["TOC_RULES_TEST_SUITE"] ?? "manual"
         let suite = "io.legado.readerharness.toc-rules." + token
         guard let defaults = UserDefaults(suiteName: suite) else {

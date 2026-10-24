@@ -8,7 +8,7 @@ enum FontFixture {
     static let sans = "LegadoFixtureSans-Regular"
     static let wide = "LegadoFixtureWide-Regular"
     static let cff = "LegadoFixtureCFF-Regular"
-    static var startupError: String?
+    nonisolated(unsafe) static var startupError: String?
 
     static var scenario: String {
         let args = ProcessInfo.processInfo.arguments

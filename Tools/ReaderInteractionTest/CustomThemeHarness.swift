@@ -9,7 +9,7 @@ enum CustomThemeHarnessSupport {
     static let fixtureID = ProcessInfo.processInfo.environment["CUSTOM_THEME_FIXTURE_ID"]
         .flatMap(UUID.init(uuidString:))?.uuidString ?? "legacy-harness"
     static let suiteName = "io.legado.reader.interaction.custom-theme." + fixtureID
-    static let defaults = UserDefaults(suiteName: suiteName)!
+    nonisolated(unsafe) static let defaults = UserDefaults(suiteName: suiteName)!
     static let assetDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(suiteName, isDirectory: true).appendingPathComponent("assets", isDirectory: true)
     static let assets = ThemeAssetStore(directory: assetDirectory)
