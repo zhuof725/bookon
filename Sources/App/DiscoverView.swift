@@ -552,9 +552,11 @@ struct DiscoverSourceView: View {
         controlValues = info
         applyingControl = true
         let src = source
+        // 捕获不可变快照：@Sendable 闭包不能带可变的局部 var。
+        let infoSnapshot = info
         Task {
             let ui = await Task.detached(priority: .userInitiated) {
-                SourceDiagnostics.applyExploreControl(source: src, action: action, info: info)
+                SourceDiagnostics.applyExploreControl(source: src, action: action, info: infoSnapshot)
             }.value
             if let ui { handle(ui) }
             let result = await Task.detached(priority: .userInitiated) {
