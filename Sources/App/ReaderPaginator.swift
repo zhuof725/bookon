@@ -54,6 +54,7 @@ enum ReaderPaginator {
 
     /// 返回的 BookPage.blockHeights 与 PageContentView 的块顺序一一对应。
     /// 入口应在主线程调用，因为 TextKit/UIKit 不支持后台布局。
+    @MainActor
     static func paginate(_ blocks: [ContentBlock], configuration: Configuration) -> [BookPage] {
         precondition(Thread.isMainThread, "ReaderPaginator must run on the main thread")
         guard !blocks.isEmpty else { return [] }
