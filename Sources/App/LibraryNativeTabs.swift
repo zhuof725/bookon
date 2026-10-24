@@ -3,23 +3,23 @@ import UIKit
 
 /// NavigationStack stays outside this root so pushed screens replace the bar.
 /// On iOS 26 the system owns the Liquid Glass appearance, sizing and labels.
-struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profile: View, SearchTab: View>: View {
+struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: View, SearchTab: View>: View {
     @Binding var selection: LibraryTab
     @Environment(\.appTheme) private var theme
     @State private var icons: [String: UIImage] = [:]
     let shelf: Shelf
     let discover: Discover
-    let statistics: Statistics
+    let explore: Explore
     let profile: Profile
     let search: SearchTab
 
     init(selection: Binding<LibraryTab>, @ViewBuilder shelf: () -> Shelf,
          @ViewBuilder discover: () -> Discover,
-         @ViewBuilder statistics: () -> Statistics, @ViewBuilder profile: () -> Profile,
+         @ViewBuilder explore: () -> Explore, @ViewBuilder profile: () -> Profile,
          @ViewBuilder search: () -> SearchTab) {
         _selection = selection
         self.shelf = shelf(); self.discover = discover()
-        self.statistics = statistics()
+        self.explore = explore()
         self.profile = profile(); self.search = search()
     }
 
@@ -29,7 +29,7 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profil
                 TabView(selection: $selection) {
                     shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
                     discover.tabItem { item(.discover) }.tag(LibraryTab.discover)
-                    statistics.tabItem { item(.statistics) }.tag(LibraryTab.statistics)
+                    explore.tabItem { item(.explore) }.tag(LibraryTab.explore)
                     profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
                     search.tabItem { item(.search) }.tag(LibraryTab.search)
                 }
@@ -39,7 +39,8 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Statistics: View, Profil
                     switch selection {
                     case .shelf: shelf
                     case .discover: discover
-                    case .statistics: statistics
+                    case .explore: explore
+                    case .statistics: explore
                     case .profile: profile
                     case .search: search
                     }

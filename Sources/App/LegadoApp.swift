@@ -75,8 +75,8 @@ struct RootView: View {
                 BookshelfView()
             } discover: {
                 DiscoverView()
-            } statistics: {
-                LibraryStatisticsView()
+            } explore: {
+                ExploreView()
             } profile: {
                 LibraryProfileView()
             } search: {

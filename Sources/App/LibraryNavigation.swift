@@ -9,6 +9,14 @@ struct LibraryProfileView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                LibraryCard("阅读") {
+                    NavigationLink {
+                        LibraryStatisticsView(showsNavigationBar: true)
+                    } label: {
+                        LibraryLinkLabel(title: "阅读统计", symbol: "chart.bar")
+                    }
+                    .accessibilityIdentifier("library.statistics")
+                }
                 LibraryCard("书库管理") {
                     Group {
                         NavigationLink { SourcesView() } label: { LibraryLinkLabel(title: "书源管理", symbol: "square.stack.3d.up") }

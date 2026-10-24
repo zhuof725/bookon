@@ -2,12 +2,14 @@ import SwiftUI
 
 enum LibraryTab: Int, CaseIterable {
     // rawValue 为历史序号，保持不变以免影响已存设置与测试标识；显示顺序见 displayOrder，搜索固定在底栏最右边。
-    case shelf = 0, statistics = 1, profile = 2, search = 3, discover = 4
+    case shelf = 0, statistics = 1, profile = 2, search = 3, discover = 4, explore = 5
     /// 底栏显示顺序（rawValue 只是历史标识，不代表显示顺序）。
-    static let displayOrder: [LibraryTab] = [.shelf, .discover, .statistics, .profile, .search]
+    /// 统计已移进「我的」，底栏换成探索，仍是 5 个位置。
+    static let displayOrder: [LibraryTab] = [.shelf, .discover, .explore, .profile, .search]
     var title: String {
         switch self {
         case .shelf: return "书架"; case .discover: return "发现"; case .statistics: return "统计"
+        case .explore: return "探索"
         case .profile: return "我的"; case .search: return "搜索"
         }
     }
@@ -15,6 +17,7 @@ enum LibraryTab: Int, CaseIterable {
         switch self {
         case .shelf: return "book.fill"; case .discover: return "safari.fill"
         case .statistics: return "chart.bar.fill"
+        case .explore: return "sparkles"
         case .profile: return "person.fill"; case .search: return "magnifyingglass"
         }
     }
@@ -23,6 +26,7 @@ enum LibraryTab: Int, CaseIterable {
         switch self {
         case .shelf: return "shelf"; case .discover: return "discover"
         case .statistics: return "statistics"
+        case .explore: return "explore"
         case .profile: return "profile"; case .search: return "search"
         }
     }

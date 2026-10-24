@@ -56,7 +56,9 @@ struct LibraryStatisticsView: View {
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
+        .navigationTitle("统计")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("stats.page")
         .onAppear {
             stats.refresh()

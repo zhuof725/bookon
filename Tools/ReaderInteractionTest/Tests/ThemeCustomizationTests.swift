@@ -122,8 +122,8 @@ final class ThemeCustomizationTests: XCTestCase {
         capture("customization-summary-eight-rows-bottom")
         page("tab"); tap("theme.editor.tab.text")
         XCTAssertTrue(app.buttons["theme.editor.tab.text"].isSelected)
-        // Three per-tab icon rows: 书架/统计/我的.
-        for key in ["shelf", "statistics", "profile"] {
+        // Three per-tab icon rows: 书架/探索/我的（统计已移进「我的」）。
+        for key in ["shelf", "explore", "profile"] {
             let row = app.buttons["theme.editor.tab.icon.\(key)"]
             visible(row)
             XCTAssertEqual(row.value as? String, "默认")
@@ -233,7 +233,7 @@ final class ThemeCustomizationTests: XCTestCase {
         XCTAssertEqual(books[0].frame.minY, books[1].frame.minY, accuracy: 2)
         XCTAssertGreaterThan(books[2].frame.minY, books[0].frame.maxY)
         XCTAssertGreaterThan(books[1].frame.minX, books[0].frame.maxX)
-        for index in [1, 2, 3, 0] {
+        for index in [4, 5, 2, 3, 0] {
             let id = "library.tab.\(index)"
             tap(id)
             XCTAssertTrue(app.buttons[id].isSelected)

@@ -17,8 +17,8 @@ struct NativeTabsGlassHarness: View {
             } discover: {
                 Text("发现测试页").accessibilityIdentifier("native.page.discover")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } statistics: {
-                Text("统计测试页").accessibilityIdentifier("native.page.statistics")
+            } explore: {
+                Text("探索测试页").accessibilityIdentifier("native.page.explore")
             } profile: {
                 Text("我的测试页").accessibilityIdentifier("native.page.profile")
             } search: {

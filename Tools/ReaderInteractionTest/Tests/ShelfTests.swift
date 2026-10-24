@@ -147,9 +147,9 @@ final class ShelfTests: XCTestCase {
     }
 
     func testDockAndReaderPushHidesRootDock() {
-        tap("library.tab.1")
-        XCTAssertTrue(app.staticTexts["shelf.statistics"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["library.tab.1"].isSelected)
+        tap("library.tab.5")
+        XCTAssertTrue(app.staticTexts["shelf.explore"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["library.tab.5"].isSelected)
         tap("library.tab.2")
         XCTAssertTrue(app.staticTexts["shelf.profile"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["library.tab.2"].isSelected)
@@ -159,7 +159,7 @@ final class ShelfTests: XCTestCase {
         a.tap()
         XCTAssertTrue(app.staticTexts["shelf.reader"].waitForExistence(timeout: 4))
         XCTAssertEqual(app.staticTexts["shelf.reader.title"].label, "A 林间札记")
-        for id in ["library.tab.0", "library.tab.1", "library.tab.2", "library.tab.3", "shelf.more"] {
+        for id in ["library.tab.0", "library.tab.5", "library.tab.2", "library.tab.3", "shelf.more"] {
             XCTAssertFalse(app.buttons[id].exists, "Root chrome must not follow the pushed reader")
         }
         XCTAssertEqual(app.navigationBars.count, 0)
