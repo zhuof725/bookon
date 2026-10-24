@@ -5,6 +5,7 @@ import Foundation
 enum DiscoverSettings {
     static let gridEnabledKey = "discover.grid.enabled"
     static let gridColumnsKey = "discover.grid.columns"
+    static let homeGroupKey = "discover.home.group"
     static let pageLayoutKey = "discover.page.layout"
     static let rankingModeKey = "discover.ranking.mode"
     static let rankingKeywordsKey = "discover.ranking.keywords"

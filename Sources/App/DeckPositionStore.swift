@@ -6,7 +6,7 @@ import SwiftUI
 /// 都会重新创建，`@State` 会跟着归零，用户一回头就跳回第一张。
 /// 这里按「模板 + 书源 + 分类」做键存在内存里，App 运行期间一直有效；
 /// 同时写入 UserDefaults，重启后也还在原位。
-final class DeckPositionStore {
+final class DeckPositionStore: @unchecked Sendable {
     /// 位置只被界面线程读写，但 `key(template:sourceUrl:kindUrl:)` 是纯函数、
     /// 不碰状态，必须能在任何上下文调用（DeckIdentity 就可能在非隔离处调用）。
     /// 所以类本身不加 @MainActor，只在读写字典时加锁。

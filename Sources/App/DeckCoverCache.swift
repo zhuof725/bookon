@@ -8,7 +8,7 @@ import CryptoKit
 /// 为什么需要磁盘：滚动时卡片反复进出屏幕，只靠内存会在系统压内存时全部丢掉，
 /// 于是每次回滑都要重新下载，表现就是「卡卡的」。
 /// 磁盘缓存按 URL 的 SHA256 命名，不解析扩展名，也不依赖服务器给的文件名。
-final class DeckCoverCache {
+final class DeckCoverCache: @unchecked Sendable {
     static let shared = DeckCoverCache()
 
     private let memory = NSCache<NSURL, UIImage>()
@@ -50,33 +50,42 @@ final class DeckCoverCache {
     func image(for url: URL) async -> UIImage? {
         if let hit = memoryImage(for: url) { return hit }
 
-        // 同一个 URL 并发请求合并成一个任务
-        lock.lock()
-        if let existing = inflight[url as NSURL] {
-            lock.unlock()
-            return await existing.value
-        }
-        let task = Task<UIImage?, Never> { [weak self] in
-            guard let self else { return nil }
-            if let disk = await self.loadFromDisk(url), let decoded = UIImage(data: disk) {
+        // 同一个 URL 并发请求合并成一个任务（持锁完成「查+建+登记」，避免重复下载）
+        let task = taskForURL(url) {
+            Task<UIImage?, Never> { [weak self] in
+                guard let self else { return nil }
+                if let disk = await self.loadFromDisk(url), let decoded = UIImage(data: disk) {
+                    self.remember(decoded, for: url)
+                    return decoded
+                }
+                guard let (data, _) = try? await URLSession.shared.data(from: url),
+                      let decoded = UIImage(data: data) else { return nil }
                 self.remember(decoded, for: url)
+                await self.saveToDisk(data, for: url)
                 return decoded
             }
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let decoded = UIImage(data: data) else { return nil }
-            self.remember(decoded, for: url)
-            await self.saveToDisk(data, for: url)
-            return decoded
         }
-        inflight[url as NSURL] = task
-        lock.unlock()
 
         let result = await task.value
+        clearTask(for: url)
+        return result
+    }
 
+    /// 已有任务直接复用，没有就创建并登记。整段持锁，NSLock 不能直接出现在 async 函数里。
+    private func taskForURL(_ url: URL,
+                            create: () -> Task<UIImage?, Never>) -> Task<UIImage?, Never> {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = inflight[url as NSURL] { return existing }
+        let task = create()
+        inflight[url as NSURL] = task
+        return task
+    }
+
+    private func clearTask(for url: URL) {
         lock.lock()
         inflight[url as NSURL] = nil
         lock.unlock()
-        return result
     }
 
     private func remember(_ image: UIImage, for url: URL) {

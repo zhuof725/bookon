@@ -103,9 +103,10 @@ struct AddBoardPage: View {
             sectionTitle("选择模板")
 
             NavigationLink {
-                DiscoverTemplateLibrary(current: template, dismissOnPick: false) { kind in
+                DiscoverTemplateLibrary(current: template,
+                                        onPick: { kind in
                     withAnimation(.easeInOut(duration: 0.2)) { template = kind }
-                }
+                }, dismissOnPick: false)
             } label: {
                 HStack(spacing: 12) {
                     // 左：当前模板的缩略预览

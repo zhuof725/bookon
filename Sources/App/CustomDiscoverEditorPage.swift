@@ -35,10 +35,10 @@ struct CustomDiscoverEditorPage: View {
                     if draft.entries.isEmpty {
                         // 空配置：第一屏就是模板展示库，点一个模板直接开始配置
                         DiscoverTemplateLibrary(current: pickedTemplate ?? .largeCard,
-                                                dismissOnPick: false) { kind in
+                                                onPick: { kind in
                             pickedTemplate = kind
                             showAddPage = true
-                        }
+                        }, dismissOnPick: false)
                         .environmentObject(store)
                     } else {
                         previewList
@@ -109,18 +109,18 @@ struct CustomDiscoverEditorPage: View {
                 }
             }
             .navigationDestination(isPresented: $showTemplatePicker) {
-                DiscoverTemplateLibrary(current: .largeCard, dismissOnPick: false) { kind in
+                DiscoverTemplateLibrary(current: .largeCard, onPick: { kind in
                     pickedTemplate = kind
                     showTemplatePicker = false
                     showAddPage = true
-                }
+                }, dismissOnPick: false)
                 .environmentObject(store)
             }
             .navigationDestination(isPresented: $showAddPage) {
                 // 从模板库点进来时模板已经定了，这一页只管选书源和分类。
-                AddBoardPage(initialTemplate: pickedTemplate) { entries in
+                AddBoardPage(onAdd: { entries in
                     for entry in entries { draft.upsert(entry) }
-                }
+                }, initialTemplate: pickedTemplate)
                 .environmentObject(store)
             }
             .sheet(isPresented: $showCarouselPicker) {

@@ -130,9 +130,9 @@ struct CarouselDataSourcePicker: View {
             Section {
                 NavigationLink {
                     DiscoverTemplateLibrary(current: config.carouselTemplate,
-                                            dismissOnPick: false) { kind in
+                                            onPick: { kind in
                         config.carouselTemplate = kind
-                    }
+                    }, dismissOnPick: false)
                     .environmentObject(store)
                 } label: {
                     HStack {
