@@ -514,7 +514,6 @@ enum ToastCenter {
     static func recordSourceAction(_ action: SourceUiAction) {
         lock.lock(); lastSourceAction = action; lock.unlock()
     }
-    private static var handler: ((String) -> Void)?
     static func setHandler(_ h: ((String) -> Void)?) { lock.lock(); handler = h; lock.unlock() }
     static func post(_ message: String) {
         lock.lock(); let h = handler; lock.unlock()

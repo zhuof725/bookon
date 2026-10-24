@@ -96,6 +96,7 @@ enum DiscoverCatalog {
                                            kind: kind, isSection: isSection))
         }
         return out
+    }
 
     /// 可选分类的分组：和 `kindSections` 同一套切节规则，但保留分组标题、丢掉控件项，
     /// 只留下「有网址的普通分类」。收藏/添加板块时用这个把分类按书源自己的分组摆开。
