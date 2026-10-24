@@ -472,14 +472,6 @@ enum SourceVerificationBridge {
 }
 
 /// JS 里 java.toast / longToast 的消息出口：界面订阅 handler 即可显示；没有订阅者时只丢弃。
-/// 发现页控件 action 里脚本发起的界面动作：`java.open(ui, scheme, data)` 与
-/// `java.searchBook(key, sourceName)`。原版由 Activity 直接响应，iOS 端把动作收集起来，
-/// 由发现页决定要打开登录页还是发起一次书源内搜索。
-enum SourceUiAction: Equatable {
-    case open(ui: String, scheme: String, data: String)
-    case search(key: String, sourceName: String)
-}
-
 enum ToastCenter {
     /// 评论页等「打开网页」请求的统一入口。界面收到后弹半屏网页。
     /// content 是书源直接给的 HTML 页面内容（Legado 的 showBrowser(url, content) 语义）：
@@ -497,23 +489,6 @@ enum ToastCenter {
     }
     private static let lock = NSLock()
     private nonisolated(unsafe) static var handler: ((String) -> Void)?
-
-    /// 发现页控件脚本想要的界面动作。每次执行 action 前清空，执行后读取。
-    private nonisolated(unsafe) static var lastSourceAction: SourceUiAction? = nil
-
-    /// 读取最近一次控件脚本请求的界面动作（执行 action 后调用）。
-    static var pendingSourceAction: SourceUiAction? {
-        lock.lock(); defer { lock.unlock() }
-        return lastSourceAction
-    }
-
-    static func resetSourceAction() {
-        lock.lock(); lastSourceAction = nil; lock.unlock()
-    }
-
-    static func recordSourceAction(_ action: SourceUiAction) {
-        lock.lock(); lastSourceAction = action; lock.unlock()
-    }
     static func setHandler(_ h: ((String) -> Void)?) { lock.lock(); handler = h; lock.unlock() }
     static func post(_ message: String) {
         lock.lock(); let h = handler; lock.unlock()
@@ -1047,17 +1022,8 @@ final class JSEngine: @unchecked Sendable {
     java.getWebViewUA=function(){return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';};
     java.showReadingBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
     java.startBrowserDp=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
-    // 发现页控件的按钮回调：原版 java.open(ui, scheme, data) 打开登录/书架等界面，
-    // java.searchBook(key, sourceName) 用当前书源直接搜索。iOS 端由原生接管（见
-    // SourceDiagnostics.applyExploreControl），这里只负责把参数交出去。
-    java.open=function(u,sc,data){
-        if(typeof __openUi==='function'){__openUi(String(u==null?'':u),String(sc==null?'':sc),String(data==null?'':data));}
-        return '';
-    };
-    java.searchBook=function(k,sn){
-        if(typeof __searchBook==='function'){__searchBook(String(k==null?'':k),String(sn==null?'':sn));}
-        return '';
-    };
+    java.open=function(){return '';};
+    java.searchBook=function(){return '';};
     java.qread=function(){return '';};
     java.getThemeConfig=function(){return 'light';};
     java.startBrowser=function(u,t,c){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''),String(c||''));}return ''};
@@ -1591,15 +1557,6 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(fontBlank, forKeyedSubscript: "__fontBlank" as NSString)
         ctx.setObject(fontReplace, forKeyedSubscript: "__fontReplace" as NSString)
         ctx.setObject(verification, forKeyedSubscript: "__verificationCode" as NSString)
-        // 发现页控件：java.open / java.searchBook 的落点。
-        let openUi: @convention(block) (String, String, String) -> Void = { ui, scheme, data in
-            ToastCenter.recordSourceAction(.open(ui: ui, scheme: scheme, data: data))
-        }
-        let searchBook: @convention(block) (String, String) -> Void = { key, sourceName in
-            ToastCenter.recordSourceAction(.search(key: key, sourceName: sourceName))
-        }
-        ctx.setObject(openUi, forKeyedSubscript: "__openUi" as NSString)
-        ctx.setObject(searchBook, forKeyedSubscript: "__searchBook" as NSString)
     }
 
     /// Stable 16-hex-digit identifier, generated once per app install and kept in UserDefaults.

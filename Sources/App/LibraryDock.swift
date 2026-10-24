@@ -1,21 +1,18 @@
 import SwiftUI
 
 enum LibraryTab: Int, CaseIterable {
-    // rawValue 为历史序号，保持不变以免影响已存设置与测试标识；显示顺序见 displayOrder。
-    // statistics 不再占底栏位置（已并入「我的」），rawValue 保留以免影响已存设置。
-    case shelf = 0, statistics = 1, profile = 2, search = 3, discover = 4, home = 5
-    /// 底栏显示顺序：首页（自定义布局）、书架、发现、我的、搜索。
-    static let displayOrder: [LibraryTab] = [.home, .shelf, .discover, .profile, .search]
+    // rawValue 为历史序号，保持不变以免影响已存设置与测试标识；显示顺序见 displayOrder，搜索固定在底栏最右边。
+    case shelf = 0, statistics = 1, profile = 2, search = 3, discover = 4
+    /// 底栏显示顺序（rawValue 只是历史标识，不代表显示顺序）。
+    static let displayOrder: [LibraryTab] = [.shelf, .discover, .statistics, .profile, .search]
     var title: String {
         switch self {
-        case .home: return "首页"
         case .shelf: return "书架"; case .discover: return "发现"; case .statistics: return "统计"
         case .profile: return "我的"; case .search: return "搜索"
         }
     }
     var symbol: String {
         switch self {
-        case .home: return "house.fill"
         case .shelf: return "book.fill"; case .discover: return "safari.fill"
         case .statistics: return "chart.bar.fill"
         case .profile: return "person.fill"; case .search: return "magnifyingglass"
@@ -24,7 +21,6 @@ enum LibraryTab: Int, CaseIterable {
     /// Customization key for ThemeCustomization.tabIcons.
     var key: String {
         switch self {
-        case .home: return "home"
         case .shelf: return "shelf"; case .discover: return "discover"
         case .statistics: return "statistics"
         case .profile: return "profile"; case .search: return "search"

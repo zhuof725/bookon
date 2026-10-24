@@ -1,7 +1,8 @@
 name: Build unsigned IPA
 
 on:
-  # 构建与回归已统一到 verify.yml，这里只在需要单独跑时手动触发。
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:

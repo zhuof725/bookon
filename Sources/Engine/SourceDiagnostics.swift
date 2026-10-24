@@ -104,20 +104,14 @@ enum SourceDiagnostics {
 
     /// 执行发现页控件的 action（书山聚合扩展）：注入 infoMap（当前控件值），返回是否执行成功。
     /// 脚本里的 setConfigs 把配置写进书源变量（磁盘持久化），随后重新读取发现分类即可生效。
-    ///
-    /// action 里可能包含 `java.refreshExplore()`（重读分类）与 `java.open(...)` /
-    /// `java.searchBook(...)`（切界面、发起搜索）。刷新由调用方统一做；界面动作用
-    /// `SourceUiAction` 回传，避免脚本真的去翻页面。
-    static func applyExploreControl(source: BookSource, action: String, info: [String: String]) -> SourceUiAction? {
+    static func applyExploreControl(source: BookSource, action: String, info: [String: String]) -> Bool {
         let script = action.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !script.isEmpty else { return nil }
+        guard !script.isEmpty else { return false }
         let context = RuleContext(source: source)
-        ToastCenter.resetSourceAction()
         let out = JSEngine.shared.evalString(script, baseUrl: source.bookSourceUrl,
                                              vars: ["infoMap": info], jsLib: source.jsLib,
                                              context: context)
-        if out == nil { return nil }
-        return ToastCenter.pendingSourceAction
+        return out != nil
     }
 
     /// 发现页书籍列表：ruleExplore 优先，缺省时用搜索规则。page 供分类地址里的 {{page}}（加载更多）。
