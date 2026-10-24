@@ -33,32 +33,6 @@ struct ThemePreviewCard: View {
     }
 }
 
-/// Both variants share the exact same component geometry; only tokens change.
-struct ThemeSplitPreview: View {
-    let theme: AppTheme
-    let isSelected: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                ThemeComponentCanvas()
-                    .environment(\.colorScheme, .light)
-                ThemeComponentCanvas()
-                    .environment(\.colorScheme, .dark)
-                    .mask(ThemeDiagonalMask())
-            }
-            .environment(\.appTheme, theme)
-            .frame(height: 104)
-            .accessibilityHidden(true)
-            ThemePreviewFooter(theme: theme, scheme: nil, nameAccessibilityIdentifier: nil)
-        }
-        .modifier(ThemePreviewContainer(isSelected: isSelected))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(theme.name)，浅色与深色预览")
-        .accessibilityValue(isSelected ? "当前使用" : "未使用")
-    }
-}
-
 /// Actual background/surface/accent samples, never invented library metrics.
 struct ThemeSwatchStrip: View {
     let theme: AppTheme

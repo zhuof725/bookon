@@ -86,16 +86,6 @@ enum ReadingStatsEngine {
         }
     }
 
-    static func bucketStart(index: Int, period: ReadingStatsPeriod, anchor: Date, calendar: Calendar) -> Date {
-        let start = range(period: period, anchor: anchor, calendar: calendar).start
-        switch period {
-        case .week, .month:
-            return calendar.date(byAdding: .day, value: index, to: start)!
-        case .year:
-            return calendar.date(byAdding: .month, value: index, to: start)!
-        }
-    }
-
     static func bucketIndex(of date: Date, period: ReadingStatsPeriod, anchor: Date, calendar: Calendar) -> Int? {
         let start = range(period: period, anchor: anchor, calendar: calendar).start
         switch period {

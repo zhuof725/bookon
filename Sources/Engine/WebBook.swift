@@ -513,19 +513,6 @@ enum WebBook {
         return cleanText(raw)
     }
 
-    /// 与 content 相同的抓取流程，但保留 <comment>/<img> 标记，供阅读器渲染段评。
-    static func contentBlocks(source: BookSource, chapter: BookChapter, nextChapterUrl: String? = nil, book: Book? = nil) async throws -> (raw: String, blocks: [ContentBlock]) {
-        let raw = try await rawContent(source: source, chapter: chapter, nextChapterUrl: nextChapterUrl, book: book)
-        // 原版 ruleContent.imageDecode：对正文里的**每张图片/气泡**单独求值一次，
-        // 脚本里 `src` 是这张图片的原始地址（地址里带 ,{...} 选项），返回值是新地址。
-        // 番茄系段评靠它清理「已渲染」的内存标记，否则点击气泡时 createSvg() 会以为
-        // 已经打开过评论页而直接跳过 → 表现为「段评打不开」。
-        // 注意必须在**图片级别、并入段落之前**执行：脚本从 src 里正则提取参数，
-        // 传整章正文或剥掉选项的地址都匹配不到。
-        let blocks = ContentBlocks.parse(raw, imageDecode: contentImageHook(source: source, book: book, chapter: chapter))
-        return (raw, blocks)
-    }
-
     /// 生成正文图片钩子。对正文里的每张图片/气泡依次做两件事：
     ///
     /// 1. **图片选项里的 `js`**：书源用它动态生成真实图片地址。

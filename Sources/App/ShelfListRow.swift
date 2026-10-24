@@ -52,14 +52,6 @@ struct ShelfListSummary: Equatable {
         guard let latestTitle else { return "暂无章节信息" }
         return latestTime.map { "\($0) · \(latestTitle)" } ?? latestTitle
     }
-    /// 网格/列表右上角的百分比：当前章位置 ÷ 目录章数。无目录不显示。
-    static func progressPercent(_ book: Book, chapterCount: Int?) -> Int? {
-        guard ShelfBooks.isStarted(book) else { return nil }
-        if let chapterCount, chapterCount > 0 {
-            return min(100, max(0, Int((Double(book.durChapterIndex) / Double(chapterCount) * 100).rounded())))
-        }
-        return nil
-    }
 }
 
 struct ShelfListRow: View {

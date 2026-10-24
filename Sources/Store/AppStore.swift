@@ -180,9 +180,6 @@ final class AppStore: ObservableObject {
         saveSources()
     }
 
-    /// 校验书源写回：累计失效分组、错误注释与响应耗时（对齐原版 CheckSourceService 的逐源 update）。
-    func applySourceCheck(_ updated: BookSource) { applySourceChecks([updated]) }
-
     /// 批量写回：一次修改书源数组（只触发一次界面刷新），在后台串行队列编码写盘，不阻塞主线程。
     /// 逐源同步写整份书源 JSON 在书源多、校验快时会长时间占住主线程并反复分配大块内存。
     func applySourceChecks(_ updated: [BookSource]) {
@@ -295,12 +292,5 @@ final class AppStore: ObservableObject {
     func saveToc(_ b: Book, _ c: [BookChapter]) {
         let f = cacheDir.appendingPathComponent("toc_" + key(b.bookUrl) + ".json")
         if let d = try? JSONEncoder().encode(c) { try? d.write(to: f) }
-    }
-    func cachedContent(_ c: BookChapter) -> String? {
-        try? String(contentsOf: cacheDir.appendingPathComponent("c_" + key(c.url) + ".txt"), encoding: .utf8)
-    }
-    func saveContent(_ c: BookChapter, _ text: String) {
-        guard !text.isEmpty else { return }
-        try? text.write(to: cacheDir.appendingPathComponent("c_" + key(c.url) + ".txt"), atomically: true, encoding: .utf8)
     }
 }

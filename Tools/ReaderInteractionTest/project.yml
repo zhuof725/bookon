@@ -51,7 +51,6 @@ targets:
       - path: ../../Sources/App/AppTheme.swift
       - path: ../../Sources/App/AppThemeStore.swift
       - path: ../../Sources/App/ThemePalette.swift
-      - path: ../../Sources/App/ThemeGalleryView.swift
       - path: ../../Sources/App/ThemeEditorView.swift
       - path: ../../Sources/App/ThemeEditorControls.swift
       - path: ../../Sources/App/ThemePreviewCard.swift

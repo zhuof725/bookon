@@ -94,12 +94,6 @@ enum DebugLog {
         return String(((components.string ?? plain) + options).prefix(2000))
     }
 
-    /// 响应行：与 Legado 一样在日志里单占一行，但只记录形态（字符数/JSON 字段/HTML 标题），不记录正文。
-    static func bodyLine(_ body: String) -> String {
-        if body.isEmpty { return "响应为空" }
-        return "响应 \(body.count) 字符；\(summary(body))"
-    }
-
     static func summary(_ body: String) -> String {
         if let data = body.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) {
             if let dict = obj as? [String: Any] { return "JSON 顶层字段：" + dict.keys.sorted().joined(separator: ", ") }

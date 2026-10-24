@@ -285,17 +285,6 @@ struct BookshelfScreen: View {
     }
 }
 
-private struct ShelfMenuPointer: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { p in
-            p.move(to: CGPoint(x: 0, y: rect.maxY))
-            p.addQuadCurve(to: CGPoint(x: rect.midX, y: 0), control: CGPoint(x: rect.midX * 0.7, y: rect.maxY * 0.3))
-            p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.midX * 1.3, y: rect.maxY * 0.3))
-            p.closeSubpath()
-        }
-    }
-}
-
 struct ShelfBookCard: View {
     @ThemePalette private var palette
     @Environment(\.appTheme) private var theme

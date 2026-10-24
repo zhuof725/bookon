@@ -779,8 +779,6 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     // MARK: 语速与引擎
 
-    func changeSpeed(_ delta: Int) { speed += delta }
-
     private func didChangeSpeed() {
         let clamped = min(max(speed, 0), 45)
         if clamped != speed { speed = clamped; return }

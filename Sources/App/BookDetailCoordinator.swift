@@ -438,16 +438,6 @@ struct BookDetailSourcePicker: View {
         return base + " · " + upstream
     }
 
-    private func upstreamName(_ book: Book) -> String? {
-        if let name = upstreamFromURL(book.bookUrl) { return name }
-        // 书地址里没有标记时，看看目录里第一章的地址（有的聚合源只把上游编在章节地址里）。
-        if let toc = store.cachedToc(book), let first = toc.first,
-           let name = upstreamFromURL(first.url) {
-            return name
-        }
-        return nil
-    }
-
     /// 聚合源的子源标记：`data:...base64,{"source":"番茄小说",...}`、查询参数 `source=/site=`
     /// 这些写法都认；不同聚合源用的键名不一样，这里按常见键名逐个找。
     private func upstreamFromURL(_ raw: String) -> String? {
