@@ -4,6 +4,7 @@ import UIKit
 // Test-only entry points. Assets are synthetic, project-owned hollow-box fonts,
 // not downloaded typefaces. Imports below exercise the real repository; the
 // native Files picker/security-provider UI is deliberately not automated here.
+@MainActor
 enum FontFixture {
     static let sans = "LegadoFixtureSans-Regular"
     static let wide = "LegadoFixtureWide-Regular"

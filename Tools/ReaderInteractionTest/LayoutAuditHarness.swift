@@ -4,6 +4,7 @@ import CoreText
 
 /// Regression fixture transcribed verbatim from photo_5A9EDD22 (第23章 screenshot).
 /// The first line is already a continuation of a paragraph on the preceding page.
+@MainActor
 private enum LayoutAuditFixture {
     static let title = "第23章 鬼面王"
     static let texts = [
