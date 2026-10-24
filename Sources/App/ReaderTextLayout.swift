@@ -1,11 +1,12 @@
-// TextKit 1 的排版对象不要求主线程；但 `UITextView` 是 UIKit 的主线程 API，
-// 而分页/测量入口已经在主线程（调用方有 precondition(Thread.isMainThread)）。
-// Swift 6 把「把非 Sendable 的 NSTextContainer 传给主线程初始化器」当成错误，
-// 这里用预并发导入把它降级为警告，保持原有的主线程约定。
-@preconcurrency import UIKit
+import UIKit
 import CoreText
 
 /// 渲染与分页共用 TextKit 1 的真实字形与换行；不拉伸字格、行距或更改原文。
+/// 把主 actor 上创建的视图带回非隔离函数（调用方已断言主线程）。
+private final class TextViewSlot: @unchecked Sendable {
+    var view: CommentTextView?
+}
+
 enum ReaderTextLayout {
     fileprivate static let baselineKey = NSAttributedString.Key("ReaderTextBaseline")
     fileprivate static let commentTailKey = NSAttributedString.Key("ReaderCommentTailStart")
@@ -274,7 +275,11 @@ enum ReaderTextLayout {
     }
 
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
-        static func makeTextView() -> CommentTextView {
+    ///
+    /// TextKit 的存储/布局/容器对象不要求主线程，只有 `UITextView` 是 UIKit 的主线程 API。
+    /// 分页与测量入口本来就有 `precondition(Thread.isMainThread)`，这里只把「创建视图」
+    /// 这一步显式声明在主 actor 上（Swift 6 不允许把非 Sendable 的容器从非隔离上下文传进去）。
+    static func makeTextView() -> CommentTextView {
         let storage = NSTextStorage()
         let manager = ReaderTextLayoutManager()
         manager.highlightView = nil
@@ -284,7 +289,11 @@ enum ReaderTextLayout {
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
         manager.addTextContainer(container)
-        let view = CommentTextView(frame: .zero, textContainer: container)
+        let slot = TextViewSlot()
+        MainActor.assumeIsolated {
+            slot.view = CommentTextView(frame: .zero, textContainer: container)
+        }
+        let view = slot.view!
         manager.highlightView = view
         return view
     }
