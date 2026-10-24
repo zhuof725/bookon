@@ -129,6 +129,12 @@ struct ShelfListBookButton: View {
         .accessibilityIdentifier("shelf.book." + book.id)
         .contextMenu {
             Button(action: open) { Label("开始阅读", systemImage: "book") }
+            Button {
+                FinishedBookStore.shared.toggle(book)
+            } label: {
+                Label(FinishedBookStore.shared.isFinished(book.bookUrl) ? "取消读完" : "标记为读完",
+                      systemImage: FinishedBookStore.shared.isFinished(book.bookUrl) ? "arrow.uturn.backward.circle" : "checkmark.circle")
+            }
             Button(action: select) { Label("选择书籍", systemImage: "checkmark.circle") }
         }
         .task(id: book) { summary = ShelfListSummary(book: book, chapters: loadChapters(book)) }

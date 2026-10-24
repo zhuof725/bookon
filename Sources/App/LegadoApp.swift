@@ -37,6 +37,7 @@ struct LegadoApp: App {
                     if phase != .active {
                         JavaBridge.store.flush()
                         ReadingStatsStore.shared.flush()
+                        ListeningStatsStore.shared.flush()
                         // 离开前台（后台/App 切换器）即视为正常结束，避免强杀被误记为闪退。
                         CrashReporter.markSessionClean()
                     }

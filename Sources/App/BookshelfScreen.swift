@@ -228,6 +228,12 @@ struct BookshelfScreen: View {
             if let onDetail {
                 Button { onDetail(book) } label: { Label("书籍详情", systemImage: "info.circle") }
             }
+            Button {
+                FinishedBookStore.shared.toggle(book)
+            } label: {
+                Label(FinishedBookStore.shared.isFinished(book.bookUrl) ? "取消读完" : "标记为读完",
+                      systemImage: FinishedBookStore.shared.isFinished(book.bookUrl) ? "arrow.uturn.backward.circle" : "checkmark.circle")
+            }
             Button { selecting = true; selection.insert(book.id) } label: { Label("选择书籍", systemImage: "checkmark.circle") }
         }
     }

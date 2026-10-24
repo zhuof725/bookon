@@ -6,10 +6,10 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, navbar, full]
+        options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, stats, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-grid, navbar, full]
   push:
     branches: [main]
-    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/App/Library*.swift', 'Sources/App/Discover*.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
+    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/App/StatisticsScreen.swift', 'Sources/App/ReadingGoalSheets.swift', 'Sources/App/Library*.swift', 'Sources/App/Discover*.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
 concurrency:
   group: reader-interaction-${{ github.ref }}
   cancel-in-progress: true
@@ -135,6 +135,7 @@ jobs:
             chrome) ARGS=(-only-testing:ReaderInteractionTests/ChromeTests) ;;
             navbar) ARGS=(-only-testing:ReaderInteractionTests/NavBarOverflowTests) ;;
             shelf) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests) ;;
+            stats) ARGS=(-only-testing:ReaderInteractionTests/StatsTests) ;;
             detail) ARGS=(-only-testing:ReaderInteractionTests/DetailTests) ;;
             toc-rules) ARGS=(-only-testing:ReaderInteractionTests/TocRulesTests) ;;
             app-font) ARGS=(-only-testing:ReaderInteractionTests/AppFontTests -only-testing:ReaderInteractionTests/FontTests/testReadingPipelineFontIdentityAndPagination) ;;
@@ -210,6 +211,12 @@ jobs:
         if: ${{ always() && inputs.suite == 'chrome' }}
         with:
           name: reader-chrome-screenshots
+          path: reader-screenshots/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.suite == 'stats' }}
+        with:
+          name: stats-screenshots
           path: reader-screenshots/
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4

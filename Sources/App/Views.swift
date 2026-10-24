@@ -1396,6 +1396,7 @@ struct ReaderView: View {
         let chapters = statsChapters
         statsChapters = []
         ReadingStatsStore.shared.record(book: book, start: start, end: Date(), chapters: chapters.sorted())
+        ReadingPlanEngine.checkDay(bookURL: book.bookUrl)
         let source = store.source(for: book.origin)
         let chapter = self.chapters.indices.contains(book.durChapterIndex) ? self.chapters[book.durChapterIndex] : nil
         SourceCallBack.fire(SourceCallBack.saveRead, source: source, book: book,
@@ -1662,7 +1663,13 @@ struct ReaderView: View {
     private func goAcrossEdge(_ dir: Int) {
         guard !loading, pendingEdge == nil, !showToc, !showSettings, commentTarget == nil, !commentBusy else { return }
         let step = dir > 0 ? 1 : -1
-        guard let target = readableIndex(from: index + step, direction: step) else { return }
+        guard let target = readableIndex(from: index + step, direction: step) else {
+            // 已经是最后一章又往后翻：正文读到末尾，自动记为读完（书架里也能手动标记）。
+            if step > 0, index >= chapters.count - 1, !chapters.isEmpty {
+                FinishedBookStore.shared.mark(book)
+            }
+            return
+        }
         // 必须直到这次请求成功/失败才解锁，不能用固定 0.6 秒窗口。
         pendingEdge = step
         pendingChapterDirection = settings.pageMode == 1 ? step : 0

@@ -80,6 +80,10 @@ struct HarnessApp: App {
                     DetailHarnessView()
                 } else if let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--nav-bar-mode=") }) {
                     NavBarOverflowHarnessView(mode: String(mode.dropFirst("--nav-bar-mode=".count)))
+                } else if ProcessInfo.processInfo.arguments.contains("--stats-data-mode") {
+                    StatsDataHarnessView()
+                } else if ProcessInfo.processInfo.arguments.contains("--stats-mode") {
+                    StatsHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--shelf-mode") {
                     ShelfHarnessView()
                 } else if ProcessInfo.processInfo.arguments.contains("--bottom-bubble-mode") {

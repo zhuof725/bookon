@@ -212,6 +212,42 @@ enum RuleRegression {
             check(ReadingStatsStore(fileURL: url, calendar: cal).aggregate(period: .week, anchor: anchor).seconds == 240, "统计：重启后读回")
             check(store.highlights(period: .week, anchor: anchor).contains { $0.title == "最常读" && $0.detail == "《书一》" }, "统计：最常读")
             try? FileManager.default.removeItem(at: url)
+
+            // 目标页：连续天数、热力图、读完的书、阅读计划
+            let goalToday = f.date(from: "2026-10-25T10:00:00+08:00")!
+            let active: Set<String> = ["2026-10-25", "2026-10-24", "2026-10-23", "2026-10-20"]
+            let streak = ReadingStreakEngine.streak(days: active, today: goalToday, calendar: cal)
+            check(streak.current == 3 && streak.maximum == 3, "统计：连续 3 天与最长纪录")
+            let yesterdayOnly = ReadingStreakEngine.streak(days: ["2026-10-24"], today: goalToday, calendar: cal)
+            check(yesterdayOnly.current == 1, "统计：今天没读时连续保留到昨天")
+            check(ReadingHeatmapEngine.level(seconds: 0, goalMinutes: 15) == 0, "热力图：无记录最浅")
+            check(ReadingHeatmapEngine.level(seconds: 900, goalMinutes: 15) == 4, "热力图：达标最深")
+            let grid = ReadingHeatmapEngine.weeks(activity: [:], weekCount: 18, today: goalToday,
+                                                  calendar: cal, goalMinutes: 15)
+            check(grid.count == 18 && grid.allSatisfy { $0.count == 7 }, "热力图：18 周 × 7 天")
+            check(ReadingHeatmapEngine.todayPosition(today: goalToday, calendar: cal).row == 6, "热力图：周日落在最后一行")
+
+            let finishedURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("finished-\(UUID().uuidString).json")
+            let finished = FinishedBookStore(fileURL: finishedURL)
+            let doneBook = Book(bookUrl: "b2", name: "书二", origin: "o")
+            finished.mark(doneBook, at: goalToday)
+            check(finished.count(inYear: 2026, calendar: cal) == 1, "读完：今年 1 本")
+            check(finished.monthlyCounts(year: 2026, calendar: cal)[9] == 1, "读完：记到 10 月")
+            finished.unmark("b2")
+            check(finished.count(inYear: 2026, calendar: cal) == 0, "读完：取消后清零")
+            check(finished.all().isEmpty, "读完：取消后列表为空")
+            try? FileManager.default.removeItem(at: finishedURL)
+
+            let plan = ReadingPlan(id: "p", bookURL: "b2", bookName: "书二", mode: .chapters,
+                                   targetDate: nil, perDayChapters: 2, perDayMinutes: nil,
+                                   reminderMinutes: nil)
+            check(ReadingPlanEngine.satisfies(plan, minutes: 0, chapters: 2), "计划：每天 2 章算达成")
+            check(!ReadingPlanEngine.satisfies(plan, minutes: 30, chapters: 1), "计划：章数不足不算")
+            check(ReadingPlanEngine.requiredChapters(remaining: 10, daysLeft: 3) == 4, "计划：每天章数向上取整")
+            check(ReadingPlanEngine.summary(plan, chapterCount: 20, currentChapter: 4,
+                                            today: goalToday, calendar: cal).contains("还剩 16 章"),
+                  "计划：剩余章节写入摘要")
         }
         NextUrlRegression.run(check)
         CookieDomainRegression.run(check)

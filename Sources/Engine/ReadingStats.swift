@@ -238,6 +238,73 @@ final class ReadingStatsModel: ObservableObject {
     func highlights(period: ReadingStatsPeriod, calendar: Calendar) -> [ReadingStatsStore.StatsHighlight] {
         store.highlights(period: period)
     }
+
+    // MARK: 目标页
+
+    var todayReadingSeconds: TimeInterval { store.today().seconds }
+
+    var todayListeningSeconds: TimeInterval {
+        ListeningStatsStore.shared.seconds(on: Date())
+    }
+
+    /// 近 N 天（含今天）的阅读 / 听书分日数据，按日期升序。
+    func dayStats(days: Int, calendar: Calendar) -> [ReadingDayStat] {
+        let today = calendar.startOfDay(for: Date())
+        guard let first = calendar.date(byAdding: .day, value: -max(days - 1, 0), to: today) else { return [] }
+        let sessions = store.sessions(from: first, to: calendar.date(byAdding: .day, value: 1, to: today) ?? Date())
+        var reading: [String: TimeInterval] = [:]
+        for session in sessions {
+            reading[ReadingStatsEngine.dayKey(session.start, calendar: calendar), default: 0] += session.seconds
+        }
+        let listening = ListeningStatsStore.shared.allTotals()
+        var result: [ReadingDayStat] = []
+        for offset in 0..<max(days, 0) {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: first) else { continue }
+            let key = ReadingStatsEngine.dayKey(date, calendar: calendar)
+            result.append(ReadingDayStat(dayKey: key, date: date,
+                                         reading: reading[key] ?? 0,
+                                         listening: listening[key] ?? 0))
+        }
+        return result
+    }
+
+    /// 每天活跃时长（阅读 + 听书），用于热力图。
+    func activityByDay(calendar: Calendar) -> [String: TimeInterval] {
+        var activity: [String: TimeInterval] = [:]
+        for session in store.allSessions() {
+            activity[ReadingStatsEngine.dayKey(session.start, calendar: calendar), default: 0] += session.seconds
+        }
+        for (key, seconds) in ListeningStatsStore.shared.allTotals() {
+            activity[key, default: 0] += seconds
+        }
+        return activity
+    }
+
+    func streak(calendar: Calendar) -> (current: Int, maximum: Int) {
+        let readingDays = store.activeDayKeys(calendar: calendar)
+        let listeningDays = ListeningStatsStore.shared.activeDays()
+        return ReadingStreakEngine.streak(days: ReadingStreakEngine.activeDays(reading: readingDays, listening: listeningDays),
+                                          today: Date(), calendar: calendar)
+    }
+
+    func finishedCount(year: Int, calendar: Calendar) -> Int {
+        FinishedBookStore.shared.count(inYear: year, calendar: calendar)
+    }
+
+    func finishedMonthly(year: Int, calendar: Calendar) -> [Int] {
+        FinishedBookStore.shared.monthlyCounts(year: year, calendar: calendar)
+    }
+
+    /// 某一本书今天的阅读分钟与去重章节数（计划打卡用）。
+    func todayProgress(bookURL: String, calendar: Calendar) -> (minutes: Int, chapters: Int) {
+        let start = calendar.startOfDay(for: Date())
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? Date()
+        let list = store.sessions(from: start, to: end).filter { $0.bookURL == bookURL && $0.seconds > 0 }
+        var chapters = Set<Int>()
+        for session in list { chapters.formUnion(session.chapters) }
+        let seconds = list.reduce(0) { $0 + $1.seconds }
+        return (Int((seconds / 60).rounded()), chapters.count)
+    }
 }
 
 /// 落盘并聚合阅读会话。与 PersistentVariableStore 同思路：内存 + 防抖写盘，
@@ -288,6 +355,15 @@ final class ReadingStatsStore: @unchecked Sendable {
     func sessions(from start: Date, to end: Date) -> [ReadingSession] {
         lock.lock(); defer { lock.unlock() }
         return all.filter { $0.start >= start && $0.start < end }
+    }
+
+    func allSessions() -> [ReadingSession] {
+        lock.lock(); defer { lock.unlock() }
+        return all
+    }
+
+    func activeDayKeys(calendar: Calendar) -> Set<String> {
+        Set(allSessions().map { ReadingStatsEngine.dayKey($0.start, calendar: calendar) })
     }
 
     func aggregate(period: ReadingStatsPeriod, anchor: Date = Date()) -> ReadingDayAggregate {

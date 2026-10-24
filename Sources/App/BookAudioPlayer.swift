@@ -49,6 +49,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private var fallbackTried = false
     private var downloadTask: Task<Void, Never>?
     private var lastReportedSecond: TimeInterval = -1
+    /// 上次计入「听书时长」的播放时刻；只累计真实前进的量。
+    private var lastListenTime: TimeInterval = 0
     /// 刚发出的 seek 目标：AVPlayer 在跳转完成前还会吐几个旧时刻，
     /// 这段时间内忽略「离目标很远」的回调，进度条才不会先弹回原处。
     private var seekTarget: (time: TimeInterval, at: Date)?
@@ -424,6 +426,14 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                     self.seekTarget = nil
                 }
                 self.currentTime = reported
+                // 听书时长：只累计真正播放时前进的秒数；缓冲/seek 的大跳变直接忽略。
+                if self.isPlaying, (self.player?.rate ?? 0) > 0 {
+                    let delta = reported - self.lastListenTime
+                    if delta > 0, delta <= 2.5 {
+                        ListeningStatsStore.shared.add(seconds: delta)
+                    }
+                }
+                self.lastListenTime = reported
                 let total = currentItem.duration.seconds
                 if total.isFinite, total > 0 { self.duration = total }
                 self.isBuffering = self.player?.timeControlStatus == .waitingToPlayAtSpecifiedRate

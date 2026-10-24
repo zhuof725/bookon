@@ -67,6 +67,11 @@ targets:
       - path: NavBarOverflowHarness.swift
       - path: ../../Sources/App/NavTextButton.swift
       - path: ShelfHarness.swift
+      - path: StatsHarness.swift
+      - path: ../../Sources/App/StatisticsScreen.swift
+      - path: ../../Sources/App/ReadingGoalSheets.swift
+      - path: ../../Sources/Engine/ReadingStats.swift
+      - path: ../../Sources/Engine/ReadingGoals.swift
       - path: ../../Sources/App/ShelfListRow.swift
       - path: ../../Sources/App/ReaderBookmarkList.swift
       - path: ../../Sources/App/ReaderImageExport.swift

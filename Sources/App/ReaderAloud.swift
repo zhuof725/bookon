@@ -84,6 +84,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var chapterTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
+    /// 听书时长累计：每秒加一次，只在实际播放时计入。
+    private var listenTask: Task<Void, Never>?
     private var noticeTask: Task<Void, Never>?
     private var timerPlayedSeconds = 0
     private var expectingFinish = false
@@ -176,6 +178,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         updateRemoteCommands(enabled: true)
         if applyTimer { applyTimerDefault() }
         restartTimerLoop()
+        restartListeningClock()
         host.follow(chapter, list[unitIndex].offset)
         playUnit()
     }
@@ -200,6 +203,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         guard isRunning, isPlaying else { return }
         isPlaying = false
         isBuffering = false
+        listenTask?.cancel(); listenTask = nil
         audioTask?.cancel(); audioTask = nil
         progressTask?.cancel(); progressTask = nil
         expectStop()
@@ -210,6 +214,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     func resume() {
         guard isRunning, !isPlaying else { return }
         isPlaying = true
+        restartListeningClock()
         if isBuffering { return }
         if playbackEngine == .http, let player, player.hasAudio,
            playerLoadedUnit?.chapter == chapterIndex,
@@ -234,6 +239,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         chapterTask?.cancel(); chapterTask = nil
         progressTask?.cancel(); progressTask = nil
         timerTask?.cancel(); timerTask = nil
+        listenTask?.cancel(); listenTask = nil
         timerLeft = 0
         expectStop()
         player?.stop()
@@ -735,6 +741,20 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 self.host?.follow(chapterIndex, unit.offset + max(index, 0))
                 self.unitDurations[self.unitIndex] = max(player.duration, 0.1)
                 self.updateChapterProgress()
+            }
+        }
+    }
+
+    // MARK: 听书时长
+
+    private func restartListeningClock() {
+        listenTask?.cancel()
+        listenTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+                guard self.isRunning, self.isPlaying else { continue }
+                ListeningStatsStore.shared.add(seconds: 1)
             }
         }
     }
