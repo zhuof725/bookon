@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// 书源导入结果：原版 Gson 是宽松解析，网上的书源经常带尾逗号、注释、单引号，
 /// 或者数组中夹着一条坏数据。这里逐条解析，坏项只记失败原因，不影响其余书源。
@@ -43,6 +44,27 @@ enum SourceImportParser {
         var report = SourceImportReport()
         var items: [Any] = []
 
+        // 标准 JSON 直接解码：完全合法的导出文件优先走这条。
+        // 不经过 JSONSerialization 的「字典 → JSON」往返，规则里的控制字符
+        // （例如番茄畅听 subContent 用 \u0000 做分隔）不会被改写。
+        if let data = t.data(using: .utf8) {
+            func usable(_ source: BookSource) -> Bool {
+                !source.bookSourceUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if let direct = try? JSONDecoder().decode([BookSource].self, from: data) {
+                let good = direct.filter(usable)
+                if !good.isEmpty {
+                    report.imported = good.count
+                    report.failed = direct.count - good.count
+                    return SourceImportOutcome(sources: good, report: report)
+                }
+            }
+            if let one = try? JSONDecoder().decode(BookSource.self, from: data), usable(one) {
+                report.imported = 1
+                return SourceImportOutcome(sources: [one], report: report)
+            }
+        }
+
         if let root = jsonObject(t) {
             items = unwrappedItems(root)
         } else {
@@ -83,7 +105,7 @@ enum SourceImportParser {
                 continue
             }
             do {
-                let data = try JSONSerialization.data(withJSONObject: dict)
+                let data = try jsonData(dict)
                 let source = try JSONDecoder().decode(BookSource.self, from: data)
                 guard !source.bookSourceUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     report.failed += 1
@@ -175,6 +197,66 @@ enum SourceImportParser {
             }
         }
         return chunks
+    }
+
+    /// 把解析出来的字典写成 JSON 文本。
+    /// 不用 `JSONSerialization.data(withJSONObject:)`：它会改写字符串里的控制字符，
+    /// 番茄畅听 v2 的 subContent 用 \u0000 做分隔，丢了整条规则就变了。
+    private static func jsonData(_ value: Any) throws -> Data {
+        guard let data = jsonText(value).data(using: .utf8) else {
+            throw SourceImportError.unreadable("无法写出 JSON")
+        }
+        return data
+    }
+
+    private static func jsonText(_ value: Any) throws -> String {
+        switch value {
+        case is NSNull:
+            return "null"
+        case let string as String:
+            return quoted(string)
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number.boolValue ? "true" : "false"
+            }
+            let double = number.doubleValue
+            if double.rounded() == double,
+               double >= Double(Int64.min), double <= Double(Int64.max) {
+                return String(number.int64Value)
+            }
+            return String(double)
+        case let array as [Any]:
+            return "[" + (try array.map { try jsonText($0) }.joined(separator: ",")) + "]"
+        case let object as [String: Any]:
+            let body = try object.map { key, value in
+                quoted(key) + ":" + (try jsonText(value))
+            }.joined(separator: ",")
+            return "{" + body + "}"
+        default:
+            return quoted(String(describing: value))
+        }
+    }
+
+    private static func quoted(_ string: String) -> String {
+        var out = "\""
+        for scalar in string.unicodeScalars {
+            switch scalar.value {
+            case 0x22: out += "\\\""
+            case 0x5C: out += "\\\\"
+            case 0x0A: out += "\\n"
+            case 0x0D: out += "\\r"
+            case 0x09: out += "\\t"
+            case 0x08: out += "\\b"
+            case 0x0C: out += "\\f"
+            default:
+                if scalar.value < 0x20 {
+                    out += String(format: "\\u%04x", scalar.value)
+                } else {
+                    out.unicodeScalars.append(scalar)
+                }
+            }
+        }
+        return out + "\""
     }
 
     private static func snippet(_ text: String, limit: Int = 80) -> String {

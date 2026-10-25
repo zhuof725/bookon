@@ -32,6 +32,15 @@ enum ZonghengFanqieRegression {
         }
         check(sources.count == 2, "两个书源夹具都能解码，实际 \(sources.count)")
 
+        // 同一份番茄书源必须能「整条导入」：导入器曾经先转字典再用
+        // JSONSerialization 写回，subContent 里的 \u0000 分隔符被改写，整条被判坏数据。
+        let fanqieText = try String(contentsOf: dir.appendingPathComponent(files[1]), encoding: .utf8)
+        let imported = try SourceImportParser.parse(fanqieText)
+        check(imported.report.imported == 1 && imported.report.failed == 0,
+              "导入器：番茄畅听 v2 整条导入（失败原因：\(imported.report.failures.first ?? "-")）")
+        check(imported.sources.first?.ruleContent?.subContent?.contains("\u{0}") == true,
+              "导入器：subContent 里的 \\u0000 分隔符保留")
+
         let zongheng = sources[0]
         let fanqie = sources[1]
         check(zongheng.bookSourceType == 0, "纵横是文字源（type 0），实际 \(zongheng.bookSourceType ?? -1)")

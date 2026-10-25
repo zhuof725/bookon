@@ -392,6 +392,7 @@ struct SourcesView: View {
     private func importFiles(_ urls: [URL]) {        guard !urls.isEmpty else { return }
         var total = 0
         var badItems = 0
+        var badReason: String?
         var failed: [String] = []
         for url in urls {
             guard let t = DocumentPicker.readText(url) else { failed.append(url.lastPathComponent); continue }
@@ -399,11 +400,15 @@ struct SourcesView: View {
                 let report = try store.importSources(json: t)
                 total += report.imported
                 badItems += report.failed
+                if badReason == nil { badReason = report.failures.first }
             }
             catch { failed.append(url.lastPathComponent) }
         }
         var msg = "成功导入 \(total) 个书源"
-        if badItems > 0 { msg += "，跳过 \(badItems) 条坏数据" }
+        if badItems > 0 {
+            msg += "，跳过 \(badItems) 条坏数据"
+            if let badReason { msg += "\n\(badReason)" }
+        }
         if !failed.isEmpty { msg += "\n失败文件：" + failed.joined(separator: "、") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { message = msg }
     }
