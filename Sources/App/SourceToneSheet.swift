@@ -43,6 +43,7 @@ struct SourceToneList: View {
     @State private var sheet: ToneSheetKind?
     @State private var searchResults: [Book] = []
     @State private var searching = false
+    @State private var diagnostics: String?
 
     private enum ToneSheetKind: Identifiable {
         case search
@@ -64,6 +65,28 @@ struct SourceToneList: View {
                     .accessibilityIdentifier("tone.current")
             } header: {
                 Text("当前音色")
+            }
+
+            if let currentBook, chapterURL != nil {
+                Section {
+                    Button {
+                        Task { await runDiagnostics(currentBook) }
+                    } label: {
+                        Label("检测本章音频", systemImage: "waveform.path.ecg")
+                            .appFont(.body)
+                    }
+                    if let diagnostics {
+                        Text(diagnostics)
+                            .appFont(.caption)
+                            .foregroundStyle(palette.secondary)
+                            .textSelection(.enabled)
+                    }
+                } header: {
+                    Text("诊断")
+                } footer: {
+                    Text("显示源变量里的 tone/abook，以及这本书本章最终拿到的音频地址。")
+                        .appFont(.caption)
+                }
             }
 
             if loading {
@@ -377,6 +400,30 @@ struct SourceToneList: View {
         groups = result.0
         summary = result.1
         loading = false
+    }
+
+    /// 面板诊断：读源变量里的 tone/abook，再按当前章节跑一次正文规则取音频地址。
+    /// 用来区分「音色没写进变量」「书源只有一版音频」「地址打不开」。
+    private func runDiagnostics(_ book: Book) async {
+        let raw = SourceVariable.get(source.bookSourceUrl)
+        var tone = "-"
+        var abook = "-"
+        if let data = raw.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            tone = object["tone"].map { String(describing: $0) } ?? "-"
+            abook = object["abook"].map { String(describing: $0) } ?? "-"
+        }
+        var lines = ["源变量：tone=\(tone) · abook=\(abook)"]
+        if let chapterURL {
+            let chapter = BookChapter(url: chapterURL, title: "", index: 0)
+            let urls = (try? await AudioChapter.playURLs(source: source, book: book, chapter: chapter)) ?? []
+            if let first = urls.first {
+                lines.append("音频：\(first.prefix(160))")
+            } else {
+                lines.append("音频：没有取到地址")
+            }
+        }
+        diagnostics = lines.joined(separator: "\n")
     }
 
     private func apply(_ tone: SourceTone.Item, group: SourceTone.Group) {
