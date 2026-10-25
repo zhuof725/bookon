@@ -111,8 +111,9 @@ enum LyricTimeline {
                 lastKnown = value
             }
         }
-        // 首尾补齐 + 单调化（字幕偶尔乱序）。
-        result.insert(0, at: 0)
+        // 结尾补总时长：boundaries[i] 是第 i 段的起点，boundaries[count] 是整章结束。
+        // 首项用字幕里第一段的真实起点（通常是 0，但片头有旁白时会更准），
+        // 不强行补 0——播放逻辑只要求 count == 段落数 + 1 且单调不减。
         result.append(duration)
         for i in 1..<result.count where result[i] < result[i - 1] {
             result[i] = result[i - 1]

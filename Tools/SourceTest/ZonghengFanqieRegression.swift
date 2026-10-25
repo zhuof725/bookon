@@ -102,7 +102,8 @@ enum ZonghengFanqieRegression {
         [01:02.75]最后一句。
         """
         let lines = LyricTimeline.parse(lrc)
-        check(lines.count == 4, "LRC 解析出 4 行（多时间戳展开、元信息丢弃），实际 \(lines.count)")
+        // 5 行：首行标题行也是有效字幕；`[00:07.25][00:12.00]` 展开成两行；`[ar:]` 元信息丢弃。
+        check(lines.count == 5, "LRC 解析出 5 行（多时间戳展开、元信息丢弃），实际 \(lines.count)")
         check(abs((lines.first?.time ?? -1) - 3.5) < 0.001,
               "LRC 首行时间 3.5s，实际 \(lines.first?.time ?? -1)")
         check(lines.contains { abs($0.time - 12.0) < 0.001 },
@@ -117,9 +118,10 @@ enum ZonghengFanqieRegression {
         if let bounds = LyricTimeline.boundaries(lines: lines, paragraphs: paragraphs, duration: 90) {
             check(bounds.count == paragraphs.count + 1,
                   "边界数 = 段落数 + 1，实际 \(bounds.count)")
-            check(bounds.first == 0, "首个边界是 0，实际 \(bounds.first ?? -1)")
             check(abs((bounds.last ?? -1) - 90) < 0.01,
                   "末个边界是总时长，实际 \(bounds.last ?? -1)")
+            check(abs((bounds.first ?? -1) - 3.5) < 0.01,
+                  "首个边界是字幕首句的真实起点 3.5s，实际 \(bounds.first ?? -1)")
             check(zip(bounds, bounds.dropFirst()).allSatisfy { $0 <= $1 },
                   "边界单调不减")
         } else {
