@@ -132,7 +132,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         failureNotified = false
         fallbackTried = false
         remoteHeaders = headers
-        DebugLog.add("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
+        DebugLog.readerAdd("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
         chapterTitle = title
         self.album = album
         bookTitle = album
@@ -359,7 +359,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
             }
         }
         let failing = remoteQueue.indices.contains(queueIndex) ? remoteQueue[queueIndex] : "-"
-        DebugLog.add("◇音频失败 \(reason) url=\(failing)")
+        DebugLog.readerAdd("◇音频失败 \(reason) url=\(failing)")
         let host = URL(string: failing)?.host ?? ""
         pushMessage("音频播放失败：\(reason)" + (host.isEmpty ? "" : "（\(host)）"))
         diagnoseFailure(failing, reason: reason, host: host)
@@ -385,10 +385,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let http = response as? HTTPURLResponse
                 let detail = "HTTP \(http?.statusCode ?? -1) · \(http?.mimeType ?? "-") · \(data.count) 字节"
-                DebugLog.add("◇音频诊断 \(detail) url=\(raw)")
+                DebugLog.readerAdd("◇音频诊断 \(detail) url=\(raw)")
                 self.pushMessage("音频播放失败：\(reason)（\(host)）\n\(detail)")
             } catch {
-                DebugLog.add("◇音频诊断失败 \(error.localizedDescription) url=\(raw)")
+                DebugLog.readerAdd("◇音频诊断失败 \(error.localizedDescription) url=\(raw)")
                 self.pushMessage("音频播放失败：\(reason)（\(host)）\n探测失败：\(error.localizedDescription)")
             }
         }

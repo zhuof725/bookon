@@ -311,7 +311,7 @@ enum SourceTone {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let toneURL = (object["tone"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultURL = (object["def"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        DebugLog.add("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (toneURL == defaultURL ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
+        DebugLog.readerAdd("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (toneURL == defaultURL ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
         if toneURL.isEmpty { return .unavailable }
         if toneURL == defaultURL { return .sameAsDefault }
         return .playable
