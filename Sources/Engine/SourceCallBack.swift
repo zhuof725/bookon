@@ -9,6 +9,8 @@ enum SourceCallBack {
     static let startRead = "startRead"
     static let endRead = "endRead"
     static let clickCustomButton = "clickCustomButton"
+    /// 长按书源自定义按钮（番茄源用它翻「本章说」的下一页）。
+    static let longClickCustomButton = "longClickCustomButton"
 
     @discardableResult
     static func fire(_ event: String, source: BookSource?, book: Book?,

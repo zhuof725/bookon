@@ -441,6 +441,11 @@ struct ReaderView: View {
                                      }
                                  },
                                  onLoadParagraphs: { await audioChapterParagraphs() },
+                                 onLoadLyric: {
+                                     guard chapters.indices.contains(index) else { return nil }
+                                     return ChapterLyric.load(source: store.source(for: book.origin),
+                                                              book: book, chapter: chapters[index])
+                                 },
                                  textFontSize: settings.fontSize,
                                  textLineSpacing: settings.lineSpacingPoints,
                                  onSwitchToTTS: { engine in switchAudioToTTS(engine) },
@@ -804,6 +809,12 @@ struct ReaderView: View {
             let result = SourceCallBack.fire(SourceCallBack.clickCustomButton, source: source,
                                              book: book, chapter: chapter)
             quickMessage = (result?.isEmpty == false) ? result : "已执行书源按钮"
+        case "customLong":
+            guard let source = store.source(for: book.origin) else { break }
+            let chapter = chapters.indices.contains(index) ? chapters[index] : nil
+            let result = SourceCallBack.fire(SourceCallBack.longClickCustomButton, source: source,
+                                             book: book, chapter: chapter)
+            quickMessage = (result?.isEmpty == false) ? result : "已执行书源按钮（长按）"
         default: break
         }
     }
@@ -1877,7 +1888,8 @@ struct ReaderView: View {
             bookAudio.onProgress = { seconds in
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
-            bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume)
+            bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume,
+                           coverUrl: book.coverUrl, origin: book.origin)
         } catch is CancellationError {
             return
         } catch {
@@ -2009,6 +2021,8 @@ struct ReaderView: View {
         host.chapterCount = { chapters.count }
         host.chapterTitle = { i in chapters.indices.contains(i) ? chapters[i].title : "" }
         host.bookLabel = { book.name }
+        host.coverURL = { book.coverUrl }
+        host.bookOrigin = { book.origin }
         host.currentOffset = { currentReadOffset() }
         host.units = { i in i == index ? aloudUnits(from: readerBlocks) : nil }
         host.readableChapter = { i, direction in readableIndex(from: i, direction: direction) }
@@ -2170,7 +2184,8 @@ struct ReaderView: View {
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
             bookAudio.play(urls: urls, title: chapters[target].title,
-                           album: book.name, startAt: resume)
+                           album: book.name, startAt: resume,
+                           coverUrl: book.coverUrl, origin: book.origin)
             loading = false
             return true
         default:

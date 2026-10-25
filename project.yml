@@ -24,10 +24,24 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Sources/Widget 只属于 Widget Extension：两个 @main 会撞车。
       - path: Sources
+        excludes:
+          - "Widget/**"
     dependencies:
       - package: SwiftSoup
       - package: Kanna
+      # 嵌入式扩展：装到主 App 的 PlugIns 里，灵动岛才挂得上。
+      - target: BookOnWidget
+        embed: true
+    entitlements:
+      # App Group：App 与扩展共享封面文件。
+      # 未签名包（CODE_SIGNING_ALLOWED=NO）不会真正写入 entitlements，
+      # 此时共享容器为 nil，播放器自动退化到内联缩略图，不影响播放。
+      path: Sources/BookOn.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.io.github.xianghuo.book
     info:
       path: Sources/Info.plist
       properties:
@@ -38,6 +52,8 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         NSPhotoLibraryAddUsageDescription: 保存正文里的图片到相机胶卷。
+        # Live Activity 必需：没有这个键 Activity.request 一律抛错。
+        NSSupportsLiveActivities: true
         UIBackgroundModes:
           - audio
         NSAppTransportSecurity:
@@ -55,3 +71,30 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "NO"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  BookOnWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Widget
+      # NowPlayingAttributes 两个 target 各编译一份，类型名保持一致才能与 App 匹配。
+      - path: Sources/Shared
+    entitlements:
+      path: Sources/BookOnWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.io.github.xianghuo.book
+    info:
+      path: Sources/Widget/Info.plist
+      properties:
+        CFBundleDisplayName: 尚书播放
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.xianghuo.book.widget
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: "NO"
+        SKIP_INSTALL: "YES"
