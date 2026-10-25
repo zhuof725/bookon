@@ -245,10 +245,10 @@ struct ReaderTocSheet: View {
                         if chapter.isVip {
                             Image(systemName: "lock.fill").font(.caption).foregroundStyle(palette.secondary)
                         }
-                        if isCached {
-                            Image(systemName: "arrow.down.circle.fill").font(.caption)
-                                .foregroundStyle(palette.secondary)
-                        }
+                        // 缓存标识与其它阅读器一致：未缓存是空心云，已缓存是实心云。
+                        Image(systemName: isCached ? "icloud.fill" : "icloud")
+                            .font(.caption)
+                            .foregroundStyle(palette.secondary)
                     }
                     if let time = chapter.updateTime, !time.isEmpty {
                         Text(time).appFont(.caption).foregroundStyle(palette.secondary).lineLimit(1)
