@@ -203,7 +203,7 @@ enum SourceImportParser {
     /// 不用 `JSONSerialization.data(withJSONObject:)`：它会改写字符串里的控制字符，
     /// 番茄畅听 v2 的 subContent 用 \u0000 做分隔，丢了整条规则就变了。
     private static func jsonData(_ value: Any) throws -> Data {
-        guard let data = jsonText(value).data(using: .utf8) else {
+        guard let data = try jsonText(value).data(using: .utf8) else {
             throw SourceImportError.unreadable("无法写出 JSON")
         }
         return data
