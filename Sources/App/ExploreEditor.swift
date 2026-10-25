@@ -186,6 +186,8 @@ struct ExploreBoardEditor: View {
         board.subtitle = board.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         board.tags = ExploreFormat.tags(tagsText)
         board.categories = board.visibleCategories
+        // 新建的板块永远拿一个新 id：编辑页被重复呈现时不会和上一张撞 id。
+        if isNew { board.id = UUID().uuidString }
         if isNew, splitByCategory {
             let boards = board.categories.map { category -> ExploreBoard in
                 let layout = ExploreLayout.suggested(forCategory: category.title)

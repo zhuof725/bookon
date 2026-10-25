@@ -82,7 +82,9 @@ final class ExploreStore: ObservableObject {
 
     func add(_ newBoards: [ExploreBoard]) {
         guard !newBoards.isEmpty else { return }
-        boards.append(contentsOf: newBoards)
+        // 编辑页的 @State 在重复呈现时可能保留上一份草稿（同一个 id）：
+        // 追加前修掉重复 id，否则 ForEach 会把两张卡当成同一张只画一张。
+        boards = ExploreBoardStore.uniqueIDs(boards + newBoards)
         save()
     }
 

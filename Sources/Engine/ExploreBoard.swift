@@ -247,8 +247,23 @@ enum ExploreBoardStore {
 
     static func load(from defaults: UserDefaults = .standard) -> [ExploreBoard] {
         guard let data = defaults.data(forKey: defaultsKey) else { return [] }
-        guard let boards = try? JSONDecoder().decode([ExploreBoard].self, from: data) else { return [] }
-        return boards
+        guard var boards = try? JSONDecoder().decode([ExploreBoard].self, from: data) else { return [] }
+        // 旧版本重复呈现编辑页时可能把同一份草稿（同 id）存了多次；
+        // 读回时修掉重复 id，两张卡才能各显示各的。
+        return uniqueIDs(boards)
+    }
+
+    /// 修掉重复 id：同一个 id 的第二张起换成新 UUID。
+    static func uniqueIDs(_ boards: [ExploreBoard]) -> [ExploreBoard] {
+        var seen = Set<String>()
+        var result: [ExploreBoard] = []
+        result.reserveCapacity(boards.count)
+        for var board in boards {
+            if seen.contains(board.id) { board.id = UUID().uuidString }
+            seen.insert(board.id)
+            result.append(board)
+        }
+        return result
     }
 
     static func save(_ boards: [ExploreBoard], to defaults: UserDefaults = .standard) {

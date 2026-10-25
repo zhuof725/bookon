@@ -86,6 +86,21 @@ enum ExploreBoardRegression {
         if let defaults = UserDefaults(suiteName: suite) {
             ExploreBoardStore.save([board], to: defaults)
             check(ExploreBoardStore.load(from: defaults) == [board], "探索：板块写入后读回")
+
+            // 重复呈现编辑页的旧 bug：同一份草稿（同 id）被存两次，ForEach 只画一张。
+            let duplicateA = ExploreBoard(id: "same", title: "甲")
+            let duplicateB = ExploreBoard(id: "same", title: "乙")
+            let fixed = ExploreBoardStore.uniqueIDs([duplicateA, duplicateB])
+            check(fixed.count == 2 && fixed[0].id != fixed[1].id, "探索：重复 id 自动换新")
+            check(fixed.map(\.title) == ["甲", "乙"], "探索：换 id 不影响顺序与内容")
+            check(ExploreBoardStore.uniqueIDs([duplicateA]).first?.id == "same", "探索：不重复时保留原 id")
+            if let data = try? JSONEncoder().encode([duplicateA, duplicateB]) {
+                defaults.set(data, forKey: ExploreBoardStore.defaultsKey)
+                let loaded = ExploreBoardStore.load(from: defaults)
+                check(loaded.count == 2 && loaded[0].id != loaded[1].id, "探索：读回配置修掉重复 id")
+            } else {
+                check(false, "探索：重复 id 测试可编码")
+            }
             defaults.removePersistentDomain(forName: suite)
         } else {
             check(false, "探索：临时 UserDefaults 可用")

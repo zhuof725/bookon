@@ -8,14 +8,14 @@ struct ExploreView: View {
     @State private var sheet: ExploreSheet?
 
     private enum ExploreSheet: Identifiable {
-        case add
+        case add(session: String)
         case manage
         case metaImport
         case edit(ExploreBoard)
 
         var id: String {
             switch self {
-            case .add: return "add"
+            case .add(let session): return "add-" + session
             case .manage: return "manage"
             case .metaImport: return "meta"
             case .edit(let board): return "edit-" + board.id
@@ -55,12 +55,10 @@ struct ExploreView: View {
         }
         .sheet(item: $sheet) { item in
             switch item {
-            case .add:
-                ExploreBoardEditor(board: nil) { boards in
-                    store.add(boards)
-                    sheet = nil
-                }
-                .environmentObject(appStore)
+            case .add(let session):
+                ExploreBoardEditor(board: nil) { store.add($0) }
+                    .id(session)
+                    .environmentObject(appStore)
             case .manage:
                 ExploreManageSheet(store: store)
                     .environmentObject(appStore)
@@ -79,7 +77,7 @@ struct ExploreView: View {
     private var menuButton: some View {
         Menu {
             Button {
-                sheet = .add
+                sheet = .add(session: UUID().uuidString)
             } label: {
                 Label("添加板块", systemImage: "plus")
             }
@@ -127,7 +125,7 @@ struct ExploreView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
             Button {
-                sheet = .add
+                sheet = .add(session: UUID().uuidString)
             } label: {
                 Text("添加板块")
                     .appFont(.system(size: 15, weight: .semibold))
@@ -166,12 +164,12 @@ struct ExploreManageSheet: View {
     @State private var sheet: ManageSheet?
 
     private enum ManageSheet: Identifiable {
-        case add
+        case add(session: String)
         case edit(ExploreBoard)
 
         var id: String {
             switch self {
-            case .add: return "add"
+            case .add(let session): return "add-" + session
             case .edit(let board): return "edit-" + board.id
             }
         }
@@ -212,7 +210,7 @@ struct ExploreManageSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { sheet = .add } label: { Image(systemName: "plus") }
+                    Button { sheet = .add(session: UUID().uuidString) } label: { Image(systemName: "plus") }
                         .accessibilityIdentifier("explore.manage.add")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -221,8 +219,9 @@ struct ExploreManageSheet: View {
             }
             .sheet(item: $sheet) { item in
                 switch item {
-                case .add:
+                case .add(let session):
                     ExploreBoardEditor(board: nil) { store.add($0) }
+                        .id(session)
                         .environmentObject(appStore)
                 case .edit(let board):
                     ExploreBoardEditor(board: board) { store.update($0.first ?? board) }
