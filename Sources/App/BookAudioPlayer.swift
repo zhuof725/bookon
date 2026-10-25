@@ -177,6 +177,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     private func startDiskCaching() {
         cacheTask?.cancel()
         let remote = remoteQueue
+        let headers = remoteHeaders
         guard !remote.isEmpty else { return }
         cacheTask = Task.detached(priority: .utility) {
             for raw in remote {
@@ -185,12 +186,23 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 guard let url = URL(string: raw),
                       url.scheme?.lowercased().hasPrefix("http") == true else { continue }
                 var request = URLRequest(url: url, timeoutInterval: 30)
-                request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-                                 forHTTPHeaderField: "User-Agent")
+                for (key, value) in headers where !key.isEmpty {
+                    request.setValue(value, forHTTPHeaderField: key)
+                }
+                if request.value(forHTTPHeaderField: "User-Agent") == nil {
+                    request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                                     forHTTPHeaderField: "User-Agent")
+                }
                 guard let (data, response) = try? await URLSession.shared.data(for: request),
                       let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode), !data.isEmpty else { continue }
-                AudioDiskCache.store(data, for: raw)
+                let kind = AudioSniff.describe(data)
+                let ext: String
+                if kind.hasPrefix("MP3") { ext = "mp3" }
+                else if kind.hasPrefix("MP4") { ext = "m4a" }
+                else if kind.hasPrefix("OGG") { ext = "ogg" }
+                else { ext = "mp3" }
+                AudioDiskCache.store(data, for: raw, ext: ext)
             }
         }
     }
@@ -430,7 +442,12 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                     throw NSError(domain: "BookAudio", code: -2,
                                   userInfo: [NSLocalizedDescriptionKey: "返回的不是音频：\(kind)，\(data.count) 字节"])
                 }
-                AudioDiskCache.store(payload, for: raw)
+                let ext: String
+                if kind.hasPrefix("MP3") { ext = "mp3" }
+                else if kind.hasPrefix("MP4") { ext = "m4a" }
+                else if kind.hasPrefix("OGG") { ext = "ogg" }
+                else { ext = "mp3" }
+                AudioDiskCache.store(payload, for: raw, ext: ext)
                 guard let file = AudioDiskCache.cachedFile(for: raw) else {
                     throw URLError(.fileDoesNotExist)
                 }

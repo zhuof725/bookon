@@ -87,23 +87,28 @@ enum AudioDiskCache {
         Insecure.MD5.hash(data: Data(url.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
-    static func fileURL(for url: String) -> URL {
-        directory.appendingPathComponent(key(url)).appendingPathExtension("audio")
+    static func fileURL(for url: String, ext: String = "audio") -> URL {
+        directory.appendingPathComponent(key(url)).appendingPathExtension(ext)
     }
 
     /// 已缓存且文件非空。
+    /// 只认标准音频扩展名：AVPlayer 对 `.audio` 这种未知后缀的本地文件会直接 Cannot Open。
     static func cachedFile(for url: String) -> URL? {
-        let file = fileURL(for: url)
-        guard let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue,
-              size > 0 else { return nil }
-        return file
+        for ext in ["mp3", "m4a", "aac", "ogg"] {
+            let file = fileURL(for: url, ext: ext)
+            if let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue,
+               size > 0 {
+                return file
+            }
+        }
+        return nil
     }
 
-    static func store(_ data: Data, for url: String) {
+    static func store(_ data: Data, for url: String, ext: String = "audio") {
         guard !data.isEmpty, data.count <= maxFileBytes else { return }
         let fm = FileManager.default
         guard (try? fm.createDirectory(at: directory, withIntermediateDirectories: true)) != nil else { return }
-        try? data.write(to: fileURL(for: url), options: .atomic)
+        try? data.write(to: fileURL(for: url, ext: ext), options: .atomic)
     }
 
     @discardableResult
