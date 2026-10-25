@@ -89,14 +89,14 @@ struct RichIntroWebView: UIViewRepresentable {
                 }
             case "put":
                 if let key = body["key"] as? String, let value = body["value"] as? String {
-                    JavaBridge.store.set("v_\(sourceURL)_\(key)", value)
+                    SourceVariableStore.shared.set("v_\(sourceURL)_\(key)", value)
                 }
             case "cache":
                 if let key = body["key"] as? String, let value = body["value"] as? String {
-                    JavaBridge.store.set(key, value)
+                    SourceVariableStore.shared.set(key, value)
                 }
             case "cacheDelete":
-                if let key = body["key"] as? String { JavaBridge.store.remove(key) }
+                if let key = body["key"] as? String { SourceVariableStore.shared.remove(key) }
             case "toast":
                 if let text = body["text"] as? String { DebugLog.add("◇书源面板：\(text)") }
             default:
@@ -112,10 +112,10 @@ struct RichIntroWebView: UIViewRepresentable {
             let variable = sourceURL.isEmpty ? "" : SourceVariable.get(sourceURL)
             var kv: [String: String] = [:]
             if !sourceURL.isEmpty,
-               let value = JavaBridge.store.get("v_\(sourceURL)_v2sv"), !value.isEmpty {
+               let value = SourceVariableStore.shared.get("v_\(sourceURL)_v2sv"), !value.isEmpty {
                 kv["v_v2sv"] = value
             }
-            if let value = JavaBridge.store.get("v2sel"), !value.isEmpty {
+            if let value = SourceVariableStore.shared.get("v2sel"), !value.isEmpty {
                 kv["v2sel"] = value
             }
             controller.addUserScript(WKUserScript(

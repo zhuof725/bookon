@@ -468,8 +468,11 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
-        .onReceive(NotificationCenter.default.publisher(for: .sourceToneChanged),
-                   perform: sourceToneChanged)
+        .modifier(SourceToneChangeReloader(
+            bookOrigin: book.origin,
+            chapterTitle: chapters.indices.contains(index) ? chapters[index].title : nil,
+            isAudioActive: bookAudio.chapterURL != nil,
+            onReload: reloadAudioChapter))
         .overlay(alignment: .top) {
             if showBars && readerChromeMounted {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
@@ -1966,16 +1969,6 @@ struct ReaderView: View {
         }
     }
 
-    /// 详情面板换了音色（写进了源变量）：清掉旧音频缓存，重载本章。
-    private func sourceToneChanged(_ note: Notification) {
-        guard (note.object as? String) == book.origin,
-              bookAudio.chapterURL != nil,
-              chapters.indices.contains(index) else { return }
-        AudioDiskCache.removeAll()
-        AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[index].title)
-        reloadAudioChapter()
-    }
-
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
     private func reloadAudioChapter() {
         guard bookAudio.chapterURL != nil,
@@ -2399,6 +2392,26 @@ struct ReaderView: View {
                     return
                 }
             }
+        }
+    }
+}
+
+
+/// 详情面板换了音色（写进源变量）后：清掉旧音频段缓存和字幕时间轴，重载本章。
+/// 单独做成 ViewModifier，避免把阅读器 body 撑到编译器类型检查超时。
+private struct SourceToneChangeReloader: ViewModifier {
+    let bookOrigin: String
+    let chapterTitle: String?
+    let isAudioActive: Bool
+    let onReload: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onReceive(NotificationCenter.default.publisher(for: .sourceToneChanged)) { note in
+            guard (note.object as? String) == bookOrigin, isAudioActive,
+                  let chapterTitle else { return }
+            AudioDiskCache.removeAll()
+            AudioSentenceTimeline.clear(bookUrl: bookOrigin, chapter: chapterTitle)
+            onReload()
         }
     }
 }

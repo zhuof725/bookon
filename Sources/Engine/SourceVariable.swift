@@ -15,16 +15,16 @@ enum SourceVariable {
 
     static func get(_ sourceURL: String) -> String {
         guard !sourceURL.isEmpty else { return "" }
-        return JavaBridge.store.get(key(sourceURL)) ?? ""
+        return SourceVariableStore.shared.get(key(sourceURL)) ?? ""
     }
 
     static func set(_ value: String, for sourceURL: String) {
         guard !sourceURL.isEmpty else { return }
         let key = key(sourceURL)
         if value.isEmpty {
-            JavaBridge.store.remove(key)
+            SourceVariableStore.shared.remove(key)
         } else {
-            JavaBridge.store.set(key, value)
+            SourceVariableStore.shared.set(key, value)
         }
     }
 
@@ -33,6 +33,6 @@ enum SourceVariable {
         guard !oldURL.isEmpty, oldURL != newURL else { return }
         let value = get(oldURL)
         if !value.isEmpty { set(value, for: newURL) }
-        JavaBridge.store.remove(key(oldURL))
+        SourceVariableStore.shared.remove(key(oldURL))
     }
 }

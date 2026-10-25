@@ -31,6 +31,8 @@ targets:
       - path: ../../Sources/Engine/BookKind.swift
       - path: ../../Sources/Engine/AudioChapter.swift
       - path: ../../Sources/Engine/SendableBox.swift
+      - path: ../../Sources/Engine/PersistentVariableStore.swift
+      - path: ../../Sources/Engine/SourceVariable.swift
       - path: SearchHistoryHarness.swift
       - path: ../../Sources/Models/BookSearchHistory.swift
       - path: ../../Sources/App/BookSearchHistoryView.swift

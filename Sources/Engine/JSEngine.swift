@@ -171,7 +171,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
 @objc final class JavaBridge: NSObject, JavaBridgeExports {
     /// 书源脚本变量（source.getVariable/setVariable、java.put/get、java.cache）：磁盘持久化，
     /// 重启后仍可读回；同一进程内与旧行为一致（返回当前值）。
-    static let store = PersistentVariableStore(fileURL: PersistentVariableStore.defaultFileURL())
+    static let store = SourceVariableStore.shared
     let context: RuleContext?
     private let session: URLSession
     /// java.ajax(url, timeout) 会在单次调用里改写它，用完恢复。
