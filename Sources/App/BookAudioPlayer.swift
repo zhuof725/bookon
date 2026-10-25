@@ -418,7 +418,19 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                     throw NSError(domain: "BookAudio", code: http.statusCode,
                                   userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)，\(data.count) 字节"])
                 }
-                AudioDiskCache.store(data, for: raw)
+                // 有的音色地址返回的是 HTML 拦截页或加密流：先看头几个字节，别把坏文件当音频播。
+                var payload = data
+                var kind = AudioSniff.describe(payload)
+                if kind.hasPrefix("HTML") || kind.hasPrefix("JSON") || kind.hasPrefix("未知"),
+                   let trimmed = AudioSniff.trimmedToAudio(data) {
+                    payload = trimmed
+                    kind = AudioSniff.describe(payload)
+                }
+                if kind.hasPrefix("HTML") || kind.hasPrefix("JSON") || kind.hasPrefix("未知") {
+                    throw NSError(domain: "BookAudio", code: -2,
+                                  userInfo: [NSLocalizedDescriptionKey: "返回的不是音频：\(kind)，\(data.count) 字节"])
+                }
+                AudioDiskCache.store(payload, for: raw)
                 guard let file = AudioDiskCache.cachedFile(for: raw) else {
                     throw URLError(.fileDoesNotExist)
                 }

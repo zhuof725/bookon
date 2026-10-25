@@ -140,3 +140,39 @@ enum AudioChapter {
         return URL(string: text, relativeTo: baseURL)?.absoluteString
     }
 }
+
+
+/// 判一下下载回来的字节像什么：MP3/M4A/HTML/JSON/加密。
+/// 番茄不同音色的音频可能带加密标记（URL 里的 cr=4），先看头几个字节再决定怎么处理。
+enum AudioSniff {
+    static func describe(_ data: Data) -> String {
+        let head = [UInt8](data.prefix(16))
+        let hex = head.map { String(format: "%02X", $0) }.joined(separator: " ")
+        if data.starts(with: Array("ID3".utf8)) { return "MP3(ID3) · \(hex)" }
+        if head.count >= 2, head[0] == 0xFF, (head[1] & 0xE0) == 0xE0 { return "MP3/AAC · \(hex)" }
+        if data.count > 8, String(data: data[4..<8], encoding: .ascii) == "ftyp" { return "MP4/M4A · \(hex)" }
+        if data.starts(with: Array("OggS".utf8)) { return "OGG · \(hex)" }
+        let text = String(data: data.prefix(80), encoding: .utf8)?.lowercased() ?? ""
+        if text.contains("<html") || text.contains("<!doctype") { return "HTML · \(hex)" }
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") { return "JSON · \(hex)" }
+        return "未知/可能是加密 · \(hex)"
+    }
+
+    /// 有的 CDN 会在音频前加一段封装头：扫描前 8KB，找到 MP3/M4A 的起始标记就丢掉前面。
+    static func trimmedToAudio(_ data: Data) -> Data? {
+        let bytes = [UInt8](data.prefix(8192))
+        guard bytes.count > 8 else { return nil }
+        func isStart(_ i: Int) -> Bool {
+            if i + 3 <= bytes.count,
+               bytes[i] == 0x49, bytes[i + 1] == 0x44, bytes[i + 2] == 0x33 { return true } // ID3
+            if i + 1 < bytes.count, bytes[i] == 0xFF, (bytes[i + 1] & 0xE0) == 0xE0 { return true }
+            if i + 4 <= bytes.count,
+               String(bytes: bytes[i..<(i + 4)], encoding: .ascii) == "ftyp" { return true }
+            return false
+        }
+        for i in 4..<bytes.count where isStart(i) {
+            return data.subdata(in: i..<data.count)
+        }
+        return nil
+    }
+}
