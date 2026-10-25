@@ -8,6 +8,11 @@ import WebKit
 /// - 高度随内容自适应（外层 ScrollView 负责滚动，WebView 自身不滚动）
 /// - 文字颜色跟随当前主题（书源样式用的是 `inherit` / `currentColor` / 半透明灰）
 /// - 链接不在简介里跳转，交给系统浏览器
+extension Notification.Name {
+    /// 书源详情面板改了源变量里的音色（tone/abook）。
+    static let sourceToneChanged = Notification.Name("BookOn.sourceToneChanged")
+}
+
 struct RichIntroWebView: UIViewRepresentable {
     let html: String
     let textColor: Color
@@ -76,7 +81,11 @@ struct RichIntroWebView: UIViewRepresentable {
             switch op {
             case "var":
                 if let value = body["value"] as? String {
+                    let previous = SourceVariable.get(sourceURL)
                     SourceVariable.set(value, for: sourceURL)
+                    if Self.toneSelectionChanged(previous, value), !sourceURL.isEmpty {
+                        NotificationCenter.default.post(name: .sourceToneChanged, object: sourceURL)
+                    }
                 }
             case "put":
                 if let key = body["key"] as? String, let value = body["value"] as? String {
@@ -157,6 +166,20 @@ struct RichIntroWebView: UIViewRepresentable {
               window.java.get = window.java.get || function(){ return ''; };
             })();
             """
+        }
+
+        /// 面板写的变量里 tone/abook 变了才算换了音色。
+        private static func toneSelectionChanged(_ old: String, _ new: String) -> Bool {
+            func selection(_ raw: String) -> String {
+                guard let data = raw.data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return ""
+                }
+                let tone = object["tone"].map { String(describing: $0) } ?? ""
+                let abook = object["abook"].map { String(describing: $0) } ?? ""
+                return tone + "|" + abook
+            }
+            return selection(old) != selection(new)
         }
 
         private static func jsString(_ value: String) -> String {

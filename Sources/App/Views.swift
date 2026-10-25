@@ -468,6 +468,15 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
+        .onReceive(NotificationCenter.default.publisher(for: .sourceToneChanged)) { note in
+            // 详情面板换了音色（写进了源变量）：清掉旧音频缓存，重载本章。
+            guard (note.object as? String) == book.origin,
+                  bookAudio.chapterURL != nil,
+                  chapters.indices.contains(index) else { return }
+            AudioDiskCache.removeAll()
+            AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[index].title)
+            reloadAudioChapter()
+        }
         .overlay(alignment: .top) {
             if showBars && readerChromeMounted {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
@@ -1971,6 +1980,11 @@ struct ReaderView: View {
               let source = store.source(for: book.origin) else { return }
         let target = index
         AudioProgress.clear(bookUrl: book.bookUrl)
+        // 换音色后旧音频段/时间轴一律作废（签名地址虽会变，但本地缓存和字幕时间轴还留着旧值）。
+        AudioDiskCache.removeAll()
+        if chapters.indices.contains(target) {
+            AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[target].title)
+        }
         Task { @MainActor in
             bookAudio.stop()
             error = nil

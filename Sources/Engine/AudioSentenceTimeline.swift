@@ -27,6 +27,10 @@ enum AudioSentenceTimeline {
         UserDefaults.standard.set(data, forKey: key(bookUrl, chapter))
     }
 
+    static func clear(bookUrl: String, chapter: String) {
+        UserDefaults.standard.removeObject(forKey: key(bookUrl, chapter))
+    }
+
     private static func key(_ bookUrl: String, _ chapter: String) -> String {
         let raw = bookUrl + "\u{1F}" + chapter
         let digest = raw.utf8.reduce(UInt64(1469598103934665603)) { hash, byte in
