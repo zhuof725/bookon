@@ -626,6 +626,9 @@ struct AudioChapterView: View {
     var onStop: (() -> Void)? = nil
     /// 正文页：取本章文字段落（有声书没有逐句时间戳，高亮按进度估算）。
     var onLoadParagraphs: (() async -> [String])? = nil
+    /// 本章字幕（书源 ruleContent.subContent 的 LRC）。给了就用它做逐句高亮，
+    /// 比「按停顿估算」准得多；返回 nil 时退回停顿分析。
+    var onLoadLyric: (() -> String?)? = nil
     /// 正文页的字号/行距：跟阅读器设置一致。
     var textFontSize: CGFloat = 18
     var textLineSpacing: CGFloat = 8
@@ -840,16 +843,29 @@ struct AudioChapterView: View {
         return min(max(Double(played - start) / Double(max(paragraphs[index].count, 1)), 0), 1)
     }
 
-    /// 生成段落时间轴（下载/解码一次，按书+章缓存）。
+    /// 生成段落时间轴。
+    ///
+    /// 优先级：书源给的 LRC 字幕（精确）→ 本机缓存的停顿检测结果 →
+    /// 下载整章音频做停顿分析（慢，最后手段）。
     private func buildTimelineIfNeeded() {
-        guard boundaries == nil, paragraphs.count > 1, audio.duration > 0,
-              let url = audio.chapterURL else { return }
+        guard boundaries == nil, paragraphs.count > 1, audio.duration > 0 else { return }
         let count = paragraphs.count
         let chapter = audio.chapterTitle
         if let cached = AudioSentenceTimeline.cached(bookUrl: book.bookUrl, chapter: chapter, count: count) {
             boundaries = cached
             return
         }
+        // 1) 书源字幕：番茄这类源有 subContent，能直接给出逐句时间戳。
+        if let lyric = onLoadLyric?(),
+           let parsed = LyricTimeline.parse(lyric),
+           let built = LyricTimeline.boundaries(lines: parsed, paragraphs: paragraphs,
+                                                duration: audio.duration) {
+            boundaries = built
+            AudioSentenceTimeline.store(built, bookUrl: book.bookUrl, chapter: chapter)
+            return
+        }
+        // 2) 没有字幕才退回音频停顿分析（要整章下载，尽量别走）。
+        guard let url = audio.chapterURL else { return }
         let texts = paragraphs
         let duration = audio.duration
         Task.detached(priority: .utility) {

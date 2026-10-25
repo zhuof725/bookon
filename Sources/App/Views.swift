@@ -441,6 +441,11 @@ struct ReaderView: View {
                                      }
                                  },
                                  onLoadParagraphs: { await audioChapterParagraphs() },
+                                 onLoadLyric: {
+                                     guard chapters.indices.contains(index) else { return nil }
+                                     return ChapterLyric.load(source: store.source(for: book.origin),
+                                                              book: book, chapter: chapters[index])
+                                 },
                                  textFontSize: settings.fontSize,
                                  textLineSpacing: settings.lineSpacingPoints,
                                  onSwitchToTTS: { engine in switchAudioToTTS(engine) },
@@ -804,6 +809,12 @@ struct ReaderView: View {
             let result = SourceCallBack.fire(SourceCallBack.clickCustomButton, source: source,
                                              book: book, chapter: chapter)
             quickMessage = (result?.isEmpty == false) ? result : "已执行书源按钮"
+        case "customLong":
+            guard let source = store.source(for: book.origin) else { break }
+            let chapter = chapters.indices.contains(index) ? chapters[index] : nil
+            let result = SourceCallBack.fire(SourceCallBack.longClickCustomButton, source: source,
+                                             book: book, chapter: chapter)
+            quickMessage = (result?.isEmpty == false) ? result : "已执行书源按钮（长按）"
         default: break
         }
     }

@@ -58,6 +58,12 @@ struct ReaderQuickPanel: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        // 书源按钮支持长按：番茄源用它翻「本章说」下一页。
+                        .onLongPressGesture(minimumDuration: 0.45) {
+                            guard item.0 == "custom" else { return }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            action("customLong")
+                        }
                         .disabled(busy || !enabled.contains(item.0))
                         .opacity(enabled.contains(item.0) ? 1 : 0.4)
                         .accessibilityIdentifier("reader.quick." + item.0)

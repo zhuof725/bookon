@@ -156,6 +156,7 @@ enum RuleRegression {
         try MangaBookRegression.run(check)
         MangaPagingRegression.run(check)
         try ShushanSourceRegression.run(check)
+        try ZonghengFanqieRegression.run(check)
         try LoginToastRegression.run(check)
         ContentLayoutRegression.run(check)
         // 书源调试输入判定与原版 Debug.startDebug 一致。
