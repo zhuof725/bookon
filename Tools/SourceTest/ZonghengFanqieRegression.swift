@@ -11,6 +11,27 @@ import Foundation
 ///   （规则切分、LRC 解析、音色探测），联网部分交给 CI 的在线用例。
 enum ZonghengFanqieRegression {
     static func run(_ check: (Bool, String) -> Void) async throws {
+        // MARK: 0) JS 兼容细节（番茄详情面板 / 音频正文依赖）
+
+        // JSON 结果交给 JS：既保留对象属性，也让 String()/JSON.parse 拿到 JSON 文本。
+        let payload: [String: Any] = ["data": [["main_url": "https://audio.example/1.mp3"]]]
+        let js = "[String(result).indexOf('main_url') >= 0, JSON.parse(result).data[0].main_url, result.data[0].main_url].join('|')"
+        let jsOut = JSEngine.shared.evalString(js, result: payload) ?? ""
+        check(jsOut == "true|https://audio.example/1.mp3|https://audio.example/1.mp3",
+              "JS result：String()/JSON.parse/对象属性一致（实际 \(jsOut)）")
+
+        // java.connect(url, headers)：第二个参数是请求头（playinfo 必须带签名头）。
+        let server = try TTSHarnessServer.start()
+        defer { server.stop() }
+        let echo = #"{"data":[{"main_url":"https://audio.example/x.mp3"}]}"#
+        server.enqueue(status: 200, headers: ["Content-Type": "application/json"], body: Data(echo.utf8))
+        let connectJS = "String(java.connect('\(server.origin)/play?item_id=1', JSON.stringify({'X-Test-Header':'yes'})).body())"
+        let fetched = JSEngine.shared.evalString(connectJS) ?? ""
+        check(fetched.contains("main_url"), "java.connect(url, headers)：拿到响应体（实际 \(fetched.prefix(80))）")
+        let report = server.report()
+        let headerValue = report?.headers.first { $0.key.lowercased() == "x-test-header" }?.value
+        check(headerValue == "yes", "java.connect(url, headers)：请求头已带上（实际 \(report?.headers ?? [:])）")
+
         // MARK: 1) 两个夹具都能被 BookSource 解码
 
         let dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

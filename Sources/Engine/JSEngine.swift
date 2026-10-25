@@ -911,6 +911,18 @@ final class JSEngine: @unchecked Sendable {
             }});
         }catch(e){ return items; }
     }
+    // JSON 结果交给 JS 时保留对象语义（result.data / result.length），
+    // 同时让 String(result) / JSON.parse(result) 拿到 JSON 文本。
+    // 原版 Rhino 把 GSON 对象当 Java 对象传入，String() 调 toString() 得到 JSON；
+    // 直接塞 JavaScriptCore 对象会变成 "[object Object]"，番茄畅听的详情面板会解析失败。
+    function __legadoJSONResult(v){
+        if(v && typeof v === 'object'){
+            try{
+                Object.defineProperty(v,'toString',{value:function(){return JSON.stringify(this);},configurable:true,enumerable:false});
+            }catch(e){}
+        }
+        return v;
+    }
     function __legadoStrResponse(p){
         var raw=p.headers||{};
         var copy=Object.create(null);
@@ -991,7 +1003,14 @@ final class JSEngine: @unchecked Sendable {
             valueOf:function(){return r.body}
         };
     }
-    java.connect=function(u){return __response(java.connectNative(String(u)))};
+    java.connect=function(u,opt){
+        if(opt==null||opt===undefined||typeof opt==='number'){return __response(java.connectNative(String(u)));}
+        var s=String(u), t=(typeof opt==='string')?String(opt):JSON.stringify(opt);
+        // 地址自带 ,{...} 请求选项后缀：保留原写法
+        if(s.indexOf(',{')>=0){return __response(java.connectNative(s));}
+        // Legado 分支里 connect 的第二个参数是请求头（番茄音源的 playinfo 必须带签名头）
+        return __response(java.httpGetNative(s,t));
+    };
     // java.ajax 的原生实现是 java.ajaxNative（见 JavaBridge）；下面只在 JS 侧
     // 加一层第二参数（请求选项 / 毫秒超时）的包装，不再改写任何原生方法。
     // java.ajax(url, second?)：Legado 的 ajax 只取第一个参数，但服务器聚合书源（重生聚合等）
@@ -1737,7 +1756,7 @@ final class JSEngine: @unchecked Sendable {
         } else if let collection = result, JSONSerialization.isValidJSONObject(collection),
                   let data = try? JSONSerialization.data(withJSONObject: collection),
                   let text = String(data: data, encoding: .utf8),
-                  let native = ctx.evaluateScript("JSON.parse(\(JSEngine.jsLiteral(text)))") {
+                  let native = ctx.evaluateScript("__legadoJSONResult(JSON.parse(\(JSEngine.jsLiteral(text))))") {
             // Foundation 的数组/字典塞进 JavaScriptCore 会变成 ObjC 集合代理，
             // 拿不到 Array.prototype 上装的 java.util.List 方法（toArray/add/size…）。
             // 这里在 JS 侧重新 JSON.parse 成原生值，语义与原版 Rhino 一致。
