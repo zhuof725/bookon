@@ -85,15 +85,7 @@ enum SourceTone {
                                 tones: array.tones, currentValue: string(config[key])))
         }
         if groups.isEmpty, let book, let dynamic = dynamicTones(source: source, book: book) {
-            if !dynamic.tts.isEmpty {
-                groups.append(Group(id: "dynamic", title: "音色", kind: .legacy,
-                                    tones: dynamic.tts, currentValue: string(config["tone"])))
-            }
-            if !dynamic.audio.isEmpty {
-                groups.append(Group(id: "dynamic-real", title: "真人录播",
-                                    kind: .realPerson(bookID: dynamic.bookID),
-                                    tones: dynamic.audio, currentValue: string(config["abook"])))
-            }
+            groups.append(contentsOf: dynamic)
         }
         return groups
     }
@@ -206,18 +198,13 @@ enum SourceTone {
 
     // MARK: 动态音色（番茄 v2）
 
-    private struct DynamicTones {
-        var tts: [Item]
-        var audio: [Item]
-        var bookID: String
-    }
-
     /// 番茄 v2 的脚本里没有音色数组，音色来自 `bookapi/audio/toneinfo`：
     /// - `tts_tones`：合成音色（tone_id）
     /// - `audio_tones`：真人录播（abook_id）
-    /// 这里借用书源自己的签名助手（FQ_BASE/FQ_P/FQ_IID/fanqieSignHeaders）按书取一次。
-    /// 只对声明了 `toneinfo` + `fanqieSignHeaders` 的脚本启用。
-    private static func dynamicTones(source: BookSource, book: Book) -> DynamicTones? {
+    /// 注意：abook_id 是 19 位数字，**不能**在 JS 里 JSON.parse 后再 String()——
+    /// JavaScript 的 Number 只有 53 位精度，会变成 …000 的假 id（书源面板也踩过这个坑）。
+    /// 这里让 JS 只负责取回原始 JSON 文本，Swift 用 Int64/字符串解码，保证位数不变。
+    private static func dynamicTones(source: BookSource, book: Book) -> [Group]? {
         let script = scriptText(source)
         guard script.contains("toneinfo"), script.contains("fanqieSignHeaders") else { return nil }
         guard let bid = bookID(from: book.bookUrl) else { return nil }
@@ -229,56 +216,50 @@ enum SourceTone {
             h["Cookie"] = "install_id=" + FQ_IID;
             var hm = new Packages.java.util.HashMap();
             for(var k in h){ hm.put(String(k), String(h[k])); }
-            var body = String(java.get(String(u), hm).body());
-            var d = (JSON.parse(body).data) || {};
-            var t = d.tts_tones || [];
-            var a = d.audio_tones || [];
-            var out = {tts: [], audio: []};
-            for(var i=0;i<t.length;i++){
-              var o = t[i] || {};
-              if(o.id == null) continue;
-              out.tts.push([String(o.title || o.name || ("音色" + o.id)), String(o.id)]);
-            }
-            for(var j=0;j<a.length;j++){
-              var r = a[j] || {};
-              var id = r.abook_id || r.abookId || r.id;
-              if(id == null) continue;
-              out.audio.push([String(r.title || r.name || ("真人" + id)), String(id)]);
-            }
-            return JSON.stringify(out);
-          }catch(e){ return "{}"; }
+            return String(java.get(String(u), hm).body());
+          }catch(e){ return ""; }
         })()
         """
-        guard let json = JSEngine.shared.evalString(js, vars: ["__fqBookId": bid],
+        guard let body = JSEngine.shared.evalString(js, vars: ["__fqBookId": bid],
                                                     jsLib: source.jsLib,
                                                     context: RuleContext(source: source, book: book)),
-              !json.isEmpty,
-              let data = json.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        func items(_ key: String) -> [Item] {
-            guard let rows = object[key] as? [[Any]] else { return [] }
-            return rows.enumerated().compactMap { index, row in
-                guard row.count >= 2 else { return nil }
-                let name = string(row[0])
-                let value = string(row[1])
-                guard !name.isEmpty, !value.isEmpty else { return nil }
-                return Item(index: index, name: name, value: value)
-            }
+              !body.isEmpty, let data = body.data(using: .utf8),
+              let info = try? JSONDecoder().decode(ToneInfoPayload.self, from: data) else { return nil }
+        let config = configDictionary(source: source)
+        var groups: [Group] = []
+        let tts = (info.data?.tts_tones ?? []).enumerated().compactMap { index, tone -> Item? in
+            guard let id = tone.id?.value, !id.isEmpty else { return nil }
+            let name = tone.title ?? tone.name ?? "音色\(id)"
+            return Item(index: index, name: name, value: id)
         }
-        return DynamicTones(tts: items("tts"), audio: items("audio"), bookID: bid)
+        if !tts.isEmpty {
+            groups.append(Group(id: "dynamic", title: "音色", kind: .legacy,
+                                tones: tts, currentValue: string(config["tone"])))
+        }
+        let audio = (info.data?.audio_tones ?? []).enumerated().compactMap { index, tone -> Item? in
+            guard let id = tone.abook_id?.value, !id.isEmpty else { return nil }
+            let name = tone.title ?? tone.name ?? "真人\(id)"
+            return Item(index: index, name: name, value: id)
+        }
+        if !audio.isEmpty {
+            groups.append(Group(id: "dynamic-real", title: "真人录播",
+                                kind: .realPerson(bookID: bid),
+                                tones: audio, currentValue: string(config["abook"])))
+        }
+        return groups
     }
 
     enum ToneProbeResult {
         /// 这个音色没有音频，书源会回落默认音色。
         case unavailable
-        /// 书源对不同音色返回了同一个音频地址：这本书只有一版录音，换音色不会变声。
+        /// 书源对不同音色返回了同一个音频：这本书只有一版录音，换音色不会变声。
         case sameAsDefault
         /// 有独立音频，可以切换。
         case playable
     }
 
-    /// 用当前章节问一次 playinfo，比较「所选音色」和「默认音色」的 main_url。
-    /// 番茄 v2 会按 tone_id 返回不同音频；地址相同就说明这本书只有一版录音。
+    /// 用当前章节问一次 playinfo，比较「所选音色」和「默认音色」的音频。
+    /// 注意签名地址每次都会变（host/token），只能比较去掉查询参数后的路径。
     static func probeTone(source: BookSource, book: Book?, chapterURL: String?, tone: String) async -> ToneProbeResult? {
         let script = scriptText(source)
         guard script.contains("playinfo"), script.contains("fanqieSignHeaders") else { return nil }
@@ -311,9 +292,14 @@ enum SourceTone {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let toneURL = (object["tone"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultURL = (object["def"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        DebugLog.readerAdd("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (toneURL == defaultURL ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
+        func mediaPath(_ raw: String) -> String {
+            guard let url = URL(string: raw) else { return raw }
+            return url.path
+        }
+        let sameMedia = !toneURL.isEmpty && mediaPath(toneURL) == mediaPath(defaultURL)
+        DebugLog.readerAdd("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (sameMedia ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
         if toneURL.isEmpty { return .unavailable }
-        if toneURL == defaultURL { return .sameAsDefault }
+        if sameMedia { return .sameAsDefault }
         return .playable
     }
 
@@ -476,6 +462,42 @@ enum SourceTone {
         case let n as NSNumber: return n.stringValue
         case .none, is NSNull: return ""
         default: return String(describing: value ?? "")
+        }
+    }
+}
+
+
+/// toneinfo 返回体。只取需要的字段；ID 用柔性类型解码，19 位数字不会被浮点化。
+private struct ToneInfoPayload: Decodable {
+    struct Payload: Decodable {
+        var tts_tones: [TTS]?
+        var audio_tones: [Audio]?
+    }
+    struct TTS: Decodable {
+        var id: ToneID?
+        var title: String?
+        var name: String?
+    }
+    struct Audio: Decodable {
+        var abook_id: ToneID?
+        var title: String?
+        var name: String?
+    }
+    var data: Payload?
+}
+
+private struct ToneID: Decodable {
+    var value: String
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let number = try? container.decode(Int64.self) {
+            value = String(number)
+        } else if let text = try? container.decode(String.self) {
+            value = text
+        } else {
+            throw DecodingError.typeMismatch(ToneID.self,
+                .init(codingPath: container.codingPath, debugDescription: "音色 id 不是数字或字符串"))
         }
     }
 }
