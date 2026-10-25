@@ -1452,14 +1452,9 @@ private struct AudioInfoSheet: View {
     let playingURL: String?
 
     private var variable: (tone: String, abook: String) {
-        let raw = source.map { SourceVariable.get($0.bookSourceUrl) } ?? ""
-        guard let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return ("-", "-")
-        }
-        let tone = object["tone"].map { String(describing: $0) } ?? "-"
-        let abook = object["abook"].map { String(describing: $0) } ?? "-"
-        return (tone, abook)
+        guard let source else { return ("-", "-") }
+        let value = SourceTone.currentSelection(source: source)
+        return (value.tone.isEmpty ? "-" : value.tone, value.abook.isEmpty ? "-" : value.abook)
     }
 
     var body: some View {

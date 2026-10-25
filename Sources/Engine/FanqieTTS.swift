@@ -41,11 +41,10 @@ enum FanqieTTS {
 
     /// 源变量里是否选了合成音色（tone > 0 且没有真人专辑）。
     static func selectedSyntheticTone(source: BookSource) -> String? {
-        let raw = SourceVariable.get(source.bookSourceUrl)
-        guard let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        let abook = (object["abook"].map { String(describing: $0) } ?? "").trimmingCharacters(in: .whitespaces)
-        let tone = (object["tone"].map { String(describing: $0) } ?? "").trimmingCharacters(in: .whitespaces)
+        // 规则会按 _ts 在三份存储里挑最新那份，这里也必须看同一份。
+        let selection = SourceTone.currentSelection(source: source)
+        let abook = selection.abook.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tone = selection.tone.trimmingCharacters(in: .whitespacesAndNewlines)
         guard abook.isEmpty, let value = Int(tone), value > 0 else { return nil }
         return tone
     }

@@ -429,13 +429,33 @@ enum SourceTone {
     // MARK: 源变量读写（对象或 [对象] 两种形状都保留）
 
     private static func configDictionary(source: BookSource) -> [String: Any] {
-        guard let data = SourceVariable.get(source.bookSourceUrl).data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) else {
-            return [:]
+        let url = source.bookSourceUrl
+        var candidates: [String] = [SourceVariable.get(url)]
+        if let value = SourceVariableStore.shared.get("v_\(url)_v2sv") { candidates.append(value) }
+        if let value = SourceVariableStore.shared.get("v2sel") { candidates.append(value) }
+        var best: [String: Any] = [:]
+        var bestTS = -Double.greatestFiniteMagnitude
+        for raw in candidates {
+            guard let data = raw.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) else { continue }
+            let dict: [String: Any]
+            if let single = object as? [String: Any] {
+                dict = single
+            } else if let list = object as? [[String: Any]], let first = list.first {
+                dict = first
+            } else {
+                continue
+            }
+            let ts = (dict["_ts"] as? NSNumber)?.doubleValue ?? 0
+            if ts >= bestTS { bestTS = ts; best = dict }
         }
-        if let dict = object as? [String: Any] { return dict }
-        if let list = object as? [[String: Any]], let first = list.first { return first }
-        return [:]
+        return best
+    }
+
+    /// 当前生效的音色配置（和规则一样按 _ts 取最新那份）。
+    static func currentSelection(source: BookSource) -> (tone: String, abook: String) {
+        let config = configDictionary(source: source)
+        return (string(config["tone"]), string(config["abook"]))
     }
 
     private static func writeConfig(source: BookSource, prefersArray: Bool = false,
@@ -453,12 +473,18 @@ enum SourceTone {
             }
         }
         update(&dict)
+        // 书源规则（番茄 v2）会在三份存储里挑 _ts 最大的那份：
+        // source.getVariable() / source.get('v2sv') / cache.getFromMemory('v2sel')。
+        // 面板按钮三份都写并带时间戳；只写第一份会被旧变量盖住，表现就是「切了没变」。
+        dict["_ts"] = Int(Date().timeIntervalSince1970 * 1000)
         let useArray = isArray || (raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && prefersArray)
         let output: Any = useArray ? [dict] : dict
         guard JSONSerialization.isValidJSONObject(output),
               let data = try? JSONSerialization.data(withJSONObject: output),
               let text = String(data: data, encoding: .utf8) else { return }
         SourceVariable.set(text, for: source.bookSourceUrl)
+        SourceVariableStore.shared.set("v_\(source.bookSourceUrl)_v2sv", text)
+        SourceVariableStore.shared.set("v2sel", text)
     }
 
     private static func string(_ value: Any?) -> String {

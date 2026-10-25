@@ -405,14 +405,9 @@ struct SourceToneList: View {
     /// 面板诊断：读源变量里的 tone/abook，再按当前章节跑一次正文规则取音频地址。
     /// 用来区分「音色没写进变量」「书源只有一版音频」「地址打不开」。
     private func runDiagnostics(_ book: Book) async {
-        let raw = SourceVariable.get(source.bookSourceUrl)
-        var tone = "-"
-        var abook = "-"
-        if let data = raw.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            tone = object["tone"].map { String(describing: $0) } ?? "-"
-            abook = object["abook"].map { String(describing: $0) } ?? "-"
-        }
+        let selection = SourceTone.currentSelection(source: source)
+        let tone = selection.tone.isEmpty ? "-" : selection.tone
+        let abook = selection.abook.isEmpty ? "-" : selection.abook
         var lines = ["源变量：tone=\(tone) · abook=\(abook)"]
         if let chapterURL {
             let chapter = BookChapter(url: chapterURL, title: "", index: 0)
