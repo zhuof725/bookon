@@ -16,8 +16,6 @@ final class ExploreStore: ObservableObject {
     /// 外部（AI）写入标签/推荐语后 +1，卡片据此重绘。
     @Published private(set) var metaRevision = 0
 
-    private var pending: Set<String> = []
-
     init(boards: [ExploreBoard]? = nil) {
         self.boards = boards ?? ExploreBoardStore.load()
     }
@@ -60,18 +58,6 @@ final class ExploreStore: ObservableObject {
         }
         await BlockRequestGate.shared.release()
         loading.remove(key)
-    }
-
-    func preload(_ board: ExploreBoard) {
-        for category in board.visibleCategories {
-            let key = category.key
-            if books[key] != nil || loading.contains(key) || pending.contains(key) { continue }
-            pending.insert(key)
-            Task {
-                await load(category)
-                pending.remove(key)
-            }
-        }
     }
 
     /// 下拉刷新：重新取所有板块里的分类。缓存先留着，新数据回来再替换，页面不会白屏。
@@ -119,10 +105,6 @@ final class ExploreStore: ObservableObject {
     func move(from offsets: IndexSet, to destination: Int) {
         boards.move(fromOffsets: offsets, toOffset: destination)
         save()
-    }
-
-    func board(id: String) -> ExploreBoard? {
-        boards.first { $0.id == id }
     }
 
     /// 「猜你喜欢」点 ×：记住这本书，不再出现在该板块。
