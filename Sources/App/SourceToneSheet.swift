@@ -26,6 +26,8 @@ struct SourceToneList: View {
     var probe: Probe? = nil
     /// 当前这本书（「搜真人版」用书名搜索；没有时不显示这个入口）。
     var currentBook: Book? = nil
+    /// 当前章节地址：番茄 v2 用它探测「这本书有没有该音色」。
+    var chapterURL: String? = nil
 
     @ThemePalette private var palette
     @ObservedObject private var engineModel = SpeakEngineModel.shared
@@ -382,6 +384,16 @@ struct SourceToneList: View {
         applying = true
         message = nil
         Task {
+            // 先按当前章节探一次：没有音频说明书源会回落默认音色，直接告诉用户，别假装切换成功。
+            if case .legacy = group.kind,
+               let chapterURL, let book = currentBook,
+               let usable = await SourceTone.probeTone(source: src, book: book,
+                                                       chapterURL: chapterURL, tone: tone.value),
+               !usable {
+                applying = false
+                message = "这本书没有「\(tone.name)」这个音色，书源会回落到默认音色。换一个音色或试试「真人录播」。"
+                return
+            }
             let ok = await Task.detached { SourceTone.apply(tone, in: group, source: src) }.value
             guard ok else {
                 applying = false
@@ -413,6 +425,8 @@ struct SourceToneSheet: View {
     let source: BookSource
     /// 当前书：番茄 v2 的音色表要按书调 toneinfo，缺省时只能用静态音色表。
     var book: Book? = nil
+    /// 当前章节地址：用于切换前探测音色是否可用。
+    var chapterURL: String? = nil
     var onApplied: () -> Void
     var onSwitchToTTS: ((HTTPTTS?) -> Void)? = nil
 
@@ -426,7 +440,7 @@ struct SourceToneSheet: View {
             }, onSwitchToTTS: { engine in
                 dismiss()
                 onSwitchToTTS?(engine)
-            }, currentBook: book)
+            }, currentBook: book, chapterURL: chapterURL)
             .navigationTitle("音色")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

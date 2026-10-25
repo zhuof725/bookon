@@ -618,6 +618,8 @@ struct AudioChapterView: View {
     let chapterCount: Int
     /// 下一章标题（显示成「下一章 · xxx」；nil 表示已是最后一章）。
     var nextChapterTitle: String? = nil
+    /// 书源里的章节地址（带 item_id，音色探测用；不是音频地址）。
+    var sourceChapterURL: String? = nil
     /// 书源：有声书的音色由书源提供（番茄源的 tone_id），没有时音色按钮不显示。
     var source: BookSource? = nil
     /// 换音色后重新取一次本章音频。
@@ -670,7 +672,7 @@ struct AudioChapterView: View {
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
         .sheet(isPresented: $showTone) {
             if let source {
-                SourceToneSheet(source: source, book: book, onApplied: {
+                SourceToneSheet(source: source, book: book, chapterURL: sourceChapterURL, onApplied: {
                     onReloadAudio?()
                     // 字幕跟着音色走（番茄只有选了音色才返回 subContent），换完重取正文/字幕。
                     lyricText = nil

@@ -432,6 +432,8 @@ struct ReaderView: View {
                                  chapterCount: chapters.count,
                                  nextChapterTitle: chapters.indices.contains(index + 1)
                                      ? chapters[index + 1].title : nil,
+                                 sourceChapterURL: chapters.indices.contains(index)
+                                     ? chapters[index].url : nil,
                                  source: store.source(for: book.origin),
                                  onReloadAudio: { reloadAudioChapter() },
                                  onStop: {

@@ -268,6 +268,49 @@ enum SourceTone {
         return DynamicTones(tts: items("tts"), audio: items("audio"), bookID: bid)
     }
 
+    /// 这个音色对**当前章节**有没有音频。
+    /// 番茄 v2 的 playinfo 会按 tone_id 返回不同的 main_url；没有就说明这本书没有该音色，
+    /// 源脚本会自己回落到默认音色（用户听感就是“切了没变”）。
+    /// 返回 nil 表示这个源不支持这种探测。
+    static func probeTone(source: BookSource, book: Book?, chapterURL: String?, tone: String) async -> Bool? {
+        let script = scriptText(source)
+        guard script.contains("playinfo"), script.contains("fanqieSignHeaders") else { return nil }
+        guard let chapterURL, let item = itemID(from: chapterURL), !tone.isEmpty else { return nil }
+        let js = """
+        (function(){
+          try{
+            var u = "https://reading.snssdk.com/reading/reader/audio/playinfo/?tone_id=" + String(__tone)
+                  + "&item_ids=" + String(__item) + "&pv_player=-1&aid=3040&device_platform=android";
+            var h = fanqieSignHeaders(u, null);
+            var hm = new Packages.java.util.HashMap();
+            for (var k in h) { hm.put(String(k), String(h[k])); }
+            var body = String(java.get(u, hm).body());
+            var d = {};
+            try { d = JSON.parse(body); } catch(e) { return "0"; }
+            return (d.data && d.data[0] && d.data[0].main_url) ? "1" : "0";
+          }catch(e){ return ""; }
+        })()
+        """
+        let out = await Task.detached { () -> String? in
+            JSEngine.shared.evalString(js, vars: ["__tone": tone, "__item": item],
+                                       jsLib: source.jsLib,
+                                       context: RuleContext(source: source, book: book))
+        }.value
+        DebugLog.add("◇音色探测 tone=\(tone) item=\(item) → \(out ?? "nil")")
+        switch out {
+        case "1": return true
+        case "0": return false
+        default: return nil
+        }
+    }
+
+    private static func itemID(from url: String) -> String? {
+        guard let range = url.range(of: "item_id=([0-9]+)", options: .regularExpression) else { return nil }
+        let digits = String(url[range]).replacingOccurrences(of: "[^0-9]", with: "",
+                                                             options: .regularExpression)
+        return digits.isEmpty ? nil : digits
+    }
+
     /// 从书籍地址里抠 book_id（番茄的 bookUrl 只是 id 载体）。
     private static func bookID(from url: String) -> String? {
         if let range = url.range(of: "(?:book_id|bookId)=([0-9]+)", options: .regularExpression) {
