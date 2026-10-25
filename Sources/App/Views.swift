@@ -1890,8 +1890,12 @@ struct ReaderView: View {
             bookAudio.onProgress = { seconds in
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
+            let audioHeaders = AnalyzeUrl.headerFields(source.header, key: nil, page: 1,
+                                                       baseUrl: source.bookSourceUrl,
+                                                       context: RuleContext(source: source),
+                                                       jsLib: source.jsLib)
             bookAudio.play(urls: urls, title: chapter.title, album: book.name, startAt: resume,
-                           coverUrl: book.coverUrl, origin: book.origin)
+                           coverUrl: book.coverUrl, origin: book.origin, headers: audioHeaders)
         } catch is CancellationError {
             return
         } catch {
@@ -2185,9 +2189,13 @@ struct ReaderView: View {
             bookAudio.onProgress = { seconds in
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: target, seconds: seconds)
             }
+            let toneHeaders = AnalyzeUrl.headerFields(source.header, key: nil, page: 1,
+                                                      baseUrl: source.bookSourceUrl,
+                                                      context: RuleContext(source: source),
+                                                      jsLib: source.jsLib)
             bookAudio.play(urls: urls, title: chapters[target].title,
                            album: book.name, startAt: resume,
-                           coverUrl: book.coverUrl, origin: book.origin)
+                           coverUrl: book.coverUrl, origin: book.origin, headers: toneHeaders)
             loading = false
             return true
         default:

@@ -8,6 +8,8 @@ import MediaPlayer
 final class BookAudioPlayer: NSObject, ObservableObject {
     /// 当前章节的音频地址；nil 表示不在音频播放状态，阅读器回到文字排版。
     @Published private(set) var chapterURL: URL?
+    /// 书源 header：直连失败改下载时带上（签名音频 CDN 常校验）。
+    private var remoteHeaders: [String: String] = [:]
     @Published private(set) var chapterTitle = ""
     @Published private(set) var isPlaying = false
     @Published private(set) var isBuffering = false
@@ -112,7 +114,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// - Parameter coverUrl: 本书封面地址，用于锁屏 / 灵动岛封面；nil 时显示占位图标。
     /// - Parameter origin: 书源地址，封面需要解密或带请求头时用。
     func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0,
-              coverUrl: String? = nil, origin: String? = nil) {
+              coverUrl: String? = nil, origin: String? = nil,
+              headers: [String: String] = [:]) {
         let urls = rawURLs.compactMap { raw -> URL? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: trimmed) else { return nil }
@@ -128,6 +131,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         stop()
         failureNotified = false
         fallbackTried = false
+        remoteHeaders = headers
+        DebugLog.add("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
         chapterTitle = title
         self.album = album
         bookTitle = album
@@ -353,7 +358,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 return
             }
         }
-        pushMessage("音频播放失败：\(reason)")
+        let failing = remoteQueue.indices.contains(queueIndex) ? remoteQueue[queueIndex] : "-"
+        DebugLog.add("◇音频失败 \(reason) url=\(failing)")
+        let host = URL(string: failing)?.host ?? ""
+        pushMessage("音频播放失败：\(reason)" + (host.isEmpty ? "" : "（\(host)）"))
         onPlaybackFailed?()
     }
 
@@ -365,8 +373,13 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         downloadTask = Task { @MainActor in
             guard let url = URL(string: raw) else { return }
             var request = URLRequest(url: url, timeoutInterval: 60)
-            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-                             forHTTPHeaderField: "User-Agent")
+            for (key, value) in remoteHeaders where !key.isEmpty {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+            if request.value(forHTTPHeaderField: "User-Agent") == nil {
+                request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                                 forHTTPHeaderField: "User-Agent")
+            }
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse else {
