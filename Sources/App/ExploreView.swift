@@ -39,6 +39,7 @@ struct ExploreView: View {
                                          onEdit: { sheet = .edit(board) },
                                          onDelete: { remove(board) })
                     }
+                    addCard
                 }
             }
             .padding(.horizontal, 16)
@@ -72,6 +73,30 @@ struct ExploreView: View {
             }
         }
         .accessibilityIdentifier("explore.page")
+    }
+
+    /// 有板块时页尾常驻一个添加入口：不必每次都走右上角菜单。
+    private var addCard: some View {
+        Button {
+            sheet = .add(session: UUID().uuidString)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("添加板块").appFont(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(palette.secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(palette.border.opacity(0.55),
+                                  style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("explore.addCard")
     }
 
     private var menuButton: some View {
