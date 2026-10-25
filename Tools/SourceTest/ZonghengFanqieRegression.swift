@@ -104,8 +104,10 @@ enum ZonghengFanqieRegression {
         let lines = LyricTimeline.parse(lrc)
         // 5 行：首行标题行也是有效字幕；`[00:07.25][00:12.00]` 展开成两行；`[ar:]` 元信息丢弃。
         check(lines.count == 5, "LRC 解析出 5 行（多时间戳展开、元信息丢弃），实际 \(lines.count)")
-        check(abs((lines.first?.time ?? -1) - 3.5) < 0.001,
-              "LRC 首行时间 3.5s，实际 \(lines.first?.time ?? -1)")
+        check(lines.contains { abs($0.time - 3.5) < 0.001 },
+              "LRC 有 3.5s 那条（排序后首行是 0s 的标题行）")
+        check(lines.first?.time == 0,
+              "LRC 首行是 0s 的标题行，实际 \(lines.first?.time ?? -1)")
         check(lines.contains { abs($0.time - 12.0) < 0.001 },
               "同一行的第二个时间戳也展开")
 
