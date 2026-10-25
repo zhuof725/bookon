@@ -23,6 +23,7 @@ enum FanqieTTS {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var toneCache: [String: (Date, ToneInfo)] = [:]
     private nonisolated(unsafe) static var tocCache: [String: (Date, [TocItem])] = [:]
+    private nonisolated(unsafe) static var textCache: [String: (Date, String)] = [:]
     private static let cacheTTL: TimeInterval = 600
 
     // MARK: - 对外
@@ -66,6 +67,48 @@ enum FanqieTTS {
     static func mediaPath(source: BookSource, book: Book, chapter: BookChapter, tone: String) async -> String? {
         guard let url = await audioURL(source: source, book: book, chapter: chapter, tone: tone) else { return nil }
         return URL(string: url)?.path ?? url
+    }
+
+    /// 本章的**文字正文**：番茄音频书的章节 id 在文字镜像上也能取到同一章的文字
+    /// （真人录播书同样有文字版）。返回按段落拼好的纯文本，取不到返回 nil。
+    static func chapterText(source: BookSource, book: Book, chapter: BookChapter) async -> String? {
+        guard isSupported(source: source) else { return nil }
+        guard let item = itemID(from: chapter.url) else { return nil }
+        if let cached = cachedText(item) { return cached }
+        guard let url = URL(string: "https://m.wkbrowser.com/i\(item)/info/v2/") else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.setValue("Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+                         forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = object["data"] as? [String: Any],
+              let html = payload["content"] as? String, !html.isEmpty else { return nil }
+        let text = plainText(fromHTML: html)
+        guard !text.isEmpty else { return nil }
+        storeText(item, text)
+        return text
+    }
+
+    private static func plainText(fromHTML html: String) -> String {
+        var text = html
+        text = text.replacingOccurrences(of: "(?i)</p\\s*>", with: "\n", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?i)<br\\s*/?>", with: "\n", options: .regularExpression)
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let entities = [("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"),
+                        ("&gt;", ">"), ("&quot;", "\""), ("&apos;", "'")]
+        for (key, value) in entities { text = text.replacingOccurrences(of: key, with: value) }
+        let lines = text.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func itemID(from url: String) -> String? {
+        guard let range = url.range(of: "item_id=([0-9]+)", options: .regularExpression) else { return nil }
+        let digits = String(url[range]).replacingOccurrences(of: "[^0-9]", with: "",
+                                                             options: .regularExpression)
+        return digits.isEmpty ? nil : digits
     }
 
     // MARK: - 数据
@@ -149,6 +192,7 @@ enum FanqieTTS {
         lock.lock()
         toneCache.removeAll()
         tocCache.removeAll()
+        textCache.removeAll()
         lock.unlock()
     }
 
@@ -172,6 +216,16 @@ enum FanqieTTS {
 
     private static func storeToc(_ related: String, _ items: [TocItem]) {
         lock.lock(); tocCache[related] = (Date(), items); lock.unlock()
+    }
+
+    private static func cachedText(_ item: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let cached = textCache[item], Date().timeIntervalSince(cached.0) < cacheTTL else { return nil }
+        return cached.1
+    }
+
+    private static func storeText(_ item: String, _ text: String) {
+        lock.lock(); textCache[item] = (Date(), text); lock.unlock()
     }
 
     // MARK: - 匹配

@@ -1956,17 +1956,27 @@ struct ReaderView: View {
     private func audioChapterParagraphs() async -> [String] {
         guard chapters.indices.contains(index),
               let source = store.source(for: book.origin) else { return [] }
-        guard let raw = try? await WebBook.rawContentWithBookInfoHealing(
-            source: source, book: book, chapter: chapters[index]) else { return [] }
         let chapter = chapters[index]
-        let content = ReaderChapterParser.content(raw: raw, isVolume: chapter.isVolume,
-                                                 replacement: bodyReplacement,
-                                                 imageDecode: imageDecodeHook(for: chapter))
-        return content.blocks.compactMap { block in
-            guard case .paragraph(let text, _, _) = block else { return nil }
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
+        if let raw = try? await WebBook.rawContentWithBookInfoHealing(
+            source: source, book: book, chapter: chapter) {
+            let content = ReaderChapterParser.content(raw: raw, isVolume: chapter.isVolume,
+                                                     replacement: bodyReplacement,
+                                                     imageDecode: imageDecodeHook(for: chapter))
+            let paragraphs = content.blocks.compactMap { block -> String? in
+                guard case .paragraph(let text, _, _) = block else { return nil }
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            if !paragraphs.isEmpty { return paragraphs }
         }
+        // 音频源没有可显示的正文：番茄音频书的章节 id 在文字镜像上有同一章的文字，
+        // 真人录播书也能取到（对应文字版）。
+        if let text = await FanqieTTS.chapterText(source: source, book: book, chapter: chapter) {
+            return text.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        return []
     }
 
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
