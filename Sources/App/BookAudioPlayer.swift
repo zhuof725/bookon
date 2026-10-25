@@ -857,8 +857,7 @@ struct AudioChapterView: View {
         }
         // 1) 书源字幕：番茄这类源有 subContent，能直接给出逐句时间戳。
         if let lyric = onLoadLyric?(),
-           let parsed = LyricTimeline.parse(lyric),
-           let built = LyricTimeline.boundaries(lines: parsed, paragraphs: paragraphs,
+           let built = LyricTimeline.boundaries(lines: LyricTimeline.parse(lyric), paragraphs: paragraphs,
                                                 duration: audio.duration) {
             boundaries = built
             AudioSentenceTimeline.store(built, bookUrl: book.bookUrl, chapter: chapter)

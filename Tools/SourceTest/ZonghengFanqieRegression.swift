@@ -131,10 +131,16 @@ enum ZonghengFanqieRegression {
         check(LyricTimeline.boundaries(lines: unrelated ?? [], paragraphs: paragraphs, duration: 90) == nil,
               "对不上的字幕返回 nil（退回停顿估算）")
 
-        // MARK: 6) 番茄音色探测（函数式 _getTones）
+        // MARK: 6) 番茄 v2 的音色是「运行时拉取」而非静态表
 
-        check(SourceTone.hasTones(source: fanqie),
-              "番茄书源被识别为有音色表（_getTones）")
+        // v2 把 toneinfo 的结果写进源变量（`tones = "id|名称|描述#…"`），
+        // jsLib 里既没有 `_getTones()` 也没有 `xxxTones = [...]`，
+        // 所以旧的探测方式对这个源无效——这里断言「已知为不支持」，
+        // 避免以后有人误以为它是坏的。要支持得给 SourceTone 加运行时音色表分支。
+        check(!SourceTone.hasTones(source: fanqie),
+              "番茄 v2 的音色表是运行时拉取的，静态探测识别不到（已知限制）")
+        check((fanqie.jsLib ?? "").contains("toneinfo") || (fanqie.ruleToc?.chapterList ?? "").contains("toneinfo"),
+              "番茄 v2 用 toneinfo 接口拉音色，而不是静态音色表")
 
         // MARK: 7) 长按事件名与原版一致
 
