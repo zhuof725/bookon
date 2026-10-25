@@ -4,6 +4,8 @@ import SwiftUI
 /// 不需要真实的 AppStore（书源解析、导入、本地书全都不参与渲染）。
 @MainActor
 final class AppStore: ObservableObject {
+    static let shared = AppStore()
+    func source(for url: String) -> BookSource? { nil }
     @Published var books: [Book] = []
 
     func cachedToc(_ book: Book) -> [BookChapter]? { nil }

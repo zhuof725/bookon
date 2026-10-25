@@ -468,15 +468,8 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(true)
-        .onReceive(NotificationCenter.default.publisher(for: .sourceToneChanged)) { note in
-            // 详情面板换了音色（写进了源变量）：清掉旧音频缓存，重载本章。
-            guard (note.object as? String) == book.origin,
-                  bookAudio.chapterURL != nil,
-                  chapters.indices.contains(index) else { return }
-            AudioDiskCache.removeAll()
-            AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[index].title)
-            reloadAudioChapter()
-        }
+        .onReceive(NotificationCenter.default.publisher(for: .sourceToneChanged),
+                   perform: sourceToneChanged)
         .overlay(alignment: .top) {
             if showBars && readerChromeMounted {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
@@ -1971,6 +1964,16 @@ struct ReaderView: View {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         }
+    }
+
+    /// 详情面板换了音色（写进了源变量）：清掉旧音频缓存，重载本章。
+    private func sourceToneChanged(_ note: Notification) {
+        guard (note.object as? String) == book.origin,
+              bookAudio.chapterURL != nil,
+              chapters.indices.contains(index) else { return }
+        AudioDiskCache.removeAll()
+        AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[index].title)
+        reloadAudioChapter()
     }
 
     /// 有声书换了音色：书源按新音色重新给本章音频，从本章开头重新播。
