@@ -644,6 +644,8 @@ struct AudioChapterView: View {
     /// 0 = 封面，1 = 正文
     @State private var mode = 0
     @State private var paragraphs: [String] = []
+    /// 本章字幕原文（subContent 的 LRC）：既能当正文显示，也用于逐句时间轴。
+    @State private var lyricText: String?
     @State private var loadingText = false
     /// 段落时间轴（本地按停顿对齐）；没有时退回按比例估算。
     @State private var boundaries: [Double]?
@@ -668,9 +670,14 @@ struct AudioChapterView: View {
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
         .sheet(isPresented: $showTone) {
             if let source {
-                SourceToneSheet(source: source, onApplied: { onReloadAudio?() },
-                                onSwitchToTTS: onSwitchToTTS)
-                    .modifier(AppThemeRoot())
+                SourceToneSheet(source: source, book: book, onApplied: {
+                    onReloadAudio?()
+                    // 字幕跟着音色走（番茄只有选了音色才返回 subContent），换完重取正文/字幕。
+                    lyricText = nil
+                    paragraphs = []
+                    Task { await loadParagraphsIfNeeded() }
+                }, onSwitchToTTS: onSwitchToTTS)
+                .modifier(AppThemeRoot())
             }
         }
     }
@@ -856,9 +863,10 @@ struct AudioChapterView: View {
             return
         }
         // 1) 书源字幕：番茄这类源有 subContent，能直接给出逐句时间戳。
-        if let lyric = onLoadLyric?(),
+        if let lyric = lyricText ?? onLoadLyric?(),
            let built = LyricTimeline.boundaries(lines: LyricTimeline.parse(lyric), paragraphs: paragraphs,
                                                 duration: audio.duration) {
+            lyricText = lyric
             boundaries = built
             AudioSentenceTimeline.store(built, bookUrl: book.bookUrl, chapter: chapter)
             return
@@ -970,9 +978,14 @@ struct AudioChapterView: View {
     }
 
     private func loadParagraphsIfNeeded() async {
-        guard let onLoadParagraphs else { return }
         loadingText = true
-        let loaded = await onLoadParagraphs()
+        var loaded = await onLoadParagraphs?() ?? []
+        // 有声书没有正文：书源带 subContent 字幕时，把字幕行当正文显示。
+        if loaded.isEmpty, let lyric = onLoadLyric?() {
+            lyricText = lyric
+            loaded = LyricTimeline.parse(lyric).map(\.text)
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
         paragraphs = loaded
         boundaries = nil
         loadingText = false

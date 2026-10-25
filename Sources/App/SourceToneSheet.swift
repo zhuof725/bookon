@@ -368,8 +368,9 @@ struct SourceToneList: View {
 
     private func load() async {
         let src = source
+        let book = currentBook
         let result = await Task.detached { () -> ([SourceTone.Group], String) in
-            (SourceTone.groups(source: src), SourceTone.summary(source: src))
+            (SourceTone.groups(source: src, book: book), SourceTone.summary(source: src))
         }.value
         groups = result.0
         summary = result.1
@@ -410,6 +411,8 @@ struct SourceToneList: View {
 /// 有声书的「音色」面板：包一层导航栏，选完自动关闭。
 struct SourceToneSheet: View {
     let source: BookSource
+    /// 当前书：番茄 v2 的音色表要按书调 toneinfo，缺省时只能用静态音色表。
+    var book: Book? = nil
     var onApplied: () -> Void
     var onSwitchToTTS: ((HTTPTTS?) -> Void)? = nil
 
@@ -423,7 +426,7 @@ struct SourceToneSheet: View {
             }, onSwitchToTTS: { engine in
                 dismiss()
                 onSwitchToTTS?(engine)
-            })
+            }, currentBook: book)
             .navigationTitle("音色")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

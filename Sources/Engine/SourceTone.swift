@@ -37,6 +37,8 @@ enum SourceTone {
     static func hasTones(source: BookSource) -> Bool {
         let script = scriptText(source)
         if script.contains("_getTones") { return true }
+        // 番茄 v2：音色表不在脚本里，要按当前书调 toneinfo 接口（见 dynamicTones）。
+        if script.contains("toneinfo"), script.contains("fanqieSignHeaders") { return true }
         guard script.contains("_tts_tone"), script.contains("Tones =") || script.contains("Tones=") else {
             return false
         }
@@ -59,8 +61,8 @@ enum SourceTone {
         return parts.isEmpty ? "默认音色" : parts.joined(separator: " · ")
     }
 
-    /// 音色分组：先看函数式，再看声明式。
-    static func groups(source: BookSource) -> [Group] {
+    /// 音色分组：先看函数式，再看声明式，最后按当前书动态取（番茄 v2）。
+    static func groups(source: BookSource, book: Book? = nil) -> [Group] {
         let config = configDictionary(source: source)
         var groups: [Group] = []
         if let tones = legacyTones(source: source), !tones.isEmpty {
@@ -74,6 +76,10 @@ enum SourceTone {
             if groups.contains(where: { $0.id == key }) { continue }
             groups.append(Group(id: key, title: title(forKey: key), kind: .declared(key: key),
                                 tones: array.tones, currentValue: string(config[key])))
+        }
+        if groups.isEmpty, let book, let tones = dynamicTones(source: source, book: book), !tones.isEmpty {
+            groups.append(Group(id: "dynamic", title: "音色", kind: .legacy,
+                                tones: tones, currentValue: string(config["tone"])))
         }
         return groups
     }
@@ -151,6 +157,62 @@ enum SourceTone {
             dict["tone_cn"] = item.value.isEmpty ? "" : "\(item.name)(\(item.value))"
         }
         return string(configDictionary(source: source)["tone"]) == item.value
+    }
+
+    // MARK: 动态音色（番茄 v2）
+
+    /// 番茄 v2 的脚本里没有音色数组，音色来自 `bookapi/audio/toneinfo`。
+    /// 这里借用书源自己的签名助手（FQ_BASE/FQ_P/FQ_IID/fanqieSignHeaders）按书取一次。
+    /// 只对声明了 `toneinfo` + `fanqieSignHeaders` 的脚本启用。
+    private static func dynamicTones(source: BookSource, book: Book) -> [Item]? {
+        let script = scriptText(source)
+        guard script.contains("toneinfo"), script.contains("fanqieSignHeaders") else { return nil }
+        guard let bid = bookID(from: book.bookUrl) else { return nil }
+        let js = """
+        (function(){
+          try{
+            var u = FQ_BASE + "/bookapi/audio/toneinfo/?" + FQ_P + "&book_id=" + String(__fqBookId);
+            var h = fanqieSignHeaders(String(u), null);
+            h["Cookie"] = "install_id=" + FQ_IID;
+            var hm = new Packages.java.util.HashMap();
+            for(var k in h){ hm.put(String(k), String(h[k])); }
+            var body = String(java.get(String(u), hm).body());
+            var d = (JSON.parse(body).data) || {};
+            var t = d.tts_tones || [];
+            var out = [];
+            for(var i=0;i<t.length;i++){
+              var o = t[i] || {};
+              if(o.id == null) continue;
+              out.push([String(o.title || o.name || ("音色" + o.id)), String(o.id)]);
+            }
+            return JSON.stringify(out);
+          }catch(e){ return "[]"; }
+        })()
+        """
+        guard let json = JSEngine.shared.evalString(js, vars: ["__fqBookId": bid],
+                                                    jsLib: source.jsLib,
+                                                    context: RuleContext(source: source, book: book)),
+              !json.isEmpty,
+              let data = json.data(using: .utf8),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[Any]] else { return nil }
+        return rows.enumerated().compactMap { index, row in
+            guard row.count >= 2 else { return nil }
+            let name = string(row[0])
+            let value = string(row[1])
+            guard !name.isEmpty, !value.isEmpty else { return nil }
+            return Item(index: index, name: name, value: value)
+        }
+    }
+
+    /// 从书籍地址里抠 book_id（番茄的 bookUrl 只是 id 载体）。
+    private static func bookID(from url: String) -> String? {
+        if let range = url.range(of: "(?:book_id|bookId)=([0-9]+)", options: .regularExpression) {
+            let digits = String(url[range]).replacingOccurrences(of: "[^0-9]", with: "",
+                                                                 options: .regularExpression)
+            return digits.isEmpty ? nil : digits
+        }
+        let digits = url.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
+        return digits.isEmpty ? nil : digits
     }
 
     // MARK: 声明式数组解析
