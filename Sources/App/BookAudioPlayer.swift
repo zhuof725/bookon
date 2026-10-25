@@ -756,6 +756,8 @@ struct AudioChapterView: View {
         .sheet(isPresented: $showAudioInfo) {
             AudioInfoSheet(chapterTitle: audio.chapterTitle,
                            chapterNumber: chapterNumber,
+                           chapterCount: chapterCount,
+                           book: book,
                            source: source,
                            playingURL: audio.chapterURL?.absoluteString)
                 .modifier(AppThemeRoot())
@@ -1459,6 +1461,8 @@ private struct AudioInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     let chapterTitle: String
     let chapterNumber: Int
+    let chapterCount: Int
+    let book: Book
     let source: BookSource?
     let playingURL: String?
 
@@ -1472,8 +1476,13 @@ private struct AudioInfoSheet: View {
         NavigationStack {
             List {
                 Section("章节") {
-                    Text("\(chapterTitle)（第 \(chapterNumber) 章）")
+                    Text("\(chapterTitle)（第 \(chapterNumber) / \(chapterCount) 章）")
                         .appFont(.body)
+                }
+                Section("书籍地址") {
+                    Text(book.bookUrl)
+                        .appFont(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
                 }
                 Section("源变量") {
                     Text("tone=\(variable.tone)")
