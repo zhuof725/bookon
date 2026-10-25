@@ -15,6 +15,10 @@ extension AudioChapter {
         if let toneURL = await SourceToneAudio.audioURL(source: source, book: book, chapter: chapter) {
             return [toneURL]
         }
+        // 番茄真人录播书：选了合成音色时改播文字版的 TTS（服务端才会按 tone 换声音）。
+        if let ttsURL = await FanqieTTS.audioURL(source: source, book: book, chapter: chapter) {
+            return [ttsURL]
+        }
         guard hasContentRule(source) else {
             return chapterURL.isEmpty ? [] : [chapterURL]
         }

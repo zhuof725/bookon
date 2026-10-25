@@ -263,6 +263,11 @@ enum SourceTone {
     static func probeTone(source: BookSource, book: Book?, chapterURL: String?, tone: String) async -> ToneProbeResult? {
         let script = scriptText(source)
         guard script.contains("playinfo"), script.contains("fanqieSignHeaders") else { return nil }
+        // 真人录播书有文字版时，音色走 TTS 通道（音色差异一定存在），不再用录播音频比较。
+        if (Int(tone) ?? 0) > 0, let book, FanqieTTS.isSupported(source: source),
+           await FanqieTTS.relatedBookID(source: source, book: book) != nil {
+            return .playable
+        }
         guard let chapterURL, let item = itemID(from: chapterURL), !tone.isEmpty else { return nil }
         let js = """
         (function(){
