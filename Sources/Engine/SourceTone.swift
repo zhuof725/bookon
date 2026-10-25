@@ -23,6 +23,8 @@ enum SourceTone {
             case legacy
             /// 声明式：配置键 = 音色 id。
             case declared(key: String)
+            /// 番茄 v2 真人录播：源变量 abook/abookBid/abookName，tone 置 0。
+            case realPerson(bookID: String)
         }
         let id: String
         let title: String
@@ -53,8 +55,13 @@ enum SourceTone {
             let value = string(config[key])
             if !value.isEmpty { parts.append("\(title(forKey: key)) \(value)") }
         }
+        let abookName = string(config["abookName"])
+        let abook = string(config["abook"])
+        if !abook.isEmpty {
+            parts.append(abookName.isEmpty ? "真人录播 \(abook)" : "真人 · \(abookName)")
+        }
         let tone = string(config["tone"])
-        if !tone.isEmpty {
+        if !tone.isEmpty, abook.isEmpty || tone != "0" {
             let name = string(config["tone_cn"])
             parts.append(name.isEmpty ? tone : name)
         }
@@ -77,9 +84,16 @@ enum SourceTone {
             groups.append(Group(id: key, title: title(forKey: key), kind: .declared(key: key),
                                 tones: array.tones, currentValue: string(config[key])))
         }
-        if groups.isEmpty, let book, let tones = dynamicTones(source: source, book: book), !tones.isEmpty {
-            groups.append(Group(id: "dynamic", title: "音色", kind: .legacy,
-                                tones: tones, currentValue: string(config["tone"])))
+        if groups.isEmpty, let book, let dynamic = dynamicTones(source: source, book: book) {
+            if !dynamic.tts.isEmpty {
+                groups.append(Group(id: "dynamic", title: "音色", kind: .legacy,
+                                    tones: dynamic.tts, currentValue: string(config["tone"])))
+            }
+            if !dynamic.audio.isEmpty {
+                groups.append(Group(id: "dynamic-real", title: "真人录播",
+                                    kind: .realPerson(bookID: dynamic.bookID),
+                                    tones: dynamic.audio, currentValue: string(config["abook"])))
+            }
         }
         return groups
     }
@@ -90,6 +104,7 @@ enum SourceTone {
         switch group.kind {
         case .legacy: return string(config["tone"])
         case .declared(let key): return string(config[key])
+        case .realPerson: return string(config["abook"])
         }
     }
 
@@ -100,11 +115,25 @@ enum SourceTone {
             writeConfig(source: source) { dict in
                 dict["tone"] = value
                 dict["tone_cn"] = value
+                // 之前被书源判过「不支持」的标记要清掉，否则一直回落到默认音色。
+                dict["toneBad"] = ""
+                // 真人录播的 abook 优先级更高，切回合成音色时必须清掉。
+                dict["abook"] = ""
+                dict["abookName"] = ""
+                dict["abookBid"] = ""
             }
         case .declared(let key):
             let prefersArray = scriptText(source).contains("JSON.stringify([")
             writeConfig(source: source, prefersArray: prefersArray) { dict in
                 dict[key] = value
+            }
+        case .realPerson(let bookID):
+            writeConfig(source: source) { dict in
+                dict["abook"] = value
+                dict["abookName"] = value
+                dict["abookBid"] = bookID
+                dict["tone"] = "0"
+                dict["toneBad"] = ""
             }
         }
     }
@@ -115,6 +144,16 @@ enum SourceTone {
         switch group.kind {
         case .legacy:
             return applyLegacy(item, source: source)
+        case .realPerson(let bookID):
+            writeConfig(source: source) { dict in
+                dict["abook"] = item.value
+                dict["abookName"] = item.name
+                dict["abookBid"] = bookID
+                dict["tone"] = "0"
+                dict["tone_cn"] = item.name
+                dict["toneBad"] = ""
+            }
+            return string(configDictionary(source: source)["abook"]) == item.value
         case .declared(let key):
             // 书山聚合这类源的配置是 `[config]` 数组：变量为空时也要写成数组，
             // 否则 getConfig() 的 Array.isArray 检查会退回默认值、我们的键读不到。
@@ -155,16 +194,30 @@ enum SourceTone {
         writeConfig(source: source) { dict in
             dict["tone"] = item.value
             dict["tone_cn"] = item.value.isEmpty ? "" : "\(item.name)(\(item.value))"
+            // 之前失败留下的 toneBad 会让书源直接回落默认音色，换音色时必须清掉。
+            dict["toneBad"] = ""
+            // 真人录播的 abook 优先级更高，切回合成音色时必须清掉。
+            dict["abook"] = ""
+            dict["abookName"] = ""
+            dict["abookBid"] = ""
         }
         return string(configDictionary(source: source)["tone"]) == item.value
     }
 
     // MARK: 动态音色（番茄 v2）
 
-    /// 番茄 v2 的脚本里没有音色数组，音色来自 `bookapi/audio/toneinfo`。
+    private struct DynamicTones {
+        var tts: [Item]
+        var audio: [Item]
+        var bookID: String
+    }
+
+    /// 番茄 v2 的脚本里没有音色数组，音色来自 `bookapi/audio/toneinfo`：
+    /// - `tts_tones`：合成音色（tone_id）
+    /// - `audio_tones`：真人录播（abook_id）
     /// 这里借用书源自己的签名助手（FQ_BASE/FQ_P/FQ_IID/fanqieSignHeaders）按书取一次。
     /// 只对声明了 `toneinfo` + `fanqieSignHeaders` 的脚本启用。
-    private static func dynamicTones(source: BookSource, book: Book) -> [Item]? {
+    private static func dynamicTones(source: BookSource, book: Book) -> DynamicTones? {
         let script = scriptText(source)
         guard script.contains("toneinfo"), script.contains("fanqieSignHeaders") else { return nil }
         guard let bid = bookID(from: book.bookUrl) else { return nil }
@@ -179,14 +232,21 @@ enum SourceTone {
             var body = String(java.get(String(u), hm).body());
             var d = (JSON.parse(body).data) || {};
             var t = d.tts_tones || [];
-            var out = [];
+            var a = d.audio_tones || [];
+            var out = {tts: [], audio: []};
             for(var i=0;i<t.length;i++){
               var o = t[i] || {};
               if(o.id == null) continue;
-              out.push([String(o.title || o.name || ("音色" + o.id)), String(o.id)]);
+              out.tts.push([String(o.title || o.name || ("音色" + o.id)), String(o.id)]);
+            }
+            for(var j=0;j<a.length;j++){
+              var r = a[j] || {};
+              var id = r.abook_id || r.abookId || r.id;
+              if(id == null) continue;
+              out.audio.push([String(r.title || r.name || ("真人" + id)), String(id)]);
             }
             return JSON.stringify(out);
-          }catch(e){ return "[]"; }
+          }catch(e){ return "{}"; }
         })()
         """
         guard let json = JSEngine.shared.evalString(js, vars: ["__fqBookId": bid],
@@ -194,14 +254,18 @@ enum SourceTone {
                                                     context: RuleContext(source: source, book: book)),
               !json.isEmpty,
               let data = json.data(using: .utf8),
-              let rows = try? JSONSerialization.jsonObject(with: data) as? [[Any]] else { return nil }
-        return rows.enumerated().compactMap { index, row in
-            guard row.count >= 2 else { return nil }
-            let name = string(row[0])
-            let value = string(row[1])
-            guard !name.isEmpty, !value.isEmpty else { return nil }
-            return Item(index: index, name: name, value: value)
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        func items(_ key: String) -> [Item] {
+            guard let rows = object[key] as? [[Any]] else { return [] }
+            return rows.enumerated().compactMap { index, row in
+                guard row.count >= 2 else { return nil }
+                let name = string(row[0])
+                let value = string(row[1])
+                guard !name.isEmpty, !value.isEmpty else { return nil }
+                return Item(index: index, name: name, value: value)
+            }
         }
+        return DynamicTones(tts: items("tts"), audio: items("audio"), bookID: bid)
     }
 
     /// 从书籍地址里抠 book_id（番茄的 bookUrl 只是 id 载体）。
