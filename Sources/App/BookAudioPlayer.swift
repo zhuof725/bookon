@@ -362,7 +362,36 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         DebugLog.add("◇音频失败 \(reason) url=\(failing)")
         let host = URL(string: failing)?.host ?? ""
         pushMessage("音频播放失败：\(reason)" + (host.isEmpty ? "" : "（\(host)）"))
+        diagnoseFailure(failing, reason: reason, host: host)
         onPlaybackFailed?()
+    }
+
+    /// 播放失败后再取一次地址信息（只下前 64KB）：把 HTTP 状态和 Content-Type
+    /// 直接写进提示，便于判断是防盗链、过期还是书源给的不是音频地址。
+    private func diagnoseFailure(_ raw: String, reason: String, host: String) {
+        guard let url = URL(string: raw), url.scheme?.lowercased().hasPrefix("http") == true else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            var request = URLRequest(url: url, timeoutInterval: 15)
+            request.setValue("bytes=0-65535", forHTTPHeaderField: "Range")
+            for (key, value) in self.remoteHeaders where !key.isEmpty {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+            if request.value(forHTTPHeaderField: "User-Agent") == nil {
+                request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                                 forHTTPHeaderField: "User-Agent")
+            }
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let http = response as? HTTPURLResponse
+                let detail = "HTTP \(http?.statusCode ?? -1) · \(http?.mimeType ?? "-") · \(data.count) 字节"
+                DebugLog.add("◇音频诊断 \(detail) url=\(raw)")
+                self.pushMessage("音频播放失败：\(reason)（\(host)）\n\(detail)")
+            } catch {
+                DebugLog.add("◇音频诊断失败 \(error.localizedDescription) url=\(raw)")
+                self.pushMessage("音频播放失败：\(reason)（\(host)）\n探测失败：\(error.localizedDescription)")
+            }
+        }
     }
 
     /// 下载当前段到本地缓存后从同一位置继续播放。
