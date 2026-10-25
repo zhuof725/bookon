@@ -1085,6 +1085,14 @@ struct AudioChapterView: View {
                 }
                 .accessibilityIdentifier("reader.audio.calibrate")
             }
+            if let onReloadAudio {
+                Button {
+                    onReloadAudio()
+                } label: {
+                    Label("刷新本章", systemImage: "arrow.clockwise")
+                }
+                .accessibilityIdentifier("reader.audio.refresh")
+            }
             Button { showAudioInfo = true } label: {
                 Label("音频信息", systemImage: "waveform.badge.magnifyingglass")
             }
