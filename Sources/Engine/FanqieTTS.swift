@@ -145,6 +145,14 @@ enum FanqieTTS {
         return url
     }
 
+    /// 刷新/换音色时清掉 toneinfo/目录缓存，保证重新取的是新链接。
+    static func clearCache() {
+        lock.lock()
+        toneCache.removeAll()
+        tocCache.removeAll()
+        lock.unlock()
+    }
+
     // MARK: - 缓存（NSLock 不能在 async 上下文里直接用，抽成同步函数）
 
     private static func cachedToneInfo(_ bid: String) -> ToneInfo? {

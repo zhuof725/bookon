@@ -1976,8 +1976,9 @@ struct ReaderView: View {
               let source = store.source(for: book.origin) else { return }
         let target = index
         AudioProgress.clear(bookUrl: book.bookUrl)
-        // 换音色后旧音频段/时间轴一律作废（签名地址虽会变，但本地缓存和字幕时间轴还留着旧值）。
+        // 换音色/刷新后旧音频段/时间轴一律作废（签名地址虽会变，但本地缓存和字幕时间轴还留着旧值）。
         AudioDiskCache.removeAll()
+        FanqieTTS.clearCache()
         if chapters.indices.contains(target) {
             AudioSentenceTimeline.clear(bookUrl: book.bookUrl, chapter: chapters[target].title)
         }
