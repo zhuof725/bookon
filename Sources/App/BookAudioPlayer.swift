@@ -10,6 +10,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     @Published private(set) var chapterURL: URL?
     /// 书源 header：直连失败改下载时带上（签名音频 CDN 常校验）。
     private var remoteHeaders: [String: String] = [:]
+    /// 当前书地址：音频缓存索引按它记录章节。
+    private var currentBookURL: String?
     @Published private(set) var chapterTitle = ""
     @Published private(set) var isPlaying = false
     @Published private(set) var isBuffering = false
@@ -115,7 +117,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
     /// - Parameter origin: 书源地址，封面需要解密或带请求头时用。
     func play(urls rawURLs: [String], title: String, album: String, startAt: TimeInterval = 0,
               coverUrl: String? = nil, origin: String? = nil,
-              headers: [String: String] = [:]) {
+              headers: [String: String] = [:], bookURL: String? = nil) {
         let urls = rawURLs.compactMap { raw -> URL? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: trimmed) else { return nil }
@@ -132,6 +134,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         failureNotified = false
         fallbackTried = false
         remoteHeaders = headers
+        currentBookURL = bookURL
         DebugLog.readerAdd("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
         chapterTitle = title
         self.album = album
@@ -141,6 +144,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         remoteQueue = urls.map(\.absoluteString)
         // 已经缓存过的段直接播本地文件（原版 SimpleCache 的效果），其余走网络边播边存。
         queue = urls.map { AudioDiskCache.cachedFile(for: $0.absoluteString) ?? $0 }
+        if let bookURL, queue.first?.isFileURL == true {
+            AudioCacheIndex.mark(bookUrl: bookURL, chapter: title)
+        }
         queueIndex = 0
         chapterURL = urls[0]
         activateSession()
@@ -178,6 +184,8 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         cacheTask?.cancel()
         let remote = remoteQueue
         let headers = remoteHeaders
+        let cacheBookURL = currentBookURL
+        let cacheChapter = chapterTitle
         guard !remote.isEmpty else { return }
         cacheTask = Task.detached(priority: .utility) {
             for raw in remote {
@@ -203,6 +211,9 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 else if kind.hasPrefix("OGG") { ext = "ogg" }
                 else { ext = "mp3" }
                 AudioDiskCache.store(data, for: raw, ext: ext)
+            }
+            if let cacheBookURL {
+                AudioCacheIndex.mark(bookUrl: cacheBookURL, chapter: cacheChapter)
             }
         }
     }

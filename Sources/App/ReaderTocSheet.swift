@@ -171,6 +171,8 @@ final class ChapterPrecacheManager: ObservableObject {
 struct ReaderTocSheet: View {
     @ThemePalette private var palette
     let chapters: [BookChapter]
+    /// 当前书地址：有声书用来判断本章音频是否已缓存。
+    var bookURL: String? = nil
     let currentIndex: Int
     @ObservedObject var manager: ChapterPrecacheManager
     let onSelect: (Int) -> Void
@@ -230,7 +232,8 @@ struct ReaderTocSheet: View {
 
     @ViewBuilder
     private func row(_ chapter: BookChapter) -> some View {
-        let isCached = manager.cached.contains(chapter.id)
+        let audioCached = bookURL.map { AudioCacheIndex.contains(bookUrl: $0, chapter: chapter.title) } ?? false
+        let isCached = manager.cached.contains(chapter.id) || audioCached
         Button { onSelect(chapter.index) } label: {
             if chapter.isVolume {
                 Text(chapter.title).appFont(.headline)

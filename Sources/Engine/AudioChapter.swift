@@ -176,3 +176,44 @@ enum AudioSniff {
         return nil
     }
 }
+
+
+/// 有声书「哪些章的音频已经落到本地」的索引（目录里显示实心云）。
+/// 只记 bookUrl + 章节标题，不存音频本身。
+enum AudioCacheIndex {
+    private static let key = "reader.audioCachedChapters.v1"
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var cache: Set<String>?
+
+    private static func id(_ bookURL: String, _ chapter: String) -> String {
+        bookURL + "\u{1F}" + chapter
+    }
+
+    static func mark(bookUrl: String, chapter: String) {
+        guard !bookUrl.isEmpty, !chapter.isEmpty else { return }
+        lock.lock()
+        var set = loadedLocked()
+        set.insert(id(bookUrl, chapter))
+        persistLocked(set)
+        lock.unlock()
+    }
+
+    static func contains(bookUrl: String, chapter: String) -> Bool {
+        guard !bookUrl.isEmpty, !chapter.isEmpty else { return false }
+        lock.lock(); defer { lock.unlock() }
+        return loadedLocked().contains(id(bookUrl, chapter))
+    }
+
+    private static func loadedLocked() -> Set<String> {
+        if let cache { return cache }
+        let list = UserDefaults.standard.stringArray(forKey: key) ?? []
+        let set = Set(list)
+        cache = set
+        return set
+    }
+
+    private static func persistLocked(_ set: Set<String>) {
+        cache = set
+        UserDefaults.standard.set(Array(set), forKey: key)
+    }
+}

@@ -594,7 +594,7 @@ struct ReaderView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showToc) {
-            ReaderTocSheet(chapters: chapters, currentIndex: index,
+            ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl, currentIndex: index,
                            manager: .shared,
                            onSelect: { target in showToc = false; openChapter(target) },
                            onRefresh: tocRefreshAction)

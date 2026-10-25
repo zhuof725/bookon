@@ -640,7 +640,7 @@ struct AloudPlayerView: View {
     // MARK: 弹层
 
     private var tocSheet: some View {
-        ReaderTocSheet(chapters: chapters,
+        ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl,
                        currentIndex: min(max(aloud.chapterIndex, 0), max(chapters.count - 1, 0)),
                        manager: .shared,
                        onSelect: { target in
