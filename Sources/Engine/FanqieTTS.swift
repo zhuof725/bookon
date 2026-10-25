@@ -73,11 +73,7 @@ enum FanqieTTS {
 
     private static func toneInfo(source: BookSource, book: Book) async -> ToneInfo? {
         guard let bid = bookID(from: book.bookUrl) else { return nil }
-        lock.lock()
-        if let cached = toneCache[bid], Date().timeIntervalSince(cached.0) < cacheTTL {
-            lock.unlock(); return cached.1
-        }
-        lock.unlock()
+        if let cached = cachedToneInfo(bid) { return cached }
         let js = """
         (function(){
           try{
@@ -96,16 +92,12 @@ enum FanqieTTS {
               let info = payload.data else { return nil }
         let value = ToneInfo(relatedBookID: info.relate_novel_bookid?.value,
                              toneIDs: (info.tts_tones ?? []).compactMap { $0.id?.value })
-        lock.lock(); toneCache[bid] = (Date(), value); lock.unlock()
+        storeToneInfo(bid, value)
         return value
     }
 
     private static func toc(source: BookSource, book: Book, relatedBookID: String) async -> [TocItem]? {
-        lock.lock()
-        if let cached = tocCache[relatedBookID], Date().timeIntervalSince(cached.0) < cacheTTL {
-            lock.unlock(); return cached.1
-        }
-        lock.unlock()
+        if let cached = cachedToc(relatedBookID) { return cached }
         let js = """
         (function(){
           try{
@@ -127,7 +119,7 @@ enum FanqieTTS {
             return TocItem(id: id, title: raw.title ?? "")
         }
         guard !items.isEmpty else { return nil }
-        lock.lock(); tocCache[relatedBookID] = (Date(), items); lock.unlock()
+        storeToc(relatedBookID, items)
         return items
     }
 
@@ -151,6 +143,28 @@ enum FanqieTTS {
                                    vars: ["__tone": tone, "__item": itemID]),
               url.hasPrefix("http") else { return nil }
         return url
+    }
+
+    // MARK: - 缓存（NSLock 不能在 async 上下文里直接用，抽成同步函数）
+
+    private static func cachedToneInfo(_ bid: String) -> ToneInfo? {
+        lock.lock(); defer { lock.unlock() }
+        guard let cached = toneCache[bid], Date().timeIntervalSince(cached.0) < cacheTTL else { return nil }
+        return cached.1
+    }
+
+    private static func storeToneInfo(_ bid: String, _ info: ToneInfo) {
+        lock.lock(); toneCache[bid] = (Date(), info); lock.unlock()
+    }
+
+    private static func cachedToc(_ related: String) -> [TocItem]? {
+        lock.lock(); defer { lock.unlock() }
+        guard let cached = tocCache[related], Date().timeIntervalSince(cached.0) < cacheTTL else { return nil }
+        return cached.1
+    }
+
+    private static func storeToc(_ related: String, _ items: [TocItem]) {
+        lock.lock(); tocCache[related] = (Date(), items); lock.unlock()
     }
 
     // MARK: - 匹配
