@@ -685,6 +685,7 @@ struct AudioChapterView: View {
 
     @ThemePalette private var palette
     @State private var showTone = false
+    @State private var showAudioInfo = false
     /// 0 = 封面，1 = 正文
     @State private var mode = 0
     @State private var paragraphs: [String] = []
@@ -712,6 +713,13 @@ struct AudioChapterView: View {
         .tint(palette.accent)
         .background { playerBackground }
         .animation(.easeInOut(duration: 0.15), value: audio.isPlaying)
+        .sheet(isPresented: $showAudioInfo) {
+            AudioInfoSheet(chapterTitle: audio.chapterTitle,
+                           chapterNumber: chapterNumber,
+                           source: source,
+                           playingURL: audio.chapterURL?.absoluteString)
+                .modifier(AppThemeRoot())
+        }
         .sheet(isPresented: $showTone) {
             if let source {
                 SourceToneSheet(source: source, book: book, chapterURL: sourceChapterURL, onApplied: {
@@ -1065,6 +1073,9 @@ struct AudioChapterView: View {
                 }
                 .accessibilityIdentifier("reader.audio.calibrate")
             }
+            Button { showAudioInfo = true } label: {
+                Label("音频信息", systemImage: "waveform.badge.magnifyingglass")
+            }
             Divider()
             Button(role: .destructive) {
                 onStop?()
@@ -1389,5 +1400,63 @@ struct AudioControlsPanel: View {
         .buttonStyle(.plain)
         .accessibilityLabel(audio.isPlaying ? "暂停" : "播放")
         .accessibilityIdentifier("reader.audio.play")
+    }
+}
+
+
+/// 播放器「音频信息」：显示当前音色变量和**实际在播**的地址，用来区分
+/// “书源给了新音频但播放器没换”和“书源本来就给同一个音频”。
+private struct AudioInfoSheet: View {
+    @ThemePalette private var palette
+    @Environment(\.dismiss) private var dismiss
+    let chapterTitle: String
+    let chapterNumber: Int
+    let source: BookSource?
+    let playingURL: String?
+
+    private var variable: (tone: String, abook: String) {
+        let raw = source.map { SourceVariable.get($0.bookSourceUrl) } ?? ""
+        guard let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return ("-", "-")
+        }
+        let tone = object["tone"].map { String(describing: $0) } ?? "-"
+        let abook = object["abook"].map { String(describing: $0) } ?? "-"
+        return (tone, abook)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("章节") {
+                    Text("\(chapterTitle)（第 \(chapterNumber) 章）")
+                        .appFont(.body)
+                }
+                Section("源变量") {
+                    Text("tone=\(variable.tone)")
+                    Text("abook=\(variable.abook)")
+                }
+                Section {
+                    Text(playingURL ?? "（没有地址）")
+                        .appFont(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                } header: {
+                    Text("实际在播的地址")
+                } footer: {
+                    Text("切换音色后看这里：如果地址变了但声音没变，是这张专辑本身同一个声音；如果地址没变，是书源回落了默认音色。")
+                        .appFont(.caption)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background { AppThemeCanvas().ignoresSafeArea() }
+            .navigationTitle("音频信息")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
