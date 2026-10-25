@@ -411,6 +411,7 @@ struct BookDetailScreen: View {
             RichIntroWebView(html: intro.renderBody,
                              textColor: palette.primary,
                              secondaryColor: palette.secondary,
+                             source: AppStore.shared.source(for: book.origin),
                              height: $richIntroHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: max(richIntroHeight, 1))

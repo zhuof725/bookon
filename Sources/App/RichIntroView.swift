@@ -12,15 +12,17 @@ struct RichIntroWebView: UIViewRepresentable {
     let html: String
     let textColor: Color
     let secondaryColor: Color
+    let source: BookSource?
     @Binding var height: CGFloat
 
     @Environment(\.colorScheme) private var scheme
 
-    func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
+    func makeCoordinator() -> Coordinator { Coordinator(height: $height, source: source) }
 
     func makeUIView(context: Context) -> WKWebView {
         let controller = WKUserContentController()
         controller.add(context.coordinator, name: Coordinator.heightHandler)
+        controller.add(context.coordinator, name: Coordinator.bridgeHandler)
         let config = WKWebViewConfiguration()
         config.userContentController = controller
         config.suppressesIncrementalRendering = false
@@ -42,20 +44,126 @@ struct RichIntroWebView: UIViewRepresentable {
         // 主题/内容不变时不重新加载，否则每次继电器刷新都会闪一下。
         guard context.coordinator.loaded != document else { return }
         context.coordinator.loaded = document
+        // 面板脚本要读写书源变量：每次加载前装一份带最新值的桥。
+        context.coordinator.installBridge(on: web.configuration.userContentController)
         web.loadHTMLString(document, baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         static let heightHandler = "introHeight"
+        static let bridgeHandler = "introBridge"
         var loaded: String?
         private let heightBinding: Binding<CGFloat>
+        private let sourceURL: String
+        private let sourceName: String
 
-        init(height: Binding<CGFloat>) { heightBinding = height }
+        init(height: Binding<CGFloat>, source: BookSource?) {
+            heightBinding = height
+            sourceURL = source?.bookSourceUrl ?? ""
+            sourceName = source?.bookSourceName ?? ""
+        }
 
         func userContentController(_ controller: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
-            guard let number = message.body as? NSNumber else { return }
-            apply(CGFloat(number.doubleValue))
+            if message.name == Self.heightHandler {
+                guard let number = message.body as? NSNumber else { return }
+                apply(CGFloat(number.doubleValue))
+                return
+            }
+            guard message.name == Self.bridgeHandler,
+                  let body = message.body as? [String: Any],
+                  let op = body["op"] as? String else { return }
+            switch op {
+            case "var":
+                if let value = body["value"] as? String {
+                    SourceVariable.set(value, for: sourceURL)
+                }
+            case "put":
+                if let key = body["key"] as? String, let value = body["value"] as? String {
+                    JavaBridge.store.set("v_\(sourceURL)_\(key)", value)
+                }
+            case "cache":
+                if let key = body["key"] as? String, let value = body["value"] as? String {
+                    JavaBridge.store.set(key, value)
+                }
+            case "cacheDelete":
+                if let key = body["key"] as? String { JavaBridge.store.remove(key) }
+            case "toast":
+                if let text = body["text"] as? String { DebugLog.add("◇书源面板：\(text)") }
+            default:
+                break
+            }
+        }
+
+        /// 面板 JS 桥：书源详情页的「音色 / 书库 / 清缓存」按钮都靠 source/cache 读写。
+        /// 之前只有 WebView 渲染，没有这些全局对象，面板只能把选择写进自己的内存
+        /// （提示「已保存在本机缓存，重启后如失效请重选一次」）。
+        func installBridge(on controller: WKUserContentController) {
+            controller.removeAllUserScripts()
+            let variable = sourceURL.isEmpty ? "" : SourceVariable.get(sourceURL)
+            var kv: [String: String] = [:]
+            if !sourceURL.isEmpty,
+               let value = JavaBridge.store.get("v_\(sourceURL)_v2sv"), !value.isEmpty {
+                kv["v_v2sv"] = value
+            }
+            if let value = JavaBridge.store.get("v2sel"), !value.isEmpty {
+                kv["v2sel"] = value
+            }
+            controller.addUserScript(WKUserScript(
+                source: Self.bridgeScript(sourceURL: sourceURL, sourceName: sourceName,
+                                          variable: variable, kv: kv),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true))
+        }
+
+        private static func bridgeScript(sourceURL: String, sourceName: String,
+                                         variable: String, kv: [String: String]) -> String {
+            let kvJSON = (try? JSONSerialization.data(withJSONObject: kv))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            return """
+            (function(){
+              var V = \(jsString(variable));
+              var KV = \(kvJSON);
+              function post(op, payload){
+                try{
+                  var m = {op: op};
+                  if(payload){ for(var k in payload){ m[k] = payload[k]; } }
+                  window.webkit.messageHandlers.\(bridgeHandler).postMessage(m);
+                }catch(e){}
+              }
+              window.source = {
+                bookSourceUrl: \(jsString(sourceURL)),
+                bookSourceName: \(jsString(sourceName)),
+                getKey: function(){ return this.bookSourceUrl; },
+                getVariable: function(){ return V || ''; },
+                setVariable: function(v){ V = String(v == null ? '' : v); post('var', {value: V}); },
+                putVariable: function(v){ this.setVariable(v); },
+                get: function(k){ k = String(k); return KV['v_' + k] == null ? '' : String(KV['v_' + k]); },
+                put: function(k, v){ k = String(k); v = String(v == null ? '' : v); KV['v_' + k] = v; post('put', {key: k, value: v}); }
+              };
+              window.cache = {
+                getFromMemory: function(k){ k = String(k); return KV[k] == null ? '' : String(KV[k]); },
+                putMemory: function(k, v){ k = String(k); v = String(v == null ? '' : v); KV[k] = v; post('cache', {key: k, value: v}); },
+                deleteMemory: function(k){ k = String(k); delete KV[k]; post('cacheDelete', {key: k}); },
+                get: function(k){ return this.getFromMemory(k); },
+                put: function(k, v){ this.putMemory(k, v); },
+                delete: function(k){ this.deleteMemory(k); }
+              };
+              window.cookie = { getKey: function(){ return ''; } };
+              window.java = window.java || {};
+              window.java.toast = function(s){ post('toast', {text: String(s == null ? '' : s)}); return ''; };
+              window.java.log = function(s){ post('toast', {text: String(s == null ? '' : s)}); return ''; };
+              window.java.put = window.java.put || function(){ return ''; };
+              window.java.get = window.java.get || function(){ return ''; };
+            })();
+            """
+        }
+
+        private static func jsString(_ value: String) -> String {
+            guard let data = try? JSONSerialization.data(withJSONObject: [value]),
+                  let text = String(data: data, encoding: .utf8),
+                  text.hasPrefix("["), text.hasSuffix("]") else { return "\"\"" }
+            return String(text.dropFirst().dropLast())
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

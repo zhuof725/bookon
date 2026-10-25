@@ -268,27 +268,38 @@ enum SourceTone {
         return DynamicTones(tts: items("tts"), audio: items("audio"), bookID: bid)
     }
 
-    /// 这个音色对**当前章节**有没有音频。
-    /// 番茄 v2 的 playinfo 会按 tone_id 返回不同的 main_url；没有就说明这本书没有该音色，
-    /// 源脚本会自己回落到默认音色（用户听感就是“切了没变”）。
-    /// 返回 nil 表示这个源不支持这种探测。
-    static func probeTone(source: BookSource, book: Book?, chapterURL: String?, tone: String) async -> Bool? {
+    enum ToneProbeResult {
+        /// 这个音色没有音频，书源会回落默认音色。
+        case unavailable
+        /// 书源对不同音色返回了同一个音频地址：这本书只有一版录音，换音色不会变声。
+        case sameAsDefault
+        /// 有独立音频，可以切换。
+        case playable
+    }
+
+    /// 用当前章节问一次 playinfo，比较「所选音色」和「默认音色」的 main_url。
+    /// 番茄 v2 会按 tone_id 返回不同音频；地址相同就说明这本书只有一版录音。
+    static func probeTone(source: BookSource, book: Book?, chapterURL: String?, tone: String) async -> ToneProbeResult? {
         let script = scriptText(source)
         guard script.contains("playinfo"), script.contains("fanqieSignHeaders") else { return nil }
         guard let chapterURL, let item = itemID(from: chapterURL), !tone.isEmpty else { return nil }
         let js = """
         (function(){
-          try{
-            var u = "https://reading.snssdk.com/reading/reader/audio/playinfo/?tone_id=" + String(__tone)
-                  + "&item_ids=" + String(__item) + "&pv_player=-1&aid=3040&device_platform=android";
-            var h = fanqieSignHeaders(u, null);
-            var hm = new Packages.java.util.HashMap();
-            for (var k in h) { hm.put(String(k), String(h[k])); }
-            var body = String(java.get(u, hm).body());
-            var d = {};
-            try { d = JSON.parse(body); } catch(e) { return "0"; }
-            return (d.data && d.data[0] && d.data[0].main_url) ? "1" : "0";
-          }catch(e){ return ""; }
+          function play(t){
+            try{
+              var u = "https://reading.snssdk.com/reading/reader/audio/playinfo/?tone_id=" + String(t)
+                    + "&item_ids=" + String(__item) + "&pv_player=-1&aid=3040&device_platform=android";
+              var h = fanqieSignHeaders(u, null);
+              var hm = new Packages.java.util.HashMap();
+              for (var k in h) { hm.put(String(k), String(h[k])); }
+              var body = String(java.get(u, hm).body());
+              var d = {};
+              try { d = JSON.parse(body); } catch(e) { return ""; }
+              if (d.data && d.data[0] && d.data[0].main_url) { return String(d.data[0].main_url); }
+              return "";
+            }catch(e){ return ""; }
+          }
+          return JSON.stringify({tone: play(__tone), def: play(0)});
         })()
         """
         let out = await Task.detached { () -> String? in
@@ -296,12 +307,14 @@ enum SourceTone {
                                        jsLib: source.jsLib,
                                        context: RuleContext(source: source, book: book))
         }.value
-        DebugLog.add("◇音色探测 tone=\(tone) item=\(item) → \(out ?? "nil")")
-        switch out {
-        case "1": return true
-        case "0": return false
-        default: return nil
-        }
+        guard let out, let data = out.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let toneURL = (object["tone"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultURL = (object["def"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        DebugLog.add("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (toneURL == defaultURL ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
+        if toneURL.isEmpty { return .unavailable }
+        if toneURL == defaultURL { return .sameAsDefault }
+        return .playable
     }
 
     private static func itemID(from url: String) -> String? {

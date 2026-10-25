@@ -387,12 +387,20 @@ struct SourceToneList: View {
             // 先按当前章节探一次：没有音频说明书源会回落默认音色，直接告诉用户，别假装切换成功。
             if case .legacy = group.kind,
                let chapterURL, let book = currentBook,
-               let usable = await SourceTone.probeTone(source: src, book: book,
-                                                       chapterURL: chapterURL, tone: tone.value),
-               !usable {
-                applying = false
-                message = "这本书没有「\(tone.name)」这个音色，书源会回落到默认音色。换一个音色或试试「真人录播」。"
-                return
+               let result = await SourceTone.probeTone(source: src, book: book,
+                                                       chapterURL: chapterURL, tone: tone.value) {
+                switch result {
+                case .unavailable:
+                    applying = false
+                    message = "这本书没有「\(tone.name)」这个音色，书源会回落到默认音色。换一个音色或试试「真人录播」。"
+                    return
+                case .sameAsDefault:
+                    applying = false
+                    message = "书源对这本书的不同音色返回了同一个音频（只有一版录音），换音色不会变声。可以试试「真人录播」专辑。"
+                    return
+                case .playable:
+                    break
+                }
             }
             let ok = await Task.detached { SourceTone.apply(tone, in: group, source: src) }.value
             guard ok else {
