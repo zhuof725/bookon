@@ -28,10 +28,10 @@ enum MediaCacheRegression {
         let audioB = "https://cdn.example.invalid/a/ch2.m4a"
         check(AudioDiskCache.cachedFile(for: audioA) == nil, "音频缓存：未下载时没有缓存")
         let audioBytes = Data(repeating: 7, count: 1024)
-        AudioDiskCache.store(audioBytes, for: audioA)
+        AudioDiskCache.store(audioBytes, for: audioA, ext: "mp3")
         check(AudioDiskCache.cachedFile(for: audioA) != nil, "音频缓存：缓存后能找到文件")
         check(AudioDiskCache.cachedFile(for: audioB) == nil, "音频缓存：不同地址互不影响")
-        AudioDiskCache.store(Data(), for: audioB)
+        AudioDiskCache.store(Data(), for: audioB, ext: "mp3")
         check(AudioDiskCache.cachedFile(for: audioB) == nil, "音频缓存：空数据不写盘")
 
         check(MangaImageDiskCache.diskBytes() > 0, "漫画缓存：占用空间可统计")
