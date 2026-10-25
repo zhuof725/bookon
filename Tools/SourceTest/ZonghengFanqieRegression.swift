@@ -167,12 +167,10 @@ enum ZonghengFanqieRegression {
 
         // MARK: 6) 番茄 v2 的音色是「运行时拉取」而非静态表
 
-        // v2 把 toneinfo 的结果写进源变量（`tones = "id|名称|描述#…"`），
-        // jsLib 里既没有 `_getTones()` 也没有 `xxxTones = [...]`，
-        // 所以旧的探测方式对这个源无效——这里断言「已知为不支持」，
-        // 避免以后有人误以为它是坏的。要支持得给 SourceTone 加运行时音色表分支。
-        check(!SourceTone.hasTones(source: fanqie),
-              "番茄 v2 的音色表是运行时拉取的，静态探测识别不到（已知限制）")
+        // v2 的音色表不在脚本里：`SourceTone` 现在识别 `toneinfo + fanqieSignHeaders`，
+        // 按当前书动态取音色（`groups(source:book:)`；静态探测只看能力，不发请求）。
+        check(SourceTone.hasTones(source: fanqie),
+              "番茄 v2 的音色表按运行时 toneinfo 识别")
         check((fanqie.jsLib ?? "").contains("toneinfo") || (fanqie.ruleToc?.chapterList ?? "").contains("toneinfo"),
               "番茄 v2 用 toneinfo 接口拉音色，而不是静态音色表")
 
