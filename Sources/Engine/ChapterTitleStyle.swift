@@ -261,11 +261,26 @@ struct ChapterTitleStyle: Equatable {
             .replacingOccurrences(of: "：", with: ":")
             .replacingOccurrences(of: "；", with: ";")
         if text.contains("{") {
-            var extracted = ""
-            for block in text.split(separator: "{").dropFirst() {
-                if let body = block.split(separator: "}").first { extracted += body + ";" }
+            // 有选择器：逐块拆开。整份主题 CSS 里的 `body { background: #000 }` 不能贴到标题上，
+            // 所以多块时只取「标题相关」的规则；只有一块（用户就是粘了一条规则）时照单全收。
+            var blocks: [(selector: String, body: String)] = []
+            for piece in text.split(separator: "}") {
+                guard let brace = piece.firstIndex(of: "{") else { continue }
+                let selector = String(piece[..<brace]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let body = String(piece[piece.index(after: brace)...])
+                if !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    blocks.append((selector, body))
+                }
             }
-            if !extracted.isEmpty { text = extracted }
+            let picked: [String]
+            if blocks.count == 1, !isPageSelector(blocks[0].selector) {
+                // 只有一条规则、而且不是 body/html 这种整页选择器：用户就是给标题写的。
+                picked = [blocks[0].body]
+            } else {
+                picked = blocks.filter { isTitleSelector($0.selector) }.map(\.body)
+            }
+            guard !picked.isEmpty else { return [] }
+            text = picked.joined(separator: ";")
         } else {
             text = text.replacingOccurrences(of: "}", with: "")
         }
@@ -282,6 +297,22 @@ struct ChapterTitleStyle: Equatable {
             out.append((key, value.lowercased()))
         }
         return out
+    }
+
+    /// 整页级别的选择器（body / html）：它的背景、颜色不该贴到标题上。
+    static func isPageSelector(_ selector: String) -> Bool {
+        let s = selector.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return s == "body" || s == "html" || s.hasPrefix("body ") || s.hasPrefix("body,")
+            || s.hasPrefix("html ") || s.hasPrefix("html,") || s.hasPrefix("body.") || s.hasPrefix("body:")
+    }
+
+    /// 选择器是不是在说「章节标题」（.title / .chapter-title / h1 / 标题 …）。
+    static func isTitleSelector(_ selector: String) -> Bool {
+        let s = selector.lowercased()
+        if s.contains("title") || s.contains("heading") || s.contains("chapter") { return true }
+        if s.contains("h1") || s.contains("h2") || s.contains("h3") { return true }
+        if s.contains("标题") { return true }
+        return false
     }
 
     /// `8px` → 绝对长度；`1.2em` / `120%` → 相对倍数。
