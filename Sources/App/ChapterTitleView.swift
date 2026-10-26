@@ -153,11 +153,20 @@ enum ChapterTitleLayout {
 final class ChapterTitleLabel: UILabel {
     private var style = ChapterTitleStyle.empty
     private var baseColor: UIColor = .black
+    /// 下边框用独立的 layer 画，不碰 UILabel 自己的绘制流程。
+    private let borderLayer = CALayer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         numberOfLines = 0
         isUserInteractionEnabled = false
+        // 没有背景色时必须是真的透明：自定义 UIView/UILabel 子类默认 isOpaque = true，
+        // 背景留空会渲染成整块黑色（标题就会变成一条黑条）。
+        isOpaque = false
+        backgroundColor = .clear
+        layer.isOpaque = false
+        borderLayer.isHidden = true
+        layer.addSublayer(borderLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -169,9 +178,27 @@ final class ChapterTitleLabel: UILabel {
                                                        color: color, style: style)
         backgroundColor = style.background.map {
             UIColor(red: CGFloat($0.red), green: CGFloat($0.green), blue: CGFloat($0.blue), alpha: CGFloat($0.alpha))
-        }
+        } ?? .clear
         invalidateIntrinsicContentSize()
-        setNeedsDisplay()
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard style.hasBorder else {
+            borderLayer.isHidden = true
+            return
+        }
+        borderLayer.isHidden = false
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let insets = contentInsets
+        let width = max(CGFloat(style.borderBottomWidth ?? 1), 0.5)
+        borderLayer.frame = CGRect(x: insets.left, y: bounds.height - width,
+                                   width: max(bounds.width - insets.left - insets.right, 0), height: width)
+        borderLayer.backgroundColor = (style.borderBottomColor?.uiColor
+            ?? ChapterTitleLayout.resolvedColor(baseColor, style: style).withAlphaComponent(0.25)).cgColor
+        CATransaction.commit()
     }
 
     private var contentInsets: UIEdgeInsets { ChapterTitleLayout.insets(style) }
@@ -190,18 +217,6 @@ final class ChapterTitleLabel: UILabel {
         super.drawText(in: rect.inset(by: contentInsets))
     }
 
-    override func draw(_ rect: CGRect) {
-        super.draw(rect)
-        guard style.hasBorder else { return }
-        let width = max(CGFloat(style.borderBottomWidth ?? 1), 0.5)
-        let color = style.borderBottomColor?.uiColor
-            ?? ChapterTitleLayout.resolvedColor(baseColor, style: style).withAlphaComponent(0.25)
-        color.setFill()
-        let insets = contentInsets
-        UIBezierPath(rect: CGRect(x: insets.left, y: bounds.height - width,
-                                  width: max(bounds.width - insets.left - insets.right, 0),
-                                  height: width)).fill()
-    }
 }
 
 extension ChapterTitleStyle.Color {
