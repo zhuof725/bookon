@@ -97,9 +97,9 @@ private struct ThemePreviewContainer: ViewModifier {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(ThemeHubSurface.card)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
                     .strokeBorder(isSelected ? Color.primary : ThemeHubSurface.border,
                                   lineWidth: isSelected ? 1.5 : 0.5)
             }

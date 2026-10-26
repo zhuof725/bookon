@@ -361,11 +361,11 @@ struct SourcesView: View {
             .disabled(selection.isEmpty)
             .accessibilityIdentifier("sources.deleteSelected")
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, AppLayout.pageInset)
         .padding(.vertical, 10)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .overlay(alignment: .top) {
-            Rectangle().fill(palette.primary.opacity(0.08)).frame(height: 0.5)
+            Rectangle().fill(palette.primary.opacity(0.08)).frame(height: AppLayout.hairline)
         }
     }
 

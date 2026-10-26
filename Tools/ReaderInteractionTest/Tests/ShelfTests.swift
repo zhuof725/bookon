@@ -46,7 +46,8 @@ final class ShelfTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'shelf.book.'")).count, 2)
         XCTAssertEqual(a.frame.minY, b.frame.minY, accuracy: 2)
         XCTAssertLessThan(b.frame.minX, a.frame.minX)
-        let expectedWidth = (app.frame.width - 48 - 36) / 3
+        // 页面左右边距 16（AppLayout.pageInset），列间距 18：可用宽度 = 宽 - 32 - 36。
+        let expectedWidth = (app.frame.width - 32 - 36) / 3
         XCTAssertEqual(a.frame.width, expectedWidth, accuracy: 4, "Three columns; only two occupied")
         XCTAssertLessThan(app.buttons["shelf.filter"].frame.maxY, a.frame.minY)
         XCTAssertEqual(app.buttons["shelf.filter"].frame.midX, app.frame.midX, accuracy: 2,

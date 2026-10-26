@@ -587,6 +587,6 @@ struct ThemeEditorTabIcon: View {
 
 extension View {
     func themeEditorSurface() -> some View {
-        appGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        appGlass(in: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous))
     }
 }

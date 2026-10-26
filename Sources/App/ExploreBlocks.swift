@@ -468,7 +468,7 @@ struct ExploreForYouCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
+            RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous).fill(palette.surface)
         }
     }
 

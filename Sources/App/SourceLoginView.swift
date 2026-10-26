@@ -130,7 +130,7 @@ struct SourceLoginView: View {
             }
             .buttonStyle(.plain)
             .disabled(busy)
-            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
             .accessibilityIdentifier("login.item.\(f.name)")
         } else if f.kind == .select {
             // 下拉（loginUi 的 type:'select'）：显示名 + 选项菜单，选中即写入表单值。
@@ -149,7 +149,7 @@ struct SourceLoginView: View {
                 .appFont(.subheadline)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
             }
             .disabled(busy || f.options.isEmpty)
             .accessibilityIdentifier("login.item.\(f.name)")
@@ -167,7 +167,7 @@ struct SourceLoginView: View {
             .disabled(busy)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 46)
-            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
             .accessibilityIdentifier("login.item.\(f.name)")
         } else {
             Group {
@@ -185,7 +185,7 @@ struct SourceLoginView: View {
             .foregroundStyle(palette.primary)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 46)
-            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
             .accessibilityIdentifier("login.item.\(f.name)")
         }
     }
@@ -201,7 +201,7 @@ struct SourceLoginView: View {
         }
         .buttonStyle(.plain)
         .disabled(busy)
-        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
         .accessibilityIdentifier(id)
     }
 
@@ -339,11 +339,11 @@ struct LoginToastCard: View {
             .padding(.horizontal, 16).padding(.vertical, 10)
             .frame(maxWidth: 320)
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)
                     .fill(Color.black.opacity(0.78))
                     .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 3)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous))
             .onTapGesture(perform: onDismiss)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("login.toastCard")

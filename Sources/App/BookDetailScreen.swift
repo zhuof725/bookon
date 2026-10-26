@@ -465,7 +465,7 @@ struct BookDetailScreen: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(DetailCardSurface())
-            .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: AppLayout.radiusCard), style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("detail.toc")
@@ -554,7 +554,7 @@ struct BookDetailScreen: View {
                 }
             }
             .modifier(DetailCardSurface(padding: 16))
-            .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: AppLayout.radiusCard), style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("detail.changeSource")
@@ -605,14 +605,14 @@ struct BookDetailScreen: View {
 
 private struct DetailCardSurface: ViewModifier {
     @ThemePalette private var palette
-    var padding: CGFloat = 18
+    var padding: CGFloat = AppLayout.gapL
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                let shape = RoundedRectangle(cornerRadius: palette.cornerRadius(default: 25), style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: palette.cornerRadius(default: AppLayout.radiusCard), style: .continuous)
                 ThemeSurface(shape: shape, isCard: true)
             }
     }

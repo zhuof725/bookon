@@ -23,7 +23,7 @@ struct CrashLogView: View {
                         .foregroundStyle(palette.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
-                        .background(surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .background(surface, in: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous))
                 } else {
                     ForEach(reports) { report in
                         Button { selected = report } label: { row(report) }
@@ -94,9 +94,9 @@ struct CrashLogView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(surface, in: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
                 .strokeBorder(palette.border.opacity(0.6), lineWidth: 0.5)
         }
         .contentShape(Rectangle())
