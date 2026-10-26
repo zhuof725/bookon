@@ -2253,8 +2253,10 @@ struct ReaderView: View {
         // 新的导航重新给一次「链接过期自动重试」的预算。
         audioFailureRetried = false
         // 朗读控制器自己请求 openChapter 时 aloudDrivenNav 为真，朗读继续；
+        // 从后台收听回到阅读页、打开的就是正在读的那一章，也不打断。
         // 其他途径（手动翻章/书签/边缘到达）都会在这里停止朗读。
-        if !aloudDrivenNav { aloud.stop() }
+        let resumingListening = aloud.isRunning && target == aloud.chapterIndex
+        if !aloudDrivenNav, !resumingListening { aloud.stop() }
         cancelScrollLoads()
         cancelPreparation()
         chapterTask?.cancel()

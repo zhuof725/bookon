@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// 全局收听中心：听书（TTS 朗读）＋ 有声书（书源音频）共用一份播放状态。
 ///
@@ -29,7 +30,21 @@ final class ListeningCenter: ObservableObject {
     private var detachedUnits: [Int: [AloudUnit]] = [:]
     private let cacheLimit = 6
 
-    private init() {}
+    /// 播放器自己的状态变化（自然播完、锁屏暂停…）不经过中心，转发一下让迷你条跟着刷新。
+    private var observers: Set<AnyCancellable> = []
+
+    private init() {
+        aloud.objectWillChange
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.objectWillChange.send() }
+            }
+            .store(in: &observers)
+        audio.objectWillChange
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.objectWillChange.send() }
+            }
+            .store(in: &observers)
+    }
 
     // MARK: 状态
 
