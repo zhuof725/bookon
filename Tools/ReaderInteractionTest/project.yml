@@ -130,6 +130,8 @@ targets:
       - path: ../../Sources/App/ReaderMenuActions.swift
       - path: ../../Sources/App/VolumeTitleView.swift
       - path: ../../Sources/App/ChapterTitleView.swift
+      - path: ../../Sources/App/ChapterTitleStyleEditor.swift
+      - path: ../../Sources/Engine/ChapterTitleStyle.swift
       - path: ../../Sources/App/ReaderTypographyControls.swift
       - path: ../../Sources/Store/ReadSettings.swift
       - path: ../../Sources/Models/Models.swift

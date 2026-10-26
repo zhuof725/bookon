@@ -38,6 +38,8 @@ struct PageContentView: View {
     var bottomMargin: Double = 10
     var volumeTitle: String? = nil
     var showsChapterTitle = false
+    /// 章节标题的 CSS 样式。
+    var titleStyle: ChapterTitleStyle = .empty
     var aloudHighlight: AloudHighlightModel? = nil
     var aloudChapter: Int? = nil
 
@@ -73,8 +75,10 @@ struct PageContentView: View {
     private func bodyRegionHeight(in size: CGSize) -> CGFloat {
         let textWidth = max(size.width - CGFloat(leftMargin + rightMargin), 1)
         let header: CGFloat = showsChapterTitle && pageNumber == 1 && !title.isEmpty
-            ? ChapterTitleLayout.height(title: title, fontSize: CGFloat(fontSize), width: textWidth)
-                + ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)) + CGFloat(paragraphSpacing)
+            ? ChapterTitleLayout.height(title: title, fontSize: CGFloat(fontSize), width: textWidth,
+                                        style: titleStyle)
+                + ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize), style: titleStyle)
+                + CGFloat(paragraphSpacing)
             : 0
         return max(size.height - safeInsets.top - safeInsets.bottom
             - CGFloat(topMargin + bottomMargin) - 24 - header, 0)
@@ -91,9 +95,11 @@ struct PageContentView: View {
                     Spacer(minLength: 8)
                 } else {
                 if showsChapterTitle && pageNumber == 1 && !title.isEmpty {
-                    ChapterTitleView(title: title, fontSize: CGFloat(fontSize), color: UIColor(fg))
+                    ChapterTitleView(title: title, fontSize: CGFloat(fontSize), color: UIColor(fg),
+                                     style: titleStyle)
                         .frame(maxWidth: .infinity)
-                        .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize)) + CGFloat(paragraphSpacing))
+                        .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(fontSize),
+                                                                          style: titleStyle) + CGFloat(paragraphSpacing))
                 }
                 VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(page.blocks.enumerated()), id: \.offset) { blockIndex, block in

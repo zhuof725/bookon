@@ -15,6 +15,8 @@ final class ReadSettings: ObservableObject {
     @AppStorage("theme") var theme: Int = 0
     @AppStorage("pageMode") var pageMode: Int = 0
     @AppStorage("pageTurnStyle") var pageTurnStyle: Int = 0
+    /// 章节标题的 CSS 样式（空串 = 默认外观）。
+    @AppStorage("readerChapterTitleCSS") var chapterTitleCSS: String = ""
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of
@@ -51,6 +53,11 @@ final class ReadSettings: ObservableObject {
     var paragraphSpacingPoints: Double {
         Double(ReaderTextLayout.androidParagraphSpacingPoints(fontSize: CGFloat(fontSize),
                                                                setting: CGFloat(paragraphSpacing)))
+    }
+
+    /// 解析好的章节标题样式（每次取用都重新解析，值类型很轻）。
+    var chapterTitleStyle: ChapterTitleStyle {
+        ChapterTitleStyle.parse(chapterTitleCSS)
     }
 
     var typographyValues: [Double] {

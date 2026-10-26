@@ -20,6 +20,8 @@ enum ReaderPaginator {
         var topInset: CGFloat = 16
         var bottomInset: CGFloat = 10
         var chapterTitle: String = ""
+        /// 章节标题的 CSS 样式（空样式 = 旧外观）。
+        var titleStyle: ChapterTitleStyle = .empty
         /// PageContentView 底部页码栏及与正文间的固定距离。
         var footerHeight: CGFloat = 16
         var footerGap: CGFloat = 8
@@ -35,7 +37,8 @@ enum ReaderPaginator {
         }
         var headerHeight: CGFloat {
             chapterTitle.isEmpty ? 0 : ChapterTitleLayout.height(title: chapterTitle,
-                fontSize: fontSize, width: textWidth) + ChapterTitleLayout.bottomSpacing(fontSize: fontSize) + paragraphSpacing
+                fontSize: fontSize, width: textWidth, style: titleStyle)
+                + ChapterTitleLayout.bottomSpacing(fontSize: fontSize, style: titleStyle) + paragraphSpacing
         }
 
         var textWidth: CGFloat {

@@ -11,6 +11,22 @@ struct ReaderTypographyControls: View {
                 HStack { Text("字体管理"); Spacer(); Text(readingFonts.selectedDisplayName).foregroundStyle(.secondary).lineLimit(1) }
             }.accessibilityIdentifier("reader.fontManager")
         }
+        Section {
+            NavigationLink {
+                ChapterTitleStyleEditor(settings: settings)
+            } label: {
+                HStack {
+                    Text("章节标题样式")
+                    Spacer()
+                    Text(settings.chapterTitleStyle.isEmpty ? "默认" : "自定义")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .accessibilityIdentifier("reader.chapterTitleStyle")
+        } header: { Text("章节标题") } footer: {
+            Text("支持一段 CSS：字号、颜色、对齐、字距、行高、内边距、下边框等，留空为默认。")
+        }
         Section("字体大小") {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
         }
