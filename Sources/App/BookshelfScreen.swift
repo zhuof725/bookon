@@ -81,15 +81,16 @@ struct BookshelfScreen: View {
             let metrics = theme.customization.map {
                 ThemeShelfMetrics(width: geometry.size.width, customization: $0, accessibility: typeSize.isAccessibilitySize)
             }
-            let columns = metrics?.columns ?? (typeSize.isAccessibilitySize ? 2 : max(3, Int((geometry.size.width - 48) / 124)))
-            VStack(spacing: 14) {
+            let columns = metrics?.columns ?? (typeSize.isAccessibilitySize ? 2
+                : max(3, Int((geometry.size.width - AppLayout.pageInset * 2) / 124)))
+            VStack(spacing: AppLayout.gapM) {
                 header
                 if selecting { selectionBar }
                 if let refreshStatus {
                     Text(refreshStatus)
                         .appFont(.system(size: 14))
                         .foregroundStyle(palette.secondary)
-                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .padding(.horizontal, AppLayout.pageInset).padding(.vertical, AppLayout.gapS)
                         .modifier(ShelfGlass(shape: Capsule()))
                         .accessibilityIdentifier("shelf.refreshStatus")
                         .transition(.opacity)
@@ -106,7 +107,7 @@ struct BookshelfScreen: View {
                     } else if layout == .grid {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: metrics == nil ? 10 : 0), spacing: 18), count: columns), alignment: .leading, spacing: 22) {
                             ForEach(visibleBooks) { book in bookButton(book, grid: true, coverWidth: metrics?.coverWidth) }
-                        }.padding(.horizontal, 24).padding(.top, 2).padding(.bottom, 24)
+                        }.padding(.horizontal, AppLayout.pageInset).padding(.top, 2).padding(.bottom, AppLayout.pageBottomInset)
                     } else {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleBooks) { book in
@@ -121,14 +122,14 @@ struct BookshelfScreen: View {
                                         selecting = true; selection.insert(book.id)
                                     })
                                     .background {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
                                             .fill(palette.surface)
                                     }
                                     .overlay {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .strokeBorder(palette.border.opacity(0.45), lineWidth: 0.5)
+                                        RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
+                                            .strokeBorder(palette.border.opacity(0.45), lineWidth: AppLayout.hairline)
                                     }
-                                    .padding(.horizontal, 16)
+                                    .padding(.horizontal, AppLayout.pageInset)
                             }
                         }.padding(.top, 4).padding(.bottom, 24)
                     }
@@ -187,15 +188,15 @@ struct BookshelfScreen: View {
     private var header: some View {
         ZStack {
             Button { menu = menu == "filter" ? nil : "filter" } label: {
-                HStack(spacing: 7) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.secondary) }
-                    .padding(.horizontal, 17).frame(height: 42)
+                HStack(spacing: AppLayout.gapS) { Text(filter.rawValue).appFont(.system(size: 16, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.secondary) }
+                    .padding(.horizontal, AppLayout.pageInset).frame(height: AppLayout.controlHeight)
             }.modifier(ShelfGlass(shape: Capsule())).accessibilityLabel("分类：" + filter.rawValue).accessibilityIdentifier("shelf.filter")
             HStack {
                 Spacer()
                 Button { menu = menu == "main" ? nil : "main" } label: { Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 44, height: 44) }
                     .modifier(ShelfGlass(shape: Circle())).accessibilityLabel("更多").accessibilityIdentifier("shelf.more")
             }
-        }.buttonStyle(.plain).foregroundStyle(palette.primary).padding(.horizontal, 16).padding(.top, 6)
+        }.buttonStyle(.plain).foregroundStyle(palette.primary).padding(.horizontal, AppLayout.pageInset).padding(.top, AppLayout.headerTopInset)
     }
 
     private var selectionBar: some View {
@@ -209,7 +210,7 @@ struct BookshelfScreen: View {
                 .foregroundStyle(.red)
                 .disabled(selectedBooks.isEmpty).accessibilityIdentifier("shelf.removeSelected")
             Button("完成") { selecting = false; selection.removeAll() }.padding(.leading, 10).accessibilityIdentifier("shelf.finishSelection")
-        }.appFont(.subheadline).padding(.horizontal, 24)
+        }.appFont(.subheadline).padding(.horizontal, AppLayout.pageInset)
     }
 
     private func bookButton(_ book: Book, grid: Bool, coverWidth: CGFloat? = nil) -> some View {

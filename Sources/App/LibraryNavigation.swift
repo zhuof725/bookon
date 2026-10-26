@@ -16,7 +16,7 @@ struct LibraryProfileView: View {
     }
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: AppLayout.gapL) {
                 LibraryCard("阅读") {
                     NavigationLink {
                         LibraryStatisticsView(showsNavigationBar: true)
@@ -68,7 +68,6 @@ struct LibraryProfileView: View {
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
                 }
                 PrecacheWindowSettingView(manager: .shared)
-                    .padding(.horizontal, 24)
                 LibraryCard {
                     Text("阅读进度、导入书源与本地书籍保存在本机。")
                         .foregroundStyle(palette.secondary).appFont(.footnote)
@@ -81,7 +80,7 @@ struct LibraryProfileView: View {
                     .accessibilityIdentifier("library.version")
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 24).padding(.vertical, 16)
+            .padding(.horizontal, AppLayout.pageInset).padding(.vertical, AppLayout.gapL)
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }

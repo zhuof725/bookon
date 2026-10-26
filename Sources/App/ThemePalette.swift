@@ -210,7 +210,7 @@ struct IndependentGlassListRow: ViewModifier {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 18))
             .listRowBackground(
-                ThemeSurface(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: 20)))
+                ThemeSurface(shape: RoundedRectangle(cornerRadius: palette.cornerRadius(default: AppLayout.radiusCard)))
                     .padding(.vertical, 4)
             )
     }

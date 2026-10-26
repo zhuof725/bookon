@@ -110,7 +110,7 @@ struct SourceEditView: View {
         }
         .appFont(.subheadline)
         .padding(16)
-        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)) }
     }
 
     private func chip(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -150,7 +150,7 @@ struct SourceEditView: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 108)
                 .padding(.horizontal, 8).padding(.vertical, 6)
-                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+                .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
                 .accessibilityIdentifier("sourceEdit.variable")
             Text("脚本里用 source.getVariable() 读取、setVariable() 写入；保存后立即生效。留空表示没有变量。")
                 .appFont(.caption2)
@@ -160,7 +160,7 @@ struct SourceEditView: View {
         .appFont(.subheadline)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)) }
     }
 
     private func fieldRow(_ f: Field) -> some View {
@@ -176,7 +176,7 @@ struct SourceEditView: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+        .background { ThemeSurface(shape: RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)) }
         .accessibilityIdentifier("sourceEdit.field.\(tab.rawValue).\(f.key)")
     }
 

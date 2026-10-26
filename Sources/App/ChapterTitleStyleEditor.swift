@@ -200,10 +200,10 @@ struct ChapterTitleStyleEditor: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
+            RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous).fill(palette.surface)
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
                 .strokeBorder(palette.primary.opacity(0.08))
         }
     }

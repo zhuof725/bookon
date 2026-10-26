@@ -89,7 +89,7 @@ struct ExploreView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 48)
             .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous)
                     .strokeBorder(palette.border.opacity(0.55),
                                   style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             }
@@ -164,8 +164,8 @@ struct ExploreView: View {
             .accessibilityIdentifier("explore.empty.add")
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 22)
-        .padding(.vertical, 30)
+        .padding(.horizontal, AppLayout.gapXL)
+        .padding(.vertical, AppLayout.gapXL)
         .background {
             RoundedRectangle(cornerRadius: ExploreStyle.cardRadius, style: .continuous)
                 .fill(palette.surface)
