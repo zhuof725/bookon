@@ -30,6 +30,7 @@ struct ChapterTitleStyleEditor: View {
     ]
 
     private let presets: [(title: String, css: String)] = [
+        ("默认", ""),
         ("下划线", "text-decoration: underline;"),
         ("细底边", "padding-bottom: 10px; border-bottom: 1px solid rgba(128,128,128,0.4);"),
         ("大标题", "font-size: 1.3em; letter-spacing: 2px;"),
@@ -137,6 +138,12 @@ struct ChapterTitleStyleEditor: View {
                     }
                 }
             }
+            Section {
+                Button("恢复默认样式", role: .destructive) { resetToDefault() }
+                    .accessibilityIdentifier("chapterTitle.reset")
+            } footer: {
+                Text("标题恢复成跟随主题的居中半粗体，并关闭高级 CSS。")
+            }
         }
         .scrollContentBackground(.hidden)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -165,6 +172,19 @@ struct ChapterTitleStyleEditor: View {
         .onChange(of: weight) { value in guard loaded else { return }; settings.chapterTitleWeight = value }
         .onChange(of: align) { value in guard loaded else { return }; settings.chapterTitleAlign = value }
         .onChange(of: advanced) { value in guard loaded else { return }; settings.chapterTitleAdvanced = value }
+    }
+
+    private func resetToDefault() {
+        draft = ""
+        size = 0
+        weight = 600
+        align = "center"
+        advanced = false
+        settings.chapterTitleCSS = ""
+        settings.chapterTitleSize = 0
+        settings.chapterTitleWeight = 600
+        settings.chapterTitleAlign = "center"
+        settings.chapterTitleAdvanced = false
     }
 
     private var preview: some View {

@@ -58,18 +58,32 @@ enum ChapterTitleLayout {
     }
 
     static func resolvedColor(_ base: UIColor, style: ChapterTitleStyle) -> UIColor {
-        if var css = style.color {
-            if let opacity = style.opacity { css.alpha *= opacity }
-            return UIColor(red: CGFloat(css.red), green: CGFloat(css.green), blue: CGFloat(css.blue), alpha: CGFloat(css.alpha))
+        var color = base
+        if let css = style.color {
+            var alpha = css.alpha
+            if let opacity = style.opacity { alpha *= opacity }
+            color = UIColor(red: CGFloat(css.red), green: CGFloat(css.green),
+                            blue: CGFloat(css.blue), alpha: CGFloat(alpha))
         }
-        // 只写了背景色、没写文字颜色：自动取对比色，否则黑底黑字会整条变成一块黑条。
-        if let background = style.background {
-            let luminance = 0.299 * background.red + 0.587 * background.green + 0.114 * background.blue
-            var color = luminance > 0.55 ? UIColor.black : UIColor.white
-            if let opacity = style.opacity { color = color.withAlphaComponent(CGFloat(opacity)) }
-            return color
+        // 有背景色时保证字能看清：只写背景没写颜色，或者写成了黑底黑字，
+        // 都自动换成对比色，避免标题整条变成一块黑条。
+        if let background = style.background, background.alpha > 0.05 {
+            let backgroundLuminance = 0.299 * background.red + 0.587 * background.green + 0.114 * background.blue
+            let textLuminance = luminance(color)
+            if abs(backgroundLuminance - textLuminance) < 0.35 {
+                color = backgroundLuminance > 0.55 ? .black : .white
+            }
+            if let opacity = style.opacity {
+                color = color.withAlphaComponent(color.cgColor.alpha * CGFloat(opacity))
+            }
         }
-        return base
+        return color
+    }
+
+    private static func luminance(_ color: UIColor) -> Double {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return 0 }
+        return 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
     }
 
     static func attributed(title: String, fontSize: CGFloat, color: UIColor,
