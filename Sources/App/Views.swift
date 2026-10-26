@@ -355,9 +355,10 @@ struct ReaderView: View {
     @State private var confirmChapterClear = false
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
-    @StateObject private var aloud = ReaderAloudController()
+    /// 播放器归收听中心托管：退出阅读页后继续播，底栏上方出现迷你条。
+    @ObservedObject private var aloud = ListeningCenter.shared.aloud
     /// 音频书源（如喜马拉雅）章节播放。
-    @StateObject private var bookAudio = BookAudioPlayer()
+    @ObservedObject private var bookAudio = ListeningCenter.shared.audio
     /// 音频章链接过期已自动刷新重试过（每次进入章节重置，防止失败循环）。
     @State private var audioFailureRetried = false
     @State private var showAloudPanel = false
@@ -744,9 +745,10 @@ struct ReaderView: View {
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: index,
                                    seconds: bookAudio.currentTime)
             }
-            bookAudio.stop()
             manga.stop()
-            aloud.detach()
+            // 听书 / 有声书交给收听中心：还在播就继续（底栏上方出现迷你条），
+            // 没在播就由它停掉并清空。
+            ListeningCenter.shared.readerDisappeared(book: book, chapters: chapters, index: index)
             persistContinuousProgress()
             closeReadingSession()
             cancelScrollLoads()
@@ -763,7 +765,11 @@ struct ReaderView: View {
             pendingLanding = nil
             store.flushProgress()
         }
-        .task { attachAloudHost(); await start() }
+        .task {
+            ListeningCenter.shared.readerAppeared(book: book)
+            attachAloudHost()
+            await start()
+        }
     }
 
     private var quickEnabled: Set<String> {
