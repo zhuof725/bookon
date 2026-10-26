@@ -34,6 +34,45 @@ enum ZonghengFanqieRegression {
 
         // MARK: 1) 两个夹具都能被 BookSource 解码
 
+        // MARK: 0.5) 目录请求要沿用详情请求的 POST 后缀
+        //
+        // 纵横的目录接口只接受 POST：bookUrl 里的 `,{"method":"POST","body":"bookId=…"}`
+        // 一旦在详情解析时被换成「响应网址」，抓目录就退化成 GET → 404 → 目录 0 章。
+        let tocServer = try TTSHarnessServer.start()
+        defer { tocServer.stop() }
+        let detailJSON = #"{"code":0,"result":{"chapterList":[{"tome":{"bookId":4242},"chapterViewList":[{"bookId":4242,"chapterId":11,"chapterName":"第1章","level":0}]}]}}"#
+        let listJSON = #"{"code":0,"result":{"chapterList":[{"tome":{"bookId":4242},"chapterViewList":[{"bookId":4242,"chapterId":11,"chapterName":"第1章","wordNums":100,"createTime":"2024-01-01","level":0},{"bookId":4242,"chapterId":12,"chapterName":"第2章","wordNums":100,"createTime":"2024-01-01","level":1}]}]}}"#
+        let loopJSON = """
+        {"bookSourceUrl":"\(tocServer.origin)","bookSourceName":"纵横回环","ruleBookInfo":{},
+         "ruleToc":{"chapterList":"result.chapterList[*].chapterViewList[*]","chapterName":"chapterName",
+                    "chapterUrl":"\(tocServer.origin)/chapter/{$.bookId}/{$.chapterId}.html","isVip":"level"},
+         "ruleContent":{"content":".content@p@text"}}
+        """
+        let loopSource = try JSONDecoder().decode(BookSource.self, from: Data(loopJSON.utf8))
+        let rawBookURL = tocServer.origin + #"/chapterlist,{"method":"POST","body":"bookId=4242"}"#
+        let detailBook = Book(bookUrl: rawBookURL, name: "我的江湖往事", origin: tocServer.origin)
+        tocServer.enqueue(status: 200, headers: ["Content-Type": "application/json"], body: Data(detailJSON.utf8))
+        let info = try await WebBook.bookInfo(source: loopSource, book: detailBook)
+        check(info.tocUrl == rawBookURL, "详情解析保留目录请求的 POST 后缀（实际 \(info.tocUrl ?? "nil")）")
+        tocServer.enqueue(status: 200, headers: ["Content-Type": "application/json"], body: Data(listJSON.utf8))
+        let loopChapters = try await WebBook.chapters(source: loopSource, book: info)
+        check(loopChapters.count == 2, "纵横式 POST 目录能解析出章节（实际 \(loopChapters.count)）")
+        let tocReport = tocServer.report()
+        check(tocReport?.method == "POST", "目录请求沿用 POST（实际 \(tocReport?.method ?? "-")）")
+        check(String(data: tocReport?.body ?? Data(), encoding: .utf8)?.contains("bookId=4242") == true,
+              "目录请求带 bookId body")
+        check(loopChapters.first?.url == "\(tocServer.origin)/chapter/4242/11.html",
+              "目录章节地址模板（实际 \(loopChapters.first?.url ?? "-")）")
+        check(loopChapters.first?.isVip == false && loopChapters.last?.isVip == true, "目录 isVip：level 0/1")
+
+        // 旧书架记录：tocUrl 是丢掉 POST 后缀的响应网址，抓目录时按 bookUrl 自愈。
+        var legacyBook = info
+        legacyBook.tocUrl = "\(tocServer.origin)/chapterlist"
+        tocServer.enqueue(status: 200, headers: ["Content-Type": "application/json"], body: Data(listJSON.utf8))
+        let healedChapters = try await WebBook.chapters(source: loopSource, book: legacyBook)
+        check(healedChapters.count == 2 && tocServer.report()?.method == "POST",
+              "旧记录丢失 POST 后缀时按 bookUrl 自愈（实际 \(healedChapters.count) 章）")
+
         let dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let files = ["Tools/SourceTest/Fixtures/zongheng-source.json",
                      "Tools/SourceTest/Fixtures/fanqie-changting-v2.json"]

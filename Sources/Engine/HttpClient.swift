@@ -253,6 +253,21 @@ struct AnalyzeUrl: @unchecked Sendable {
         return URL(string: s, relativeTo: bu)?.absoluteString ?? s
     }
 
+    /// 网址是否带 Legado 请求选项后缀 `,{…}`（method/body/headers/charset）。
+    static func hasRequestOptions(_ s: String) -> Bool {
+        s.range(of: ",\\s*\\{", options: .regularExpression) != nil
+    }
+
+    /// 去掉请求选项后，两个网址是否指向同一位置（scheme/host/path/query 全等）。
+    static func sameResource(_ a: String, _ b: String) -> Bool {
+        func bare(_ s: String) -> String {
+            if let r = s.range(of: ",\\s*\\{", options: .regularExpression) { return String(s[..<r.lowerBound]) }
+            return s
+        }
+        guard let ua = URLComponents(string: bare(a)), let ub = URLComponents(string: bare(b)) else { return false }
+        return ua.scheme == ub.scheme && ua.host == ub.host && ua.path == ub.path && ua.query == ub.query
+    }
+
     static func jsonString(_ o: Any) -> String? {
         guard JSONSerialization.isValidJSONObject(o), let d = try? JSONSerialization.data(withJSONObject: o) else { return nil }
         return String(data: d, encoding: .utf8)
