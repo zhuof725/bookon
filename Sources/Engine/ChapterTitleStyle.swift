@@ -128,6 +128,39 @@ struct ChapterTitleStyle: Equatable {
 
     static let empty = ChapterTitleStyle()
 
+    /// 简单设置（字号 / 字重 / 位置）对应的样式；没有高级 CSS 时用它。
+    static func simple(size: Double, weight: Int, alignment: String) -> ChapterTitleStyle {
+        var style = ChapterTitleStyle()
+        if size > 0 { style.fontSize = size }
+        if weight > 0 { style.fontWeight = weight }
+        style.alignment = Alignment(rawValue: alignment) ?? .center
+        return style
+    }
+
+    /// 高级 CSS 覆盖在简单设置之上：CSS 写了哪一项就换哪一项。
+    mutating func merge(_ other: ChapterTitleStyle) {
+        if let v = other.fontSize { fontSize = v }
+        if let v = other.fontScale { fontScale = v }
+        if let v = other.fontWeight { fontWeight = v }
+        if let v = other.italic { italic = v }
+        if let v = other.color { color = v }
+        if let v = other.background { background = v }
+        if let v = other.alignment { alignment = v }
+        if let v = other.letterSpacing { letterSpacing = v }
+        if let v = other.lineHeight { lineHeight = v }
+        if let v = other.underline { underline = v }
+        if let v = other.strikethrough { strikethrough = v }
+        if let v = other.transform { transform = v }
+        if let v = other.opacity { opacity = v }
+        if let v = other.paddingTop { paddingTop = v }
+        if let v = other.paddingBottom { paddingBottom = v }
+        if let v = other.paddingHorizontal { paddingHorizontal = v }
+        if let v = other.marginTop { marginTop = v }
+        if let v = other.marginBottom { marginBottom = v }
+        if let v = other.borderBottomWidth { borderBottomWidth = v }
+        if let v = other.borderBottomColor { borderBottomColor = v }
+    }
+
     var isEmpty: Bool { self == ChapterTitleStyle() }
 
     var hasBorder: Bool { (borderBottomWidth ?? 0) > 0 }

@@ -1,35 +1,142 @@
 import SwiftUI
 
-/// 章节标题样式：直接写一小段 CSS，下面实时预览。
-/// 空内容 = 默认外观（跟随主题、居中、稍大一号的半粗体）。
+/// 章节标题样式：常用项直接调（字号 / 字重 / 位置），需要时再打开「高级 CSS」写样式。
+/// 高级 CSS 覆盖在简单设置之上：CSS 写了哪一项就换哪一项。
 struct ChapterTitleStyleEditor: View {
     @ObservedObject var settings: ReadSettings
     @ThemePalette private var palette
     @State private var draft: String = ""
     @State private var loaded = false
+    @State private var size: Double = 0
+    @State private var weight: Int = 600
+    @State private var align: String = "center"
+    @State private var advanced = false
     @FocusState private var editing: Bool
 
-    private var style: ChapterTitleStyle { ChapterTitleStyle.parse(draft) }
+    private var cssStyle: ChapterTitleStyle { ChapterTitleStyle.parse(draft) }
+
+    private var effective: ChapterTitleStyle {
+        var style = ChapterTitleStyle.simple(size: size, weight: weight, alignment: align)
+        if advanced { style.merge(cssStyle) }
+        return style
+    }
+
+    private let weights: [(title: String, value: Int)] = [
+        ("常规", 400), ("中粗", 500), ("半粗", 600), ("粗体", 700)
+    ]
+
+    private let alignments: [(title: String, value: String)] = [
+        ("居左", "left"), ("居中", "center"), ("居右", "right")
+    ]
 
     private let presets: [(title: String, css: String)] = [
-        ("默认", ""),
-        ("居中加粗", "font-weight: 700; text-align: center; letter-spacing: 1px;"),
-        ("左对齐", "text-align: left; letter-spacing: 0.5px;"),
         ("下划线", "text-decoration: underline;"),
         ("细底边", "padding-bottom: 10px; border-bottom: 1px solid rgba(128,128,128,0.4);"),
         ("大标题", "font-size: 1.3em; letter-spacing: 2px;"),
-        ("灰色小字", "font-size: 0.85em; color: #8a8a8a; letter-spacing: 2px;")
+        ("灰色小字", "font-size: 0.85em; color: #8a8a8a; letter-spacing: 2px;"),
+        ("左右留白", "padding: 6px 12px; background-color: rgba(128,128,128,0.12);"),
+        ("行高宽松", "line-height: 1.6; letter-spacing: 1px;")
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        Form {
+            Section {
                 preview
-                presetsView
-                editor
-                help
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    .listRowBackground(Color.clear)
             }
-            .padding(16)
+
+            Section {
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("字号")
+                        Spacer()
+                        Text(size <= 0 ? "跟随正文" : "\(Int(size)) pt")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("chapterTitle.sizeValue")
+                    }
+                    Slider(value: $size, in: 0...36, step: 1)
+                        .accessibilityLabel("字号")
+                        .accessibilityIdentifier("chapterTitle.size")
+                }
+                Picker("字重", selection: $weight) {
+                    ForEach(weights, id: \.value) { item in Text(item.title).tag(item.value) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("chapterTitle.weight")
+                Picker("位置", selection: $align) {
+                    ForEach(alignments, id: \.value) { item in Text(item.title).tag(item.value) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("chapterTitle.align")
+            } header: {
+                Text("标题样式")
+            } footer: {
+                Text("字号选「跟随正文」时按正文字号自动放大两号；字重与位置对分页、滚动两种模式都生效。")
+            }
+
+            Section {
+                Toggle("高级 CSS", isOn: $advanced)
+                    .accessibilityIdentifier("chapterTitle.advanced")
+            } footer: {
+                Text("打开后用一段 CSS 覆盖上面的设置。支持 font-size、font-weight、color、background-color、text-align、letter-spacing、line-height、text-decoration、padding、border-bottom 等；可以直接粘带选择器的规则，只取花括号里的声明。")
+            }
+
+            if advanced {
+                Section {
+                    TextEditor(text: $draft)
+                        .appFont(.system(size: 14, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 130)
+                        .focused($editing)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .accessibilityIdentifier("chapterTitle.css")
+                } header: {
+                    HStack {
+                        Text("CSS")
+                        Spacer()
+                        if !draft.isEmpty {
+                            Button("清空") {
+                                draft = ""
+                                settings.chapterTitleCSS = ""
+                            }
+                            .appFont(.footnote)
+                            .accessibilityIdentifier("chapterTitle.clear")
+                        }
+                    }
+                } footer: {
+                    if cssStyle.isEmpty {
+                        Text("留空则只用上面的简单设置。")
+                    } else {
+                        Text("示例：color: #333; font-size: 22px; text-align: left; border-bottom: 1px solid #ddd;")
+                    }
+                }
+
+                Section("预设") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(presets, id: \.title) { preset in
+                                Button {
+                                    draft = preset.css
+                                    settings.chapterTitleCSS = preset.css
+                                } label: {
+                                    Text(preset.title)
+                                        .appFont(.footnote)
+                                        .padding(.horizontal, 12)
+                                        .frame(height: 30)
+                                        .background { AppGlassSurface(shape: Capsule(), tint: palette.surface) }
+                                        .contentShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("chapterTitle.preset.\(preset.title)")
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
         }
         .scrollContentBackground(.hidden)
         .background { AppThemeCanvas().ignoresSafeArea() }
@@ -44,132 +151,40 @@ struct ChapterTitleStyleEditor: View {
         .task {
             guard !loaded else { return }
             draft = settings.chapterTitleCSS
+            size = settings.chapterTitleSize
+            weight = settings.chapterTitleWeight
+            align = settings.chapterTitleAlign
+            advanced = settings.chapterTitleAdvanced
             loaded = true
         }
         .onChange(of: draft) { value in
-            // 键盘每敲一个字就写回：阅读器那边只重排版式，不会整章重抓。
             guard loaded else { return }
             settings.chapterTitleCSS = value
         }
+        .onChange(of: size) { value in guard loaded else { return }; settings.chapterTitleSize = value }
+        .onChange(of: weight) { value in guard loaded else { return }; settings.chapterTitleWeight = value }
+        .onChange(of: align) { value in guard loaded else { return }; settings.chapterTitleAlign = value }
+        .onChange(of: advanced) { value in guard loaded else { return }; settings.chapterTitleAdvanced = value }
     }
-
-    // MARK: 预览
 
     private var preview: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("预览")
-                .appFont(.footnote.weight(.semibold))
-                .foregroundStyle(palette.secondary)
-            VStack(alignment: .leading, spacing: 12) {
-                ChapterTitleView(title: "第一章 空屋", fontSize: CGFloat(settings.fontSize),
-                                 color: UIColor(palette.primary), style: style)
-                    .frame(maxWidth: .infinity)
-                Text("　　那年，我离开家乡，跟着堂嫂来到港城打工。")
-                    .appFont(.system(size: CGFloat(settings.fontSize)))
-                    .foregroundStyle(palette.primary.opacity(0.9))
-                    .lineSpacing(CGFloat(settings.lineSpacingPoints))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(palette.surface)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(palette.primary.opacity(0.08))
-            }
+            ChapterTitleView(title: "第一章 空屋", fontSize: CGFloat(settings.fontSize),
+                             color: UIColor(palette.primary), style: effective)
+                .frame(maxWidth: .infinity)
+            Text("　　那年，我离开家乡，跟着堂嫂来到港城打工。")
+                .appFont(.system(size: CGFloat(settings.fontSize)))
+                .foregroundStyle(palette.primary.opacity(0.9))
+                .lineSpacing(CGFloat(settings.lineSpacingPoints))
         }
-    }
-
-    // MARK: 预设
-
-    private var presetsView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("预设")
-                .appFont(.footnote.weight(.semibold))
-                .foregroundStyle(palette.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(presets, id: \.title) { preset in
-                        Button {
-                            draft = preset.css
-                            settings.chapterTitleCSS = preset.css
-                        } label: {
-                            Text(preset.title)
-                                .appFont(.footnote)
-                                .foregroundStyle(palette.primary)
-                                .padding(.horizontal, 12)
-                                .frame(height: 32)
-                                .background { AppGlassSurface(shape: Capsule(), tint: palette.surface) }
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("chapterTitle.preset.\(preset.title)")
-                    }
-                }
-            }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
         }
-    }
-
-    // MARK: 编辑
-
-    private var editor: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("CSS")
-                    .appFont(.footnote.weight(.semibold))
-                    .foregroundStyle(palette.secondary)
-                Spacer()
-                if !draft.isEmpty {
-                    Button("清空") {
-                        draft = ""
-                        settings.chapterTitleCSS = ""
-                    }
-                    .appFont(.footnote)
-                    .accessibilityIdentifier("chapterTitle.clear")
-                }
-            }
-            TextEditor(text: $draft)
-                .appFont(.system(size: 14, design: .monospaced))
-                .foregroundStyle(palette.primary)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 140)
-                .padding(10)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(palette.surface)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(palette.primary.opacity(editing ? 0.28 : 0.08))
-                }
-                .focused($editing)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .accessibilityIdentifier("chapterTitle.css")
-            if draft.isEmpty {
-                Text("留空使用默认样式。")
-                    .appFont(.caption)
-                    .foregroundStyle(palette.secondary)
-            }
-        }
-    }
-
-    private var help: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("支持的属性")
-                .appFont(.footnote.weight(.semibold))
-                .foregroundStyle(palette.secondary)
-            Text("""
-            font-size（px / pt / em / %）、font-weight、font-style、
-            color、background-color、text-align、letter-spacing、line-height、
-            text-decoration、text-transform、opacity、
-            margin-top / margin-bottom、padding、border-bottom
-            """)
-            .appFont(.caption)
-            .foregroundStyle(palette.secondary)
-            .accessibilityIdentifier("chapterTitle.help")
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(palette.primary.opacity(0.08))
         }
     }
 }

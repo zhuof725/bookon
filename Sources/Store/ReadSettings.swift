@@ -17,6 +17,11 @@ final class ReadSettings: ObservableObject {
     @AppStorage("pageTurnStyle") var pageTurnStyle: Int = 0
     /// 章节标题的 CSS 样式（空串 = 默认外观）。
     @AppStorage("readerChapterTitleCSS") var chapterTitleCSS: String = ""
+    /// 章节标题简单设置：字号（0 = 跟随正文）、字重、位置，以及是否叠加高级 CSS。
+    @AppStorage("readerChapterTitleSize") var chapterTitleSize: Double = 0
+    @AppStorage("readerChapterTitleWeight") var chapterTitleWeight: Int = 600
+    @AppStorage("readerChapterTitleAlign") var chapterTitleAlign: String = "center"
+    @AppStorage("readerChapterTitleAdvanced") var chapterTitleAdvanced: Bool = false
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of
@@ -55,9 +60,24 @@ final class ReadSettings: ObservableObject {
                                                                setting: CGFloat(paragraphSpacing)))
     }
 
-    /// 解析好的章节标题样式（每次取用都重新解析，值类型很轻）。
+    /// 最终生效的章节标题样式：简单设置打底，开启高级 CSS 时由 CSS 覆盖。
     var chapterTitleStyle: ChapterTitleStyle {
-        ChapterTitleStyle.parse(chapterTitleCSS)
+        var style = ChapterTitleStyle.simple(size: chapterTitleSize, weight: chapterTitleWeight,
+                                             alignment: chapterTitleAlign)
+        guard chapterTitleAdvanced else { return style }
+        style.merge(ChapterTitleStyle.parse(chapterTitleCSS))
+        return style
+    }
+
+    /// 标题样式的版本串：阅读器据此重排版（简单设置 + 高级 CSS 都算）。
+    var chapterTitleSignature: String {
+        "\(chapterTitleSize)|\(chapterTitleWeight)|\(chapterTitleAlign)|\(chapterTitleAdvanced)|\(chapterTitleCSS)"
+    }
+
+    /// 有没有改过标题样式（设置页显示「默认 / 自定义」）。
+    var chapterTitleIsDefault: Bool {
+        if chapterTitleAdvanced, !ChapterTitleStyle.parse(chapterTitleCSS).isEmpty { return false }
+        return chapterTitleSize <= 0 && chapterTitleWeight == 600 && chapterTitleAlign == "center"
     }
 
     var typographyValues: [Double] {
