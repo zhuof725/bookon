@@ -447,11 +447,10 @@ struct AnalyzeUrl: @unchecked Sendable {
         #if canImport(UIKit) && canImport(WebKit)
         let blocked = [403, 429, 503].contains(status) && (text ?? "").count < 200
         let deferredAuthorization = deferAuthorizationChallenge && [401, 403].contains(status)
+        let challengeNeeded = blocked || WebViewSupport.isChallenge(text ?? "")
         // 该主机 2 小时内刚过过一次 Cloudflare：Cookie 已有，不再起 WebView，
         // 直接带 Cookie 重试一次；还 403 就回传原响应（搜索兜底会接手）。
-        if allowChallengeFallback && !deferredAuthorization
-            && (blocked || WebViewSupport.isChallenge(text ?? "")),
-            recentlyClearedHost(finalUrl) {
+        if allowChallengeFallback && !deferredAuthorization && challengeNeeded, recentlyClearedHost(finalUrl) {
             if let retry = try? await session.data(for: req, delegate: ExpiredCertificateAllowance.delegate) {
                 let retryStatus = (retry.1 as? HTTPURLResponse)?.statusCode ?? 0
                 let retryText = String(data: retry.0, encoding: enc) ?? ""
@@ -464,7 +463,7 @@ struct AnalyzeUrl: @unchecked Sendable {
             try Task.checkCancellation()
             return HTTPResponseData(body: text ?? "", response: resp, fallbackURL: url, rawData: rawData)
         }
-        if allowChallengeFallback && !deferredAuthorization && (blocked || WebViewSupport.isChallenge(text ?? "")) {
+        if allowChallengeFallback && !deferredAuthorization && challengeNeeded {
             DebugLog.add("被拦截/需要验证：改用 WebView；验证后会重新请求原接口")
             if let r = try? await WebViewLoader.load(url: finalUrl, method: method, body: body.map { percentEncodedBody($0) },
                                                      headers: headers, js: webJs, cookieJar: cookieJarEnabled) {
