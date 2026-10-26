@@ -518,31 +518,8 @@ struct BookDetailScreen: View {
     /// 文字书和它的「真人录播」是两个条目：目录、片头都跟着条目走。
     /// 这里在文字书详情页给出音频书条目的直达入口。
     @ViewBuilder private var audioEditionCard: some View {
-        if let audioEdition, let onOpenAudioEdition {
-            Button {
-                onOpenAudioEdition(audioEdition)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(palette.accent)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("真人录播版").appFont(.body)
-                        Text("音频书条目，目录含片头与集数编号")
-                            .appFont(.caption)
-                            .foregroundStyle(palette.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.accent)
-                }
-                .modifier(DetailCardSurface(padding: 16))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("detail.audioEdition")
+        if let edition = audioEdition, let action = onOpenAudioEdition {
+            AudioEditionRow(action: { action(edition) })
         }
     }
 
@@ -724,5 +701,37 @@ private struct DetailTagLayout: Layout {
             x += size.width + spacing
         }
         return (CGSize(width: usedWidth, height: items.isEmpty ? 0 : y + rowHeight), items)
+    }
+}
+
+
+/// 详情页的「真人录播版」入口（文字书 → 音频书条目）。
+private struct AudioEditionRow: View {
+    @ThemePalette private var palette
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(palette.accent)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("真人录播版").appFont(.body)
+                    Text("音频书条目，目录含片头与集数编号")
+                        .appFont(.caption)
+                        .foregroundStyle(palette.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+            }
+            .modifier(DetailCardSurface(padding: 16))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("detail.audioEdition")
     }
 }
