@@ -159,6 +159,15 @@ final class AppStore: ObservableObject {
         saveSources()
     }
 
+    /// 批量删除书源（按书源地址）。只写一次盘，界面也只刷新一次。
+    func deleteSources(_ urls: Set<String>) {
+        guard !urls.isEmpty else { return }
+        let before = sources.count
+        sources.removeAll { urls.contains($0.bookSourceUrl) }
+        guard sources.count != before else { return }
+        saveSources()
+    }
+
     /// 移动到分组：用新分组替换原分组（空白则清空分组）。
     func moveSource(_ s: BookSource, toGroup group: String) {
         guard let i = sources.firstIndex(where: { $0.bookSourceUrl == s.bookSourceUrl }) else { return }

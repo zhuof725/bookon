@@ -700,6 +700,7 @@ struct ReaderView: View {
         .onChange(of: settings.rightMargin) { _ in repaginate() }
         .onChange(of: settings.topMargin) { _ in repaginate() }
         .onChange(of: settings.bottomMargin) { _ in repaginate() }
+        .onChange(of: settings.chapterTitleCSS) { _ in repaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -1233,7 +1234,7 @@ struct ReaderView: View {
                                     content: AnyView(scrollChapterBody(chapter)),
                                     appearanceID: "\(settings.theme)-\(scrollBoundaryRevision(for: chapter.id))")
             }, request: scrollRequest,
-                layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)",
+                layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)|\(settings.chapterTitleCSS)",
                 background: UIColor(theme.bg),
                 onPosition: { chapter, position in recordContinuousPosition(chapter, position: position) },
                 onApproachEdge: { direction in loadScrollNeighbor(direction) },
@@ -1267,9 +1268,11 @@ struct ReaderView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { toggleBars() }
             } else {
-                ChapterTitleView(title: chapter.title, fontSize: CGFloat(settings.fontSize), color: UIColor(theme.fg))
+                ChapterTitleView(title: chapter.title, fontSize: CGFloat(settings.fontSize),
+                                 color: UIColor(theme.fg), style: settings.chapterTitleStyle)
                     .padding(.top, max(CGFloat(settings.fontSize), 20))
-                    .padding(.bottom, max(CGFloat(settings.fontSize) * 0.8, 14))
+                    .padding(.bottom, ChapterTitleLayout.bottomSpacing(fontSize: CGFloat(settings.fontSize),
+                                                                       style: settings.chapterTitleStyle))
                     .contentShape(Rectangle())
                     .onTapGesture { toggleBars() }
                 ForEach(Array(content.readingBlocks.enumerated()), id: \.offset) { blockIndex, block in
@@ -1448,7 +1451,8 @@ struct ReaderView: View {
             rightInset: CGFloat(settings.rightMargin),
             topInset: CGFloat(settings.topMargin),
             bottomInset: CGFloat(settings.bottomMargin),
-            chapterTitle: chapters.indices.contains(target) && !chapters[target].isVolume ? chapters[target].title : "")
+            chapterTitle: chapters.indices.contains(target) && !chapters[target].isVolume ? chapters[target].title : "",
+            titleStyle: settings.chapterTitleStyle)
     }
 
     /// 正文与邻章共享版式；只在布局改变时换标识，主题变化直接重绘各个纸面。
@@ -1621,6 +1625,7 @@ struct ReaderView: View {
                 topMargin: settings.topMargin, bottomMargin: settings.bottomMargin,
                 volumeTitle: chapter?.isVolume == true ? chapter?.title : nil,
                 showsChapterTitle: chapter?.isVolume != true,
+                titleStyle: settings.chapterTitleStyle,
                 aloudHighlight: activeHighlight, aloudChapter: target).ignoresSafeArea())
         }
     }

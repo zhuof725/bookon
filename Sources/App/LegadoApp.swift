@@ -230,6 +230,10 @@ struct SourcesView: View {
     @State private var exportItem: SourceExportItem?
     @State private var editTarget: SourceEditTarget?
     @State private var collapsedGroups: Set<String> = []
+    /// 批量选择（批量删除书源）。
+    @State private var selecting = false
+    @State private var selection: Set<String> = []
+    @State private var confirmBatchDelete = false
     var body: some View {
         List {
             Section {
@@ -240,8 +244,12 @@ struct SourcesView: View {
             ForEach(BookSource.groupedSections(store.sources), id: \.name) { section in
                 Section {
                     if !collapsedGroups.contains(section.name) {
-                        ForEach(section.sources) { s in sourceRow(s) }
-                            .independentGlassRow()
+                        ForEach(section.sources) { s in
+                            sourceRow(s)
+                                .contentShape(Rectangle())
+                                .onTapGesture { if selecting { toggleSelection(s) } }
+                        }
+                        .independentGlassRow()
                     }
                 } header: { groupHeader(section.name, count: section.sources.count) }
             }
@@ -258,12 +266,25 @@ struct SourcesView: View {
             Button("取消", role: .cancel) { groupSource = nil }
             Button("确定") { if let s = groupSource { store.moveSource(s, toGroup: groupText) }; groupSource = nil }
         } message: { Text(groupSource?.bookSourceName ?? "") }
+        .alert("删除所选 \(selection.count) 个书源？", isPresented: $confirmBatchDelete) {
+            Button("取消", role: .cancel) {}
+            Button("删除", role: .destructive) {
+                store.deleteSources(selection)
+                selection.removeAll()
+                selecting = false
+            }
+        } message: {
+            Text("删除后无法恢复；书架里用到这些书源的书需要重新导入书源。")
+        }
         .alert("删除书源「\(deleteSource?.bookSourceName ?? "")」？", isPresented: Binding(get: { deleteSource != nil }, set: { if !$0 { deleteSource = nil } })) {
             Button("取消", role: .cancel) { deleteSource = nil }
             Button("删除", role: .destructive) { if let s = deleteSource { store.deleteSource(s) }; deleteSource = nil }
         }
         .sheet(isPresented: $showCheck) { SourceCheckView(sources: checkList, store: store) }
         .overlay { if busy { ProgressView() } }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting { selectionBar }
+        }
         .toolbar {
             Button { editTarget = SourceEditTarget(source: nil) } label: { Image(systemName: "square.and.pencil") }
                 .accessibilityLabel("新建书源")
@@ -272,6 +293,13 @@ struct SourcesView: View {
                 Section("校验书源") {
                     Button("校验全部书源") { startCheck(store.sources) }
                     Button("校验启用中的书源") { startCheck(store.sources.filter { $0.isEnabled }) }
+                }
+                Section("书源") {
+                    Button(selecting ? "退出批量选择" : "批量删除书源…") {
+                        selecting.toggle()
+                        selection.removeAll()
+                    }
+                    .accessibilityIdentifier("sources.batch")
                 }
                 Section("导入配置文件") {
                     Button("文本导入") { input = ""; importTitle = "输入书源 JSON"; showImport = true }
@@ -310,6 +338,37 @@ struct SourcesView: View {
         }
     }
 
+    /// 批量选择底栏：已选数量 + 全选 + 删除。
+    private var selectionBar: some View {
+        HStack(spacing: 14) {
+            Text("已选 \(selection.count) 个")
+                .appFont(.subheadline.weight(.medium))
+                .foregroundStyle(palette.primary)
+                .accessibilityIdentifier("sources.selectedCount")
+            Spacer(minLength: 8)
+            Button(selection.count == store.sources.count && !store.sources.isEmpty ? "取消全选" : "全选") {
+                if selection.count == store.sources.count { selection.removeAll() }
+                else { selection = Set(store.sources.map(\.bookSourceUrl)) }
+            }
+            .appFont(.subheadline)
+            .accessibilityIdentifier("sources.selectAll")
+            Button("完成") { selecting = false; selection.removeAll() }
+                .appFont(.subheadline)
+                .accessibilityIdentifier("sources.selectionDone")
+            Button(role: .destructive) { confirmBatchDelete = true } label: {
+                Text("删除").appFont(.subheadline.weight(.semibold))
+            }
+            .disabled(selection.isEmpty)
+            .accessibilityIdentifier("sources.deleteSelected")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background { AppThemeCanvas().ignoresSafeArea() }
+        .overlay(alignment: .top) {
+            Rectangle().fill(palette.primary.opacity(0.08)).frame(height: 0.5)
+        }
+    }
+
     /// 分组标题：组名 + 书源数，点按折叠/展开。
     private func groupHeader(_ name: String, count: Int) -> some View {
         let collapsed = collapsedGroups.contains(name)
@@ -338,6 +397,12 @@ struct SourcesView: View {
     @ViewBuilder
     private func sourceRow(_ s: BookSource) -> some View {
         HStack {
+            if selecting {
+                Image(systemName: selection.contains(s.bookSourceUrl) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(selection.contains(s.bookSourceUrl) ? palette.primary : palette.secondary)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading) {
                 Text(s.bookSourceName).foregroundStyle(palette.primary).lineLimit(1)
                 HStack(spacing: 6) {
@@ -350,10 +415,19 @@ struct SourcesView: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
+            if !selecting {
+                Toggle("", isOn: Binding(get: { s.isEnabled }, set: { _ in store.toggleSource(s) })).labelsHidden()
+            }
         }
         .contentShape(Rectangle())
-        .contextMenu { sourceMenu(s) }
+        .contextMenu { if !selecting { sourceMenu(s) } }
+        .accessibilityValue(selecting ? (selection.contains(s.bookSourceUrl) ? "已选择" : "未选择") : "")
+    }
+
+    private func toggleSelection(_ s: BookSource) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if selection.contains(s.bookSourceUrl) { selection.remove(s.bookSourceUrl) }
+        else { selection.insert(s.bookSourceUrl) }
     }
 
     /// 书源操作菜单（列表行）。

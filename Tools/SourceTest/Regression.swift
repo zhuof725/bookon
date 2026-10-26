@@ -150,6 +150,7 @@ enum RuleRegression {
         try await HTTPTTSRegression.run(check)
         try CookieJarSwitchRegression.run(check)
         try TocParseRegression.run(check)
+        try ChapterTitleStyleRegression.run(check)
         try LoginFormRegression.run(check)
         try ServerPanelLoginRegression.run(check)
         try await XiaoliuSourceRegression.run(check)
