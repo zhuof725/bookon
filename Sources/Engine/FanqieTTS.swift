@@ -23,6 +23,7 @@ enum FanqieTTS {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var toneCache: [String: (Date, ToneInfo)] = [:]
     private nonisolated(unsafe) static var tocCache: [String: (Date, [TocItem])] = [:]
+    private nonisolated(unsafe) static var albumCache: [String: (Date, [BookChapter])] = [:]
     private nonisolated(unsafe) static var textCache: [String: (Date, String)] = [:]
     private static let cacheTTL: TimeInterval = 600
 
@@ -111,6 +112,33 @@ enum FanqieTTS {
         return digits.isEmpty ? nil : digits
     }
 
+    /// 选了真人讲书专辑时，目录要用**专辑自己的**章节表（带片头、001 编号）。
+    /// 返回 nil 表示沿用书籍原本的目录。
+    static func albumChapters(source: BookSource, book: Book) async -> [BookChapter]? {
+        guard isSupported(source: source) else { return nil }
+        let album = SourceTone.currentSelection(source: source).abook
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !album.isEmpty, album != bookID(from: book.bookUrl) else { return nil }
+        if let cached = cachedAlbumChapters(album) { return cached }
+        var edition = Book(bookUrl: "https://fanqienovel.com/robots.txt?bookId=\(album)",
+                           name: book.name, author: book.author, origin: book.origin)
+        edition.coverUrl = book.coverUrl
+        guard let chapters = try? await WebBook.chapters(source: source, book: edition),
+              !chapters.isEmpty else { return nil }
+        storeAlbumChapters(album, chapters)
+        return chapters
+    }
+
+    private static func cachedAlbumChapters(_ album: String) -> [BookChapter]? {
+        lock.lock(); defer { lock.unlock() }
+        guard let cached = albumCache[album], Date().timeIntervalSince(cached.0) < cacheTTL else { return nil }
+        return cached.1
+    }
+
+    private static func storeAlbumChapters(_ album: String, _ chapters: [BookChapter]) {
+        lock.lock(); albumCache[album] = (Date(), chapters); lock.unlock()
+    }
+
     // MARK: - 数据
 
     private static func toneInfo(source: BookSource, book: Book) async -> ToneInfo? {
@@ -193,6 +221,7 @@ enum FanqieTTS {
         toneCache.removeAll()
         tocCache.removeAll()
         textCache.removeAll()
+        albumCache.removeAll()
         lock.unlock()
     }
 

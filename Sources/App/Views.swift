@@ -1181,6 +1181,8 @@ struct ReaderView: View {
     /// 重新抓取目录：目录规则用 `@get:{…}` 取详情页 `@put` 变量（漫画 comic_id）时，
     /// 先跑一次详情页把变量写进当前会话，否则章节地址会缺参数（漫画接口报「漫画标识不能为空」）。
     private func freshChapters(source: BookSource, book: Book) async throws -> [BookChapter] {
+        // 选了真人讲书专辑：目录跟专辑走（带片头与集数编号）。
+        if let album = await FanqieTTS.albumChapters(source: source, book: book) { return album }
         var b = book
         if b.tocUrl == nil || WebBook.tocRuleUsesVariables(source) {
             b = try await WebBook.bookInfo(source: source, book: b)
