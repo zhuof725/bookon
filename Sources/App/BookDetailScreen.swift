@@ -283,7 +283,7 @@ struct BookDetailScreen: View {
             infoColumn(icon: "bell.fill", title: "更新", value: updateText,
                        valueID: "detail.update.value", id: nil, action: nil)
         }
-        .modifier(DetailCardSurface(padding: 14))
+        .modifier(DetailCardSurface(padding: AppLayout.gapL))
     }
 
     /// 「类型」栏：点一下可以把这本书手动定为 文本 / 音频 / 漫画（覆盖自动识别）。
@@ -553,7 +553,7 @@ struct BookDetailScreen: View {
                     .foregroundStyle(palette.accent)
                 }
             }
-            .modifier(DetailCardSurface(padding: 16))
+            .modifier(DetailCardSurface(padding: AppLayout.gapL))
             .contentShape(RoundedRectangle(cornerRadius: palette.cornerRadius(default: AppLayout.radiusCard), style: .continuous))
         }
         .buttonStyle(.plain)

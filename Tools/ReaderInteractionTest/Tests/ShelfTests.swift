@@ -82,7 +82,10 @@ final class ShelfTests: XCTestCase {
         XCTAssertEqual(a.value as? String, "已选择")
         tap("shelf.removeSelected")
         XCTAssertTrue(app.buttons["移除书籍"].waitForExistence(timeout: 3))
-        tap("取消") // Never confirm removal or touch the user's files.
+        // iOS 26 的 confirmationDialog 只暴露动作按钮，不暴露「取消」；
+        // 点弹窗上方的遮罩关闭它。Never confirm removal or touch the user's files.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        XCTAssertTrue(app.buttons["移除书籍"].waitForNonExistence(timeout: 3))
         status("books=2"); status("removed=0")
         tap("shelf.finishSelection")
         XCTAssertEqual(a.value as? String, "打开阅读")
@@ -101,10 +104,10 @@ final class ShelfTests: XCTestCase {
         XCTAssertFalse(a.label.contains("共0章"))
         XCTAssertTrue(a.label.contains("暂无章节信息"))
         XCTAssertFalse(b.staticTexts["99+"].exists)
-        XCTAssertEqual(a.frame.minX, 0, accuracy: 2)
-        XCTAssertEqual(a.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertEqual(a.frame.minX, 16, accuracy: 2, "列表卡左右各留 16（AppLayout.pageInset）")
+        XCTAssertEqual(a.frame.width, app.frame.width - 32, accuracy: 2)
         XCTAssertEqual(a.frame.height, 104, accuracy: 2)
-        XCTAssertEqual(b.frame.maxY, a.frame.minY, accuracy: 2)
+        XCTAssertEqual(a.frame.minY - b.frame.maxY, 10, accuracy: 2, "列表卡间距 10")
         capture("shelf-reference-list-light")
         tap("shelf.more"); tap("shelf.select"); b.tap()
         XCTAssertEqual(b.value as? String, "已选择")
