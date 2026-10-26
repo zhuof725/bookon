@@ -117,7 +117,8 @@ struct BookDetailView: View {
                 if store.isOnShelf(book) { confirmingRemoval = true }
                 else { store.addToShelf(book) }
             },
-            onEditIntro: { if store.isLocal(book) { showingIntroEditor = true } }, onTOC: { showingTOC = true })
+            onEditIntro: { if store.isLocal(book) { showingIntroEditor = true } }, onTOC: { showingTOC = true },
+            onOpenAudioEdition: { edition in book = edition })
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .navigationDestination(isPresented: $showingReader) { ReaderView(book: current) }
