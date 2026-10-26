@@ -100,6 +100,7 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
             finalUrl = loader.webView.url?.absoluteString ?? url
         }
         await syncCookiesFromWebView(host: u.host, enabled: cookieJar)
+        if !WebViewSupport.isChallenge(html) { WebViewLoader.markCleared(host: u.host) }
         if let js = js, !js.isEmpty, !WebViewSupport.isChallenge(html) {
             let r = await loader.source(js: js)
             if !r.isEmpty { html = r }
@@ -124,7 +125,27 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
         }
     }
 
-    // MARK: Cookie 同步
+    // MARK: 已通过验证的主机（短窗口内不再反复弹 Cloudflare 验证）
+
+private static let clearedLock = NSLock()
+private nonisolated(unsafe) static var clearedHosts: [String: Date] = [:]
+/// 通过时间上限：2 小时（cf_clearance 通常有效约 30–60 分钟，宽松给），
+/// 期间同主机请求只带 Cookie 重试，不再起 WebView。
+private static let clearedWindow: TimeInterval = 2 * 3600
+
+static func markCleared(host: String?) {
+    guard let host, !host.isEmpty else { return }
+    clearedLock.lock(); clearedHosts[host] = Date(); clearedLock.unlock()
+}
+
+static func recentlyCleared(host: String?) -> Bool {
+    guard let host, !host.isEmpty else { return false }
+    clearedLock.lock(); defer { clearedLock.unlock() }
+    guard let when = clearedHosts[host] else { return false }
+    return Date().timeIntervalSince(when) < clearedWindow
+}
+
+// MARK: Cookie 同步
 
     /// 把 WebView 里的 Cookie 回流到共享存储。
     /// - host 非空时只回流与该主机相关的 Cookie，避免把无关站点的 Cookie 带进来。
