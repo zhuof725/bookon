@@ -69,9 +69,11 @@ struct LegadoApp: App {
 
 struct RootView: View {
     @State private var selection: LibraryTab = .shelf
+    /// 收听中心：迷你播放条是否出现、面板是否弹出都跟着它走。
+    @ObservedObject private var listening = ListeningCenter.shared
     var body: some View {
         NavigationStack {
-            LibraryTabContainer(selection: $selection) {
+            LibraryTabContainer(selection: $selection, accessoryVisible: listening.showsBar) {
                 BookshelfView()
             } discover: {
                 DiscoverView()
@@ -81,8 +83,13 @@ struct RootView: View {
                 LibraryProfileView()
             } search: {
                 SearchView()
+            } accessory: {
+                ListeningBar()
             }
             .background { AppThemeCanvas().ignoresSafeArea() }
+        }
+        .sheet(isPresented: $listening.showSheet) {
+            ListeningSheet().modifier(AppThemeRoot())
         }
     }
 }

@@ -3,7 +3,9 @@ import UIKit
 
 /// NavigationStack stays outside this root so pushed screens replace the bar.
 /// On iOS 26 the system owns the Liquid Glass appearance, sizing and labels.
-struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: View, SearchTab: View>: View {
+/// `accessory` 挂在底栏上方（iOS 26 是系统自带的 tabViewBottomAccessory，
+/// 老系统叠在自定义底栏上），用来放迷你播放条之类的常驻控件。
+struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: View, SearchTab: View, Accessory: View>: View {
     @Binding var selection: LibraryTab
     @Environment(\.appTheme) private var theme
     @State private var icons: [String: UIImage] = [:]
@@ -12,28 +14,31 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
     let explore: Explore
     let profile: Profile
     let search: SearchTab
+    let accessoryVisible: Bool
+    let accessory: Accessory
 
-    init(selection: Binding<LibraryTab>, @ViewBuilder shelf: () -> Shelf,
+    init(selection: Binding<LibraryTab>, accessoryVisible: Bool = false,
+         @ViewBuilder shelf: () -> Shelf,
          @ViewBuilder discover: () -> Discover,
          @ViewBuilder explore: () -> Explore, @ViewBuilder profile: () -> Profile,
-         @ViewBuilder search: () -> SearchTab) {
+         @ViewBuilder search: () -> SearchTab,
+         @ViewBuilder accessory: () -> Accessory) {
         _selection = selection
         self.shelf = shelf(); self.discover = discover()
         self.explore = explore()
         self.profile = profile(); self.search = search()
+        self.accessoryVisible = accessoryVisible
+        self.accessory = accessory()
     }
 
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                TabView(selection: $selection) {
-                    shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
-                    discover.tabItem { item(.discover) }.tag(LibraryTab.discover)
-                    explore.tabItem { item(.explore) }.tag(LibraryTab.explore)
-                    profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
-                    search.tabItem { item(.search) }.tag(LibraryTab.search)
+                if accessoryVisible {
+                    tabs.tabViewBottomAccessory { accessory }
+                } else {
+                    tabs
                 }
-                // No custom material/background/UITabBarAppearance: retain native glass.
             } else {
                 Group {
                     switch selection {
@@ -45,7 +50,12 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
                     case .search: search
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { LibraryDock(selection: $selection) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        if accessoryVisible { accessory }
+                        LibraryDock(selection: $selection)
+                    }
+                }
             }
         }
         .task(id: theme.customization?.tabIcons) {
@@ -69,6 +79,17 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
         }
     }
 
+    @ViewBuilder private var tabs: some View {
+        TabView(selection: $selection) {
+            shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
+            discover.tabItem { item(.discover) }.tag(LibraryTab.discover)
+            explore.tabItem { item(.explore) }.tag(LibraryTab.explore)
+            profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
+            search.tabItem { item(.search) }.tag(LibraryTab.search)
+        }
+        // No custom material/background/UITabBarAppearance: retain native glass.
+    }
+
     @ViewBuilder private func item(_ tab: LibraryTab) -> some View {
         let value = theme.customization?.tabIcons?[tab.key]
         if let value, ThemeAssetStore.isValidID(value), let image = icons[tab.key] {
@@ -79,5 +100,16 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
             Image(systemName: tab.symbol)
         }
         Text(tab.title)
+    }
+}
+
+/// 没有底部配件的老调用方（UI 测试夹具也走这个初始化器）。
+extension LibraryTabContainer where Accessory == EmptyView {
+    init(selection: Binding<LibraryTab>, @ViewBuilder shelf: () -> Shelf,
+         @ViewBuilder discover: () -> Discover,
+         @ViewBuilder explore: () -> Explore, @ViewBuilder profile: () -> Profile,
+         @ViewBuilder search: () -> SearchTab) {
+        self.init(selection: selection, accessoryVisible: false, shelf: shelf, discover: discover,
+                  explore: explore, profile: profile, search: search, accessory: { EmptyView() })
     }
 }

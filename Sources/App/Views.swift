@@ -355,9 +355,10 @@ struct ReaderView: View {
     @State private var confirmChapterClear = false
     @State private var menuProgress = 0.0
     @State private var scrubbing = false
-    @StateObject private var aloud = ReaderAloudController()
+    /// 播放器归收听中心托管：退出阅读页后继续播，底栏上方出现迷你条。
+    @ObservedObject private var aloud = ListeningCenter.shared.aloud
     /// 音频书源（如喜马拉雅）章节播放。
-    @StateObject private var bookAudio = BookAudioPlayer()
+    @ObservedObject private var bookAudio = ListeningCenter.shared.audio
     /// 音频章链接过期已自动刷新重试过（每次进入章节重置，防止失败循环）。
     @State private var audioFailureRetried = false
     @State private var showAloudPanel = false
@@ -744,9 +745,10 @@ struct ReaderView: View {
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: index,
                                    seconds: bookAudio.currentTime)
             }
-            bookAudio.stop()
             manga.stop()
-            aloud.detach()
+            // 听书 / 有声书交给收听中心：还在播就继续（底栏上方出现迷你条），
+            // 没在播就由它停掉并清空。
+            ListeningCenter.shared.readerDisappeared(book: book, chapters: chapters, index: index)
             persistContinuousProgress()
             closeReadingSession()
             cancelScrollLoads()
@@ -763,7 +765,11 @@ struct ReaderView: View {
             pendingLanding = nil
             store.flushProgress()
         }
-        .task { attachAloudHost(); await start() }
+        .task {
+            ListeningCenter.shared.readerAppeared(book: book)
+            attachAloudHost()
+            await start()
+        }
     }
 
     private var quickEnabled: Set<String> {
@@ -2247,8 +2253,10 @@ struct ReaderView: View {
         // 新的导航重新给一次「链接过期自动重试」的预算。
         audioFailureRetried = false
         // 朗读控制器自己请求 openChapter 时 aloudDrivenNav 为真，朗读继续；
+        // 从后台收听回到阅读页、打开的就是正在读的那一章，也不打断。
         // 其他途径（手动翻章/书签/边缘到达）都会在这里停止朗读。
-        if !aloudDrivenNav { aloud.stop() }
+        let resumingListening = aloud.isRunning && target == aloud.chapterIndex
+        if !aloudDrivenNav, !resumingListening { aloud.stop() }
         cancelScrollLoads()
         cancelPreparation()
         chapterTask?.cancel()
