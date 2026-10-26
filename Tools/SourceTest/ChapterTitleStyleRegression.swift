@@ -61,6 +61,16 @@ enum ChapterTitleStyleRegression {
         check(fullWidth.color?.red == 1, "标题样式：全角冒号/分号")
         check(fullWidth.fontSize == 22, "标题样式：全角冒号下的 font-size")
 
+        // 整份主题 CSS：只取标题相关的规则，body 的黑色背景不能贴到标题上。
+        let sheet = ChapterTitleStyle.parse("body { background: #000; color: #eee } .chapter-title { font-size: 22px } h1 { letter-spacing: 1px }")
+        check(sheet.background == nil, "标题样式：整份 CSS 里 body 的背景不生效")
+        check(sheet.fontSize == 22 && sheet.letterSpacing == 1, "标题样式：整份 CSS 只取标题相关规则")
+        check(sheet.color == nil, "标题样式：整份 CSS 里 body 的文字色不生效")
+
+        // 只粘一条规则（选择器随便叫什么）时照单全收。
+        let singleRule = ChapterTitleStyle.parse(".foo { color: red; font-size: 18px }")
+        check(singleRule.color != nil && singleRule.fontSize == 18, "标题样式：单条规则照单全收")
+
         // 声明顺序无关 + 后写的覆盖前面的。
         let ordered = ChapterTitleStyle.parse("color: #000; text-align: right; color: #fff")
         check(ordered.alignment == .right, "标题样式：属性顺序无关")
