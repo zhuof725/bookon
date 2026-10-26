@@ -28,11 +28,6 @@ struct BookDetailScreen: View {
     var onTypeChange: ((BookKind) -> Void)? = nil
     /// 聚合源的子源（如「番茄听书」），显示在来源卡片里。
     var sourceUpstream: String? = nil
-    /// 打开「真人录播版」（音频书条目，目录带片头/001 编号）。nil 时不显示入口。
-    var onOpenAudioEdition: ((Book) -> Void)? = nil
-
-    @State private var audioEdition: Book?
-    @State private var loadingAudioEdition = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 长简介默认收起 4 行，点「展开全文」再看全。
@@ -103,7 +98,6 @@ struct BookDetailScreen: View {
                     infoStrip
                     introCard
                     tocCard
-                    audioEditionCard
                     sourceCard
                     feedback
                 }
@@ -116,7 +110,6 @@ struct BookDetailScreen: View {
         }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
-        .task(id: book.bookUrl) { await loadAudioEditionIfNeeded() }
     }
 
     // MARK: - 顶栏
@@ -513,41 +506,6 @@ struct BookDetailScreen: View {
             .background(Capsule().fill(palette.accent.opacity(0.12)))
     }
 
-    // MARK: - 真人录播版入口
-
-    /// 文字书和它的「真人录播」是两个条目：目录、片头都跟着条目走。
-    /// 这里在文字书详情页给出音频书条目的直达入口。
-    @ViewBuilder private var audioEditionCard: some View {
-        if let edition = audioEdition, let action = onOpenAudioEdition {
-            AudioEditionRow(action: { action(edition) })
-        }
-    }
-
-    /// 查这本书有没有独立的「真人录播」专辑条目（toneinfo 的 audio_tones）。
-    /// 只在音频源上有效，查不到就不显示入口。
-    private func loadAudioEditionIfNeeded() async {
-        guard onOpenAudioEdition != nil, audioEdition == nil, !loadingAudioEdition else { return }
-        guard let source = AppStore.shared.source(for: book.origin),
-              FanqieTTS.isSupported(source: source),
-              let currentID = FanqieTTS.bookIDForEdition(book.bookUrl) else { return }
-        loadingAudioEdition = true
-        let current = book
-        let groups = await Task.detached { SourceTone.groups(source: source, book: current) }.value
-        loadingAudioEdition = false
-        guard let real = groups.first(where: { group in
-            if case .realPerson = group.kind { return true }
-            return false
-        }), let album = real.tones.first else { return }
-        let albumID = album.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !albumID.isEmpty, albumID != currentID else { return }
-        var edition = Book(bookUrl: "https://fanqienovel.com/robots.txt?bookId=\(albumID)",
-                           name: current.name, author: current.author, origin: current.origin)
-        edition.coverUrl = current.coverUrl
-        edition.intro = current.intro
-        edition.kind = current.kind
-        audioEdition = edition
-    }
-
     // MARK: - 来源
 
     private var sourceCard: some View {
@@ -701,37 +659,5 @@ private struct DetailTagLayout: Layout {
             x += size.width + spacing
         }
         return (CGSize(width: usedWidth, height: items.isEmpty ? 0 : y + rowHeight), items)
-    }
-}
-
-
-/// 详情页的「真人录播版」入口（文字书 → 音频书条目）。
-private struct AudioEditionRow: View {
-    @ThemePalette private var palette
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.accent)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("真人录播版").appFont(.body)
-                    Text("音频书条目，目录含片头与集数编号")
-                        .appFont(.caption)
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(palette.accent)
-            }
-            .modifier(DetailCardSurface(padding: 16))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("detail.audioEdition")
     }
 }

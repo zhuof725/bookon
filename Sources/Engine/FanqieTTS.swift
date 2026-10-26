@@ -254,11 +254,6 @@ enum FanqieTTS {
         return text
     }
 
-    /// 书籍地址里的 book_id（详情页判断“当前是不是音频书条目”用）。
-    static func bookIDForEdition(_ url: String) -> String? {
-        bookID(from: url)
-    }
-
     private static func bookID(from url: String) -> String? {
         if let range = url.range(of: "(?:book_id|bookId)=([0-9]+)", options: .regularExpression) {
             let digits = String(url[range]).replacingOccurrences(of: "[^0-9]", with: "",
