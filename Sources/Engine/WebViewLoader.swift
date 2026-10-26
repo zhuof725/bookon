@@ -133,12 +133,12 @@ private nonisolated(unsafe) static var clearedHosts: [String: Date] = [:]
 /// 期间同主机请求只带 Cookie 重试，不再起 WebView。
 private static let clearedWindow: TimeInterval = 2 * 3600
 
-static func markCleared(host: String?) {
+nonisolated static func markCleared(host: String?) {
     guard let host, !host.isEmpty else { return }
     clearedLock.lock(); clearedHosts[host] = Date(); clearedLock.unlock()
 }
 
-static func recentlyCleared(host: String?) -> Bool {
+nonisolated static func recentlyCleared(host: String?) -> Bool {
     guard let host, !host.isEmpty else { return false }
     clearedLock.lock(); defer { clearedLock.unlock() }
     guard let when = clearedHosts[host] else { return false }
