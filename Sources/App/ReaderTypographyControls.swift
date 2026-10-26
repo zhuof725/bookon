@@ -18,7 +18,7 @@ struct ReaderTypographyControls: View {
                 HStack {
                     Text("章节标题样式")
                     Spacer()
-                    Text(settings.chapterTitleStyle.isEmpty ? "默认" : "自定义")
+                    Text(settings.chapterTitleIsDefault ? "默认" : "自定义")
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

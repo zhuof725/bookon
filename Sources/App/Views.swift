@@ -700,7 +700,7 @@ struct ReaderView: View {
         .onChange(of: settings.rightMargin) { _ in repaginate() }
         .onChange(of: settings.topMargin) { _ in repaginate() }
         .onChange(of: settings.bottomMargin) { _ in repaginate() }
-        .onChange(of: settings.chapterTitleCSS) { _ in repaginate() }
+        .onChange(of: settings.chapterTitleSignature) { _ in repaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -1234,7 +1234,7 @@ struct ReaderView: View {
                                     content: AnyView(scrollChapterBody(chapter)),
                                     appearanceID: "\(settings.theme)-\(scrollBoundaryRevision(for: chapter.id))")
             }, request: scrollRequest,
-                layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)|\(settings.chapterTitleCSS)",
+                layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)|\(settings.chapterTitleSignature)",
                 background: UIColor(theme.bg),
                 onPosition: { chapter, position in recordContinuousPosition(chapter, position: position) },
                 onApproachEdge: { direction in loadScrollNeighbor(direction) },

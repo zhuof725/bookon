@@ -128,6 +128,39 @@ struct ChapterTitleStyle: Equatable {
 
     static let empty = ChapterTitleStyle()
 
+    /// 简单设置（字号 / 字重 / 位置）对应的样式；没有高级 CSS 时用它。
+    static func simple(size: Double, weight: Int, alignment: String) -> ChapterTitleStyle {
+        var style = ChapterTitleStyle()
+        if size > 0 { style.fontSize = size }
+        if weight > 0 { style.fontWeight = weight }
+        style.alignment = Alignment(rawValue: alignment) ?? .center
+        return style
+    }
+
+    /// 高级 CSS 覆盖在简单设置之上：CSS 写了哪一项就换哪一项。
+    mutating func merge(_ other: ChapterTitleStyle) {
+        if let v = other.fontSize { fontSize = v }
+        if let v = other.fontScale { fontScale = v }
+        if let v = other.fontWeight { fontWeight = v }
+        if let v = other.italic { italic = v }
+        if let v = other.color { color = v }
+        if let v = other.background { background = v }
+        if let v = other.alignment { alignment = v }
+        if let v = other.letterSpacing { letterSpacing = v }
+        if let v = other.lineHeight { lineHeight = v }
+        if let v = other.underline { underline = v }
+        if let v = other.strikethrough { strikethrough = v }
+        if let v = other.transform { transform = v }
+        if let v = other.opacity { opacity = v }
+        if let v = other.paddingTop { paddingTop = v }
+        if let v = other.paddingBottom { paddingBottom = v }
+        if let v = other.paddingHorizontal { paddingHorizontal = v }
+        if let v = other.marginTop { marginTop = v }
+        if let v = other.marginBottom { marginBottom = v }
+        if let v = other.borderBottomWidth { borderBottomWidth = v }
+        if let v = other.borderBottomColor { borderBottomColor = v }
+    }
+
     var isEmpty: Bool { self == ChapterTitleStyle() }
 
     var hasBorder: Bool { (borderBottomWidth ?? 0) > 0 }
@@ -150,7 +183,9 @@ struct ChapterTitleStyle: Equatable {
             case "color":
                 style.color = Color.parse(value)
             case "background", "background-color":
+                // `background: #000 url(x) no-repeat` 这类简写只取颜色部分。
                 style.background = Color.parse(value)
+                    ?? value.split(whereSeparator: { $0 == " " }).compactMap { Color.parse(String($0)) }.first
             case "text-align":
                 style.alignment = Alignment(rawValue: value)
             case "letter-spacing":
@@ -212,11 +247,27 @@ struct ChapterTitleStyle: Equatable {
         return style
     }
 
-    /// 拆成 `属性: 值` 列表：去掉注释、`!important`，属性名转小写。
+    /// 拆成 `属性: 值` 列表。
+    ///
+    /// 支持直接粘一段带选择器的 CSS（`.chapter-title { color: #fff; background: #000 }`）：
+    /// 只取花括号里的声明；没有花括号就整段当声明列表。
+    /// 顺便去掉注释、`!important`，并把中文输入法打出来的全角冒号/分号归一化。
     static func declarations(_ css: String) -> [(String, String)] {
         var text = css
         while let start = text.range(of: "/*"), let end = text.range(of: "*/", range: start.upperBound..<text.endIndex) {
             text.removeSubrange(start.lowerBound..<end.upperBound)
+        }
+        text = text
+            .replacingOccurrences(of: "：", with: ":")
+            .replacingOccurrences(of: "；", with: ";")
+        if text.contains("{") {
+            var extracted = ""
+            for block in text.split(separator: "{").dropFirst() {
+                if let body = block.split(separator: "}").first { extracted += body + ";" }
+            }
+            if !extracted.isEmpty { text = extracted }
+        } else {
+            text = text.replacingOccurrences(of: "}", with: "")
         }
         var out: [(String, String)] = []
         for chunk in text.split(separator: ";") {
@@ -227,7 +278,7 @@ struct ChapterTitleStyle: Equatable {
                 value.removeSubrange(important)
                 value = value.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            guard !key.isEmpty, !value.isEmpty else { continue }
+            guard !key.isEmpty, !value.isEmpty, !key.contains(" "), !key.contains("{") else { continue }
             out.append((key, value.lowercased()))
         }
         return out

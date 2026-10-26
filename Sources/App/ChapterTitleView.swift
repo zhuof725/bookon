@@ -58,9 +58,18 @@ enum ChapterTitleLayout {
     }
 
     static func resolvedColor(_ base: UIColor, style: ChapterTitleStyle) -> UIColor {
-        guard var css = style.color else { return base }
-        if let opacity = style.opacity { css.alpha *= opacity }
-        return UIColor(red: CGFloat(css.red), green: CGFloat(css.green), blue: CGFloat(css.blue), alpha: CGFloat(css.alpha))
+        if var css = style.color {
+            if let opacity = style.opacity { css.alpha *= opacity }
+            return UIColor(red: CGFloat(css.red), green: CGFloat(css.green), blue: CGFloat(css.blue), alpha: CGFloat(css.alpha))
+        }
+        // 只写了背景色、没写文字颜色：自动取对比色，否则黑底黑字会整条变成一块黑条。
+        if let background = style.background {
+            let luminance = 0.299 * background.red + 0.587 * background.green + 0.114 * background.blue
+            var color = luminance > 0.55 ? UIColor.black : UIColor.white
+            if let opacity = style.opacity { color = color.withAlphaComponent(CGFloat(opacity)) }
+            return color
+        }
+        return base
     }
 
     static func attributed(title: String, fontSize: CGFloat, color: UIColor,
