@@ -27,11 +27,28 @@ enum WebBook {
         let books = parseBookList(source: source, body: response.body, baseUrl: response.url, rule: rule, context: context)
         guard books.isEmpty else { return books }
         // 搜索为空：站点可能只接受表单 POST（书源却写成 GET）。用页面表单重试一次。
+        // 1) 先用「原查询串 → POST 表单体」重试：有的站点只收 POST，
+        //    有的客户端把 GBK 预编码的 GET 查询串改写坏了也一样救得回来。
+        if let query = URLComponents(string: suWithBase(su, key: key, page: page, source: source))?.query,
+           !query.isEmpty,
+           let posted = await SearchFormFallback.postWithQuery(source: source, key: key, page: page,
+                                                               query: query, queryURL: response.url),
+           !posted.body.isEmpty {
+            DebugLog.recordSource(posted.body, stage: 10)
+            let recovered = parseBookList(source: source, body: posted.body, baseUrl: posted.url,
+                                          rule: rule, context: context)
+            if !recovered.isEmpty { return recovered }
+        }
+        // 2) 再按页面里的搜索表单 POST（能带上隐藏字段，更贴近站点预期）。
         guard let posted = await SearchFormFallback.postSearch(source: source, key: key, page: page,
                                                                pageBody: response.body, pageURL: response.url),
               !posted.body.isEmpty else { return books }
         DebugLog.recordSource(posted.body, stage: 10)
         return parseBookList(source: source, body: posted.body, baseUrl: posted.url, rule: rule, context: context)
+    }
+
+    private static func suWithBase(_ su: String, key: String, page: Int, source: BookSource) -> String {
+        AnalyzeUrl.substitute(su, key: key, page: page, jsLib: source.jsLib)
     }
 
     /// 书源请求的统一入口：拿到响应后执行 loginCheckJs（原版 WebBook 在每个请求点都做）。

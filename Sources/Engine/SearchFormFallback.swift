@@ -10,6 +10,27 @@ import SwiftSoup
 ///
 /// 只做一次，不改书源、不改配置。
 enum SearchFormFallback {
+    /// 用**原 GET 查询串**改成 POST 再发一次（词在表单体里按 charset 编码，
+    /// 不依赖 URL 百分号编码是否被 Foundation 改写）。body 为空时用查询参数里的全部键值对。
+    static func postWithQuery(source: BookSource, key: String, page: Int,
+                              query: String, queryURL: String) async -> HTTPResponseData? {
+        var bodyPairs = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if bodyPairs.isEmpty { return nil }
+        var urlString = queryURL
+        if let q = urlString.firstIndex(of: "?") { urlString = String(urlString[..<q]) }
+        let pathBase = AnalyzeUrl.absolute(urlString, base: source.bookSourceUrl)
+        var charset = searchCharset(source: source)
+        if charset.isEmpty { charset = "gbk" }
+        DebugLog.add("≡搜索无结果，改用 POST 表单体（查询原样带入）重试")
+        var request = AnalyzeUrl(rawUrl: pathBase, key: key, page: page,
+                                 baseUrl: source.bookSourceUrl, sourceHeader: source.header,
+                                 context: RuleContext(source: source), jsLib: source.jsLib)
+        request.method = "POST"
+        request.body = bodyPairs
+        request.charset = charset
+        return try? await WebBook.fetch(request)
+    }
+
     /// 返回 POST 的响应（body + 最终地址）；站点没有可用 POST 表单时返回 nil。
     static func postSearch(source: BookSource, key: String, page: Int,
                            pageBody: String, pageURL: String) async -> HTTPResponseData? {
