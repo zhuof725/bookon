@@ -125,20 +125,16 @@ enum ChapterTitleLayout {
     }
 }
 
-/// 章节标题容器：内边距 + 背景色 + 下边框都由它画，文字按 CSS 排版。
-final class ChapterTitleBox: UIView {
-    private let label = UILabel()
-    private let border = UIView()
+/// 章节标题：UILabel 子类。内边距 / 背景色 / 下边框都画在自己身上，
+/// 保留「就是一个静态文本」的结构（可访问性、版式测量、UI 测试都按 UILabel 找）。
+final class ChapterTitleLabel: UILabel {
     private var style = ChapterTitleStyle.empty
     private var baseColor: UIColor = .black
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        label.numberOfLines = 0
-        label.isUserInteractionEnabled = false
-        addSubview(label)
-        border.isUserInteractionEnabled = false
-        addSubview(border)
+        numberOfLines = 0
+        isUserInteractionEnabled = false
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -146,29 +142,42 @@ final class ChapterTitleBox: UIView {
     func configure(title: String, fontSize: CGFloat, color: UIColor, style: ChapterTitleStyle) {
         self.style = style
         baseColor = color
-        label.attributedText = ChapterTitleLayout.attributed(title: title, fontSize: fontSize,
-                                                             color: color, style: style)
+        attributedText = ChapterTitleLayout.attributed(title: title, fontSize: fontSize,
+                                                       color: color, style: style)
         backgroundColor = style.background.map {
             UIColor(red: CGFloat($0.red), green: CGFloat($0.green), blue: CGFloat($0.blue), alpha: CGFloat($0.alpha))
         }
-        border.isHidden = !style.hasBorder
-        setNeedsLayout()
+        invalidateIntrinsicContentSize()
+        setNeedsDisplay()
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let insets = ChapterTitleLayout.insets(style)
-        label.frame = CGRect(x: insets.left, y: insets.top,
-                             width: max(bounds.width - insets.left - insets.right, 1),
-                             height: max(bounds.height - insets.top - insets.bottom, 1))
-        if style.hasBorder {
-            let width = max(CGFloat(style.borderBottomWidth ?? 1), 0.5)
-            border.frame = CGRect(x: insets.left, y: bounds.height - width,
-                                  width: label.frame.width, height: width)
-            let color = style.borderBottomColor?.uiColor
-                ?? ChapterTitleLayout.resolvedColor(baseColor, style: style).withAlphaComponent(0.25)
-            border.backgroundColor = color
-        }
+    private var contentInsets: UIEdgeInsets { ChapterTitleLayout.insets(style) }
+
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        let insets = contentInsets
+        var rect = super.textRect(forBounds: bounds.inset(by: insets), limitedToNumberOfLines: numberOfLines)
+        rect.origin.x -= insets.left
+        rect.origin.y -= insets.top
+        rect.size.width += insets.left + insets.right
+        rect.size.height += insets.top + insets.bottom
+        return rect
+    }
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: contentInsets))
+    }
+
+    override func draw(_ rect: CGRect) {
+        super.draw(rect)
+        guard style.hasBorder else { return }
+        let width = max(CGFloat(style.borderBottomWidth ?? 1), 0.5)
+        let color = style.borderBottomColor?.uiColor
+            ?? ChapterTitleLayout.resolvedColor(baseColor, style: style).withAlphaComponent(0.25)
+        color.setFill()
+        let insets = contentInsets
+        UIBezierPath(rect: CGRect(x: insets.left, y: bounds.height - width,
+                                  width: max(bounds.width - insets.left - insets.right, 0),
+                                  height: width)).fill()
     }
 }
 
@@ -184,19 +193,18 @@ struct ChapterTitleView: UIViewRepresentable {
     let color: UIColor
     var style: ChapterTitleStyle = .empty
 
-    func makeUIView(context: Context) -> ChapterTitleBox {
-        let box = ChapterTitleBox()
-        box.isUserInteractionEnabled = false
-        box.accessibilityIdentifier = "chapter-title"
-        box.configure(title: title, fontSize: fontSize, color: color, style: style)
-        return box
+    func makeUIView(context: Context) -> ChapterTitleLabel {
+        let label = ChapterTitleLabel()
+        label.accessibilityIdentifier = "chapter-title"
+        label.configure(title: title, fontSize: fontSize, color: color, style: style)
+        return label
     }
 
-    func updateUIView(_ box: ChapterTitleBox, context: Context) {
-        box.configure(title: title, fontSize: fontSize, color: color, style: style)
+    func updateUIView(_ label: ChapterTitleLabel, context: Context) {
+        label.configure(title: title, fontSize: fontSize, color: color, style: style)
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ChapterTitleBox, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ChapterTitleLabel, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0 else { return nil }
         return CGSize(width: width, height: ChapterTitleLayout.height(title: title, fontSize: fontSize,
                                                                       width: width, style: style))
