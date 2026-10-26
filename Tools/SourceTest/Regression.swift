@@ -17,6 +17,12 @@ enum RuleRegression {
         check(JSEngine.shared.evalString("java.get('bid')", context: RuleContext()) == "", "独立无书源上下文不串变量")
         check(JSEngine.shared.evalString("libValue", result: "payload", baseUrl: "https://example.invalid/", vars: ["key": "测试", "page": 2], jsLib: "var libValue = [result,baseUrl,key,page].join('|');") == "payload|https://example.invalid/|测试|2", "jsLib 初始化可读取请求绑定")
         check(AnalyzeUrl.substitute("{{'searchKey/searchPage'}}", key: "测试", page: 3) == "searchKey/searchPage", "URL 模板不改写 JS 字符串常量")
+        // POST 表单体也要替换 {{key}}（第一版主网搜索：wd={{key}} + charset gbk）。
+        let postRule = "/wap.php?action=search&pageno={{page}},{\"method\":\"POST\",\"body\":\"wd={{key}}&objectType=2\",\"charset\":\"gbk\"}"
+        let postReq = AnalyzeUrl(rawUrl: postRule, key: "我的", page: 1, baseUrl: "https://www.diyibanzhu.me")
+        check(postReq.method == "POST", "POST 选项：method")
+        check(postReq.body == "wd=我的&objectType=2", "POST 表单体替换 {{key}}（实际 \(postReq.body ?? "nil")）")
+        check(postReq.charset?.lowercased() == "gbk", "POST 表单体 charset 保留")
         check(AnalyzeUrl.substitute("{{searchKey}}/{{searchPage}}", key: "测试", page: 3) == "测试/3", "URL 模板保留搜索参数兼容别名")
         check(AnalyzeUrl.substitute("{{({searchKey: '保留字段'}).searchKey}}", key: "测试", page: 3) == "保留字段", "URL 模板不改写对象属性名")
         check(AnalyzeUrl.evalUrlJS("/search?q={{key}}", key: "测试", page: 1, baseUrl: "https://example.invalid/") == "/search?q={{key}}", "无 JS 的 URL 保持原文等待模板替换")

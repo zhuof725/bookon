@@ -101,6 +101,14 @@ struct AnalyzeUrl: @unchecked Sendable {
             if let b = o["body"] { body = (b as? String) ?? AnalyzeUrl.jsonString(b) }
             if let c = o["charset"] as? String { charset = c }
             if let h = o["headers"] as? [String: Any] { for (k, v) in h { headers[k] = "\(v)" } }
+            // 表单正文里的 {{key}}/{{page}} 也要替换（第一版主等站点：POST body "wd={{key}}"）。
+            if let raw = body, !raw.isEmpty {
+                var b = AnalyzeUrl.evalUrlJS(raw, key: key, page: page, baseUrl: baseUrl,
+                                             context: context, jsLib: jsLib, extraVars: extraVars)
+                b = AnalyzeUrl.substitute(b, key: key, page: page, context: context,
+                                          jsLib: jsLib, extraVars: extraVars)
+                body = b
+            }
             if let w = o["webView"] {
                 if let b = w as? Bool { webView = b }
                 else if let n = w as? NSNumber { webView = n.boolValue }
