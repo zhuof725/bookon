@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSoup
 
 /// 站点搜索表单兜底。
 ///
