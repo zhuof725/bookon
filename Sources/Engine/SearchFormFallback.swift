@@ -17,24 +17,35 @@ enum SearchFormFallback {
         guard let forms = try? doc.select("form"), !forms.isEmpty else { return nil }
 
         // 优先「method=post 且有文本输入框」的表单。
+        // 优先 method=post 的表单；有些站点省略 method（默认 GET）但后端同时接受 POST，
+        // 所以没有 post 表单时退而用「第一个带文本输入框」的表单再试一次。
+        var fallbackChoice: (Element, String)?
         var chosen: Element?
         var keywordField: String?
         var keywordType: String?
         for form in forms {
             let method = ((try? form.attr("method")) ?? "").lowercased()
-            guard method == "post" else { continue }
             guard let inputs = try? form.select("input"), !inputs.isEmpty else { continue }
+            var field: String?
             for input in inputs {
                 let type = ((try? input.attr("type")) ?? "text").lowercased()
                 guard ["text", "search", ""].contains(type) else { continue }
                 let name = ((try? input.attr("name")) ?? "").trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { continue }
-                chosen = form
-                keywordField = name
-                keywordType = type
+                field = name
                 break
             }
-            if chosen != nil { break }
+            guard let field else { continue }
+            if method == "post" {
+                chosen = form
+                keywordField = field
+                break
+            }
+            if fallbackChoice == nil { fallbackChoice = (form, field) }
+        }
+        if chosen == nil, let (form, field) = fallbackChoice {
+            chosen = form
+            keywordField = field
         }
         guard let form = chosen, let field = keywordField else { return nil }
         _ = keywordType

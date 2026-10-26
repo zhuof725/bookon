@@ -6,6 +6,14 @@ struct LibraryProfileView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
     @State private var crashCount = 0
+
+    /// 「我的」页底部显示的版本（装错包/没更新时一眼能看出来）。
+    static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "尚书 \(short) (build \(build))"
+    }
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -67,6 +75,10 @@ struct LibraryProfileView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(16)
                 }
+                Text(Self.versionText)
+                    .foregroundStyle(palette.secondary).appFont(.caption)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("library.version")
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 24).padding(.vertical, 16)
