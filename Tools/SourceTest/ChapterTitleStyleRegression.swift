@@ -67,6 +67,9 @@ enum ChapterTitleStyleRegression {
         check(sheet.fontSize == 22 && sheet.letterSpacing == 1, "标题样式：整份 CSS 只取标题相关规则")
         check(sheet.color == nil, "标题样式：整份 CSS 里 body 的文字色不生效")
 
+        let bodyOnly = ChapterTitleStyle.parse("body { background: #000; color: #eee }")
+        check(bodyOnly.isEmpty, "标题样式：只粘 body 规则时完全忽略")
+
         // 只粘一条规则（选择器随便叫什么）时照单全收。
         let singleRule = ChapterTitleStyle.parse(".foo { color: red; font-size: 18px }")
         check(singleRule.color != nil && singleRule.fontSize == 18, "标题样式：单条规则照单全收")

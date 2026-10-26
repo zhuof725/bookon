@@ -273,8 +273,9 @@ struct ChapterTitleStyle: Equatable {
                 }
             }
             let picked: [String]
-            if blocks.count <= 1 {
-                picked = blocks.map(\.body)
+            if blocks.count == 1, !isPageSelector(blocks[0].selector) {
+                // 只有一条规则、而且不是 body/html 这种整页选择器：用户就是给标题写的。
+                picked = [blocks[0].body]
             } else {
                 picked = blocks.filter { isTitleSelector($0.selector) }.map(\.body)
             }
@@ -296,6 +297,13 @@ struct ChapterTitleStyle: Equatable {
             out.append((key, value.lowercased()))
         }
         return out
+    }
+
+    /// 整页级别的选择器（body / html）：它的背景、颜色不该贴到标题上。
+    static func isPageSelector(_ selector: String) -> Bool {
+        let s = selector.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return s == "body" || s == "html" || s.hasPrefix("body ") || s.hasPrefix("body,")
+            || s.hasPrefix("html ") || s.hasPrefix("html,") || s.hasPrefix("body.") || s.hasPrefix("body:")
     }
 
     /// 选择器是不是在说「章节标题」（.title / .chapter-title / h1 / 标题 …）。
