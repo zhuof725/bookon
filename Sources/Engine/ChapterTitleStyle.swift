@@ -169,8 +169,11 @@ struct ChapterTitleStyle: Equatable {
                     style.opacity = min(max(number, 0), 1)
                 }
             case "padding":
-                applyBox(value, top: &style.paddingTop, bottom: &style.paddingBottom,
-                         horizontal: &style.paddingHorizontal)
+                if let box = boxValues(value) {
+                    style.paddingTop = box.top
+                    style.paddingBottom = box.bottom
+                    style.paddingHorizontal = box.horizontal
+                }
             case "padding-top":
                 if let length = length(value), !length.relative { style.paddingTop = length.value }
             case "padding-bottom":
@@ -178,7 +181,10 @@ struct ChapterTitleStyle: Equatable {
             case "padding-left", "padding-right", "padding-inline", "padding-inline-start", "padding-inline-end":
                 if let length = length(value), !length.relative { style.paddingHorizontal = length.value }
             case "margin":
-                applyBox(value, top: &style.marginTop, bottom: &style.marginBottom, horizontal: nil)
+                if let box = boxValues(value) {
+                    style.marginTop = box.top
+                    style.marginBottom = box.bottom
+                }
             case "margin-top":
                 if let length = length(value), !length.relative { style.marginTop = length.value }
             case "margin-bottom":
@@ -271,22 +277,17 @@ struct ChapterTitleStyle: Equatable {
     }
 
     /// CSS 的 1~4 值简写：上 / 左右 / 下。
-    static func applyBox(_ raw: String, top: inout Double?, bottom: inout Double?, horizontal: inout Double?) {
+    static func boxValues(_ raw: String) -> (top: Double, bottom: Double, horizontal: Double?)? {
         let parts = raw.split(whereSeparator: { $0 == " " }).map(String.init).filter { !$0.isEmpty }
-        guard !parts.isEmpty else { return }
         let values = parts.compactMap { length($0) }.filter { !$0.relative }.map(\.value)
-        guard !values.isEmpty else { return }
+        guard !values.isEmpty else { return nil }
         switch values.count {
         case 1:
-            top = values[0]; bottom = values[0]
-            if horizontal != nil { horizontal = values[0] }
+            return (values[0], values[0], values[0])
         case 2:
-            top = values[0]; bottom = values[0]
-            if horizontal != nil { horizontal = values[1] }
+            return (values[0], values[0], values[1])
         default:
-            top = values[0]
-            bottom = values.count >= 3 ? values[2] : values[0]
-            if horizontal != nil { horizontal = values[1] }
+            return (values[0], values.count >= 3 ? values[2] : values[0], values[1])
         }
     }
 }
