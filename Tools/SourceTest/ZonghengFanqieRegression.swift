@@ -32,9 +32,7 @@ enum ZonghengFanqieRegression {
         let headerValue = report?.headers.first { $0.key.lowercased() == "x-test-header" }?.value
         check(headerValue == "yes", "java.connect(url, headers)：请求头已带上（实际 \(report?.headers ?? [:])）")
 
-        // MARK: 1) 两个夹具都能被 BookSource 解码
-
-        // MARK: 0.5) 目录请求要沿用详情请求的 POST 后缀
+        // MARK: 1) 目录请求要沿用详情请求的 POST 后缀
         //
         // 纵横的目录接口只接受 POST：bookUrl 里的 `,{"method":"POST","body":"bookId=…"}`
         // 一旦在详情解析时被换成「响应网址」，抓目录就退化成 GET → 404 → 目录 0 章。
@@ -73,6 +71,7 @@ enum ZonghengFanqieRegression {
         check(healedChapters.count == 2 && tocServer.report()?.method == "POST",
               "旧记录丢失 POST 后缀时按 bookUrl 自愈（实际 \(healedChapters.count) 章）")
 
+        // 两个夹具都能被 BookSource 解码
         let dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let files = ["Tools/SourceTest/Fixtures/zongheng-source.json",
                      "Tools/SourceTest/Fixtures/fanqie-changting-v2.json"]
