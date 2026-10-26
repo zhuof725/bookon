@@ -23,8 +23,8 @@ final class ListeningCenter: ObservableObject {
     @Published private(set) var chapterIndex = 0
     /// 阅读器是否在前台：它自带控制条，此时不显示迷你播放条。
     @Published private(set) var readerAttached = false
-    /// 迷你条点开的收听面板。
-    @Published var showSheet = false
+    /// 迷你条点开的完整听书界面。
+    @Published var showPlayer = false
 
     /// 后台播放时自己加载的段落（章节号 → 段落），只保留最近几章。
     private var detachedUnits: [Int: [AloudUnit]] = [:]
@@ -128,6 +128,12 @@ final class ListeningCenter: ObservableObject {
 
     // MARK: 迷你条控制
 
+    /// 点条身 / 列表：回到完整的听书界面。
+    func openPlayer() {
+        guard isActive else { return }
+        showPlayer = true
+    }
+
     func toggle() {
         switch mode {
         case .aloud: aloud.togglePlay()
@@ -161,7 +167,7 @@ final class ListeningCenter: ObservableObject {
         chapters = []
         chapterIndex = 0
         detachedUnits.removeAll()
-        if showSheet { showSheet = false }
+        if showPlayer { showPlayer = false }
     }
 
     // MARK: 后台朗读（TTS）
@@ -254,6 +260,19 @@ final class ListeningCenter: ObservableObject {
         guard chapters.indices.contains(index) else { return }
         chapterIndex = index
         if let book { AppStore.shared.updateProgress(book, index: index, title: chapters[index].title) }
+    }
+
+    /// 有声书播放器「正文」页要的段落（和朗读共用同一份章节加载与缓存）。
+    func chapterParagraphs(_ index: Int) async -> [String] {
+        guard chapters.indices.contains(index) else { return [] }
+        if detachedUnits[index] == nil { _ = await loadForPlayback(index) }
+        return (detachedUnits[index] ?? []).map(\.text)
+    }
+
+    /// 有声书播放器「正文」页的字幕（书源 ruleContent.subContent 的 LRC）。
+    func chapterLyric(_ index: Int) -> String? {
+        guard let book, let source, chapters.indices.contains(index) else { return nil }
+        return ChapterLyric.load(source: source, book: book, chapter: chapters[index])
     }
 
     // MARK: 后台有声书

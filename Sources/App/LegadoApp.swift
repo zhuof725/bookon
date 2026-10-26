@@ -88,8 +88,8 @@ struct RootView: View {
             }
             .background { AppThemeCanvas().ignoresSafeArea() }
         }
-        .sheet(isPresented: $listening.showSheet) {
-            ListeningSheet().modifier(AppThemeRoot())
+        .fullScreenCover(isPresented: $listening.showPlayer) {
+            ListeningPlayerScreen().modifier(AppThemeRoot())
         }
     }
 }

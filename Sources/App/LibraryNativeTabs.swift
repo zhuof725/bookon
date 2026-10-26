@@ -34,10 +34,15 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                if accessoryVisible {
-                    tabs.tabViewBottomAccessory { accessory }
-                } else {
-                    tabs
+                // 迷你播放条挂在每个 Tab 内容的底部安全区上：没在播时什么都不占，
+                // 也不会像系统 tabViewBottomAccessory 那样「空着也画一条玻璃条」，
+                // 更不会因为运行时增删配件让整个 TabView 重建（书架顶部会多出一截空白）。
+                TabView(selection: $selection) {
+                    tab(shelf, .shelf)
+                    tab(discover, .discover)
+                    tab(explore, .explore)
+                    tab(profile, .profile)
+                    tab(search, .search)
                 }
             } else {
                 Group {
@@ -79,15 +84,13 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
         }
     }
 
-    @ViewBuilder private var tabs: some View {
-        TabView(selection: $selection) {
-            shelf.tabItem { item(.shelf) }.tag(LibraryTab.shelf)
-            discover.tabItem { item(.discover) }.tag(LibraryTab.discover)
-            explore.tabItem { item(.explore) }.tag(LibraryTab.explore)
-            profile.tabItem { item(.profile) }.tag(LibraryTab.profile)
-            search.tabItem { item(.search) }.tag(LibraryTab.search)
-        }
-        // No custom material/background/UITabBarAppearance: retain native glass.
+    @ViewBuilder private func tab<V: View>(_ content: V, _ value: LibraryTab) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if accessoryVisible { accessory }
+            }
+            .tabItem { item(value) }
+            .tag(value)
     }
 
     @ViewBuilder private func item(_ tab: LibraryTab) -> some View {
