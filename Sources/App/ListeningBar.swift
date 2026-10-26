@@ -60,6 +60,11 @@ struct ListeningBar: View {
         .padding(.leading, 10)
         .padding(.trailing, 4)
         .frame(height: 48)
+        .background {
+            AppGlassSurface(shape: RoundedRectangle(cornerRadius: 24, style: .continuous), tint: palette.surface)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .contain)
     }
 
