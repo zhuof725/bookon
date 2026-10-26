@@ -302,7 +302,7 @@ enum SourceTone {
             return url.path
         }
         let sameMedia = !toneURL.isEmpty && mediaPath(toneURL) == mediaPath(defaultURL)
-        DebugLog.readerAdd("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (sameMedia ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
+        AudioLog.add("◇音色探测 tone=\(tone) item=\(item) → \(toneURL.isEmpty ? "无音频" : (sameMedia ? "与默认音色相同" : URL(string: toneURL)?.host ?? "有独立音频"))")
         if toneURL.isEmpty { return .unavailable }
         if sameMedia { return .sameAsDefault }
         return .playable

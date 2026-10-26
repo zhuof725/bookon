@@ -217,3 +217,29 @@ enum AudioCacheIndex {
         UserDefaults.standard.set(Array(set), forKey: key)
     }
 }
+
+
+/// 有声书诊断日志（音频地址 / 失败原因 / 音色探测）。
+/// 单独一份，不混进「书源调试」页面；只在播放器的「音频信息」里显示。
+enum AudioLog {
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var entries: [String] = []
+    private static let limit = 60
+
+    static func add(_ message: String) {
+        lock.lock(); defer { lock.unlock() }
+        let stamp = DateFormatter()
+        stamp.dateFormat = "HH:mm:ss"
+        entries.append("\(stamp.string(from: Date())) \(message)")
+        if entries.count > limit { entries.removeFirst(entries.count - limit) }
+    }
+
+    static func snapshot() -> String {
+        lock.lock(); defer { lock.unlock() }
+        return entries.joined(separator: "\n")
+    }
+
+    static func clear() {
+        lock.lock(); entries.removeAll(); lock.unlock()
+    }
+}

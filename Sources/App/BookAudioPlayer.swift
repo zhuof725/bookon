@@ -135,7 +135,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
         fallbackTried = false
         remoteHeaders = headers
         currentBookURL = bookURL
-        DebugLog.readerAdd("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
+        AudioLog.add("◇音频地址 \(title): \(urls.prefix(2).map(\.absoluteString).joined(separator: " | "))")
         chapterTitle = title
         self.album = album
         bookTitle = album
@@ -382,7 +382,7 @@ final class BookAudioPlayer: NSObject, ObservableObject {
             }
         }
         let failing = remoteQueue.indices.contains(queueIndex) ? remoteQueue[queueIndex] : "-"
-        DebugLog.readerAdd("◇音频失败 \(reason) url=\(failing)")
+        AudioLog.add("◇音频失败 \(reason) url=\(failing)")
         let host = URL(string: failing)?.host ?? ""
         pushMessage("音频播放失败：\(reason)" + (host.isEmpty ? "" : "（\(host)）"))
         diagnoseFailure(failing, reason: reason, host: host)
@@ -408,10 +408,10 @@ final class BookAudioPlayer: NSObject, ObservableObject {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let http = response as? HTTPURLResponse
                 let detail = "HTTP \(http?.statusCode ?? -1) · \(http?.mimeType ?? "-") · \(data.count) 字节"
-                DebugLog.readerAdd("◇音频诊断 \(detail) url=\(raw)")
+                AudioLog.add("◇音频诊断 \(detail) url=\(raw)")
                 self.pushMessage("音频播放失败：\(reason)（\(host)）\n\(detail)")
             } catch {
-                DebugLog.readerAdd("◇音频诊断失败 \(error.localizedDescription) url=\(raw)")
+                AudioLog.add("◇音频诊断失败 \(error.localizedDescription) url=\(raw)")
                 self.pushMessage("音频播放失败：\(reason)（\(host)）\n探测失败：\(error.localizedDescription)")
             }
         }
@@ -1497,6 +1497,18 @@ private struct AudioInfoSheet: View {
                 } footer: {
                     Text("切换音色后看这里：如果地址变了但声音没变，是这张专辑本身同一个声音；如果地址没变，是书源回落了默认音色。")
                         .appFont(.caption)
+                }
+                Section {
+                    Text(AudioLog.snapshot().isEmpty ? "（暂无）" : AudioLog.snapshot())
+                        .appFont(.system(size: 10, design: .monospaced))
+                        .textSelection(.enabled)
+                } header: {
+                    HStack {
+                        Text("音频日志")
+                        Spacer()
+                        Button("清空") { AudioLog.clear() }
+                            .appFont(.caption)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
