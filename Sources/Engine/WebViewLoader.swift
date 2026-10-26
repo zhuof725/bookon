@@ -127,11 +127,11 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
 
     // MARK: 已通过验证的主机（短窗口内不再反复弹 Cloudflare 验证）
 
-private static let clearedLock = NSLock()
+nonisolated private static let clearedLock = NSLock()
 private nonisolated(unsafe) static var clearedHosts: [String: Date] = [:]
 /// 通过时间上限：2 小时（cf_clearance 通常有效约 30–60 分钟，宽松给），
 /// 期间同主机请求只带 Cookie 重试，不再起 WebView。
-private static let clearedWindow: TimeInterval = 2 * 3600
+nonisolated private static let clearedWindow: TimeInterval = 2 * 3600
 
 nonisolated static func markCleared(host: String?) {
     guard let host, !host.isEmpty else { return }
