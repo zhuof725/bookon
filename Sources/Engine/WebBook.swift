@@ -328,7 +328,15 @@ enum WebBook {
                 DebugLog.add("≡规则未命中，已自动识别：\(used.joined(separator: "、"))")
             }
         }
-        b.tocUrl = toc.isEmpty ? url : AnalyzeUrl.absolute(toc, base: url)
+        if toc.isEmpty {
+            // 目录规则没给地址时，目录页就是详情请求本身。这里必须沿用原始 bookUrl，
+            // 不能用响应网址：后者已经丢掉 `,{"method":"POST","body":"bookId=…"}` 这类请求后缀，
+            // 抓目录会退化成 GET（纵横这类只认 POST 的接口直接 404，目录 0 章）。
+            let raw = book.bookUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+            b.tocUrl = raw.isEmpty ? url : raw
+        } else {
+            b.tocUrl = AnalyzeUrl.absolute(toc, base: url)
+        }
         context.book = b
         return (b, n, a)
     }
@@ -350,7 +358,14 @@ enum WebBook {
         // 只有一个地址时沿链继续。地址去重，最多 30 页。
         // 多页串行太慢（如喜马拉雅一次给 8 页、每页 280KB+），按小并发成批抓取、保持页序。
         var wave: [String] = []
-        let head = book.tocUrl ?? book.bookUrl
+        var head = book.tocUrl ?? book.bookUrl
+        // 旧记录里的 tocUrl 是详情页的「响应网址」，请求选项后缀已经丢了。
+        // 同一位置且 bookUrl 带 `,{"method":"POST",…}` 时以 bookUrl 为准，
+        // 这样已上架的书不用重新解析详情也能抓目录。
+        if !book.bookUrl.isEmpty, AnalyzeUrl.hasRequestOptions(book.bookUrl),
+           !AnalyzeUrl.hasRequestOptions(head), AnalyzeUrl.sameResource(head, book.bookUrl) {
+            head = book.bookUrl
+        }
         if !head.isEmpty { wave.append(head) }
         var pages: [[BookChapter]] = []
         while !wave.isEmpty, visited.count < 30 {
