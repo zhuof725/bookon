@@ -150,7 +150,9 @@ struct ChapterTitleStyle: Equatable {
             case "color":
                 style.color = Color.parse(value)
             case "background", "background-color":
+                // `background: #000 url(x) no-repeat` 这类简写只取颜色部分。
                 style.background = Color.parse(value)
+                    ?? value.split(whereSeparator: { $0 == " " }).compactMap { Color.parse(String($0)) }.first
             case "text-align":
                 style.alignment = Alignment(rawValue: value)
             case "letter-spacing":
@@ -212,11 +214,27 @@ struct ChapterTitleStyle: Equatable {
         return style
     }
 
-    /// 拆成 `属性: 值` 列表：去掉注释、`!important`，属性名转小写。
+    /// 拆成 `属性: 值` 列表。
+    ///
+    /// 支持直接粘一段带选择器的 CSS（`.chapter-title { color: #fff; background: #000 }`）：
+    /// 只取花括号里的声明；没有花括号就整段当声明列表。
+    /// 顺便去掉注释、`!important`，并把中文输入法打出来的全角冒号/分号归一化。
     static func declarations(_ css: String) -> [(String, String)] {
         var text = css
         while let start = text.range(of: "/*"), let end = text.range(of: "*/", range: start.upperBound..<text.endIndex) {
             text.removeSubrange(start.lowerBound..<end.upperBound)
+        }
+        text = text
+            .replacingOccurrences(of: "：", with: ":")
+            .replacingOccurrences(of: "；", with: ";")
+        if text.contains("{") {
+            var extracted = ""
+            for block in text.split(separator: "{").dropFirst() {
+                if let body = block.split(separator: "}").first { extracted += body + ";" }
+            }
+            if !extracted.isEmpty { text = extracted }
+        } else {
+            text = text.replacingOccurrences(of: "}", with: "")
         }
         var out: [(String, String)] = []
         for chunk in text.split(separator: ";") {
@@ -227,7 +245,7 @@ struct ChapterTitleStyle: Equatable {
                 value.removeSubrange(important)
                 value = value.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            guard !key.isEmpty, !value.isEmpty else { continue }
+            guard !key.isEmpty, !value.isEmpty, !key.contains(" "), !key.contains("{") else { continue }
             out.append((key, value.lowercased()))
         }
         return out

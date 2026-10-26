@@ -51,6 +51,16 @@ enum ChapterTitleStyleRegression {
         let transform = ChapterTitleStyle.parse("text-transform: uppercase; opacity: 0.6")
         check(transform.transform == .uppercase && transform.opacity == 0.6, "标题样式：大小写与透明度")
 
+        // 直接粘一段带选择器的 CSS（常见于从 GitHub 上抄来的规则）：
+        // 只取花括号里的声明，不能把选择器后面的第一条属性吃掉。
+        let selected = ChapterTitleStyle.parse(".chapter-title { color: #fff; background: #000; }")
+        check(selected.color?.red == 1 && selected.color?.green == 1, "标题样式：带选择器的规则取到 color")
+        check(selected.background != nil && selected.background?.red == 0, "标题样式：带选择器的规则取到 background")
+
+        let fullWidth = ChapterTitleStyle.parse("color：#fff；font-size：22px；")
+        check(fullWidth.color?.red == 1, "标题样式：全角冒号/分号")
+        check(fullWidth.fontSize == 22, "标题样式：全角冒号下的 font-size")
+
         // 声明顺序无关 + 后写的覆盖前面的。
         let ordered = ChapterTitleStyle.parse("color: #000; text-align: right; color: #fff")
         check(ordered.alignment == .right, "标题样式：属性顺序无关")
