@@ -34,10 +34,10 @@ struct LibraryTabContainer<Shelf: View, Discover: View, Explore: View, Profile: 
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                if accessoryVisible {
-                    tabs.tabViewBottomAccessory { accessory }
-                } else {
-                    tabs
+                // 始终挂上底部配件：只在播放时才往里放内容。
+                // 用条件包住整个 TabView 会让底栏重建，书架的导航栏会重新占位（顶部多出一截空白）。
+                tabs.tabViewBottomAccessory {
+                    if accessoryVisible { accessory }
                 }
             } else {
                 Group {
