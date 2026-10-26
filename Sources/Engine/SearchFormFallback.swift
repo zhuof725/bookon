@@ -13,8 +13,15 @@ enum SearchFormFallback {
     /// 返回 POST 的响应（body + 最终地址）；站点没有可用 POST 表单时返回 nil。
     static func postSearch(source: BookSource, key: String, page: Int,
                            pageBody: String, pageURL: String) async -> HTTPResponseData? {
-        guard let doc = try? SwiftSoup.parse(pageBody, pageURL) else { return nil }
-        guard let forms = try? doc.select("form"), !forms.isEmpty else { return nil }
+        guard let doc = try? SwiftSoup.parse(pageBody, pageURL) else {
+            DebugLog.add("≡兜底：页面解析失败")
+            return nil
+        }
+        guard let forms = try? doc.select("form"), !forms.isEmpty else {
+            DebugLog.add("≡兜底：页面里没有表单（长度 \(pageBody.count)）")
+            return nil
+        }
+        DebugLog.add("≡兜底：找到 \(forms.count) 个表单")
 
         // 优先「method=post 且有文本输入框」的表单。
         // 优先 method=post 的表单；有些站点省略 method（默认 GET）但后端同时接受 POST，
@@ -47,7 +54,10 @@ enum SearchFormFallback {
             chosen = form
             keywordField = field
         }
-        guard let form = chosen, let field = keywordField else { return nil }
+        guard let form = chosen, let field = keywordField else {
+            DebugLog.add("≡兜底：表单里没有可用的关键词输入框")
+            return nil
+        }
         _ = keywordType
 
         // 表单 charset（accept-charset）优先，其次书源 searchUrl 里的 charset，最后 utf-8。
@@ -82,7 +92,7 @@ enum SearchFormFallback {
         request.method = "POST"
         request.body = body
         request.charset = charset
-        DebugLog.add("≡搜索无结果，改用站点表单 POST（\(field)）重试")
+        DebugLog.add("≡搜索无结果，改用站点表单 POST（\(field) → \(target)）重试")
         return try? await WebBook.fetch(request)
     }
 
