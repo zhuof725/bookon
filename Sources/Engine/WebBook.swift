@@ -24,7 +24,14 @@ enum WebBook {
         let au = AnalyzeUrl(rawUrl: su, key: key, page: page, baseUrl: source.bookSourceUrl, sourceHeader: source.header, context: context, jsLib: source.jsLib)
         let response = try await fetch(au)
         DebugLog.recordSource(response.body, stage: 10)
-        return parseBookList(source: source, body: response.body, baseUrl: response.url, rule: rule, context: context)
+        let books = parseBookList(source: source, body: response.body, baseUrl: response.url, rule: rule, context: context)
+        guard books.isEmpty else { return books }
+        // 搜索为空：站点可能只接受表单 POST（书源却写成 GET）。用页面表单重试一次。
+        guard let posted = await SearchFormFallback.postSearch(source: source, key: key, page: page,
+                                                               pageBody: response.body, pageURL: response.url),
+              !posted.body.isEmpty else { return books }
+        DebugLog.recordSource(posted.body, stage: 10)
+        return parseBookList(source: source, body: posted.body, baseUrl: posted.url, rule: rule, context: context)
     }
 
     /// 书源请求的统一入口：拿到响应后执行 loginCheckJs（原版 WebBook 在每个请求点都做）。
