@@ -39,6 +39,7 @@ final class AIServiceTests: XCTestCase {
         XCTAssertTrue(app.buttons["ai.edit.save"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.textFields["ai.edit.baseURL"].exists)
         XCTAssertTrue(app.textFields["ai.edit.model"].exists)
+        XCTAssertTrue(app.buttons["ai.edit.fetchModels"].exists, "模型字段旁应有「获取模型」按钮")
         capture("ai-02-editor")
 
         // 返回列表。
