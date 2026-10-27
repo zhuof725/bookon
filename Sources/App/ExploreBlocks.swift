@@ -9,6 +9,9 @@ struct ExploreBoardCard: View {
     var onDelete: (() -> Void)? = nil
 
     @State private var tab = 0
+    @State private var aiBusy = false
+    @State private var aiMessage: String?
+    @State private var metaTick = 0
 
     private var categories: [ExploreCategory] { board.visibleCategories }
     private var activeTab: Int {
@@ -56,12 +59,34 @@ struct ExploreBoardCard: View {
             await store.load(activeCategory)
         }
         .contextMenu {
+            Button { generateRecommendations() } label: {
+                Label(aiBusy ? "正在生成…" : "AI 生成推荐语", systemImage: "sparkles")
+            }
+            .disabled(aiBusy || visibleBooks.isEmpty)
             if let onEdit {
                 Button { onEdit() } label: { Label("编辑板块", systemImage: "slider.horizontal.3") }
             }
             if let onDelete {
                 Button(role: .destructive) { onDelete() } label: { Label("删除板块", systemImage: "trash") }
             }
+        }
+        .id(metaTick)
+        .overlay(alignment: .top) {
+            if aiBusy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在生成推荐语…").appFont(.footnote)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(.regularMaterial))
+                .padding(.top, 6)
+                .accessibilityIdentifier("explore.ai.busy")
+            }
+        }
+        .alert("AI 推荐语", isPresented: Binding(get: { aiMessage != nil }, set: { if !$0 { aiMessage = nil } })) {
+            Button("好", role: .cancel) { aiMessage = nil }
+        } message: {
+            Text(aiMessage ?? "")
         }
         .accessibilityIdentifier("explore.board.\(board.id)")
     }
@@ -287,6 +312,32 @@ struct ExploreBoardCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 用已配置的 AI 服务给当前板块的书生成标签与推荐语。
+    private func generateRecommendations() {
+        let ai = AIServiceStore.shared
+        guard let config = ai.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = ai.apiKey(for: config.id) else {
+            aiMessage = "先在「我的 → AI 提供商」配置并启用一个服务。"
+            return
+        }
+        let targets = Array(visibleBooks.prefix(AIRecommender.maxBooks))
+        guard !targets.isEmpty else { return }
+
+        aiBusy = true
+        Task {
+            do {
+                let count = try await AIRecommender.generate(books: targets, provider: provider,
+                                                             config: config, apiKey: key)
+                metaTick += 1
+                aiMessage = "已为 \(count) 本书生成推荐语。"
+            } catch {
+                aiMessage = error.localizedDescription
+            }
+            aiBusy = false
         }
     }
 

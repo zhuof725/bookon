@@ -25,11 +25,11 @@ struct AIProviderEditView: View {
         self.provider = provider
         self.existing = config
         self.isNewCustom = isNewCustom
-        let storedKey = config.flatMap { _ in AIServiceStore.shared.apiKey(for: config!.id) } ?? ""
         _name = State(initialValue: config?.name ?? "")
         _baseURL = State(initialValue: config?.baseURL ?? provider.baseURL)
         _model = State(initialValue: config?.model ?? provider.defaultModel)
-        _key = State(initialValue: storedKey)
+        // 已保存的密钥不回填：留空即保持不变，避免内存里多一份明文。
+        _key = State(initialValue: "")
         _temperature = State(initialValue: config?.temperature ?? 0.7)
         _enabled = State(initialValue: config?.enabled ?? true)
         _makeDefault = State(initialValue: config != nil && AIServiceStore.shared.defaultID == config?.id)
@@ -47,7 +47,19 @@ struct AIProviderEditView: View {
     private var trimmedModel: String { model.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var trimmedKey: String { key.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private var canTest: Bool { !trimmedBase.isEmpty && !trimmedModel.isEmpty && !trimmedKey.isEmpty }
+    /// 已保存过密钥（编辑已有服务时）。
+    private var hasSavedKey: Bool {
+        guard let existing else { return false }
+        return AIServiceStore.shared.hasKey(for: existing.id)
+    }
+    /// 本次请求可用的密钥：输入框优先，其次用已保存的。
+    private var effectiveKey: String {
+        if !trimmedKey.isEmpty { return trimmedKey }
+        guard let existing else { return "" }
+        return AIServiceStore.shared.apiKey(for: existing.id) ?? ""
+    }
+
+    private var canTest: Bool { !trimmedBase.isEmpty && !trimmedModel.isEmpty && !effectiveKey.isEmpty }
     private var canSave: Bool { !trimmedBase.isEmpty && (isCustom ? !name.trimmingCharacters(in: .whitespaces).isEmpty : true) }
 
     var body: some View {
@@ -137,10 +149,11 @@ struct AIProviderEditView: View {
             fieldRow("API Key") {
                 HStack(spacing: 6) {
                     Group {
+                        let prompt = hasSavedKey ? "已保存 · 留空则不修改" : "sk-…"
                         if revealKey {
-                            TextField("sk-…", text: $key)
+                            TextField("", text: $key, prompt: Text(prompt))
                         } else {
-                            SecureField("sk-…", text: $key)
+                            SecureField("", text: $key, prompt: Text(prompt))
                         }
                     }
                     .appFont(.system(.callout, design: .monospaced))
@@ -371,7 +384,7 @@ struct AIProviderEditView: View {
         test = .running
         let provider = self.provider
         let config = draftConfig()
-        let apiKey = trimmedKey
+        let apiKey = effectiveKey
         Task {
             do {
                 let result = try await AIClient().ping(provider: provider, config: config, apiKey: apiKey)
@@ -388,7 +401,8 @@ struct AIProviderEditView: View {
         var config = draftConfig()
         config.id = id
         store.save(config)
-        store.setKey(trimmedKey, for: id)
+        // 留空表示沿用已有密钥；新建服务留空则不写。
+        if !trimmedKey.isEmpty { store.setKey(trimmedKey, for: id) }
         if makeDefault || store.defaultID == nil {
             store.defaultID = id
         }
