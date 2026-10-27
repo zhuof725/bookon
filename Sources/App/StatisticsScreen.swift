@@ -55,7 +55,7 @@ struct LibraryStatisticsView: View {
                 sectionTitle("阅读统计")
                 statsCard
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppLayout.pageInset)
             .padding(.bottom, 44)
         }
         .background { AppThemeCanvas().ignoresSafeArea() }

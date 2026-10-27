@@ -39,7 +39,7 @@ struct FontManagerView: View {
                         .appFont(.footnote).foregroundStyle(palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
+                .padding(.horizontal, AppLayout.pageInset).padding(.top, AppLayout.gapL).padding(.bottom, AppLayout.gapXL)
             }
         }
         .foregroundStyle(palette.primary)

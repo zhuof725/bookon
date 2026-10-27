@@ -26,10 +26,10 @@ struct TxtTocRulesView: View {
                 Text("目录规则").appFont(.headline)
                 Spacer()
                 Color.clear.frame(width: 46, height: 46)
-            }.padding(.horizontal, 18).padding(.top, 8)
+            }.padding(.horizontal, AppLayout.pageInset).padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("规则列表").appFont(.title2.bold()).padding(.horizontal, 18)
+                    Text("规则列表").appFont(.title2.bold()).padding(.horizontal, AppLayout.pageInset)
                     VStack(spacing: 8) {
                         ForEach(TxtTocRule.builtIns + custom) { rule in
                             if rule.isBuiltIn {
@@ -55,7 +55,7 @@ struct TxtTocRulesView: View {
                     }
                     Text("适用于新导入的 TXT 文件，内置与自定义规则共同识别标题。已有目录不自动重建，EPUB 和书源目录不受影响。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
-                }.padding(.horizontal, 18).padding(.bottom, 28)
+                }.padding(.horizontal, AppLayout.pageInset).padding(.bottom, 28)
             }
         }
         .foregroundStyle(palette.primary)
@@ -103,7 +103,7 @@ struct TxtTocRulesView: View {
             Text(rule.pattern).appFont(rule.isBuiltIn ? .system(.caption, design: .monospaced) : .system(size: 14, design: .monospaced))
                 .foregroundStyle(palette.secondary).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-        }.padding(.horizontal, 18).padding(.vertical, rule.isBuiltIn ? 10 : 18)
+        }.padding(.horizontal, AppLayout.pageInset).padding(.vertical, rule.isBuiltIn ? 10 : 18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(SettingsGlassSurface())
             .contentShape(Rectangle())

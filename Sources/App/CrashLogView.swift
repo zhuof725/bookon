@@ -45,7 +45,8 @@ struct CrashLogView: View {
                     .foregroundStyle(palette.secondary)
                     .padding(.top, 2)
             }
-            .padding(20)
+            .padding(.horizontal, AppLayout.pageInset)
+            .padding(.vertical, AppLayout.gapL)
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
         .foregroundStyle(palette.primary)

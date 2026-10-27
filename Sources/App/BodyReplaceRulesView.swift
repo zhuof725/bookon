@@ -34,10 +34,10 @@ struct BodyReplaceRulesView: View {
                 Text("正文替换规则").appFont(.headline)
                 Spacer()
                 Color.clear.frame(width: 46, height: 46)
-            }.padding(.horizontal, 18).padding(.top, 8)
+            }.padding(.horizontal, AppLayout.pageInset).padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("规则列表 · \(rules.count)/50").appFont(.title2.bold()).padding(.horizontal, 18)
+                    Text("规则列表 · \(rules.count)/50").appFont(.title2.bold()).padding(.horizontal, AppLayout.pageInset)
                     VStack(spacing: 8) {
                         if rules.isEmpty {
                             Text("还没有正文替换规则\n添加规则可清理阅读正文中的指定文字。")
@@ -81,7 +81,7 @@ struct BodyReplaceRulesView: View {
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
                     Text("每个段落单独匹配，正则表达式不能跨段。替换内容留空表示删除匹配文字；超时或超出长度限制时，该条规则保持处理前的段落。")
                         .appFont(.footnote).foregroundStyle(palette.secondary).padding(.horizontal, 8)
-                }.padding(.horizontal, 18).padding(.bottom, 28)
+                }.padding(.horizontal, AppLayout.pageInset).padding(.bottom, 28)
             }
         }
         .foregroundStyle(palette.primary)

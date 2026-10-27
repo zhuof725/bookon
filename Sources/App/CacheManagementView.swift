@@ -80,7 +80,7 @@ struct CacheManagementView: View {
                     Image(systemName: "arrow.clockwise").font(.system(size: 19, weight: .medium))
                         .frame(width: 46, height: 46).modifier(ShelfGlass(shape: Circle()))
                 }.disabled(model.busy).accessibilityLabel("刷新缓存占用").accessibilityIdentifier("cache.refresh")
-            }.buttonStyle(.plain).padding(.horizontal, 18).padding(.top, 8)
+            }.buttonStyle(.plain).padding(.horizontal, AppLayout.pageInset).padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -123,7 +123,7 @@ struct CacheManagementView: View {
                         .appFont(.footnote).foregroundStyle(palette.secondary)
                     Text("只统计本页列出的缓存，文件大小为逻辑字节数，网络占用由系统报告。不包含全部网页缓存或当前屏幕持有的图片与排版。阅读和网络请求会再次生成缓存。")
                         .appFont(.footnote).foregroundStyle(palette.secondary)
-                }.padding(.horizontal, 18).padding(.bottom, 28)
+                }.padding(.horizontal, AppLayout.pageInset).padding(.bottom, 28)
             }
         }
         .background { AppThemeCanvas().ignoresSafeArea() }
