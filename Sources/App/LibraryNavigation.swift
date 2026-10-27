@@ -25,6 +25,10 @@ struct LibraryProfileView: View {
                     }
                     .accessibilityIdentifier("library.statistics")
                 }
+                LibraryCard("AI") {
+                    NavigationLink { AIServiceView() } label: { LibraryLinkLabel(title: "AI 提供商", symbol: "sparkles") }
+                        .accessibilityIdentifier("library.ai")
+                }
                 LibraryCard("书库管理") {
                     Group {
                         NavigationLink { SourcesView() } label: { LibraryLinkLabel(title: "书源管理", symbol: "square.stack.3d.up") }
