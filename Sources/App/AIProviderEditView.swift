@@ -432,6 +432,17 @@ struct AIProviderEditView: View {
 
     // MARK: 状态
 
+    private func draftConfig() -> AIServiceConfig {
+        AIServiceConfig(id: resolvedID,
+                        name: isCustom ? name.trimmingCharacters(in: .whitespaces) : nil,
+                        baseURL: trimmedBase,
+                        model: trimmedModel,
+                        temperature: temperature,
+                        enabled: enabled,
+                        appendV1: (isCustom || effectiveProvider.proto == .openAI) ? appendV1 : nil,
+                        updatedAt: existing?.updatedAt ?? Date())
+    }
+
     private func runTest() {
         testing = true
         probe = nil
