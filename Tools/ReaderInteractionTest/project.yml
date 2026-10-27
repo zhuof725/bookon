@@ -20,9 +20,11 @@ targets:
       - path: AIServiceHarness.swift
       - path: ../../Sources/App/AIServiceView.swift
       - path: ../../Sources/App/AIProviderEditView.swift
+      - path: ../../Sources/App/AIModelPickerSheet.swift
       - path: ../../Sources/App/AIServiceStore.swift
       - path: ../../Sources/Engine/AIProvider.swift
       - path: ../../Sources/Engine/AIClient.swift
+      - path: ../../Sources/Engine/AIModels.swift
       - path: AppearanceFixHarness.swift
       - path: LiveAppearanceHarness.swift
       - path: ../../Sources/App/ReaderAppearancePreview.swift
