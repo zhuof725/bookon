@@ -7,9 +7,9 @@ import SwiftUI
 /// - 非敏感字段（地址、模型、温度、启用状态）存 UserDefaults。
 /// - API Key 优先进系统钥匙串；无签名安装包可能没有钥匙串权限，
 ///   此时退化为沙盒内明文文件，并在界面上明确告知。
-@MainActor
 final class AIServiceStore: ObservableObject {
-    static let shared = AIServiceStore()
+    /// 项目内其它设置存储同款写法：只从主线程（SwiftUI）访问。
+    nonisolated(unsafe) static let shared = AIServiceStore()
 
     /// 已保存的配置，键为服务 id（自定义服务为 custom-<uuid>）。
     @Published private(set) var configs: [String: AIServiceConfig] = [:]

@@ -6,7 +6,7 @@ on:
         description: Test scope
         type: choice
         default: smoke
-        options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, stats, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-tabs, theme-grid, navbar, full]
+        options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, ai-service, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, stats, smoke, continuity, scroll, typography, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-tabs, theme-grid, navbar, full]
   push:
     branches: [main]
     paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/App/StatisticsScreen.swift', 'Sources/App/ReadingGoalSheets.swift', 'Sources/App/Library*.swift', 'Sources/App/Discover*.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
@@ -114,6 +114,7 @@ jobs:
             shelf-list) ARGS=(-only-testing:ReaderInteractionTests/ShelfTests/testReferenceListMetadataAndSelection -only-testing:ReaderInteractionTests/ShelfTests/testReferenceListDarkLarge320 -only-testing:ReaderInteractionTests/ShelfTests/testShelfAndMoreMenuScreenshots -only-testing:ReaderInteractionTests/ShelfTests/testImportAndSearchCallbacks -only-testing:ReaderInteractionTests/ShelfTests/testDockAndReaderPushHidesRootDock -only-testing:ReaderInteractionTests/ShelfTests/testPullToRefreshRunsOnce) ;;
             appearance-fixes) ARGS=(-only-testing:ReaderInteractionTests/AppearanceFixTests -only-testing:ReaderInteractionTests/SettingsGlassTests -only-testing:ReaderInteractionTests/TocRulesTests/testBuiltInListCannotOpen -only-testing:ReaderInteractionTests/TocRulesTests/testDarkListScreenshot) ;;
             settings-glass) ARGS=(-only-testing:ReaderInteractionTests/SettingsGlassTests -only-testing:ReaderInteractionTests/NativeTabsGlassTests) ;;
+            ai-service) ARGS=(-only-testing:ReaderInteractionTests/AIServiceTests) ;;
             native-tabs-glass) ARGS=(-only-testing:ReaderInteractionTests/NativeTabsGlassTests -only-testing:ReaderInteractionTests/ShelfTests -only-testing:ReaderInteractionTests/DetailTests -only-testing:ReaderInteractionTests/ChromeTests) ;;
             cache-management) ARGS=(-only-testing:ReaderInteractionTests/CacheManagementTests) ;;
             search-history) ARGS=(-only-testing:ReaderInteractionTests/SearchHistoryTests) ;;
@@ -198,7 +199,7 @@ jobs:
             reader-screenshots/manifest.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && ((inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') || inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
+        if: ${{ always() && ((inputs.suite == 'aloud-highlight' || inputs.suite == 'native-tabs-glass' || inputs.suite == 'settings-glass' || inputs.suite == 'ai-service' || inputs.suite == 'appearance-fixes' || inputs.suite == 'shelf-list' || inputs.suite == 'live-appearance' || inputs.suite == 'search-history' || inputs.suite == 'reader-toc' || inputs.suite == 'cache-management' || inputs.suite == 'continuity' || inputs.suite == 'scroll' || inputs.suite == 'body-rules') || inputs.suite == 'custom-themes' || inputs.suite == 'theme-grid' || inputs.suite == 'theme-customization' || inputs.suite == 'theme-customization-focused') }}
         with:
           name: custom-theme-screenshots
           path: |

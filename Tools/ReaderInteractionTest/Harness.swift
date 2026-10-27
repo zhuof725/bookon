@@ -51,6 +51,8 @@ struct HarnessApp: App {
                     AppearanceFixHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--settings-glass-mode") {
                     SettingsGlassHarness()
+                } else if ProcessInfo.processInfo.arguments.contains("--ai-service-mode") {
+                    AIServiceHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--native-tabs-mode") {
                     NativeTabsGlassHarness()
                 } else if ProcessInfo.processInfo.arguments.contains("--native-glass-mode") {
