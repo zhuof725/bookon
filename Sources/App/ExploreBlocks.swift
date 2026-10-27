@@ -7,6 +7,8 @@ struct ExploreBoardCard: View {
     let board: ExploreBoard
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    /// 外部（AI 生成推荐语）变化时递增，让卡片重新读取 ExploreMetaStore。
+    var metaVersion: Int = 0
 
     @State private var tab = 0
     @State private var aiBusy = false

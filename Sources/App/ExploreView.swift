@@ -6,6 +6,9 @@ struct ExploreView: View {
     @EnvironmentObject private var appStore: AppStore
     @StateObject private var store: ExploreStore
     @State private var sheet: ExploreSheet?
+    /// AI 生成推荐语后自增，用来让卡片重新读取推荐语。
+    @State private var metaTick = 0
+    @State private var aiRefreshing = false
 
     private enum ExploreSheet: Identifiable {
         case add(session: String)
@@ -37,7 +40,8 @@ struct ExploreView: View {
                         ExploreBoardCard(store: store,
                                          board: board,
                                          onEdit: { sheet = .edit(board) },
-                                         onDelete: { remove(board) })
+                                         onDelete: { remove(board) },
+                                         metaVersion: metaTick)
                     }
                     addCard
                 }
@@ -47,6 +51,19 @@ struct ExploreView: View {
             .padding(.bottom, 28)
         }
         .refreshable { await store.refreshAll() }
+        .task { await runAutoRefreshIfNeeded() }
+        .overlay(alignment: .top) {
+            if aiRefreshing {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("AI 正在生成推荐语…").appFont(.footnote)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(.regularMaterial))
+                .padding(.top, 6)
+                .accessibilityIdentifier("explore.ai.auto.busy")
+            }
+        }
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("探索")
@@ -172,6 +189,45 @@ struct ExploreView: View {
         }
     }
 
+    /// 打开探索页时按冷却时间自动补一批推荐语。失败不打断用户，只推迟下一次。
+    @MainActor
+    private func runAutoRefreshIfNeeded() async {
+        guard AIExploreAutoRefresh.shouldRun else { return }
+        let ai = AIServiceStore.shared
+        guard let config = ai.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = ai.apiKey(for: config.id) else { return }
+
+        // 跨板块收集"还没有推荐语"的书，同一本只取一次。
+        var seen = Set<String>()
+        var targets: [Book] = []
+        for board in store.boards {
+            for category in board.visibleCategories {
+                for book in store.books(for: category) ?? [] {
+                    guard seen.insert(book.bookUrl).inserted else { continue }
+                    let reason = ExploreMetaStore.reason(for: book.bookUrl) ?? ""
+                    if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        targets.append(book)
+                    }
+                }
+            }
+        }
+        let batch = Array(targets.prefix(AIRecommender.maxBooks))
+        // 页面还没加载出书（网络慢或首次进入）时不消费冷却时间，下次再来。
+        guard !batch.isEmpty else { return }
+
+        aiRefreshing = true
+        do {
+            let count = try await AIRecommender.generate(books: batch, provider: provider,
+                                                         config: config, apiKey: key)
+            if count > 0 { metaTick += 1 }
+        } catch {
+            // 自动流程不弹窗；仍然记录时间，避免反复失败持续消耗额度。
+        }
+        AIExploreAutoRefresh.lastRun = Date()
+        aiRefreshing = false
+    }
+
     private func remove(_ board: ExploreBoard) {
         withAnimation(.easeInOut(duration: 0.2)) {
             store.remove(id: board.id)
@@ -183,6 +239,7 @@ struct ExploreView: View {
 
 struct ExploreManageSheet: View {
     @ThemePalette private var palette
+    @AppStorage("explore.ai.autoRefresh.v1") private var autoRefresh = false
     @EnvironmentObject private var appStore: AppStore
     @ObservedObject var store: ExploreStore
     @Environment(\.dismiss) private var dismiss
@@ -226,6 +283,20 @@ struct ExploreManageSheet: View {
                             .appFont(.caption)
                             .foregroundStyle(palette.secondary)
                     }
+                }
+                Section {
+                    Toggle(isOn: $autoRefresh) {
+                        Text("自动生成推荐语").appFont(.body)
+                    }
+                    .accessibilityIdentifier("explore.ai.auto")
+                    Text(AIExploreAutoRefresh.statusText())
+                        .appFont(.caption)
+                        .foregroundStyle(palette.secondary)
+                } header: {
+                    Text("AI")
+                } footer: {
+                    Text("打开探索页时，给还没有推荐语的书补一批（每次最多 \(AIRecommender.maxBooks) 本，6 小时内只跑一次）。需要先在「我的 → AI 提供商」配置服务。")
+                        .appFont(.caption)
                 }
             }
             .scrollContentBackground(.hidden)
