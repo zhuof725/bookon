@@ -40,8 +40,9 @@ enum AICatalog {
     static let builtins: [AIProvider] = [
         AIProvider(id: "openai", name: "OpenAI", symbol: "brain.head.profile", tint: "10A37F",
                    proto: .openAI, baseURL: "https://api.openai.com",
-                   defaultModel: "gpt-4o-mini", appendV1: true,
-                   modelHints: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]),
+                   defaultModel: "gpt-4o-mini",
+                   modelHints: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"],
+                   appendV1: true),
         AIProvider(id: "claude", name: "Claude", symbol: "sparkles", tint: "D97757",
                    proto: .anthropic, baseURL: "https://api.anthropic.com",
                    defaultModel: "claude-sonnet-4-5",
