@@ -78,6 +78,7 @@ enum AIRegression {
         let geminiURL = geminiRequest.url?.absoluteString ?? ""
         check(geminiURL.contains("/v1beta/models/"), "Gemini 端点：/v1beta/models/")
         check(geminiURL.contains("generateContent"), "Gemini 端点：generateContent")
+        check(geminiURL.contains("gemini-2.5-flash:generateContent"), "Gemini 模型名与动作之间的冒号不被编码")
         check(geminiURL.contains("key=AIza-test"), "Gemini 密钥走查询参数")
         check(geminiRequest.value(forHTTPHeaderField: "Authorization") == nil, "Gemini 不带 Bearer 头")
         let geminiBody = (try? JSONSerialization.jsonObject(with: geminiRequest.httpBody ?? Data())) as? [String: Any]
@@ -96,11 +97,42 @@ enum AIRegression {
         } catch { threwMissingModel = true }
         check(threwMissingModel, "缺模型时直接报错，不发请求")
 
-        var threwMissingKey = false
-        do {
-            _ = try AIRequestBuilder.request(openai, config: openAIConfig, apiKey: " ", messages: [.user("hi")])
-        } catch { threwMissingKey = true }
-        check(threwMissingKey, "缺密钥时直接报错")
+        // 空密钥是本地端点（Ollama / LM Studio）的合法配置：请求照发，但不带空的 Bearer 头。
+        let keylessRequest = try? AIRequestBuilder.request(openai, config: openAIConfig, apiKey: " ",
+                                                          messages: [.user("hi")])
+        check(keylessRequest != nil, "空密钥不阻止请求")
+        check(keylessRequest?.value(forHTTPHeaderField: "Authorization") == nil, "空密钥不发 Authorization 头")
+
+        // 只填到域名：自动补 /v1
+        let hostOnly = AIServiceConfig(id: "openai", baseURL: "https://api.openai.com", model: "gpt-4o-mini")
+        let hostRequest = try? AIRequestBuilder.request(openai, config: hostOnly, apiKey: "k", messages: [.user("hi")])
+        check(hostRequest?.url?.absoluteString == "https://api.openai.com/v1/chat/completions",
+              "只填域名时自动补 /v1")
+
+        // 关掉自动补：按原样拼，用于自建网关
+        let verbatim = AIServiceConfig(id: "openai", baseURL: "https://relay.example.com/api", model: "m",
+                                       appendV1: false)
+        let verbatimRequest = try? AIRequestBuilder.request(openai, config: verbatim, apiKey: "k",
+                                                            messages: [.user("hi")])
+        check(verbatimRequest?.url?.absoluteString == "https://relay.example.com/api/chat/completions",
+              "关闭自动补 /v1 时按原样拼接")
+
+        // 用户直接贴完整端点：不重复
+        let fullEndpoint = AIServiceConfig(id: "openai", baseURL: "https://relay.example.com/v1/chat/completions",
+                                           model: "m")
+        let fullRequest = try? AIRequestBuilder.request(openai, config: fullEndpoint, apiKey: "k",
+                                                        messages: [.user("hi")])
+        check(fullRequest?.url?.absoluteString == "https://relay.example.com/v1/chat/completions",
+              "贴完整端点时不重复拼接")
+
+        // 国内服务的版本段不能被再补一个 /v1
+        for (name, base) in [("智谱", "https://open.bigmodel.cn/api/paas/v4"),
+                             ("通义", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                             ("豆包", "https://ark.cn-beijing.volces.com/api/v3")] {
+            let config = AIServiceConfig(id: "x", baseURL: base, model: "m", appendV1: false)
+            let request = try? AIRequestBuilder.request(openai, config: config, apiKey: "k", messages: [.user("hi")])
+            check(request?.url?.absoluteString == base + "/chat/completions", "\(name) 的版本路径保持原样")
+        }
 
         // MARK: 响应解析
 

@@ -19,11 +19,13 @@ struct AIProvider: Identifiable, Hashable, Sendable {
     let symbol: String
     /// 品牌色（hex，无 #）。
     let tint: String
-    let proto: AIProtocol
+    var proto: AIProtocol
     let baseURL: String
     let defaultModel: String
     let modelHints: [String]
     var isCustom: Bool = false
+    /// OpenAI 兼容协议的地址是否自动补 `/v1`（base 只填到主机时用）。
+    var appendV1: Bool = false
 
     /// 补全用户漏写的 `/v1` 之类的路径，返回可直接拼接端点的根地址。
     var normalizedBaseURL: String {
@@ -37,8 +39,8 @@ enum AICatalog {
     /// 顺序与设置页一致：常用在前。
     static let builtins: [AIProvider] = [
         AIProvider(id: "openai", name: "OpenAI", symbol: "brain.head.profile", tint: "10A37F",
-                   proto: .openAI, baseURL: "https://api.openai.com/v1",
-                   defaultModel: "gpt-4o-mini",
+                   proto: .openAI, baseURL: "https://api.openai.com",
+                   defaultModel: "gpt-4o-mini", appendV1: true,
                    modelHints: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]),
         AIProvider(id: "claude", name: "Claude", symbol: "sparkles", tint: "D97757",
                    proto: .anthropic, baseURL: "https://api.anthropic.com",
@@ -77,7 +79,7 @@ enum AICatalog {
     static let custom = AIProvider(id: "custom", name: "自定义服务", symbol: "plus", tint: "0A84FF",
                                    proto: .openAI, baseURL: "", defaultModel: "",
                                    modelHints: ["任何兼容 OpenAI /chat/completions 的服务"],
-                                   isCustom: true)
+                                   isCustom: true, appendV1: true)
 
     static func provider(id: String) -> AIProvider? {
         builtins.first { $0.id == id } ?? (id == custom.id ? custom : nil)
@@ -103,16 +105,19 @@ struct AIServiceConfig: Codable, Identifiable, Equatable, Sendable {
     var model: String
     var temperature: Double
     var enabled: Bool
+    /// OpenAI 兼容地址是否自动补 `/v1`；nil 表示跟随提供商默认。
+    var appendV1: Bool?
     var updatedAt: Date
 
     init(id: String, name: String? = nil, baseURL: String, model: String, temperature: Double = 0.7,
-         enabled: Bool = true, updatedAt: Date = Date()) {
+         enabled: Bool = true, appendV1: Bool? = nil, updatedAt: Date = Date()) {
         self.id = id
         self.name = name
         self.baseURL = baseURL
         self.model = model
         self.temperature = temperature
         self.enabled = enabled
+        self.appendV1 = appendV1
         self.updatedAt = updatedAt
     }
 
@@ -157,27 +162,48 @@ enum AIError: LocalizedError, Equatable {
 /// 请求构造。纯函数，便于回归测试直接断言 URL 与 JSON 结构。
 enum AIRequestBuilder {
     /// 各协议的对话端点。`model` 只对 Gemini 的路径有影响。
+    ///
+    /// OpenAI 兼容协议按 OpenMinis 的语义处理：`appendV1` 打开时把 base 结尾的
+    /// `/v1` 去掉后重新拼 `/v1/chat/completions`（不会出现 `/v1/v1`）；
+    /// 关闭时按原样拼 `/chat/completions`。用户直接贴完整端点也认。
     static func endpoint(_ provider: AIProvider, config: AIServiceConfig, apiKey: String) throws -> URL {
-        let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !base.isEmpty, var url = URL(string: base) else { throw AIError.badURL }
+        let base = normalizedBase(config.baseURL)
+        guard !base.isEmpty else { throw AIError.badURL }
         let model = config.trimmedModel
+
+        func make(_ string: String) throws -> URL {
+            guard let value = URL(string: string) else { throw AIError.badURL }
+            return value
+        }
 
         switch provider.proto {
         case .openAI:
-            url.appendPathComponent("chat")
-            url.appendPathComponent("completions")
+            if base.hasSuffix("/chat/completions") { return try make(base) }
+            let append = config.appendV1 ?? provider.appendV1
+            guard append else { return try make(base + "/chat/completions") }
+            var host = base
+            if host.hasSuffix("/v1") { host = String(host.dropLast(3)) }
+            return try make(host + "/v1/chat/completions")
+
         case .anthropic:
-            // 允许用户填 https://api.anthropic.com 或 .../v1
-            if !url.path.hasSuffix("/v1") { url.appendPathComponent("v1") }
-            url.appendPathComponent("messages")
+            if base.hasSuffix("/messages") { return try make(base) }
+            if base.hasSuffix("/v1") { return try make(base + "/messages") }
+            return try make(base + "/v1/messages")
+
         case .gemini:
-            if !url.path.contains("/v1beta") { url.appendPathComponent("v1beta") }
-            url.appendPathComponent("models")
-            // Gemini 的端点形如 /v1beta/models/gemini-2.5-flash:generateContent
-            url.appendPathComponent("\(model):generateContent")
+            let encoded = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
+            if base.contains("/v1beta") {
+                return try make(base + "/models/" + encoded + ":generateContent")
+            }
+            return try make(base + "/v1beta/models/" + encoded + ":generateContent")
         }
-        return url
+    }
+
+    /// 去掉首尾空白与结尾斜杠（保留 `https://` 里的双斜杠）。
+    static func normalizedBase(_ raw: String) -> String {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasSuffix("/") { value.removeLast() }
+        return value
     }
 
     static func request(_ provider: AIProvider, config: AIServiceConfig, apiKey: String,
@@ -185,7 +211,6 @@ enum AIRequestBuilder {
                         timeout: TimeInterval = 30) throws -> URLRequest {
         let model = config.trimmedModel
         guard !model.isEmpty else { throw AIError.missingModel }
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIError.missingKey }
 
         let url = try endpoint(provider, config: config, apiKey: apiKey)
         var request = URLRequest(url: url)
@@ -200,7 +225,11 @@ enum AIRequestBuilder {
 
         switch provider.proto {
         case .openAI:
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            // 空密钥是本地端点（Ollama / LM Studio / 私有中转）的合法配置：
+            // 不发送空的 `Bearer `，而是完全不发这个头。
+            if !key.isEmpty {
+                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            }
             var payload: [String: Any] = [
                 "model": model,
                 "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] },
@@ -211,7 +240,7 @@ enum AIRequestBuilder {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         case .anthropic:
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            if !key.isEmpty { request.setValue(key, forHTTPHeaderField: "x-api-key") }
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
             var payload: [String: Any] = [
                 "model": model,

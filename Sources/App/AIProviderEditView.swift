@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 单个 AI 服务的配置页：密钥、接口地址、模型、温度、启用状态，以及连通性测试。
 struct AIProviderEditView: View {
@@ -18,8 +19,10 @@ struct AIProviderEditView: View {
     @State private var enabled: Bool
     @State private var revealKey = false
     @State private var makeDefault: Bool
-    @State private var test: TestState = .idle
-    @State private var showValidation = false
+    @State private var proto: AIProtocol
+    @State private var appendV1: Bool
+    @State private var testing = false
+    @State private var probe: AIProbeResult?
 
     init(provider: AIProvider, config: AIServiceConfig?, isNewCustom: Bool = false) {
         self.provider = provider
@@ -33,9 +36,18 @@ struct AIProviderEditView: View {
         _temperature = State(initialValue: config?.temperature ?? 0.7)
         _enabled = State(initialValue: config?.enabled ?? true)
         _makeDefault = State(initialValue: config != nil && AIServiceStore.shared.defaultID == config?.id)
+        _proto = State(initialValue: provider.proto)
+        _appendV1 = State(initialValue: config?.appendV1 ?? provider.appendV1)
     }
 
     private var resolvedID: String { existing?.id ?? (isNewCustom ? "" : provider.id) }
+
+    /// 自定义服务允许在三种协议间切换，其余服务固定。
+    private var effectiveProvider: AIProvider {
+        var value = provider
+        if isCustom { value.proto = proto }
+        return value
+    }
     private var isCustom: Bool { isNewCustom || provider.isCustom }
     private var tint: Color { AppThemeColor.color(provider.tint) }
     private var title: String {
@@ -59,7 +71,10 @@ struct AIProviderEditView: View {
         return AIServiceStore.shared.apiKey(for: existing.id) ?? ""
     }
 
-    private var canTest: Bool { !trimmedBase.isEmpty && !trimmedModel.isEmpty && !effectiveKey.isEmpty }
+    private var canTest: Bool {
+        guard !trimmedBase.isEmpty, !trimmedModel.isEmpty else { return false }
+        return !effectiveKey.isEmpty || isCustom
+    }
     private var canSave: Bool { !trimmedBase.isEmpty && (isCustom ? !name.trimmingCharacters(in: .whitespaces).isEmpty : true) }
 
     var body: some View {
@@ -68,6 +83,7 @@ struct AIProviderEditView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppLayout.gapL) {
                     identityCard
+                    protocolCard
                     credentialCard
                     behaviorCard
                     testSection
@@ -137,11 +153,42 @@ struct AIProviderEditView: View {
     }
 
     private var protocolLabel: String {
-        switch provider.proto {
+        switch effectiveProvider.proto {
         case .openAI: return isCustom ? "OpenAI 兼容接口" : "OpenAI 接口"
         case .anthropic: return "Anthropic Messages 接口"
         case .gemini: return "Google Generative Language 接口"
         }
+    }
+
+    /// 自定义服务可选协议；OpenAI 兼容地址决定是否自动补 `/v1`。
+    private var protocolCard: some View {
+        VStack(alignment: .leading, spacing: AppLayout.gapM) {
+            if isCustom {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("接口协议").appFont(.caption).foregroundStyle(palette.secondary)
+                    Picker("接口协议", selection: $proto) {
+                        Text("OpenAI 兼容").tag(AIProtocol.openAI)
+                        Text("Anthropic").tag(AIProtocol.anthropic)
+                        Text("Gemini").tag(AIProtocol.gemini)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("ai.edit.proto")
+                }
+            }
+            if effectiveProvider.proto == .openAI {
+                Toggle("自动补 /v1", isOn: $appendV1)
+                    .appFont(.body)
+                    .accessibilityIdentifier("ai.edit.appendV1")
+                Text(appendV1
+                     ? "地址只填到域名即可，会拼成 域名/v1/chat/completions。也支持直接贴完整端点。"
+                     : "地址按原样使用并拼 /chat/completions，需要自己带上版本路径，例如 https://api.deepseek.com/v1。")
+                    .appFont(.caption).foregroundStyle(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(AppLayout.pageInset)
+        .appGlass(in: RoundedRectangle(cornerRadius: AppLayout.radiusCard, style: .continuous),
+                  tint: palette.surface)
     }
 
     private var credentialCard: some View {
@@ -256,51 +303,77 @@ struct AIProviderEditView: View {
         VStack(alignment: .leading, spacing: AppLayout.gapS) {
             Button { runTest() } label: {
                 HStack(spacing: 8) {
-                    if case .running = test {
+                    if testing {
                         ProgressView().controlSize(.small)
                     } else {
                         Image(systemName: "bolt.horizontal")
                     }
-                    Text(isTesting ? "正在连接…" : "测试连接").appFont(.subheadline.weight(.medium))
+                    Text(testing ? "正在连接…" : "测试连接").appFont(.subheadline.weight(.medium))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
                 .appGlass(in: Capsule(), tint: palette.surface)
             }
             .buttonStyle(.plain)
-            .disabled(!canTest || isTesting)
+            .disabled(!canTest || testing)
             .opacity(canTest ? 1 : 0.5)
             .accessibilityIdentifier("ai.edit.test")
 
-            switch test {
-            case .idle:
-                if !canTest {
-                    Text("填好密钥、地址和模型后可以测试。")
-                        .appFont(.caption).foregroundStyle(palette.secondary)
-                }
-            case .running:
-                EmptyView()
-            case let .success(message):
-                resultRow(message, symbol: "checkmark.circle.fill", color: .green)
-            case let .failure(message):
-                resultRow(message, symbol: "xmark.octagon.fill", color: .red)
+            if let probe {
+                probeCard(probe)
+            } else if !canTest {
+                Text(isCustom && trimmedKey.isEmpty
+                     ? "本地或无需鉴权的服务可以不填密钥；填好地址和模型后即可测试。"
+                     : "填好密钥、地址和模型后可以测试。")
+                    .appFont(.caption).foregroundStyle(palette.secondary)
             }
         }
     }
 
-    private func resultRow(_ text: String, symbol: String, color: Color) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbol).foregroundStyle(color)
-            Text(text)
-                .appFont(.footnote)
-                .foregroundStyle(palette.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+    /// 测试结果：结论 + 服务端原文 + 实际请求地址，失败时可直接复制发给别人排查。
+    private func probeCard(_ result: AIProbeResult) -> some View {
+        let tint = result.ok ? Color.green : Color.red
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: result.ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                    .foregroundStyle(tint)
+                Text(result.title).appFont(.subheadline.weight(.semibold))
+                Spacer(minLength: 4)
+                Text(String(format: "%.1f s", result.seconds))
+                    .appFont(.caption).foregroundStyle(palette.secondary)
+            }
+            if !result.detail.isEmpty {
+                Text(result.detail)
+                    .appFont(.footnote)
+                    .foregroundStyle(palette.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(result.url)
+                .appFont(.system(size: 11, design: .monospaced))
+                .foregroundStyle(palette.secondary)
+                .lineLimit(3)
+                .textSelection(.enabled)
+            if !result.ok && !result.raw.isEmpty && result.raw != result.detail {
+                Text(result.raw)
+                    .appFont(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+            }
+            Button {
+                UIPasteboard.general.string = result.summary
+                    + (result.raw.isEmpty ? "" : "\n\n响应：\(result.raw)")
+            } label: {
+                Label("复制诊断信息", systemImage: "doc.on.doc")
+                    .appFont(.caption)
+                    .foregroundStyle(palette.accent)
+            }
+            .buttonStyle(.plain)
         }
         .padding(AppLayout.gapM)
         .background {
             RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)
-                .fill(color.opacity(0.10))
+                .fill(tint.opacity(0.09))
         }
         .accessibilityIdentifier("ai.edit.testResult")
     }
@@ -359,40 +432,16 @@ struct AIProviderEditView: View {
 
     // MARK: 状态
 
-    private enum TestState: Equatable {
-        case idle, running
-        case success(String)
-        case failure(String)
-    }
-
-    private var isTesting: Bool {
-        if case .running = test { return true }
-        return false
-    }
-
-    private func draftConfig() -> AIServiceConfig {
-        AIServiceConfig(id: resolvedID,
-                        name: isCustom ? name.trimmingCharacters(in: .whitespaces) : nil,
-                        baseURL: trimmedBase,
-                        model: trimmedModel,
-                        temperature: temperature,
-                        enabled: enabled,
-                        updatedAt: existing?.updatedAt ?? Date())
-    }
-
     private func runTest() {
-        test = .running
-        let provider = self.provider
+        testing = true
+        probe = nil
+        let provider = effectiveProvider
         let config = draftConfig()
         let apiKey = effectiveKey
         Task {
-            do {
-                let result = try await AIClient().ping(provider: provider, config: config, apiKey: apiKey)
-                let seconds = String(format: "%.1f", result.seconds)
-                test = .success("连通正常（\(seconds)s）：\(result.text.prefix(60))")
-            } catch {
-                test = .failure(error.localizedDescription)
-            }
+            let result = await AIClient().probe(provider: provider, config: config, apiKey: apiKey)
+            probe = result
+            testing = false
         }
     }
 
@@ -400,6 +449,7 @@ struct AIProviderEditView: View {
         let id = resolvedID.isEmpty ? store.makeCustomID() : resolvedID
         var config = draftConfig()
         config.id = id
+        config.appendV1 = (isCustom || provider.proto == .openAI) ? appendV1 : nil
         store.save(config)
         // 留空表示沿用已有密钥；新建服务留空则不写。
         if !trimmedKey.isEmpty { store.setKey(trimmedKey, for: id) }
