@@ -21,10 +21,13 @@ final class AIServiceStore: ObservableObject {
     }
     /// 当前安装包无法写入钥匙串（密钥以明文保存在沙盒）。
     @Published private(set) var insecureKeyStorage = false
+    /// 每个服务上次拉取到的模型列表，避免每次进页面都请求一次。
+    @Published private(set) var modelCache: [String: [AIModelSummary]] = [:]
 
     private static let defaultsKey = "ai.services.v1"
     private static let defaultKey = "ai.default.v1"
     private static let fallbackKey = "ai.keys.fallback.v1"
+    private static let modelsKey = "ai.models.cache.v1"
     private static let keychainService = "io.github.xianghuo.book.ai"
     private let defaults = UserDefaults.standard
 
@@ -116,12 +119,28 @@ final class AIServiceStore: ObservableObject {
 
     func makeCustomID() -> String { Self.customPrefix + UUID().uuidString }
 
+    // MARK: 模型列表缓存
+
+    func cachedModels(for id: String) -> [AIModelSummary] { modelCache[id] ?? [] }
+
+    func setCachedModels(_ models: [AIModelSummary], for id: String) {
+        guard !id.isEmpty, !models.isEmpty else { return }
+        modelCache[id] = models
+        if let data = try? JSONEncoder().encode(modelCache) {
+            defaults.set(data, forKey: Self.modelsKey)
+        }
+    }
+
     static let customPrefix = "custom-"
 
     // MARK: 持久化
 
     private func load() {
         defaultID = defaults.string(forKey: Self.defaultKey)
+        if let data = defaults.data(forKey: Self.modelsKey),
+           let saved = try? JSONDecoder().decode([String: [AIModelSummary]].self, from: data) {
+            modelCache = saved
+        }
         guard let data = defaults.data(forKey: Self.defaultsKey),
               let list = try? JSONDecoder().decode([AIServiceConfig].self, from: data) else { return }
         configs = Dictionary(uniqueKeysWithValues: list.map { ($0.id, $0) })

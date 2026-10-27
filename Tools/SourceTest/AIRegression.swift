@@ -158,6 +158,44 @@ enum AIRegression {
         check(AITextCleaner.clean("「推荐」") == "推荐", "去掉中文引号")
         check(AITextCleaner.clean("  正文  ") == "正文", "去首尾空白")
 
+        // MARK: 模型列表
+
+        func parsed(_ json: String) -> [AIModelSummary] {
+            AIModelListParser.parse(Data(json.utf8)) ?? []
+        }
+        check(parsed(#"{"data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"}]}"#).count == 2, "解析 OpenAI 模型列表")
+        check(parsed(#"["alpha","beta"]"#).map(\.id) == ["alpha", "beta"], "解析裸数组模型列表")
+        check(parsed(#"{"data":{"models":[{"id":"nested"}]}}"#).first?.id == "nested", "解析嵌套一层的模型列表")
+        let geminiModels = parsed(#"{"models":[{"name":"models/gemini-2.5-flash","displayName":"Gemini 2.5 Flash"}]}"#)
+        check(geminiModels.first?.id == "gemini-2.5-flash", "Gemini 的 models/ 前缀被去掉")
+        check(geminiModels.first?.displayName == "Gemini 2.5 Flash", "Gemini 的 displayName 保留")
+        check(parsed(#"{"data":[{"id":"claude-sonnet-4-5","display_name":"Claude Sonnet 4.5"}]}"#).first?.displayName
+                == "Claude Sonnet 4.5", "解析 Anthropic 的 display_name")
+        check(parsed(#"{"data":[{"id":"a"},{"id":"a"}]}"#).count == 1, "重复模型去重")
+        check(parsed(#"{"error":{"message":"bad key"}}"#).isEmpty, "错误响应不当作模型列表")
+
+        // 模型列表的端点规则要与对话端点一致
+        let listOpenAI = AIServiceConfig(id: "openai", baseURL: "https://api.openai.com", model: "m")
+        let listRequest = try? AIModelFetcher().makeRequest(provider: openai, config: listOpenAI, apiKey: "k")
+        check(listRequest?.url?.absoluteString == "https://api.openai.com/v1/models", "OpenAI 官方补 /v1/models")
+        var listRequest2: URLRequest?
+        do { listRequest2 = try AIModelFetcher().makeRequest(provider: openai, config: openAIConfig, apiKey: "k") } catch {}
+        check(listRequest2?.url?.absoluteString == "https://api.openai.com/v1/models", "已含 /v1 时不重复成 /v1/v1/models")
+        check(listRequest2?.value(forHTTPHeaderField: "Authorization") == "Bearer k", "模型列表带 Bearer")
+
+        let listClaude = AIServiceConfig(id: "claude", baseURL: "https://api.anthropic.com", model: "m")
+        let claudeListRequest = try? AIModelFetcher().makeRequest(provider: provider("claude"), config: listClaude, apiKey: "sk-ant")
+        check(claudeListRequest?.url?.absoluteString.hasPrefix("https://api.anthropic.com/v1/models") == true,
+              "Claude 的模型端点")
+        check(claudeListRequest?.value(forHTTPHeaderField: "anthropic-version") == "2023-06-01",
+              "Claude 模型列表带版本头")
+
+        let listGemini = AIServiceConfig(id: "gemini", baseURL: "https://generativelanguage.googleapis.com", model: "m")
+        let geminiListRequest = try? AIModelFetcher().makeRequest(provider: provider("gemini"), config: listGemini, apiKey: "AIza")
+        let geminiListURL = geminiListRequest?.url?.absoluteString ?? ""
+        check(geminiListURL.contains("/v1beta/models"), "Gemini 的模型端点")
+        check(geminiListURL.contains("key=AIza"), "Gemini 模型列表的密钥参数")
+
         // MARK: 目录完整性
 
         check(AICatalog.builtins.count >= 9, "内置提供商至少 9 个")

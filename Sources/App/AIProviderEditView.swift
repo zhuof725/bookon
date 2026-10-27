@@ -23,6 +23,9 @@ struct AIProviderEditView: View {
     @State private var appendV1: Bool
     @State private var testing = false
     @State private var probe: AIProbeResult?
+    @State private var showModels = false
+    @State private var fetchingModels = false
+    @State private var modelsError: String?
 
     init(provider: AIProvider, config: AIServiceConfig?, isNewCustom: Bool = false) {
         self.provider = provider
@@ -98,6 +101,14 @@ struct AIProviderEditView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) { saveBar }
+        .sheet(isPresented: $showModels) {
+            AIModelPickerSheet(store: store,
+                               serviceID: modelCacheKey,
+                               current: trimmedModel,
+                               providerName: title,
+                               onPick: { model = $0 },
+                               onRefresh: { await refreshModels() })
+        }
     }
 
     // MARK: 页头
@@ -228,12 +239,24 @@ struct AIProviderEditView: View {
             }
             separator
             fieldRow("模型") {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     TextField("模型名称", text: $model)
                         .appFont(.system(.callout, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("ai.edit.model")
+                    if fetchingModels {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button { openModelPicker() } label: {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 16))
+                                .foregroundStyle(palette.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("获取模型列表")
+                        .accessibilityIdentifier("ai.edit.fetchModels")
+                    }
                     if !provider.modelHints.isEmpty {
                         Menu {
                             ForEach(provider.modelHints, id: \.self) { hint in
@@ -246,6 +269,15 @@ struct AIProviderEditView: View {
                         }
                         .accessibilityLabel("选择常用模型")
                     }
+                }
+                if let modelsError {
+                    Text(modelsError)
+                        .appFont(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if !availableModels.isEmpty {
+                    Text("已缓存 \(availableModels.count) 个模型，点左侧按钮选择。")
+                        .appFont(.caption).foregroundStyle(palette.secondary)
                 }
             }
         }
@@ -432,6 +464,42 @@ struct AIProviderEditView: View {
 
     // MARK: 状态
 
+    /// 未保存的自定义服务也要有稳定的缓存位置。
+    private var modelCacheKey: String {
+        resolvedID.isEmpty ? "custom-draft" : resolvedID
+    }
+
+    private var availableModels: [AIModelSummary] {
+        store.cachedModels(for: modelCacheKey)
+    }
+
+    private func openModelPicker() {
+        if !availableModels.isEmpty {
+            showModels = true
+        } else {
+            fetchModels(openAfter: true)
+        }
+    }
+
+    private func fetchModels(openAfter: Bool = false) {
+        fetchingModels = true
+        modelsError = nil
+        let provider = effectiveProvider
+        let config = draftConfig()
+        let key = effectiveKey
+        let cacheKey = modelCacheKey
+        Task {
+            do {
+                let list = try await AIModelFetcher().fetch(provider: provider, config: config, apiKey: key)
+                store.setCachedModels(list, for: cacheKey)
+                if openAfter { showModels = true }
+            } catch {
+                modelsError = error.localizedDescription
+            }
+            fetchingModels = false
+        }
+    }
+
     private func draftConfig() -> AIServiceConfig {
         AIServiceConfig(id: resolvedID,
                         name: isCustom ? name.trimmingCharacters(in: .whitespaces) : nil,
@@ -441,6 +509,20 @@ struct AIProviderEditView: View {
                         enabled: enabled,
                         appendV1: (isCustom || effectiveProvider.proto == .openAI) ? appendV1 : nil,
                         updatedAt: existing?.updatedAt ?? Date())
+    }
+
+    private func refreshModels() async {
+        let provider = effectiveProvider
+        let config = draftConfig()
+        let key = effectiveKey
+        let cacheKey = modelCacheKey
+        do {
+            let list = try await AIModelFetcher().fetch(provider: provider, config: config, apiKey: key)
+            store.setCachedModels(list, for: cacheKey)
+            modelsError = nil
+        } catch {
+            modelsError = error.localizedDescription
+        }
     }
 
     private func runTest() {
