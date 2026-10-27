@@ -303,6 +303,8 @@ enum RuleRegression {
               "结尾单引号缺失的脚本自动补齐（魔丸书源）")
         // GET + "{}" 空 body：书源脚本（光遇聚合等）经 request() 序列化后挂在 GET 上，
         // URLSession 会拒绝带 body 的 GET —— 引擎现在自动剥离（SearchProbe A-仅body 用例验证）。
+        // AI 服务：请求构造与响应解析（纯函数，不联网）
+        AIRegression.run(check: check)
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
 }

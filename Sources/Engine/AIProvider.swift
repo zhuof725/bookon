@@ -174,8 +174,8 @@ enum AIRequestBuilder {
         case .gemini:
             if !url.path.contains("/v1beta") { url.appendPathComponent("v1beta") }
             url.appendPathComponent("models")
-            url.appendPathComponent(model)
-            url.appendPathComponent("generateContent")
+            // Gemini 的端点形如 /v1beta/models/gemini-2.5-flash:generateContent
+            url.appendPathComponent("\(model):generateContent")
         }
         return url
     }
