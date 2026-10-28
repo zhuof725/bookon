@@ -88,6 +88,18 @@ final class ExploreStore: ObservableObject {
         save()
     }
 
+    /// 有则原地替换，没有则插入（AI 推荐板块用，保证只有一个）。
+    func upsert(_ board: ExploreBoard, atFront: Bool = false) {
+        if let index = boards.firstIndex(where: { $0.id == board.id }) {
+            boards[index] = board
+        } else if atFront {
+            boards.insert(board, at: 0)
+        } else {
+            boards.append(board)
+        }
+        save()
+    }
+
     func update(_ board: ExploreBoard) {
         guard let index = boards.firstIndex(where: { $0.id == board.id }) else { return }
         boards[index] = board

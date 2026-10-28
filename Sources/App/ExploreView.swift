@@ -56,7 +56,7 @@ struct ExploreView: View {
             if aiRefreshing {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("AI 正在生成推荐语…").appFont(.footnote)
+                    Text("AI 正在整理推荐…").appFont(.footnote)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Capsule().fill(.regularMaterial))
@@ -189,16 +189,36 @@ struct ExploreView: View {
         }
     }
 
-    /// 打开探索页时按冷却时间自动补一批推荐语。失败不打断用户，只推迟下一次。
+    /// 打开探索页时的 AI 自动流程：先挑书源分类做推荐板块，再补推荐语。
+    /// 失败不打断用户，只推迟下一次。
     @MainActor
     private func runAutoRefreshIfNeeded() async {
-        guard AIExploreAutoRefresh.shouldRun else { return }
         let ai = AIServiceStore.shared
         guard let config = ai.activeConfig,
               let provider = AICatalog.provider(id: config.id),
               let key = ai.apiKey(for: config.id) else { return }
+        guard AIExploreAutoRefresh.shouldPick || AIExploreAutoRefresh.shouldRun else { return }
 
-        // 跨板块收集"还没有推荐语"的书，同一本只取一次。
+        aiRefreshing = true
+        defer { aiRefreshing = false }
+
+        // 1) AI 挑选书源分类，生成「AI 推荐」板块（放在最前面）。
+        if AIExploreAutoRefresh.shouldPick {
+            do {
+                let board = try await AIExplorePicks.generate(
+                    sources: appStore.sources, shelf: appStore.books,
+                    provider: provider, config: config, apiKey: key)
+                store.upsert(board, atFront: true)
+                metaTick += 1
+            } catch {
+                // 书源拉不到分类、AI 返回异常时静默跳过。
+            }
+            AIExploreAutoRefresh.picksLastRun = Date()
+        }
+
+        // 2) 给还没有推荐语的书补一批标签与推荐语。
+        guard AIExploreAutoRefresh.shouldRun else { return }
+
         var seen = Set<String>()
         var targets: [Book] = []
         for board in store.boards {
@@ -216,7 +236,6 @@ struct ExploreView: View {
         // 页面还没加载出书（网络慢或首次进入）时不消费冷却时间，下次再来。
         guard !batch.isEmpty else { return }
 
-        aiRefreshing = true
         do {
             let count = try await AIRecommender.generate(books: batch, provider: provider,
                                                          config: config, apiKey: key)
@@ -225,7 +244,6 @@ struct ExploreView: View {
             // 自动流程不弹窗；仍然记录时间，避免反复失败持续消耗额度。
         }
         AIExploreAutoRefresh.lastRun = Date()
-        aiRefreshing = false
     }
 
     private func remove(_ board: ExploreBoard) {
@@ -240,10 +258,13 @@ struct ExploreView: View {
 struct ExploreManageSheet: View {
     @ThemePalette private var palette
     @AppStorage("explore.ai.autoRefresh.v1") private var autoRefresh = false
+    @AppStorage("explore.ai.picks.v1") private var autoPicks = false
     @EnvironmentObject private var appStore: AppStore
     @ObservedObject var store: ExploreStore
     @Environment(\.dismiss) private var dismiss
     @State private var sheet: ManageSheet?
+    @State private var pickingNow = false
+    @State private var pickMessage: String?
 
     private enum ManageSheet: Identifiable {
         case add(session: String)
@@ -285,6 +306,37 @@ struct ExploreManageSheet: View {
                     }
                 }
                 Section {
+                    Toggle(isOn: $autoPicks) {
+                        Text("自动挑选书源推荐").appFont(.body)
+                    }
+                    .accessibilityIdentifier("explore.ai.autoPicks")
+                    Text(AIExploreAutoRefresh.picksStatusText())
+                        .appFont(.caption)
+                        .foregroundStyle(palette.secondary)
+
+                    Button { pickNow() } label: {
+                        HStack(spacing: 8) {
+                            if pickingNow { ProgressView().controlSize(.small) }
+                            Text(pickingNow ? "正在挑选…" : "立即重新挑选")
+                                .appFont(.body)
+                        }
+                    }
+                    .disabled(pickingNow)
+                    .accessibilityIdentifier("explore.ai.pickNow")
+                    if let pickMessage {
+                        Text(pickMessage)
+                            .appFont(.caption)
+                            .foregroundStyle(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    Text("AI 推荐")
+                } footer: {
+                    Text("AI 会读你的书架口味，从已导入书源的发现分类里挑 3 个，生成放在最前面的「AI 推荐」板块（6 小时内最多自动跑一次）。")
+                        .appFont(.caption)
+                }
+
+                Section {
                     Toggle(isOn: $autoRefresh) {
                         Text("自动生成推荐语").appFont(.body)
                     }
@@ -293,9 +345,9 @@ struct ExploreManageSheet: View {
                         .appFont(.caption)
                         .foregroundStyle(palette.secondary)
                 } header: {
-                    Text("AI")
+                    Text("AI 文案")
                 } footer: {
-                    Text("打开探索页时，给还没有推荐语的书补一批（每次最多 \(AIRecommender.maxBooks) 本，6 小时内只跑一次）。需要先在「我的 → AI 提供商」配置服务。")
+                    Text("打开探索页时，给还没有推荐语的书补一批（每次最多 \(AIRecommender.maxBooks) 本）。需要先在「我的 → AI 提供商」配置服务。")
                         .appFont(.caption)
                 }
             }
@@ -326,6 +378,32 @@ struct ExploreManageSheet: View {
             }
         }
         .accessibilityIdentifier("explore.manage.page")
+    }
+
+    /// 手动跑一次「挑选书源」，不等冷却。
+    private func pickNow() {
+        let ai = AIServiceStore.shared
+        guard let config = ai.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = ai.apiKey(for: config.id) else {
+            pickMessage = "先在「我的 → AI 提供商」配置并启用一个服务。"
+            return
+        }
+        pickingNow = true
+        pickMessage = nil
+        Task {
+            do {
+                let board = try await AIExplorePicks.generate(
+                    sources: appStore.sources, shelf: appStore.books,
+                    provider: provider, config: config, apiKey: key)
+                store.upsert(board, atFront: true)
+                AIExploreAutoRefresh.picksLastRun = Date()
+                pickMessage = "已生成「\(board.displayTitle)」，\(board.categories.count) 个分类。"
+            } catch {
+                pickMessage = error.localizedDescription
+            }
+            pickingNow = false
+        }
     }
 
     private func row(_ board: ExploreBoard) -> some View {

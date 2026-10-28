@@ -7,6 +7,8 @@ import Foundation
 enum AIExploreAutoRefresh {
     private static let enabledKey = "explore.ai.autoRefresh.v1"
     private static let lastRunKey = "explore.ai.autoRefresh.lastRun.v1"
+    private static let picksEnabledKey = "explore.ai.picks.v1"
+    private static let picksLastRunKey = "explore.ai.picks.lastRun.v1"
 
     /// 两次自动刷新之间的最短间隔。
     static let cooldown: TimeInterval = 6 * 3600
@@ -29,6 +31,38 @@ enum AIExploreAutoRefresh {
         guard enabled else { return false }
         guard let last = lastRun else { return true }
         return Date().timeIntervalSince(last) >= cooldown
+    }
+
+    // MARK: 自动挑选书源分类
+
+    /// 是否让 AI 自动挑选书源分类，生成「AI 推荐」板块。
+    static var picksEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: picksEnabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: picksEnabledKey) }
+    }
+
+    static var picksLastRun: Date? {
+        get { UserDefaults.standard.object(forKey: picksLastRunKey) as? Date }
+        set {
+            if let newValue { UserDefaults.standard.set(newValue, forKey: picksLastRunKey) }
+            else { UserDefaults.standard.removeObject(forKey: picksLastRunKey) }
+        }
+    }
+
+    static var shouldPick: Bool {
+        guard picksEnabled else { return false }
+        guard let last = picksLastRun else { return true }
+        return Date().timeIntervalSince(last) >= cooldown
+    }
+
+    static func picksStatusText(now: Date = Date()) -> String {
+        guard picksEnabled else { return "关闭" }
+        guard let last = picksLastRun else { return "下次打开探索时挑选" }
+        let remaining = cooldown - now.timeIntervalSince(last)
+        guard remaining > 0 else { return "下次打开探索时挑选" }
+        let hours = Int(remaining / 3600)
+        let minutes = Int(remaining.truncatingRemainder(dividingBy: 3600) / 60)
+        return hours > 0 ? "\(hours) 小时 \(minutes) 分后可再次挑选" : "\(minutes) 分后可再次挑选"
     }
 
     /// 冷却状态的可读描述，设置页用。
