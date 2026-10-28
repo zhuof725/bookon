@@ -4,6 +4,7 @@ import SwiftUI
 struct ExploreView: View {
     @ThemePalette private var palette
     @EnvironmentObject private var appStore: AppStore
+    @ObservedObject private var ai = AIServiceStore.shared
     @StateObject private var store: ExploreStore
     @State private var sheet: ExploreSheet?
     /// AI 生成推荐语后自增，用来让卡片重新读取推荐语。
@@ -16,6 +17,7 @@ struct ExploreView: View {
         case manage
         case metaImport
         case edit(ExploreBoard)
+        case aiService
 
         var id: String {
             switch self {
@@ -23,6 +25,7 @@ struct ExploreView: View {
             case .manage: return "manage"
             case .metaImport: return "meta"
             case .edit(let board): return "edit-" + board.id
+            case .aiService: return "ai-service"
             }
         }
     }
@@ -89,6 +92,8 @@ struct ExploreView: View {
                 ExploreBoardEditor(board: nil) { store.add($0) }
                     .id(session)
                     .environmentObject(appStore)
+            case .aiService:
+                NavigationStack { AIServiceView() }
             case .manage:
                 ExploreManageSheet(store: store)
                     .environmentObject(appStore)
@@ -166,22 +171,30 @@ struct ExploreView: View {
         .accessibilityIdentifier("explore.menu")
     }
 
+    /// 没有板块时的空态：能自动生成就让 AI 直接来，不行才引导去配置。
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles.rectangle.stack")
+        let configured = ai.activeConfig != nil
+        return VStack(spacing: 14) {
+            Image(systemName: configured ? "sparkles" : "sparkles.rectangle.stack")
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(palette.secondary)
-            Text("还没有探索板块")
+                .foregroundStyle(configured ? palette.accent : palette.secondary)
+            Text(configured ? "AI 正在按你的书架挑书" : "还没有推荐内容")
                 .appFont(.system(size: 19, weight: .semibold))
-            Text("把书源的发现分类做成卡片：畅销精选、品质好书、双列榜单、新书榜、分类推荐、猜你喜欢，六种版式随时换。")
+            Text(configured
+                 ? "第一次进入会花几秒挑分类。之后每 6 小时自动更新一次，不用你设置。"
+                 : "配一个 AI 服务，打开探索页就会自动出现按你书架挑的推荐板块。")
                 .appFont(.system(size: 13))
                 .foregroundStyle(palette.secondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
             Button {
-                sheet = .add(session: UUID().uuidString)
+                if configured {
+                    Task { await generatePicksNow() }
+                } else {
+                    sheet = .aiService
+                }
             } label: {
-                Text("添加板块")
+                Text(configured ? "现在生成" : "配置 AI 服务")
                     .appFont(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.onAccent)
                     .padding(.horizontal, 24)
@@ -189,83 +202,37 @@ struct ExploreView: View {
                     .background { Capsule().fill(palette.accent) }
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
-            .accessibilityIdentifier("explore.empty.add")
+            .accessibilityIdentifier("explore.empty.primary")
+            if configured {
+                Button { sheet = .add(session: UUID().uuidString) } label: {
+                    Text("或手动添加板块").appFont(.system(size: 13)).foregroundStyle(palette.secondary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppLayout.gapXL)
         .padding(.vertical, AppLayout.gapXL)
-        .background {
-            RoundedRectangle(cornerRadius: ExploreStyle.cardRadius, style: .continuous)
-                .fill(palette.surface)
-        }
     }
 
-    /// 打开探索页时的 AI 自动流程：先挑书源分类做推荐板块，再补推荐语。
-    /// 失败不打断用户，只推迟下一次。
+    /// 空态里点「现在生成」：立刻按当前书架挑一次。
     @MainActor
-    private func runAutoRefreshIfNeeded() async {
-        let ai = AIServiceStore.shared
+    private func generatePicksNow() async {
         guard let config = ai.activeConfig,
               let provider = AICatalog.provider(id: config.id),
               let key = ai.apiKey(for: config.id) else { return }
-        guard AIExploreAutoRefresh.shouldPick || AIExploreAutoRefresh.shouldRun else { return }
-
         aiRefreshing = true
         defer { aiRefreshing = false }
-
-        // 1) AI 挑选书源分类，生成「AI 推荐」板块（放在最前面）。
-        if AIExploreAutoRefresh.shouldPick {
-            do {
-                let board = try await AIExplorePicks.generate(
-                    sources: appStore.sources, shelf: appStore.books,
-                    provider: provider, config: config, apiKey: key)
-                store.upsert(board, atFront: true)
-                metaTick += 1
-                showToast("已更新「\(board.displayTitle)」")
-            } catch {
-                // 书源拉不到分类、AI 返回异常时静默跳过。
-            }
-            AIExploreAutoRefresh.picksLastRun = Date()
-        }
-
-        // 2) 给还没有推荐语的书补一批标签与推荐语。
-        guard AIExploreAutoRefresh.shouldRun else { return }
-
-        var seen = Set<String>()
-        var targets: [Book] = []
-        for board in store.boards {
-            for category in board.visibleCategories {
-                for book in store.books(for: category) ?? [] {
-                    guard seen.insert(book.bookUrl).inserted else { continue }
-                    let reason = ExploreMetaStore.reason(for: book.bookUrl) ?? ""
-                    if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        targets.append(book)
-                    }
-                }
-            }
-        }
-        let batch = Array(targets.prefix(AIRecommender.maxBooks))
-        // 页面还没加载出书（网络慢或首次进入）时不消费冷却时间，下次再来。
-        guard !batch.isEmpty else { return }
-
         do {
-            let count = try await AIRecommender.generate(books: batch, provider: provider,
-                                                         config: config, apiKey: key)
-            if count > 0 { metaTick += 1 }
+            let board = try await AIExplorePicks.generate(
+                sources: appStore.sources, shelf: appStore.books,
+                provider: provider, config: config, apiKey: key)
+            store.upsert(board, atFront: true)
+            metaTick += 1
+            AIExploreAutoRefresh.picksLastRun = Date()
+            showToast("已更新「\(board.displayTitle)」")
         } catch {
-            // 自动流程不弹窗；仍然记录时间，避免反复失败持续消耗额度。
-        }
-        AIExploreAutoRefresh.lastRun = Date()
-    }
-
-    /// 顶部短暂提示，让自动流程有可见反馈。
-    @MainActor
-    private func showToast(_ text: String) {
-        withAnimation(.easeOut(duration: 0.2)) { aiToast = text }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_600_000_000)
-            withAnimation(.easeIn(duration: 0.2)) { aiToast = nil }
+            showToast(error.localizedDescription)
         }
     }
 
@@ -280,8 +247,8 @@ struct ExploreView: View {
 
 struct ExploreManageSheet: View {
     @ThemePalette private var palette
-    @AppStorage("explore.ai.autoRefresh.v1") private var autoRefresh = false
-    @AppStorage("explore.ai.picks.v1") private var autoPicks = false
+    @AppStorage("explore.ai.autoRefresh.v1") private var autoRefresh = true
+    @AppStorage("explore.ai.picks.v1") private var autoPicks = true
     @EnvironmentObject private var appStore: AppStore
     @ObservedObject var store: ExploreStore
     @Environment(\.dismiss) private var dismiss

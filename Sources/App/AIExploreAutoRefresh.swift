@@ -13,8 +13,13 @@ enum AIExploreAutoRefresh {
     /// 两次自动刷新之间的最短间隔。
     static let cooldown: TimeInterval = 6 * 3600
 
+    /// 默认开启：推荐板块里的书应该自带推荐语。
     static var enabled: Bool {
-        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        get {
+            let defaults = UserDefaults.standard
+            guard defaults.object(forKey: enabledKey) != nil else { return true }
+            return defaults.bool(forKey: enabledKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
@@ -36,8 +41,13 @@ enum AIExploreAutoRefresh {
     // MARK: 自动挑选书源分类
 
     /// 是否让 AI 自动挑选书源分类，生成「AI 推荐」板块。
+    /// 默认开启：用户不该为了"有推荐"先去翻设置。
     static var picksEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: picksEnabledKey) }
+        get {
+            let defaults = UserDefaults.standard
+            guard defaults.object(forKey: picksEnabledKey) != nil else { return true }
+            return defaults.bool(forKey: picksEnabledKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: picksEnabledKey) }
     }
 
