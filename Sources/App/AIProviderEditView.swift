@@ -26,6 +26,7 @@ struct AIProviderEditView: View {
     @State private var showModels = false
     @State private var fetchingModels = false
     @State private var modelsError: String?
+    @State private var showKeyWarning = false
 
     init(provider: AIProvider, config: AIServiceConfig?, isNewCustom: Bool = false) {
         self.provider = provider
@@ -101,6 +102,12 @@ struct AIProviderEditView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) { saveBar }
+        .alert("还没有填写 API Key", isPresented: $showKeyWarning) {
+            Button("去填写", role: .cancel) {}
+            Button("仍然保存") { commitSave() }
+        } message: {
+            Text("云端服务没有密钥无法使用，探索页也不会生成推荐。如果这是本地或免鉴权服务，可以忽略。")
+        }
         .sheet(isPresented: $showModels) {
             AIModelPickerSheet(store: store,
                                serviceID: modelCacheKey,
@@ -153,8 +160,18 @@ struct AIProviderEditView: View {
                 } else {
                     Text(provider.name).appFont(.body)
                 }
-                Text(protocolLabel)
-                    .appFont(.footnote).foregroundStyle(palette.secondary)
+                HStack(spacing: 6) {
+                    Text(protocolLabel)
+                        .appFont(.footnote).foregroundStyle(palette.secondary)
+                    Text(hasSavedKey ? "已存密钥" : "缺密钥")
+                        .appFont(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(hasSavedKey ? .green : .orange)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background {
+                            Capsule().fill((hasSavedKey ? Color.green : Color.orange).opacity(0.12))
+                        }
+                        .accessibilityIdentifier("ai.edit.keyState")
+                }
             }
             Spacer(minLength: 0)
         }
@@ -538,7 +555,23 @@ struct AIProviderEditView: View {
         }
     }
 
+    /// 本地/局域网端点可以没有密钥；云端服务没有密钥一定用不了。
+    private var looksLocal: Bool {
+        let value = trimmedBase.lowercased()
+        return value.contains("127.0.0.1") || value.contains("localhost")
+            || value.contains("192.168.") || value.contains("10.0.") || value.contains("172.16.")
+    }
+
     private func save() {
+        // 没有密钥也没存过：云端服务保存了也用不了，先确认一次。
+        if trimmedKey.isEmpty, !hasSavedKey, !looksLocal {
+            showKeyWarning = true
+            return
+        }
+        commitSave()
+    }
+
+    private func commitSave() {
         let id = resolvedID.isEmpty ? store.makeCustomID() : resolvedID
         var config = draftConfig()
         config.id = id

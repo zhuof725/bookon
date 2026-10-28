@@ -83,15 +83,18 @@ final class AIServiceStore: ObservableObject {
     func setKey(_ key: String, for id: String) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { removeKey(for: id); return true }
-        if writeKeychain(trimmed, account: id) {
-            keyedIDs.insert(id)
-        } else {
+
+        // 未签名安装包的钥匙串有时「写入不报错、读回来是空」：
+        // 写完后立刻回读校验，读不回就落到沙盒里的明文副本，并清掉那份读不出的钥匙串条目。
+        let storedInKeychain = writeKeychain(trimmed, account: id) && readKeychain(id) == trimmed
+        if !storedInKeychain {
+            deleteKeychain(id)
             var fallback = fallbackKeys()
             fallback[id] = trimmed
             defaults.set(fallback, forKey: Self.fallbackKey)
-            keyedIDs.insert(id)
             insecureKeyStorage = true
         }
+        keyedIDs.insert(id)
         return true
     }
 

@@ -164,8 +164,7 @@ struct ExploreView: View {
                 .appFont(.system(size: 19, weight: .semibold))
             Text(configured
                  ? "第一次会花几秒搜索并挑选。之后每 6 小时更新，下拉刷新可以立刻换一批。"
-                 : (hasAny
-                    ? "服务已保存但不可用：检查 API Key、模型名，并确认「启用」是打开的。"
+                 : (hasAny ? aiUnavailableReason
                     : "配一个 AI 服务，打开探索页就会按你的阅读记录推荐相似的小说。"))
                 .appFont(.system(size: 13))
                 .foregroundStyle(palette.secondary)
@@ -315,6 +314,22 @@ struct ExploreView: View {
         }
     }
 
+    /// 说明为什么没有可用服务，精确到缺哪一项。
+    private var aiUnavailableReason: String {
+        if ai.configs.isEmpty { return "还没有配置 AI 服务，无法生成推荐。" }
+        let ordered = ai.orderedConfigs
+        if let broken = ordered.first(where: { !ai.hasKey(for: $0.id) }) {
+            return "「\(broken.displayName)」没有读到 API Key。打开它重新填一次密钥并点保存。"
+        }
+        if let broken = ordered.first(where: { $0.trimmedModel.isEmpty }) {
+            return "「\(broken.displayName)」还没有填模型名。"
+        }
+        if let disabled = ordered.first(where: { !$0.enabled }) {
+            return "「\(disabled.displayName)」被停用了。"
+        }
+        return "AI 服务不可用，点「检查 AI 服务」查看配置。"
+    }
+
     /// 下拉刷新：先换一批推荐，再补失败过的板块。
     /// 不在这里强制刷新全部分类 —— 一次几十个请求会把书源打挂，整页变「加载失败」。
     @MainActor
@@ -323,9 +338,7 @@ struct ExploreView: View {
               let provider = AICatalog.provider(id: config.id),
               let key = ai.apiKey(for: config.id) else {
             // 没有可用服务时必须说清楚，否则用户只觉得「刷了没反应」。
-            recommendError = ai.configs.isEmpty
-                ? "还没有配置 AI 服务，无法生成推荐。"
-                : "AI 服务不可用：检查 API Key、模型名，并确认「启用」是打开的。"
+            recommendError = aiUnavailableReason
             await store.retryFailed()
             return
         }
