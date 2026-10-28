@@ -236,6 +236,74 @@ struct ExploreView: View {
         }
     }
 
+    /// 打开探索页时的 AI 自动流程：先挑书源分类做推荐板块，再补推荐语。
+    /// 失败不打断用户，只推迟下一次。
+    @MainActor
+    private func runAutoRefreshIfNeeded() async {
+        let service = AIServiceStore.shared
+        guard let config = service.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = service.apiKey(for: config.id) else { return }
+        guard AIExploreAutoRefresh.shouldPick || AIExploreAutoRefresh.shouldRun else { return }
+
+        aiRefreshing = true
+        defer { aiRefreshing = false }
+
+        // 1) AI 挑选书源分类，生成「AI 推荐」板块（放在最前面）。
+        if AIExploreAutoRefresh.shouldPick {
+            do {
+                let board = try await AIExplorePicks.generate(
+                    sources: appStore.sources, shelf: appStore.books,
+                    provider: provider, config: config, apiKey: key)
+                store.upsert(board, atFront: true)
+                metaTick += 1
+                showToast("已更新「\(board.displayTitle)」")
+            } catch {
+                // 书源拉不到分类、AI 返回异常时静默跳过。
+            }
+            AIExploreAutoRefresh.picksLastRun = Date()
+        }
+
+        // 2) 给还没有推荐语的书补一批标签与推荐语。
+        guard AIExploreAutoRefresh.shouldRun else { return }
+
+        var seen = Set<String>()
+        var targets: [Book] = []
+        for board in store.boards {
+            for category in board.visibleCategories {
+                for book in store.books(for: category) ?? [] {
+                    guard seen.insert(book.bookUrl).inserted else { continue }
+                    let reason = ExploreMetaStore.reason(for: book.bookUrl) ?? ""
+                    if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        targets.append(book)
+                    }
+                }
+            }
+        }
+        let batch = Array(targets.prefix(AIRecommender.maxBooks))
+        // 页面还没加载出书（网络慢或首次进入）时不消费冷却时间，下次再来。
+        guard !batch.isEmpty else { return }
+
+        do {
+            let count = try await AIRecommender.generate(books: batch, provider: provider,
+                                                         config: config, apiKey: key)
+            if count > 0 { metaTick += 1 }
+        } catch {
+            // 自动流程不弹窗；仍然记录时间，避免反复失败持续消耗额度。
+        }
+        AIExploreAutoRefresh.lastRun = Date()
+    }
+
+    /// 顶部短暂提示，让自动流程有可见反馈。
+    @MainActor
+    private func showToast(_ text: String) {
+        withAnimation(.easeOut(duration: 0.2)) { aiToast = text }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            withAnimation(.easeIn(duration: 0.2)) { aiToast = nil }
+        }
+    }
+
     private func remove(_ board: ExploreBoard) {
         withAnimation(.easeInOut(duration: 0.2)) {
             store.remove(id: board.id)
