@@ -95,15 +95,19 @@ struct ExploreBoardCard: View {
 
     // MARK: - 页头
 
+    /// AI 生成的板块在标题前显示星芒，和手工配置的板块区分开。
+    private var isAIBoard: Bool { board.id == AIExplorePicks.boardID }
+
     @ViewBuilder private var header: some View {
         switch board.layout {
         case .bestseller, .coverGrid:
-            ExploreCardHeader(title: board.displayTitle, more: board.moreCategory)
+            ExploreCardHeader(title: board.displayTitle, more: board.moreCategory,
+                              aiGenerated: isAIBoard)
         case .rankColumns, .categoryFeed:
             VStack(alignment: .leading, spacing: 10) {
                 // 默认让第一个分类当标题（参考图那样）；用户改了名字就把名字显示在标签上方。
                 if !board.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ExploreCardHeader(title: board.displayTitle)
+                    ExploreCardHeader(title: board.displayTitle, aiGenerated: isAIBoard)
                 }
                 ExploreTabHeader(titles: categories.map(\.title),
                                  selection: activeTab,
@@ -115,7 +119,8 @@ struct ExploreBoardCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 ExploreCardHeader(title: board.displayTitle,
                                   subtitle: board.displaySubtitle,
-                                  more: activeCategory)
+                                  more: activeCategory,
+                                  aiGenerated: isAIBoard)
                 chipRow
             }
         case .forYou:

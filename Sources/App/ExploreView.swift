@@ -9,6 +9,7 @@ struct ExploreView: View {
     /// AI 生成推荐语后自增，用来让卡片重新读取推荐语。
     @State private var metaTick = 0
     @State private var aiRefreshing = false
+    @State private var aiToast: String?
 
     private enum ExploreSheet: Identifiable {
         case add(session: String)
@@ -62,6 +63,17 @@ struct ExploreView: View {
                 .background(Capsule().fill(.regularMaterial))
                 .padding(.top, 6)
                 .accessibilityIdentifier("explore.ai.auto.busy")
+            } else if let aiToast {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
+                    Text(aiToast).appFont(.footnote)
+                }
+                .foregroundStyle(palette.primary)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(.regularMaterial))
+                .padding(.top, 6)
+                .transition(.opacity)
+                .accessibilityIdentifier("explore.ai.toast")
             }
         }
         .foregroundStyle(palette.primary)
@@ -210,6 +222,7 @@ struct ExploreView: View {
                     provider: provider, config: config, apiKey: key)
                 store.upsert(board, atFront: true)
                 metaTick += 1
+                showToast("已更新「\(board.displayTitle)」")
             } catch {
                 // 书源拉不到分类、AI 返回异常时静默跳过。
             }
@@ -244,6 +257,16 @@ struct ExploreView: View {
             // 自动流程不弹窗；仍然记录时间，避免反复失败持续消耗额度。
         }
         AIExploreAutoRefresh.lastRun = Date()
+    }
+
+    /// 顶部短暂提示，让自动流程有可见反馈。
+    @MainActor
+    private func showToast(_ text: String) {
+        withAnimation(.easeOut(duration: 0.2)) { aiToast = text }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            withAnimation(.easeIn(duration: 0.2)) { aiToast = nil }
+        }
     }
 
     private func remove(_ board: ExploreBoard) {

@@ -60,9 +60,17 @@ struct ExploreCardHeader: View {
     let title: String
     var subtitle: String? = nil
     var more: ExploreCategory? = nil
+    /// AI 生成的板块：标题前加一个星芒，便于与手工板块区分。
+    var aiGenerated: Bool = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
+            if aiGenerated {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+                    .accessibilityLabel("AI 生成")
+            }
             Text(title)
                 .appFont(.system(size: 21, weight: .bold))
                 .foregroundStyle(palette.primary)
