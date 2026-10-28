@@ -55,86 +55,10 @@ struct ExploreView: View {
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
-        .refreshable {
-            // 下拉的主要意图是「换一批推荐」，先做它，再补失败过的板块。
-            // 不在这里强制刷新全部：一次打几十个请求会把书源打挂，页面全变「加载失败」。
-            if let config = ai.activeConfig,
-               let provider = AICatalog.provider(id: config.id),
-               let key = ai.apiKey(for: config.id) {
-                recommendError = nil
-                aiRefreshing = true
-                let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
-                if ok { AIExploreAutoRefresh.picksLastRun = Date() }
-                aiRefreshing = false
-            }
-            await store.retryFailed()
-        }
+        .refreshable { await handlePullRefresh() }
         .task { await runAutoRefreshIfNeeded() }
-        .overlay(alignment: .top) {
-            if aiRefreshing {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("AI 正在整理推荐…").appFont(.footnote)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(.regularMaterial))
-                .padding(.top, 6)
-                .accessibilityIdentifier("explore.ai.auto.busy")
-            } else if let recommendError {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.orange)
-                        Text(recommendError)
-                            .appFont(.footnote)
-                            .foregroundStyle(palette.primary)
-                            .lineLimit(4)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    HStack(spacing: 14) {
-                        Button("重试") {
-                            Task {
-                                let service = AIServiceStore.shared
-                                guard let config = service.activeConfig,
-                                      let provider = AICatalog.provider(id: config.id),
-                                      let key = service.apiKey(for: config.id) else { return }
-                                recommendError = nil
-                                aiRefreshing = true
-                                let ok = await recommendSimilar(provider: provider, config: config,
-                                                                apiKey: key, force: true)
-                                if ok { AIExploreAutoRefresh.picksLastRun = Date() }
-                                aiRefreshing = false
-                            }
-                        }
-                        Button("检查 AI 服务") { sheet = .aiService }
-                        Button("关闭") { recommendError = nil }
-                    }
-                    .appFont(.caption)
-                    .foregroundStyle(palette.accent)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .frame(maxWidth: 360, alignment: .leading)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.regularMaterial)
-                }
-                .padding(.horizontal, AppLayout.pageInset)
-                .padding(.top, 6)
-                .accessibilityIdentifier("explore.recommend.error")
-            } else if let aiToast {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
-                    Text(aiToast).appFont(.footnote)
-                }
-                .foregroundStyle(palette.primary)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(.regularMaterial))
-                .padding(.top, 6)
-                .transition(.opacity)
-                .accessibilityIdentifier("explore.ai.toast")
-            }
-        }
+        .overlay(alignment: .top) { aiStatusOverlay }
+
         .foregroundStyle(palette.primary)
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("探索")
@@ -388,6 +312,107 @@ struct ExploreView: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_600_000_000)
             withAnimation(.easeIn(duration: 0.2)) { aiToast = nil }
+        }
+    }
+
+    /// 下拉刷新：先换一批推荐，再补失败过的板块。
+    /// 不在这里强制刷新全部分类 —— 一次几十个请求会把书源打挂，整页变「加载失败」。
+    @MainActor
+    private func handlePullRefresh() async {
+        if let config = ai.activeConfig,
+           let provider = AICatalog.provider(id: config.id),
+           let key = ai.apiKey(for: config.id) {
+            recommendError = nil
+            aiRefreshing = true
+            let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+            if ok { AIExploreAutoRefresh.picksLastRun = Date() }
+            aiRefreshing = false
+        }
+        await store.retryFailed()
+    }
+
+    private var aiStatusOverlay: some View {
+        Group {
+            if aiRefreshing {
+                refreshingPill
+            } else if let recommendError {
+                recommendErrorCard(recommendError)
+            } else if let aiToast {
+                toastPill(aiToast)
+            }
+        }
+    }
+
+    private var refreshingPill: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("AI 正在整理推荐…").appFont(.footnote)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Capsule().fill(.regularMaterial))
+        .padding(.top, 6)
+        .accessibilityIdentifier("explore.ai.auto.busy")
+    }
+
+    private func toastPill(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
+            Text(text).appFont(.footnote)
+        }
+        .foregroundStyle(palette.primary)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Capsule().fill(.regularMaterial))
+        .padding(.top, 6)
+        .transition(.opacity)
+        .accessibilityIdentifier("explore.ai.toast")
+    }
+
+    private func recommendErrorCard(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .appFont(.footnote)
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 14) {
+                Button("重试") { retryRecommend() }
+                Button("检查 AI 服务") { sheet = .aiService }
+                Button("关闭") { recommendError = nil }
+            }
+            .appFont(.caption)
+            .foregroundStyle(palette.accent)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: 360, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.regularMaterial)
+        }
+        .padding(.horizontal, AppLayout.pageInset)
+        .padding(.top, 6)
+        .accessibilityIdentifier("explore.recommend.error")
+    }
+
+    @MainActor
+    private func retryRecommend() {
+        let service = AIServiceStore.shared
+        guard let config = service.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = service.apiKey(for: config.id) else {
+            recommendError = "还没有可用的 AI 服务。"
+            return
+        }
+        recommendError = nil
+        aiRefreshing = true
+        Task {
+            let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+            if ok { AIExploreAutoRefresh.picksLastRun = Date() }
+            aiRefreshing = false
         }
     }
 
