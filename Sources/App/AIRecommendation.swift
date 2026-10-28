@@ -171,6 +171,13 @@ enum AIRecommendation {
         guard !keywords.isEmpty else { throw RecommendationError.noKeywords }
 
         var pool = await search(keywords: keywords, sources: sources, excluding: excluding)
+        if pool.isEmpty {
+            // 「换一批」把仅有的候选都排掉了：退一步只排除书架，宁可重复也要有内容。
+            let shelfOnly = Set(shelf.map(\.bookUrl))
+            if excluding != shelfOnly {
+                pool = await search(keywords: keywords, sources: sources, excluding: shelfOnly)
+            }
+        }
         // 书源里搜到的书可能还没简介：先按关键词粗排，取前 20 交给模型精挑。
         pool = Array(rank(pool, keywords: keywords).prefix(candidateLimit))
         guard !pool.isEmpty else { throw RecommendationError.noCandidates }

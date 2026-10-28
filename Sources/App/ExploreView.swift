@@ -319,16 +319,39 @@ struct ExploreView: View {
     /// 不在这里强制刷新全部分类 —— 一次几十个请求会把书源打挂，整页变「加载失败」。
     @MainActor
     private func handlePullRefresh() async {
-        if let config = ai.activeConfig,
-           let provider = AICatalog.provider(id: config.id),
-           let key = ai.apiKey(for: config.id) {
-            recommendError = nil
-            aiRefreshing = true
-            let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
-            if ok { AIExploreAutoRefresh.picksLastRun = Date() }
-            aiRefreshing = false
+        guard let config = ai.activeConfig,
+              let provider = AICatalog.provider(id: config.id),
+              let key = ai.apiKey(for: config.id) else {
+            // 没有可用服务时必须说清楚，否则用户只觉得「刷了没反应」。
+            recommendError = ai.configs.isEmpty
+                ? "还没有配置 AI 服务，无法生成推荐。"
+                : "AI 服务不可用：检查 API Key、模型名，并确认「启用」是打开的。"
+            await store.retryFailed()
+            return
         }
-        await store.retryFailed()
+
+        recommendError = nil
+        aiRefreshing = true
+        let before = recommendedURLs()
+        let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+        aiRefreshing = false
+        if ok {
+            AIExploreAutoRefresh.picksLastRun = Date()
+            let after = recommendedURLs()
+            if !before.isEmpty, before == after {
+                recommendError = "这次没搜到新的书。书源返回的结果有限，换几个书源或稍后再试。"
+            }
+        }
+
+        // 板块书单在后台刷新，不阻塞下拉手势；失败的分类会保留旧数据。
+        Task { await store.refreshAll() }
+    }
+
+    /// 当前推荐板块里已有的书，用来判断「换一批」是否真的换了。
+    private func recommendedURLs() -> Set<String> {
+        guard let board = store.boards.first(where: { $0.id == AIRecommendation.boardID }),
+              let books = board.pinnedBooks else { return [] }
+        return Set(books.map(\.bookUrl))
     }
 
     private var aiStatusOverlay: some View {
