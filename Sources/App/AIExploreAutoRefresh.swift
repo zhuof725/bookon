@@ -7,21 +7,20 @@ import Foundation
 enum AIExploreAutoRefresh {
     private static let enabledKey = "explore.ai.autoRefresh.v1"
     private static let lastRunKey = "explore.ai.autoRefresh.lastRun.v1"
-    private static let defaults = UserDefaults.standard
 
     /// 两次自动刷新之间的最短间隔。
     static let cooldown: TimeInterval = 6 * 3600
 
     static var enabled: Bool {
-        get { defaults.bool(forKey: enabledKey) }
-        set { defaults.set(newValue, forKey: enabledKey) }
+        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
     static var lastRun: Date? {
-        get { defaults.object(forKey: lastRunKey) as? Date }
+        get { UserDefaults.standard.object(forKey: lastRunKey) as? Date }
         set {
-            if let newValue { defaults.set(newValue, forKey: lastRunKey) }
-            else { defaults.removeObject(forKey: lastRunKey) }
+            if let newValue { UserDefaults.standard.set(newValue, forKey: lastRunKey) }
+            else { UserDefaults.standard.removeObject(forKey: lastRunKey) }
         }
     }
 
