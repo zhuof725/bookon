@@ -11,6 +11,7 @@ struct ExploreView: View {
     @State private var metaTick = 0
     @State private var aiRefreshing = false
     @State private var aiToast: String?
+    @State private var recommendError: String?
 
     private enum ExploreSheet: Identifiable {
         case add(session: String)
@@ -55,12 +56,18 @@ struct ExploreView: View {
             .padding(.bottom, 28)
         }
         .refreshable {
-            await store.refreshAll()
+            // 下拉的主要意图是「换一批推荐」，先做它，再补失败过的板块。
+            // 不在这里强制刷新全部：一次打几十个请求会把书源打挂，页面全变「加载失败」。
             if let config = ai.activeConfig,
                let provider = AICatalog.provider(id: config.id),
                let key = ai.apiKey(for: config.id) {
-                await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+                recommendError = nil
+                aiRefreshing = true
+                let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+                if ok { AIExploreAutoRefresh.picksLastRun = Date() }
+                aiRefreshing = false
             }
+            await store.retryFailed()
         }
         .task { await runAutoRefreshIfNeeded() }
         .overlay(alignment: .top) {
@@ -73,6 +80,48 @@ struct ExploreView: View {
                 .background(Capsule().fill(.regularMaterial))
                 .padding(.top, 6)
                 .accessibilityIdentifier("explore.ai.auto.busy")
+            } else if let recommendError {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.orange)
+                        Text(recommendError)
+                            .appFont(.footnote)
+                            .foregroundStyle(palette.primary)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 14) {
+                        Button("重试") {
+                            Task {
+                                let service = AIServiceStore.shared
+                                guard let config = service.activeConfig,
+                                      let provider = AICatalog.provider(id: config.id),
+                                      let key = service.apiKey(for: config.id) else { return }
+                                recommendError = nil
+                                aiRefreshing = true
+                                let ok = await recommendSimilar(provider: provider, config: config,
+                                                                apiKey: key, force: true)
+                                if ok { AIExploreAutoRefresh.picksLastRun = Date() }
+                                aiRefreshing = false
+                            }
+                        }
+                        Button("检查 AI 服务") { sheet = .aiService }
+                        Button("关闭") { recommendError = nil }
+                    }
+                    .appFont(.caption)
+                    .foregroundStyle(palette.accent)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .frame(maxWidth: 360, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.regularMaterial)
+                }
+                .padding(.horizontal, AppLayout.pageInset)
+                .padding(.top, 6)
+                .accessibilityIdentifier("explore.recommend.error")
             } else if let aiToast {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
@@ -181,15 +230,19 @@ struct ExploreView: View {
     /// 没有板块时的空态：能自动生成就让 AI 直接来，不行才引导去配置。
     private var emptyState: some View {
         let configured = ai.activeConfig != nil
+        let hasAny = !ai.configs.isEmpty
         return VStack(spacing: 14) {
             Image(systemName: configured ? "sparkles" : "sparkles.rectangle.stack")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(configured ? palette.accent : palette.secondary)
-            Text(configured ? "正在按你的阅读记录找相似的书" : "还没有推荐内容")
+            Text(configured ? "正在按你的阅读记录找相似的书"
+                 : (hasAny ? "AI 服务还没就绪" : "还没有推荐内容"))
                 .appFont(.system(size: 19, weight: .semibold))
             Text(configured
                  ? "第一次会花几秒搜索并挑选。之后每 6 小时更新，下拉刷新可以立刻换一批。"
-                 : "配一个 AI 服务，打开探索页就会按你的阅读记录推荐相似的小说。")
+                 : (hasAny
+                    ? "服务已保存但不可用：检查 API Key、模型名，并确认「启用」是打开的。"
+                    : "配一个 AI 服务，打开探索页就会按你的阅读记录推荐相似的小说。"))
                 .appFont(.system(size: 13))
                 .foregroundStyle(palette.secondary)
                 .multilineTextAlignment(.center)
@@ -201,7 +254,7 @@ struct ExploreView: View {
                     sheet = .aiService
                 }
             } label: {
-                Text(configured ? "现在生成" : "配置 AI 服务")
+                Text(configured ? "现在生成" : (hasAny ? "检查 AI 服务" : "配置 AI 服务"))
                     .appFont(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.onAccent)
                     .padding(.horizontal, 24)
@@ -210,6 +263,13 @@ struct ExploreView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("explore.empty.primary")
+            if let recommendError {
+                Text(recommendError)
+                    .appFont(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if configured {
                 Button { sheet = .add(session: UUID().uuidString) } label: {
                     Text("或手动添加板块").appFont(.system(size: 13)).foregroundStyle(palette.secondary)
@@ -236,8 +296,9 @@ struct ExploreView: View {
     /// 按阅读记录推荐相似小说，写进置顶的「为你推荐」板块。
     /// `force` = 用户主动要（下拉刷新 / 点按钮），失败要提示；自动流程静默。
     @MainActor
+    @discardableResult
     private func recommendSimilar(provider: AIProvider, config: AIServiceConfig,
-                                  apiKey: String, force: Bool) async {
+                                  apiKey: String, force: Bool) async -> Bool {
         // 排除书架已有的，以及当前板块里的（下拉刷新就是换一批）。
         var excluding = Set(appStore.books.map(\.bookUrl))
         if let board = store.boards.first(where: { $0.id == AIRecommendation.boardID }) {
@@ -257,9 +318,13 @@ struct ExploreView: View {
                 pinnedBooks: outcome.books)
             store.upsert(board, atFront: true)
             metaTick += 1
+            recommendError = nil
             showToast("已更新「为你推荐」")
+            return true
         } catch {
-            if force { showToast(error.localizedDescription) }
+            // 失败不闪一下就消失：留在页面上，让用户能看清原因并重试。
+            recommendError = error.localizedDescription
+            return false
         }
     }
 
@@ -271,15 +336,19 @@ struct ExploreView: View {
         guard let config = service.activeConfig,
               let provider = AICatalog.provider(id: config.id),
               let key = service.apiKey(for: config.id) else { return }
-        guard AIExploreAutoRefresh.shouldPick || AIExploreAutoRefresh.shouldRun else { return }
+        let hasBoard = store.boards.contains { $0.id == AIRecommendation.boardID }
+        // 还没有推荐板块时不等冷却：用户第一次进来就应该看到内容。
+        let shouldPick = hasBoard ? AIExploreAutoRefresh.shouldPick : AIExploreAutoRefresh.picksEnabled
+        guard shouldPick || AIExploreAutoRefresh.shouldRun else { return }
 
         aiRefreshing = true
         defer { aiRefreshing = false }
 
         // 1) 按阅读记录推荐相似小说，生成置顶的「为你推荐」板块。
-        if AIExploreAutoRefresh.shouldPick {
-            await recommendSimilar(provider: provider, config: config, apiKey: key, force: false)
-            AIExploreAutoRefresh.picksLastRun = Date()
+        if shouldPick {
+            let ok = await recommendSimilar(provider: provider, config: config, apiKey: key, force: false)
+            // 失败不写冷却时间，下次进来会重试；成功才计时。
+            if ok { AIExploreAutoRefresh.picksLastRun = Date() }
         }
 
         // 2) 给还没有推荐语的书补一批标签与推荐语。

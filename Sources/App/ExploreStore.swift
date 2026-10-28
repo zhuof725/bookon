@@ -54,10 +54,24 @@ final class ExploreStore: ObservableObject {
             books[key] = list
             DiscoverBlockCache.store(source: category.sourceURL, url: category.url, books: list)
         } catch {
-            failed.insert(key)
+            // 已经有数据就保留：网络抖动不该把整页打成「加载失败」。
+            if books[key] == nil { failed.insert(key) }
         }
         await BlockRequestGate.shared.release()
         loading.remove(key)
+    }
+
+    /// 只重试失败过的分类，不动已经成功的板块。
+    func retryFailed() async {
+        guard !refreshing else { return }
+        refreshing = true
+        let categories = boards.flatMap(\.visibleCategories).filter { failed.contains($0.key) }
+        await withTaskGroup(of: Void.self) { group in
+            for category in categories {
+                group.addTask { await self.load(category, force: true) }
+            }
+        }
+        refreshing = false
     }
 
     /// 下拉刷新：重新取所有板块里的分类。缓存先留着，新数据回来再替换，页面不会白屏。
