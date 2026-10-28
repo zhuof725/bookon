@@ -166,6 +166,8 @@ struct ExploreBoard: Codable, Hashable, Identifiable {
     var tags: [String]
     /// 「猜你喜欢」里点 × 隐藏掉的书。
     var hiddenBookURLs: [String]
+    /// 直接挂在板块上的书（AI 推荐用）；非空时忽略分类。
+    var pinnedBooks: [Book]?
 
     init(id: String = UUID().uuidString,
          title: String = "",
@@ -174,7 +176,8 @@ struct ExploreBoard: Codable, Hashable, Identifiable {
          categories: [ExploreCategory] = [],
          count: Int? = nil,
          tags: [String] = [],
-         hiddenBookURLs: [String] = []) {
+         hiddenBookURLs: [String] = [],
+         pinnedBooks: [Book]? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -183,6 +186,7 @@ struct ExploreBoard: Codable, Hashable, Identifiable {
         self.count = min(max(count ?? layout.defaultCount, 1), 30)
         self.tags = tags
         self.hiddenBookURLs = hiddenBookURLs
+        self.pinnedBooks = pinnedBooks
     }
 
     var displayTitle: String {

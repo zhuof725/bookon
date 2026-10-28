@@ -29,6 +29,8 @@ struct ExploreBoardCard: View {
     }
 
     private var books: [Book] {
+        // AI 推荐板块把书直接挂在板块上，不依赖分类加载。
+        if let pinned = board.pinnedBooks, !pinned.isEmpty { return pinned }
         guard let activeCategory else { return [] }
         return store.books(for: activeCategory) ?? []
     }
@@ -57,6 +59,8 @@ struct ExploreBoardCard: View {
             }
         }
         .task(id: activeCategory?.key) {
+            // 直接挂书的板块不需要按分类拉取。
+            if let pinned = board.pinnedBooks, !pinned.isEmpty { return }
             guard let activeCategory else { return }
             await store.load(activeCategory)
         }
@@ -299,7 +303,16 @@ struct ExploreBoardCard: View {
     private var forYouLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
             ExploreCenteredTitle(title: board.displayTitle)
-            if categories.isEmpty {
+            if let subtitle = board.displaySubtitle {
+                Text(subtitle)
+                    .appFont(.system(size: 12.5))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+            }
+            if categories.isEmpty && (board.pinnedBooks ?? []).isEmpty {
                 Text("这个板块还没有选分类。长按标题可以编辑。")
                     .appFont(.footnote)
                     .foregroundStyle(palette.secondary)

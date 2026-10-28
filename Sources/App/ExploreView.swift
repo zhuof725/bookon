@@ -54,7 +54,14 @@ struct ExploreView: View {
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
-        .refreshable { await store.refreshAll() }
+        .refreshable {
+            await store.refreshAll()
+            if let config = ai.activeConfig,
+               let provider = AICatalog.provider(id: config.id),
+               let key = ai.apiKey(for: config.id) {
+                await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+            }
+        }
         .task { await runAutoRefreshIfNeeded() }
         .overlay(alignment: .top) {
             if aiRefreshing {
@@ -178,11 +185,11 @@ struct ExploreView: View {
             Image(systemName: configured ? "sparkles" : "sparkles.rectangle.stack")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(configured ? palette.accent : palette.secondary)
-            Text(configured ? "AI 正在按你的书架挑书" : "还没有推荐内容")
+            Text(configured ? "正在按你的阅读记录找相似的书" : "还没有推荐内容")
                 .appFont(.system(size: 19, weight: .semibold))
             Text(configured
-                 ? "第一次进入会花几秒挑分类。之后每 6 小时自动更新一次，不用你设置。"
-                 : "配一个 AI 服务，打开探索页就会自动出现按你书架挑的推荐板块。")
+                 ? "第一次会花几秒搜索并挑选。之后每 6 小时更新，下拉刷新可以立刻换一批。"
+                 : "配一个 AI 服务，打开探索页就会按你的阅读记录推荐相似的小说。")
                 .appFont(.system(size: 13))
                 .foregroundStyle(palette.secondary)
                 .multilineTextAlignment(.center)
@@ -215,7 +222,7 @@ struct ExploreView: View {
         .padding(.vertical, AppLayout.gapXL)
     }
 
-    /// 空态里点「现在生成」：立刻按当前书架挑一次。
+    /// 空态里点「现在生成」：立刻按当前书架推荐一次。
     @MainActor
     private func generatePicksNow() async {
         guard let config = ai.activeConfig,
@@ -223,16 +230,36 @@ struct ExploreView: View {
               let key = ai.apiKey(for: config.id) else { return }
         aiRefreshing = true
         defer { aiRefreshing = false }
+        await recommendSimilar(provider: provider, config: config, apiKey: key, force: true)
+    }
+
+    /// 按阅读记录推荐相似小说，写进置顶的「为你推荐」板块。
+    /// `force` = 用户主动要（下拉刷新 / 点按钮），失败要提示；自动流程静默。
+    @MainActor
+    private func recommendSimilar(provider: AIProvider, config: AIServiceConfig,
+                                  apiKey: String, force: Bool) async {
+        // 排除书架已有的，以及当前板块里的（下拉刷新就是换一批）。
+        var excluding = Set(appStore.books.map(\.bookUrl))
+        if let board = store.boards.first(where: { $0.id == AIRecommendation.boardID }) {
+            excluding.formUnion((board.pinnedBooks ?? []).map(\.bookUrl))
+        }
         do {
-            let board = try await AIExplorePicks.generate(
-                sources: appStore.sources, shelf: appStore.books,
-                provider: provider, config: config, apiKey: key)
+            let outcome = try await AIRecommendation.recommend(
+                shelf: appStore.books, sources: appStore.sources,
+                excluding: excluding, provider: provider, config: config, apiKey: apiKey)
+            let board = ExploreBoard(
+                id: AIRecommendation.boardID,
+                title: AIRecommendation.boardTitle,
+                subtitle: outcome.subtitle,
+                layout: .forYou,
+                categories: [],
+                count: AIRecommendation.targetCount,
+                pinnedBooks: outcome.books)
             store.upsert(board, atFront: true)
             metaTick += 1
-            AIExploreAutoRefresh.picksLastRun = Date()
-            showToast("已更新「\(board.displayTitle)」")
+            showToast("已更新「为你推荐」")
         } catch {
-            showToast(error.localizedDescription)
+            if force { showToast(error.localizedDescription) }
         }
     }
 
@@ -249,18 +276,9 @@ struct ExploreView: View {
         aiRefreshing = true
         defer { aiRefreshing = false }
 
-        // 1) AI 挑选书源分类，生成「AI 推荐」板块（放在最前面）。
+        // 1) 按阅读记录推荐相似小说，生成置顶的「为你推荐」板块。
         if AIExploreAutoRefresh.shouldPick {
-            do {
-                let board = try await AIExplorePicks.generate(
-                    sources: appStore.sources, shelf: appStore.books,
-                    provider: provider, config: config, apiKey: key)
-                store.upsert(board, atFront: true)
-                metaTick += 1
-                showToast("已更新「\(board.displayTitle)」")
-            } catch {
-                // 书源拉不到分类、AI 返回异常时静默跳过。
-            }
+            await recommendSimilar(provider: provider, config: config, apiKey: key, force: false)
             AIExploreAutoRefresh.picksLastRun = Date()
         }
 
@@ -365,7 +383,7 @@ struct ExploreManageSheet: View {
                 }
                 Section {
                     Toggle(isOn: $autoPicks) {
-                        Text("自动挑选书源推荐").appFont(.body)
+                        Text("按阅读记录自动推荐").appFont(.body)
                     }
                     .accessibilityIdentifier("explore.ai.autoPicks")
                     Text(AIExploreAutoRefresh.picksStatusText())
@@ -375,7 +393,7 @@ struct ExploreManageSheet: View {
                     Button { pickNow() } label: {
                         HStack(spacing: 8) {
                             if pickingNow { ProgressView().controlSize(.small) }
-                            Text(pickingNow ? "正在挑选…" : "立即重新挑选")
+                            Text(pickingNow ? "正在推荐…" : "立即换一批")
                                 .appFont(.body)
                         }
                     }
@@ -390,7 +408,7 @@ struct ExploreManageSheet: View {
                 } header: {
                     Text("AI 推荐")
                 } footer: {
-                    Text("AI 会读你的书架口味，从已导入书源的发现分类里挑 3 个，生成放在最前面的「AI 推荐」板块（6 小时内最多自动跑一次）。")
+                    Text("读你最近在读的书，提取分类与标签，去各书源搜相似的书，再让 AI 挑出最像的，生成置顶的「为你推荐」板块。下拉刷新可以随时换一批。")
                         .appFont(.caption)
                 }
 
@@ -438,7 +456,7 @@ struct ExploreManageSheet: View {
         .accessibilityIdentifier("explore.manage.page")
     }
 
-    /// 手动跑一次「挑选书源」，不等冷却。
+    /// 手动换一批推荐，不等冷却。
     private func pickNow() {
         let ai = AIServiceStore.shared
         guard let config = ai.activeConfig,
@@ -449,14 +467,26 @@ struct ExploreManageSheet: View {
         }
         pickingNow = true
         pickMessage = nil
+        var excluding = Set(appStore.books.map(\.bookUrl))
+        if let board = store.boards.first(where: { $0.id == AIRecommendation.boardID }) {
+            excluding.formUnion((board.pinnedBooks ?? []).map(\.bookUrl))
+        }
         Task {
             do {
-                let board = try await AIExplorePicks.generate(
-                    sources: appStore.sources, shelf: appStore.books,
-                    provider: provider, config: config, apiKey: key)
+                let outcome = try await AIRecommendation.recommend(
+                    shelf: appStore.books, sources: appStore.sources,
+                    excluding: excluding, provider: provider, config: config, apiKey: key)
+                let board = ExploreBoard(
+                    id: AIRecommendation.boardID,
+                    title: AIRecommendation.boardTitle,
+                    subtitle: outcome.subtitle,
+                    layout: .forYou,
+                    categories: [],
+                    count: AIRecommendation.targetCount,
+                    pinnedBooks: outcome.books)
                 store.upsert(board, atFront: true)
                 AIExploreAutoRefresh.picksLastRun = Date()
-                pickMessage = "已生成「\(board.displayTitle)」，\(board.categories.count) 个分类。"
+                pickMessage = "已推荐 \(outcome.books.count) 本。"
             } catch {
                 pickMessage = error.localizedDescription
             }
