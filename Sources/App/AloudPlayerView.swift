@@ -372,7 +372,8 @@ struct AloudPlayerView: View {
     private var playerCard: some View {
         VStack(spacing: 4) {
             if aloud.isPreparing {
-                Text("正在缓冲 \(aloud.preparationDone)/\(aloud.preparationTotal) 段")
+                Text("正在缓冲 \(aloud.preparationDone)/\(aloud.preparationTotal) 段"
+                     + (aloud.preparationFailed > 0 ? "（失败 \(aloud.preparationFailed)）" : ""))
                     .appFont(.caption)
                     .foregroundStyle(palette.secondary)
                     .accessibilityIdentifier("reader.aloud.preparing")

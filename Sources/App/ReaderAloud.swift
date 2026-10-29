@@ -68,6 +68,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 开播前缓冲进度：总共要准备几段、已完成几段（0/0 表示没在准备）。
     @Published private(set) var preparationDone = 0
     @Published private(set) var preparationTotal = 0
+    @Published private(set) var preparationFailed = 0
     var isPreparing: Bool { preparationTotal > 0 }
     @Published private(set) var engineName = AloudTTSConfig.engineLabel
     @Published var speed = AloudTTSConfig.speechRate {
@@ -204,6 +205,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         nextChapterTask = nil
         preparationDone = 0
         preparationTotal = 0
+        preparationFailed = 0
         prefetchTask?.cancel()
         prefetchWindow = nil
         let expanded = AloudMultiVoice.expand(list)
@@ -305,6 +307,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         nextChapterTask?.cancel(); nextChapterTask = nil
         preparationDone = 0
         preparationTotal = 0
+        preparationFailed = 0
         prefetchTask?.cancel(); prefetchTask = nil
         prefetchWindow = nil
         chapterTask?.cancel(); chapterTask = nil
@@ -563,6 +566,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             prepareTask = nil
             preparationDone = 0
             preparationTotal = 0
+            preparationFailed = 0
             prefetchTask?.cancel()
             prefetchWindow = nil
             unitIndex = direction > 0 ? 0 : max(expanded.count - 1, 0)
@@ -585,6 +589,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         prepareTask?.cancel(); prepareTask = nil
         preparationDone = 0
         preparationTotal = 0
+        preparationFailed = 0
         expectStop()
         player?.stop()
         playerLoadedUnit = nil
@@ -884,6 +889,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         prepareTask = nil
         preparationDone = 0
         preparationTotal = 0
+        preparationFailed = 0
         let items = preparationItems()
         guard !items.isEmpty else {
             playUnit()
@@ -920,7 +926,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 group.addTask { await self.downloadPreparationItem(item) }
             }
             while await group.next() != nil {
-                if Task.isCancelled {
+                if Task.isCancelled || preparationFailed >= 3 {
                     group.cancelAll()
                     break
                 }
@@ -934,8 +940,12 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     private func downloadPreparationItem(_ item: PrefetchItem) async {
-        _ = try? await downloadAudio(key: item.key, engine: item.engine,
-                                     text: item.text, speed: item.speed, limitRate: true)
+        do {
+            _ = try await downloadAudio(key: item.key, engine: item.engine,
+                                        text: item.text, speed: item.speed, limitRate: true)
+        } catch {
+            preparationFailed += 1
+        }
         guard preparationTotal > 0 else { return }
         preparationDone = min(preparationDone + 1, preparationTotal)
     }
