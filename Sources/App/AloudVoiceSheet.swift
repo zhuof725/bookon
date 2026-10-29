@@ -91,8 +91,6 @@ struct AloudVoiceSheet: View {
                     }
                 } header: {
                     Text("朗读引擎")
-                } footer: {
-                    Text("每个在线引擎就是一种音色；需要更多音色可以在「朗读引擎管理」里导入。")
                 }
 
                 if isSystem {
@@ -108,7 +106,7 @@ struct AloudVoiceSheet: View {
                     } header: {
                         Text("系统音色")
                     } footer: {
-                        Text("更多音色：系统设置 → 辅助功能 → 朗读内容 → 声音 → 中文，下载后回到这里选择。")
+                        Text("更多声部：设置 → 辅助功能 → 朗读内容 → 声音 → 中文。")
                     }
                 }
 
@@ -145,8 +143,6 @@ struct AloudVoiceSheet: View {
                     .accessibilityIdentifier("aloud.voice.roleSettings")
                 } header: {
                     Text("多角色朗读")
-                } footer: {
-                    Text("按“”「」把正文拆成旁白与对话，识别「林晚晴说道」这类提示后换音色；旁白、对话、男女声可分别指定系统音色或在线引擎。")
                 }
 
                 Section {
@@ -166,8 +162,6 @@ struct AloudVoiceSheet: View {
                     .accessibilityIdentifier("aloud.voice.purify")
                 } header: {
                     Text("朗读净化")
-                } footer: {
-                    Text("朗读前去掉网址、站点广告、本章完等无关文字；可自定义规则，只影响朗读。")
                 }
 
                 Section {
@@ -195,15 +189,13 @@ struct AloudVoiceSheet: View {
                     }
                 } header: {
                     Text("书源音色")
-                } footer: {
-                    Text("书源自带的朗读音色（番茄源的 _getTones、书山聚合这类源的 xxxTones 都能识别）。这些音色只在该书源的有声书里生效。")
                 }
 
                 Section {
                     Toggle(isOn: $backgroundPlayback) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("正文照常显示").appFont(.body)
-                            Text("音频在后台播放，阅读页保留正文（退出用阅读页底栏的喇叭键暂停）")
+                            Text("后台播放，阅读页保留正文")
                                 .appFont(.caption).foregroundStyle(palette.secondary)
                         }
                     }

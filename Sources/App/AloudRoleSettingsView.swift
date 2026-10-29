@@ -19,8 +19,6 @@ struct AloudRoleSettingsView: View {
             Section {
                 Toggle("开启多角色朗读", isOn: $store.config.enabled)
                     .accessibilityIdentifier("aloud.role.enabled")
-            } footer: {
-                Text("按“”「」把正文拆成旁白与对话；能认出「林晚晴说道」这类提示时，切换成该角色的声线。")
             }
 
             Section {
@@ -34,8 +32,6 @@ struct AloudRoleSettingsView: View {
                          id: "aloud.role.female")
             } header: {
                 Text("基础声线")
-            } footer: {
-                Text("「跟随当前引擎」= 沿用音色面板里选的朗读引擎；每一行都可以改选在线引擎或系统音色。")
             }
 
             if let aloud {
@@ -48,14 +44,12 @@ struct AloudRoleSettingsView: View {
                     .accessibilityIdentifier("aloud.role.engines")
                 } header: {
                     Text("在线引擎")
-                } footer: {
-                    Text("还没有在线引擎？在这里导入或新建，每个引擎就是一个音色。当前主引擎：\(AloudTTSConfig.engineLabel)。")
                 }
             }
 
             Section {
                 if store.config.knownNames.isEmpty {
-                    Text("朗读几章后，这里会自动列出对话里出现的角色名。")
+                    Text("读几章后自动收集角色名。")
                         .appFont(.footnote)
                         .foregroundStyle(palette.secondary)
                 } else {
@@ -68,8 +62,6 @@ struct AloudRoleSettingsView: View {
                 }
             } header: {
                 Text("角色声线")
-            } footer: {
-                Text("自动 = 按「他/她」提示选男声或女声；识别错了可以直接给角色指定一个音色。")
             }
         }
         .scrollContentBackground(.hidden)

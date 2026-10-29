@@ -120,8 +120,8 @@ enum AloudAudioFetcher {
 /// 键含引擎 URL 与语速，换引擎/语速不串缓存（与原版命名规则一致）。
 final class AloudAudioCache: @unchecked Sendable {
     static let shared = AloudAudioCache(directoryURL: AloudAudioCache.defaultDirectoryURL())
-    /// 缓存上限：接近原版 exo 缓存的 128MB。
-    static let byteLimit = 128 * 1024 * 1024
+    /// 缓存上限：512MB（约 30+ 小时在线朗读），够听完一整本再回头拖进度。
+    static let byteLimit = 512 * 1024 * 1024
 
     let directoryURL: URL
     private let lock = NSLock()

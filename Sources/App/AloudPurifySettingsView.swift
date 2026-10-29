@@ -15,12 +15,12 @@ struct AloudPurifySettingsView: View {
                 Toggle("同时应用「正文替换规则」", isOn: $store.useBodyRules)
                     .accessibilityIdentifier("aloud.purify.useBodyRules")
             } footer: {
-                Text("朗读前去掉网址、站点广告、本章完等无关文字；只影响送进朗读的文字，不改阅读页正文。")
+                Text("只影响朗读，不改阅读页正文。")
             }
 
             Section {
                 if store.rules.isEmpty {
-                    Text("还没有自定义规则。内置清理已经会去掉网址和常见尾注。")
+                    Text("还没有自定义规则。")
                         .appFont(.footnote)
                         .foregroundStyle(palette.secondary)
                 } else {
@@ -68,8 +68,6 @@ struct AloudPurifySettingsView: View {
                 .accessibilityIdentifier("aloud.purify.add")
             } header: {
                 Text("自定义规则 · \(store.rules.count)/50")
-            } footer: {
-                Text("按列表顺序执行；正则模式支持 $1 捕获组。规则只作用于送进朗读的文字。")
             }
 
             Section {
@@ -84,8 +82,6 @@ struct AloudPurifySettingsView: View {
                     .accessibilityIdentifier("aloud.purify.preview")
             } header: {
                 Text("效果预览")
-            } footer: {
-                Text("预览使用上面这段示例文字，实时显示净化后的朗读文本。")
             }
         }
         .scrollContentBackground(.hidden)

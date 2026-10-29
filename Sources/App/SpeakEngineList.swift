@@ -6,7 +6,6 @@ import AVFoundation
 struct AloudPreloadCard: View {
     @AppStorage(AloudTTSConfig.preloadKey) private var storedCount = AloudTTSConfig.defaultPreloadCount
     @AppStorage(AloudTTSConfig.earlyAdvanceKey) private var earlyAdvance = 0
-    @ObservedObject private var prefetchStatus = AloudPrefetchStatus.shared
     private let range = AloudTTSConfig.preloadRange
     private var count: Int { AloudTTSConfig.clampedPreloadCount(storedCount) }
     @ThemePalette private var palette
@@ -50,9 +49,6 @@ struct AloudPreloadCard: View {
                     }
                     .accessibilityIdentifier("reader.aloud.preloadPlus")
                 }
-                Text("范围: \(range.lowerBound)-\(range.upperBound)，预加载更多段落可减少卡顿")
-                    .appFont(.footnote).foregroundStyle(palette.secondary)
-
                 Divider().padding(.vertical, 2)
 
                 HStack(alignment: .center, spacing: 8) {
@@ -68,17 +64,8 @@ struct AloudPreloadCard: View {
                        in: 0...1000, step: 50)
                     .tint(palette.accent)
                     .accessibilityIdentifier("reader.aloud.earlyAdvance")
-                Text("在线音频剩余不足该值时直接播下一段，0 关闭；系统语音没有音频文件，不适用。")
+                Text("0 关闭；仅在线引擎。")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
-
-                if prefetchStatus.cached > 0 || prefetchStatus.failed > 0 || prefetchStatus.running > 0 {
-                    Text("本次预取：成功 \(prefetchStatus.cached) 段 · 进行中 \(prefetchStatus.running) · 失败 \(prefetchStatus.failed) 段"
-                         + (prefetchStatus.lastError.map { "（\($0)）" } ?? ""))
-                        .appFont(.footnote)
-                        .foregroundStyle(palette.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("reader.aloud.prefetchStatus")
-                }
             }
             .padding(.horizontal, 16).padding(.vertical, 16)
             .modifier(SettingsGlassSurface())
