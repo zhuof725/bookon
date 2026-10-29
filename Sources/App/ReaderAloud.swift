@@ -579,6 +579,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
         } else {
             speakSystemUnit(speak, voice: systemVoice)
         }
+        // 系统语音段也要预取后面的在线引擎段（多角色混用时很常见）。
+        prefetch(from: unitIndex + 1)
     }
 
     // MARK: 系统语音
@@ -652,7 +654,6 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             playErrorCount = 0
             startProgressTracking()
-            prefetch(from: unitIndex + 1)
         }
     }
 
@@ -710,36 +711,66 @@ final class ReaderAloudController: NSObject, ObservableObject {
         }
     }
 
-    /// 提前下载后续段落音频；有并发率时按间隔限速。段落数取设置（1–20）。
+    private struct PrefetchItem {
+        let text: String
+        let engine: HTTPTTS
+        let speed: Int
+    }
+
+    /// 提前下载后续「有在线引擎」的段落音频。多角色下旁白/对话可能用不同引擎，
+    /// 所以按段解析引擎，而不是只看会话引擎；系统语音段自然跳过。
+    /// 段落数取设置（1–20），只统计真正要下载音频的段。
     private func prefetch(from index: Int) {
-        guard isRunning, playbackEngine == .http, let engine else { return }
+        guard isRunning else { return }
         prefetchTask?.cancel()
         let snapshot = units
-        let title = chapterTitle
-        let speed = downloadSpeed(for: engine)
-        let limit = min(index + AloudTTSConfig.preloadCount - 1, snapshot.count - 1)
-        guard index <= limit else { return }
-        prefetchTask = Task.detached(priority: .utility) { [weak self] in
-            var i = index
-            while i <= limit {
-                guard !Task.isCancelled else { return }
-                let unit = snapshot[i]
-                if let speak = AloudText.speakText(for: unit.text) {
-                    let key = AloudAudioCache.shared.key(chapter: title, engineURL: engine.url,
-                                                         speed: speed, text: speak)
-                    if AloudAudioCache.shared.cachedFile(forKey: key) == nil {
-                        do {
-                            await self?.waitForRateLimit(engine)
-                            let data = try await AloudAudioFetcher.fetchAudio(engine: engine, text: speak, speed: speed)
-                            try Task.checkCancellation()
-                            _ = try AloudAudioCache.shared.store(data, forKey: key)
-                        } catch {
-                            return
-                        }
-                    }
-                }
-                i += 1
+        guard index < snapshot.count else { return }
+        let config = AloudRoleVoiceStore.shared.config
+        let limit = AloudTTSConfig.preloadCount
+        var items: [PrefetchItem] = []
+
+        var i = index
+        let scanEnd = min(snapshot.count, index + max(limit * 3, 12))
+        while i < scanEnd, items.count < limit {
+            let unit = snapshot[i]
+            if let engine = httpEngine(for: unit.speaker, config: config),
+               let speak = AloudText.speakText(for: unit.text) {
+                items.append(PrefetchItem(text: speak, engine: engine,
+                                          speed: downloadSpeed(for: engine)))
             }
+            i += 1
+        }
+        guard !items.isEmpty else { return }
+        let title = chapterTitle
+        prefetchTask = Task.detached(priority: .utility) { [weak self] in
+            for item in items {
+                guard !Task.isCancelled else { return }
+                let key = AloudAudioCache.shared.key(chapter: title, engineURL: item.engine.url,
+                                                     speed: item.speed, text: item.text)
+                if AloudAudioCache.shared.cachedFile(forKey: key) != nil { continue }
+                do {
+                    await self?.waitForRateLimit(item.engine)
+                    let data = try await AloudAudioFetcher.fetchAudio(engine: item.engine,
+                                                                      text: item.text,
+                                                                      speed: item.speed)
+                    try Task.checkCancellation()
+                    _ = try AloudAudioCache.shared.store(data, forKey: key)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    /// 某一段实际会用到的在线引擎；明确选了系统音色的段返回 nil。
+    private func httpEngine(for speaker: AloudSpeaker, config: AloudRoleVoiceConfig) -> HTTPTTS? {
+        guard config.enabled else { return engine }
+        guard let choice = AloudRoleVoiceResolver.choice(for: speaker, config: config) else {
+            return engine
+        }
+        switch choice {
+        case let .engine(value): return value
+        case .system: return nil
         }
     }
 
