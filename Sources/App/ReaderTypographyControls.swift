@@ -79,55 +79,69 @@ struct ReaderAppearanceControls: View {
 /// 字号、边距使用 pt；行高和段后间距使用字高倍率，每步 0.1。
 struct ReaderTypographyControls: View {
     @ObservedObject var settings: ReadSettings
-    @ObservedObject private var readingFonts = ReadingFontManager.shared
 
     var body: some View {
-        Section("阅读字体") {
-            NavigationLink { FontManagerView() } label: {
-                HStack { Text("字体管理"); Spacer(); Text(readingFonts.selectedDisplayName).foregroundStyle(.secondary).lineLimit(1) }
-            }.accessibilityIdentifier("reader.fontManager")
-        }
         Section {
-            NavigationLink {
-                ChapterTitleStyleEditor(settings: settings)
-            } label: {
-                HStack {
-                    Text("章节标题样式")
-                    Spacer()
-                    Text(settings.chapterTitleIsDefault ? "默认" : "自定义")
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .accessibilityIdentifier("reader.chapterTitleStyle")
-        } header: { Text("章节标题") } footer: {
-            Text("支持一段 CSS：字号、颜色、对齐、字距、行高、内边距、下边框等，留空为默认。")
-        }
-        Section("字体大小") {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
-        }
-        Section {
             ReaderLayoutControl(title: "行高倍率", identifier: "line", value: $settings.lineSpacing, range: 0...20, usesHeightMultiplier: true)
             ReaderLayoutControl(title: "段后倍率", identifier: "paragraph", value: $settings.paragraphSpacing, range: 0...20, usesHeightMultiplier: true)
-        } header: { Text("间距") } footer: {
-            Text("按实际字高计算，随字号缩放；每步调整 0.1 倍。行高 1.0 倍表示不增加行间距。")
+        } header: { Text("文字排版") } footer: {
+            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。")
         }
         Section {
             Toggle("两端对齐", isOn: $settings.fullJustify)
                 .accessibilityIdentifier("layout-full-justify")
             Toggle("底部对齐", isOn: $settings.bottomJustify)
                 .accessibilityIdentifier("layout-bottom-justify")
-        } header: { Text("对齐") } footer: {
-            Text("正文首行始终顶齐。近满页小幅均分行间余量，同时齐底；短末页保持自然行距，留白在下方。")
-        }
-        Section {
             ReaderLayoutControl(title: "左边距", identifier: "left", value: $settings.leftMargin, range: 0...60)
             ReaderLayoutControl(title: "右边距", identifier: "right", value: $settings.rightMargin, range: 0...60)
             ReaderLayoutControl(title: "上边距", identifier: "top", value: $settings.topMargin, range: 0...80)
             ReaderLayoutControl(title: "下边距", identifier: "bottom", value: $settings.bottomMargin, range: 0...80)
-        } header: { Text("边距") } footer: {
-            Text("单位为 pt。上下边距在系统安全区内计算；调整后即时生效并自动保存。")
+        } header: { Text("边距与对齐") } footer: {
+            Text("边距单位 pt，调整后即时生效。")
         }
+    }
+}
+
+/// 阅读设置里统一的入口行：图标 + 标题 + 当前值；箭头由 NavigationLink 绘制。
+struct ReaderSettingsLinkRow<Destination: View>: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    let identifier: String
+    let destination: Destination
+
+    init(symbol: String, title: String, detail: String = "", identifier: String,
+         @ViewBuilder destination: () -> Destination) {
+        self.symbol = symbol
+        self.title = title
+        self.detail = detail
+        self.identifier = identifier
+        self.destination = destination()
+    }
+
+    var body: some View {
+        NavigationLink {
+            destination
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 24, alignment: .center)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(title)
+                Spacer(minLength: 8)
+                if !detail.isEmpty {
+                    Text(detail)
+                        .appFont(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier(identifier)
     }
 }
 

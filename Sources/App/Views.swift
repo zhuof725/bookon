@@ -623,12 +623,29 @@ struct ReaderView: View {
                     .independentGlassRow()
                     ReaderTypographyControls(settings: settings)
                         .independentGlassRow()
-                    Section("朗读") {
-                        NavigationLink("朗读引擎管理") { SpeakEngineList(aloud: aloud) }
+                    Section {
+                        ReaderSettingsLinkRow(symbol: "textformat", title: "字体管理",
+                                              detail: readingFonts.selectedDisplayName,
+                                              identifier: "reader.fontManager") {
+                            FontManagerView()
+                        }
+                        ReaderSettingsLinkRow(symbol: "textformat.size", title: "章节标题样式",
+                                              detail: settings.chapterTitleIsDefault ? "默认" : "自定义",
+                                              identifier: "reader.chapterTitleStyle") {
+                            ChapterTitleStyleEditor(settings: settings)
+                        }
+                        ReaderSettingsLinkRow(symbol: "waveform", title: "朗读引擎管理",
+                                              identifier: "reader.speakEngines") {
+                            SpeakEngineList(aloud: aloud)
+                        }
+                        ReaderSettingsLinkRow(symbol: "bubble.right", title: "段评气泡",
+                                              identifier: "reader.bubbleStyles") {
+                            BubbleStyleSettingsView()
+                        }
+                    } header: {
+                        Text("更多设置")
                     }
                     .independentGlassRow()
-                    NavigationLink("段评气泡") { BubbleStyleSettingsView() }
-                        .independentGlassRow()
                 }
                 .foregroundStyle(palette.primary)
                 .scrollContentBackground(.hidden)
