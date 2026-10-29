@@ -21,6 +21,7 @@ struct PageContentView: View {
     let lineSpacing: Double
     let fg: Color
     let bg: Color
+    var commentCardScale: CGFloat = 1
     let title: String
     let pageNumber: Int
     let pageCount: Int
@@ -141,7 +142,8 @@ struct PageContentView: View {
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .chapterComments(let t, let count, let items, let click):
                         ChapterCommentsCard(title: t, count: count, items: items,
-                                            fontSize: fontSize, foreground: fg, background: bg,
+                                            fontSize: fontSize, scale: commentCardScale,
+                                            foreground: fg, background: bg,
                                             onTap: { onTapComment(click) })
                             .frame(height: renderedBlockHeight(at: blockIndex), alignment: .topLeading)
                             .padding(.top, paragraphLeadingGap(at: blockIndex))

@@ -715,6 +715,7 @@ struct ReaderView: View {
         .onChange(of: settings.topMargin) { _ in scheduleRepaginate() }
         .onChange(of: settings.bottomMargin) { _ in scheduleRepaginate() }
         .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
+        .onChange(of: settings.commentCardSize) { _ in scheduleRepaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -1466,7 +1467,8 @@ struct ReaderView: View {
             topInset: CGFloat(settings.topMargin),
             bottomInset: CGFloat(settings.bottomMargin),
             chapterTitle: chapters.indices.contains(target) && !chapters[target].isVolume ? chapters[target].title : "",
-            titleStyle: settings.chapterTitleStyle)
+            titleStyle: settings.chapterTitleStyle,
+            commentCardScale: settings.commentCardScaleFactor)
     }
 
     /// 多项设置在同一轮改变时（如日间/夜间整套切换）合并成一次重排。
@@ -1640,6 +1642,7 @@ struct ReaderView: View {
         return chapterPages.enumerated().map { i, page in
             AnyView(PageContentView(page: page, fontSize: settings.fontSize,
                 lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
+                commentCardScale: settings.commentCardScaleFactor,
                 title: chapter?.title ?? "",
                 pageNumber: i + 1, pageCount: chapterPages.count,
                 onTapComment: { commentTapped($0) }, selection: textSelectionActions,
@@ -1808,6 +1811,7 @@ struct ReaderView: View {
         case .chapterComments(let title, let count, let items, let click):
             ChapterCommentsCard(title: title, count: count, items: items,
                                 fontSize: CGFloat(settings.fontSize),
+                                scale: settings.commentCardScaleFactor,
                                 foreground: theme.fg, background: theme.bg,
                                 onTap: { commentTapped(click) })
         }

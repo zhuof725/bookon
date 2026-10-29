@@ -9,12 +9,13 @@ struct ChapterCommentsCard: View {
     let count: String
     let items: [ChapterCommentItem]
     let fontSize: CGFloat
+    var scale: CGFloat = 1
     let foreground: Color
     let background: Color
     let onTap: () -> Void
 
-    /// 正文最多展示 3 条，完整列表点进评论页看。
-    static let inlineItemLimit = 3
+    /// 正文最多展示 2 条，完整列表点进评论页看。
+    static let inlineItemLimit = 2
 
     private var visibleItems: [ChapterCommentItem] {
         Array(items.prefix(Self.inlineItemLimit))
@@ -26,13 +27,14 @@ struct ChapterCommentsCard: View {
         return red * 0.2126 + green * 0.7152 + blue * 0.0722 < 0.5
     }
 
-    private var bodyFont: CGFloat { max(fontSize - 2, 12) }
-    private var userFont: CGFloat { max(fontSize - 3, 11) }
-    private var titleFont: CGFloat { max(fontSize - 2, 12) }
-    private var countFont: CGFloat { max(fontSize - 3, 11) }
+    private var scaledFontSize: CGFloat { max(fontSize * max(scale, 0.5), 10) }
+    private var bodyFont: CGFloat { max(scaledFontSize - 2, 11) }
+    private var userFont: CGFloat { max(scaledFontSize - 3, 10) }
+    private var titleFont: CGFloat { max(scaledFontSize - 2, 11) }
+    private var countFont: CGFloat { max(scaledFontSize - 3, 10) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: visibleItems.isEmpty ? 0 : max(10, fontSize * 0.55)) {
+        VStack(alignment: .leading, spacing: visibleItems.isEmpty ? 0 : max(8, scaledFontSize * 0.5)) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
                     .font(.system(size: titleFont, weight: .bold))
@@ -44,7 +46,7 @@ struct ChapterCommentsCard: View {
                     .lineLimit(1)
             }
             ForEach(Array(visibleItems.enumerated()), id: \.offset) { _, item in
-                VStack(alignment: .leading, spacing: max(4, fontSize * 0.2)) {
+                VStack(alignment: .leading, spacing: max(3, scaledFontSize * 0.18)) {
                     HStack(alignment: .center, spacing: 8) {
                         Text(item.user)
                             .font(.system(size: userFont, weight: .semibold))
@@ -68,7 +70,7 @@ struct ChapterCommentsCard: View {
                         .font(.system(size: bodyFont))
                         .foregroundStyle(foreground.opacity(0.92))
                         .lineSpacing(2)
-                        .lineLimit(4)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -89,23 +91,24 @@ struct ChapterCommentsCard: View {
         .accessibilityHint("打开本章说")
     }
 
-    /// 分页器用的高度：与上面的字体、间距、4 行上限保持一致。
-    static func height(items: [ChapterCommentItem], fontSize: CGFloat, width: CGFloat) -> CGFloat {
-        let f = max(fontSize, 1)
+    /// 分页器用的高度：与上面的字体、间距、3 行上限保持一致。
+    static func height(items: [ChapterCommentItem], fontSize: CGFloat, width: CGFloat,
+                       scale: CGFloat = 1) -> CGFloat {
+        let f = max(fontSize * max(scale, 0.5), 10)
         let innerWidth = max(width - 28, 40)
-        let header = max(f - 2, 12) * 1.35
+        let header = max(f - 2, 11) * 1.35
         let padding: CGFloat = 24
         let visible = items.prefix(inlineItemLimit)
         guard !visible.isEmpty else { return header + padding }
-        let body = max(f - 2, 12)
-        let user = max(f - 3, 11)
-        let gap = max(10, f * 0.55)
+        let body = max(f - 2, 11)
+        let user = max(f - 3, 10)
+        let gap = max(8, f * 0.5)
         var total = header + padding
         for item in visible {
-            let userRow = user * 1.4 + max(4, f * 0.2)
+            let userRow = user * 1.4 + max(3, f * 0.18)
             let textHeight = measure(item.text, font: body, width: innerWidth)
             let lineHeight = body * 1.32
-            let lines = min(4, max(1, Int(ceil(textHeight / lineHeight))))
+            let lines = min(3, max(1, Int(ceil(textHeight / lineHeight))))
             total += userRow + CGFloat(lines) * lineHeight + gap
         }
         return total + 4

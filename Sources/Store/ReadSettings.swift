@@ -54,6 +54,8 @@ final class ReadSettings: ObservableObject {
     @AppStorage("readerChapterTitleWeight") var chapterTitleWeight: Int = 600
     @AppStorage("readerChapterTitleAlign") var chapterTitleAlign: String = "center"
     @AppStorage("readerChapterTitleAdvanced") var chapterTitleAdvanced: Bool = false
+    /// 正文里「本章说」原生卡片的大小：0 小、1 标准、2 大。默认偏小，避免挡住正文。
+    @AppStorage("readerCommentCardSize") var commentCardSize: Int = 0
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of
@@ -194,7 +196,16 @@ final class ReadSettings: ObservableObject {
 
     var typographyValues: [Double] {
         [fontSize, lineSpacing, paragraphSpacing, leftMargin, rightMargin, topMargin, bottomMargin,
-         fullJustify ? 1 : 0, bottomJustify ? 1 : 0]
+         fullJustify ? 1 : 0, bottomJustify ? 1 : 0, Double(commentCardSize)]
+    }
+
+    /// 本章说卡片的字号倍率；跟随正文字号，再乘这个系数。
+    var commentCardScaleFactor: CGFloat {
+        switch commentCardSize {
+        case 1: return 1
+        case 2: return 1.15
+        default: return 0.85
+        }
     }
 
     static let themes: [(bg: Color, fg: Color, name: String)] = [

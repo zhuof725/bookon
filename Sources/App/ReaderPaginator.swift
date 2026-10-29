@@ -22,6 +22,8 @@ enum ReaderPaginator {
         var chapterTitle: String = ""
         /// 章节标题的 CSS 样式（空样式 = 旧外观）。
         var titleStyle: ChapterTitleStyle = .empty
+        /// 本章说卡片相对正文字号的倍率。
+        var commentCardScale: CGFloat = 1
         /// PageContentView 底部页码栏及与正文间的固定距离。
         var footerHeight: CGFloat = 16
         var footerGap: CGFloat = 8
@@ -330,7 +332,8 @@ enum ReaderPaginator {
         case .chapterComments(_, _, let items, _):
             return ChapterCommentsCard.height(items: items,
                                               fontSize: configuration.fontSize,
-                                              width: configuration.textWidth)
+                                              width: configuration.textWidth,
+                                              scale: configuration.commentCardScale)
         case .inlineBubble, .paragraph:
             return 0
         }

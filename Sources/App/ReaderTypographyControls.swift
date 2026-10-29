@@ -85,8 +85,14 @@ struct ReaderTypographyControls: View {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
             ReaderLayoutControl(title: "行高倍率", identifier: "line", value: $settings.lineSpacing, range: 0...20, usesHeightMultiplier: true)
             ReaderLayoutControl(title: "段后倍率", identifier: "paragraph", value: $settings.paragraphSpacing, range: 0...20, usesHeightMultiplier: true)
+            Picker("本章说卡片", selection: $settings.commentCardSize) {
+                Text("小").tag(0)
+                Text("标准").tag(1)
+                Text("大").tag(2)
+            }
+            .accessibilityIdentifier("reader.commentCard.size")
         } header: { Text("文字排版") } footer: {
-            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。")
+            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。本章说卡片只影响正文里的评论摘要。")
         }
         Section {
             Toggle("两端对齐", isOn: $settings.fullJustify)
