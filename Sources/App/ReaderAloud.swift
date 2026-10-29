@@ -97,6 +97,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 已安排的预取窗口（段索引范围）：窗口内的后续段不再重复取消/重建，
     /// 否则旁白（系统语音）每读一两秒就会把在线音频的预取任务打断，永远下不完。
     private var prefetchWindow: Range<Int>?
+    /// 正在下载的音频（key → 任务）：播放与预取共用，避免同一段重复请求。
+    private var inflightAudio: [String: Task<URL, Error>] = [:]
     private var chapterTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
@@ -623,23 +625,16 @@ final class ReaderAloudController: NSObject, ObservableObject {
                                              speed: speed, text: speak)
         audioTask = Task { @MainActor in
             let fileURL: URL
-            if let cached = AloudAudioCache.shared.cachedFile(forKey: key) {
-                fileURL = cached
-            } else {
-                do {
-                    await waitForRateLimit(engine)
-                    let data = try await AloudAudioFetcher.fetchAudio(
-                        engine: engine, text: speak, speed: speed)
-                    try Task.checkCancellation()
-                    fileURL = try AloudAudioCache.shared.store(data, forKey: key)
-                    downloadErrorCount = 0
-                } catch is CancellationError {
-                    return
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    handleDownloadError(error, key: key)
-                    return
-                }
+            do {
+                fileURL = try await downloadAudio(key: key, engine: engine, text: speak,
+                                                  speed: speed, limitRate: false)
+                downloadErrorCount = 0
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                handleDownloadError(error, key: key)
+                return
             }
             guard !Task.isCancelled, isRunning, isPlaying else { return }
             isBuffering = false
@@ -695,17 +690,19 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     private func handleDownloadError(_ error: Error, key: String) {
-        _ = error   // 下载失败统一提示+跳过，错误细节在调试日志里。
         AloudAudioCache.shared.remove(key)
         downloadErrorCount += 1
+        let detail = ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+            .replacingOccurrences(of: "\n", with: " ")
+            .prefix(50)
         if downloadErrorCount >= 5 {
-            pushNotice("连续 \(downloadErrorCount) 次语音下载失败，已暂停朗读")
+            pushNotice("连续 \(downloadErrorCount) 次语音下载失败，已暂停朗读：\(detail)")
             downloadErrorCount = 0
             isPlaying = false
             isBuffering = false
             updateNowPlaying()
         } else {
-            pushNotice("语音下载失败，跳过本段")
+            pushNotice("语音下载失败，跳过本段：\(detail)")
             advance()
         }
     }
@@ -724,6 +721,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     private struct PrefetchItem {
+        let key: String
         let text: String
         let engine: HTTPTTS
         let speed: Int
@@ -748,37 +746,55 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
         var i = index
         let scanEnd = min(snapshot.count, index + max(limit * 4, 16))
+        let title = chapterTitle
         while i < scanEnd, items.count < limit {
             let unit = snapshot[i]
             if let engine = httpEngine(for: unit.speaker, config: config),
                let speak = AloudText.speakText(for: unit.text) {
-                items.append(PrefetchItem(text: speak, engine: engine,
+                let key = AloudAudioCache.shared.key(chapter: title, engineURL: engine.url,
+                                                     speed: downloadSpeed(for: engine), text: speak)
+                items.append(PrefetchItem(key: key, text: speak, engine: engine,
                                           speed: downloadSpeed(for: engine)))
             }
             i += 1
         }
         prefetchWindow = index..<scanEnd
         guard !items.isEmpty else { return }
-        let title = chapterTitle
-        prefetchTask = Task.detached(priority: .utility) { [weak self] in
+        prefetchTask = Task { @MainActor [weak self] in
             for item in items {
+                guard let self, !Task.isCancelled else { return }
+                // 播放正在等音频时先把引擎让给播放，避免预取占着限速槽位。
+                while self.isBuffering, !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 120_000_000)
+                }
                 guard !Task.isCancelled else { return }
-                let key = AloudAudioCache.shared.key(chapter: title, engineURL: item.engine.url,
-                                                     speed: item.speed, text: item.text)
-                if AloudAudioCache.shared.cachedFile(forKey: key) != nil { continue }
                 do {
-                    await self?.waitForRateLimit(item.engine)
-                    let data = try await AloudAudioFetcher.fetchAudio(engine: item.engine,
-                                                                      text: item.text,
-                                                                      speed: item.speed)
-                    try Task.checkCancellation()
-                    _ = try AloudAudioCache.shared.store(data, forKey: key)
+                    _ = try await self.downloadAudio(key: item.key, engine: item.engine,
+                                                     text: item.text, speed: item.speed,
+                                                     limitRate: true)
                 } catch {
-                    if !Task.isCancelled { await self?.resetPrefetchWindow() }
+                    if !Task.isCancelled { self.prefetchWindow = nil }
                     return
                 }
             }
         }
+    }
+
+    /// 同一段音频只发一次请求：播放和预取共用 in-flight 任务。
+    /// 播放（limitRate: false）不排限速队列，优先拿到音频；预取按引擎并发率退让。
+    private func downloadAudio(key: String, engine: HTTPTTS, text: String, speed: Int,
+                               limitRate: Bool) async throws -> URL {
+        if let cached = AloudAudioCache.shared.cachedFile(forKey: key) { return cached }
+        if let task = inflightAudio[key] { return try await task.value }
+        let task = Task { @MainActor in
+            if limitRate { await waitForRateLimit(engine) }
+            let data = try await AloudAudioFetcher.fetchAudio(engine: engine, text: text, speed: speed)
+            try Task.checkCancellation()
+            return try AloudAudioCache.shared.store(data, forKey: key)
+        }
+        inflightAudio[key] = task
+        defer { inflightAudio[key] = nil }
+        return try await task.value
     }
 
     private func resetPrefetchWindow() {
