@@ -23,6 +23,7 @@ struct SettingsGlassLabel: View {
     let title: String
     let symbol: String
     var value: String = ""
+    var trailing: String = ""
     var chevron: Bool = true
     @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 23
 
@@ -38,6 +39,13 @@ struct SettingsGlassLabel: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 4)
+            if !trailing.isEmpty {
+                Text(trailing)
+                    .appFont(.footnote)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
             if chevron {
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium))
                     .foregroundStyle(palette.secondary.opacity(0.55)).accessibilityHidden(true)

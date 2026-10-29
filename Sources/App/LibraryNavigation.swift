@@ -5,6 +5,9 @@ import SwiftUI
 struct LibraryProfileView: View {
     @ThemePalette private var palette
     @EnvironmentObject var store: AppStore
+    @ObservedObject private var fonts = ReadingFontManager.shared
+    @ObservedObject private var themeStore = AppThemeStore.shared
+    @ObservedObject private var aiStore = AIServiceStore.shared
     @State private var crashCount = 0
 
     /// 「我的」页底部显示的版本（装错包/没更新时一眼能看出来）。
@@ -24,54 +27,77 @@ struct LibraryProfileView: View {
                         LibraryLinkLabel(title: "阅读统计", symbol: "chart.bar")
                     }
                     .accessibilityIdentifier("library.statistics")
+                    LibraryCardDivider()
+                    PrecacheWindowSettingView(manager: .shared)
                 }
-                LibraryCard("AI") {
-                    NavigationLink { AIServiceView() } label: { LibraryLinkLabel(title: "AI 提供商", symbol: "sparkles") }
-                        .accessibilityIdentifier("library.ai")
+                LibraryCard("书库") {
+                    NavigationLink { SourcesView() } label: {
+                        LibraryLinkLabel(title: "书源管理", symbol: "square.stack.3d.up",
+                                         detail: "\(store.sources.count) 个")
+                    }
+                    .accessibilityIdentifier("library.sources")
+                    LibraryCardDivider()
+                    NavigationLink { TxtTocRulesView() } label: {
+                        LibraryLinkLabel(title: "目录规则", symbol: "list.bullet.rectangle")
+                    }
+                    .accessibilityIdentifier("library.tocRules")
+                    LibraryCardDivider()
+                    NavigationLink { BodyReplaceRulesView() } label: {
+                        LibraryLinkLabel(title: "替换规则", symbol: "text.badge.checkmark")
+                    }
+                    .accessibilityIdentifier("library.replaceRules")
                 }
-                LibraryCard("书库管理") {
-                    Group {
-                        NavigationLink { SourcesView() } label: { LibraryLinkLabel(title: "书源管理", symbol: "square.stack.3d.up") }
-                            .accessibilityIdentifier("library.sources")
-                        LibraryCardDivider()
-                        NavigationLink { TxtTocRulesView() } label: { LibraryLinkLabel(title: "目录规则", symbol: "list.bullet.rectangle") }
-                            .accessibilityIdentifier("library.tocRules")
-                        LibraryCardDivider()
-                        NavigationLink { BodyReplaceRulesView() } label: { LibraryLinkLabel(title: "替换规则", symbol: "text.badge.checkmark") }
-                            .accessibilityIdentifier("library.replaceRules")
-                        LibraryCardDivider()
-                        NavigationLink { SpeakEngineList(aloud: ReaderAloudController()) } label: { LibraryLinkLabel(title: "朗读引擎管理", symbol: "waveform.badge.mic") }
-                            .accessibilityIdentifier("library.speakEngines")
-                        LibraryCardDivider()
+                LibraryCard("阅读辅助") {
+                    NavigationLink { FontManagerView() } label: {
+                        LibraryLinkLabel(title: "字体管理", symbol: "textformat",
+                                         detail: fonts.selectedDisplayName)
                     }
-                    Group {
-                        NavigationLink { BubbleStyleSettingsView() } label: { LibraryLinkLabel(title: "段评气泡", symbol: "bubble.right") }
-                            .accessibilityIdentifier("library.bubbleStyles")
-                        LibraryCardDivider()
-                        NavigationLink { FontManagerView() } label: { LibraryLinkLabel(title: "字体管理", symbol: "textformat") }
-                            .accessibilityIdentifier("library.fonts")
-                        LibraryCardDivider()
-                        NavigationLink { AppAppearanceSettingsView() } label: { LibraryLinkLabel(title: "外观主题", symbol: "circle.lefthalf.filled") }
-                            .accessibilityIdentifier("library.appearance")
-                        LibraryCardDivider()
-                        NavigationLink { SearchView() } label: { LibraryLinkLabel(title: "搜索书籍", symbol: "magnifyingglass") }
-                        LibraryCardDivider()
-                        NavigationLink { NetworkSettingsView() } label: { LibraryLinkLabel(title: "网络设置", symbol: "network") }
-                            .accessibilityIdentifier("library.network")
+                    .accessibilityIdentifier("library.fonts")
+                    LibraryCardDivider()
+                    NavigationLink { SpeakEngineList(aloud: ReaderAloudController()) } label: {
+                        LibraryLinkLabel(title: "朗读引擎管理", symbol: "waveform.badge.mic")
                     }
+                    .accessibilityIdentifier("library.speakEngines")
+                    LibraryCardDivider()
+                    NavigationLink { BubbleStyleSettingsView() } label: {
+                        LibraryLinkLabel(title: "段评气泡", symbol: "bubble.right")
+                    }
+                    .accessibilityIdentifier("library.bubbleStyles")
+                }
+                LibraryCard("应用") {
+                    NavigationLink { AIServiceView() } label: {
+                        LibraryLinkLabel(title: "AI 提供商", symbol: "sparkles",
+                                         detail: aiStore.activeConfig == nil ? "未配置" : "已配置")
+                    }
+                    .accessibilityIdentifier("library.ai")
+                    LibraryCardDivider()
+                    NavigationLink { AppAppearanceSettingsView() } label: {
+                        LibraryLinkLabel(title: "外观主题", symbol: "circle.lefthalf.filled",
+                                         detail: themeStore.selectedTheme.name)
+                    }
+                    .accessibilityIdentifier("library.appearance")
+                    LibraryCardDivider()
+                    NavigationLink { NetworkSettingsView() } label: {
+                        LibraryLinkLabel(title: "网络设置", symbol: "network")
+                    }
+                    .accessibilityIdentifier("library.network")
                 }
                 LibraryCard("本机数据") {
-                    NavigationLink { CacheManagementView() } label: { LibraryLinkLabel(title: "缓存管理", symbol: "internaldrive") }
-                        .accessibilityIdentifier("library.cache")
+                    NavigationLink { CacheManagementView() } label: {
+                        LibraryLinkLabel(title: "缓存管理", symbol: "internaldrive")
+                    }
+                    .accessibilityIdentifier("library.cache")
                     LibraryCardDivider()
-                    NavigationLink { CrashLogView() } label: { LibraryLinkLabel(title: crashCount > 0 ? "崩溃日志（\(crashCount)）" : "崩溃日志", symbol: "exclamationmark.triangle") }
-                        .accessibilityIdentifier("library.crashLogs")
+                    NavigationLink { CrashLogView() } label: {
+                        LibraryLinkLabel(title: "崩溃日志", symbol: "exclamationmark.triangle",
+                                         detail: crashCount > 0 ? "\(crashCount) 条" : "")
+                    }
+                    .accessibilityIdentifier("library.crashLogs")
                     LibraryCardDivider()
                     LibraryValueRow(title: "已导入书源", value: "\(store.sources.count) 个")
                     LibraryCardDivider()
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")
                 }
-                PrecacheWindowSettingView(manager: .shared)
                 LibraryCard {
                     Text("阅读进度、导入书源与本地书籍保存在本机。")
                         .foregroundStyle(palette.secondary).appFont(.footnote)
@@ -129,8 +155,9 @@ private struct LibraryLinkLabel: View {
     @ThemePalette private var palette
     let title: String
     let symbol: String
+    var detail: String = ""
     var body: some View {
-        SettingsGlassLabel(title: title, symbol: symbol)
+        SettingsGlassLabel(title: title, symbol: symbol, trailing: detail)
     }
 }
 

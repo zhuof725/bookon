@@ -131,14 +131,8 @@ struct AloudVoiceSheet: View {
                     NavigationLink {
                         AloudRoleSettingsView(aloud: aloud)
                     } label: {
-                        HStack(spacing: 12) {
-                            Label("角色声线", systemImage: "person.2.wave.2")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(palette.secondary)
-                        }
-                        .contentShape(Rectangle())
+                        Label("角色声线", systemImage: "person.2.wave.2")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("aloud.voice.roleSettings")
                 } header: {
@@ -228,6 +222,8 @@ struct AloudVoiceSheet: View {
                         Label("停止朗读", systemImage: "stop.circle")
                     }
                     .accessibilityIdentifier("aloud.voice.stop")
+                } header: {
+                    Text("管理")
                 }
             }
             .scrollContentBackground(.hidden)

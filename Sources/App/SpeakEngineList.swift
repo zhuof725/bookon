@@ -169,22 +169,26 @@ struct SpeakEngineList: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("新建引擎") { showNewEditor = true }
-                        Button("文本导入") { importTitle = "输入引擎 JSON"; importInput = ""; showImportText = true }
-                        Button("本地文件导入") { showImportFile = true }
-                        Button("URL 导入") { importTitle = "输入引擎链接"; importInput = ""; showImportText = true }
-                        Button("剪贴板导入") { importClipboard() }
-                        Divider()
-                        Button("导入默认") {
-                            let n = HTTPTTSStore.shared.importDefaults(); engines.reload()
-                            show("导入了 \(n) 个默认引擎")
+                        Section("新建") {
+                            Button("新建引擎") { showNewEditor = true }
                         }
-                        Button("导出全部引擎") { exportAll() }
-                        .disabled(engines.list.isEmpty)
-                        Divider()
-                        Button("清空音频缓存") {
-                            AloudAudioCache.shared.clear()
-                            show("朗读音频缓存已清空")
+                        Section("导入") {
+                            Button("文本导入") { importTitle = "输入引擎 JSON"; importInput = ""; showImportText = true }
+                            Button("本地文件导入") { showImportFile = true }
+                            Button("URL 导入") { importTitle = "输入引擎链接"; importInput = ""; showImportText = true }
+                            Button("剪贴板导入") { importClipboard() }
+                            Button("导入默认") {
+                                let n = HTTPTTSStore.shared.importDefaults(); engines.reload()
+                                show("导入了 \(n) 个默认引擎")
+                            }
+                        }
+                        Section("数据") {
+                            Button("导出全部引擎") { exportAll() }
+                                .disabled(engines.list.isEmpty)
+                            Button("清空音频缓存") {
+                                AloudAudioCache.shared.clear()
+                                show("朗读音频缓存已清空")
+                            }
                         }
                     } label: {
                         Image(systemName: "plus.circle.fill")
