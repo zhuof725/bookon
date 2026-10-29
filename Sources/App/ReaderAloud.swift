@@ -110,6 +110,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 开播前缓冲任务与下一章后台预加载任务。
     private var prepareTask: Task<Void, Never>?
     private var nextChapterTask: Task<Void, Never>?
+    /// 跳转后处于暂停状态：恢复播放时先按新位置缓冲再播。
+    private var needsPreparation = false
     /// 已安排的预取窗口（段索引范围）：窗口内的后续段不再重复取消/重建，
     /// 否则旁白（系统语音）每读一两秒就会把在线音频的预取任务打断，永远下不完。
     private var prefetchWindow: Range<Int>?
@@ -279,6 +281,11 @@ final class ReaderAloudController: NSObject, ObservableObject {
         guard isRunning, !isPlaying else { return }
         isPlaying = true
         restartListeningClock()
+        if needsPreparation {
+            beginPlayback(preparationLimit: 2)
+            updateNowPlaying()
+            return
+        }
         if isPreparing {
             updateNowPlaying()
             return
@@ -308,6 +315,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         preparationDone = 0
         preparationTotal = 0
         preparationFailed = 0
+        needsPreparation = false
         prefetchTask?.cancel(); prefetchTask = nil
         prefetchWindow = nil
         chapterTask?.cancel(); chapterTask = nil
@@ -401,8 +409,23 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 进度条/队列定位：跳到本章第 index 段；暂停时只定位不播放。
     /// - Parameter seconds: 跨段定位时在目标段内的起始秒数（音频载入后 seek 到这里）。
     func seekUnit(_ index: Int, inside seconds: TimeInterval? = nil) {
-        guard isRunning, units.indices.contains(index), index != unitIndex else { return }
+        guard isRunning, units.indices.contains(index) else { return }
+        // 同一段且音频已载入：直接段内跳，不必重新下载。
+        if index == unitIndex, let seconds, canSeekInsideLoadedUnit, let player {
+            let clamped = min(max(seconds, 0), player.duration)
+            player.seek(to: clamped)
+            let model = chapterTimeline()
+            if model.starts.indices.contains(index) {
+                chapterPlayed = min(model.starts[index] + clamped, model.total)
+            }
+            updateNowPlaying()
+            return
+        }
         cancelUnitPlayback()
+        // 旧位置的预取窗口作废：新位置重新扫描、重新准备。
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        prefetchWindow = nil
         pendingUnitOffset = seconds
         unitIndex = index
         unitTotal = units.count
@@ -416,7 +439,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
         }
         updateNowPlaying()
-        if isPlaying { playUnit() }
+        needsPreparation = true
+        if isPlaying { beginPlayback(preparationLimit: 2) }
     }
 
     // MARK: 本章播放进度
@@ -857,11 +881,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
     // MARK: - 开播前缓冲与下一章
 
     /// 开播前要准备好的在线段：从当前位置往后，最多「预加载段落」段。
-    private func preparationItems() -> [PrefetchItem] {
+    private func preparationItems(limit override: Int? = nil) -> [PrefetchItem] {
         guard !units.isEmpty else { return [] }
         let config = AloudRoleVoiceStore.shared.config
-        let limit = AloudTTSConfig.preloadCount
-        guard limit > 0 else { return [] }
+        let limit = max(1, min(override ?? AloudTTSConfig.preloadCount, 50))
         let title = chapterTitle
         var items: [PrefetchItem] = []
         var keys = Set<String>()
@@ -884,13 +907,14 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     /// 开播：先按「预加载段落」把前面的在线音频准备好，再真正播放。
-    private func beginPlayback() {
+    private func beginPlayback(preparationLimit: Int? = nil) {
         prepareTask?.cancel()
         prepareTask = nil
         preparationDone = 0
         preparationTotal = 0
         preparationFailed = 0
-        let items = preparationItems()
+        needsPreparation = false
+        let items = preparationItems(limit: preparationLimit)
         guard !items.isEmpty else {
             playUnit()
             return
