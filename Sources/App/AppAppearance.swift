@@ -42,6 +42,7 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
 struct AppAppearanceSettingsView: View {
     @ObservedObject private var store: AppThemeStore
     @AppStorage(AppAppearance.storageKey) private var rawAppearance = AppAppearance.system.rawValue
+    @AppStorage(AppGlassMode.storageKey) private var glassEnabled = true
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
