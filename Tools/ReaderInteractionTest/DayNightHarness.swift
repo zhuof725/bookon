@@ -18,6 +18,16 @@ struct DayNightHarnessView: View {
         _settings = StateObject(wrappedValue: ReadSettings())
     }
 
+    private func bumpFont(_ delta: Double) {
+        settings.objectWillChange.send()
+        settings.fontSize = min(36, max(12, settings.fontSize + delta))
+    }
+
+    private func bumpLeft(_ delta: Double) {
+        settings.objectWillChange.send()
+        settings.leftMargin = min(60, max(0, settings.leftMargin + delta))
+    }
+
     private var stateText: String {
         "mode=\(settings.mode) theme=\(settings.theme) font=\(Int(settings.fontSize)) left=\(Int(settings.leftMargin))"
     }
@@ -30,21 +40,25 @@ struct DayNightHarnessView: View {
                     HStack {
                         Text("字号")
                         Spacer()
-                        Button("－") { settings.fontSize = max(12, settings.fontSize - 1) }
+                        Button("－") { bumpFont(-1) }
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("day-night-font-minus")
                         Text("\(Int(settings.fontSize)) pt")
                             .accessibilityIdentifier("day-night-font")
-                        Button("＋") { settings.fontSize = min(36, settings.fontSize + 1) }
+                        Button("＋") { bumpFont(1) }
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("day-night-font-plus")
                     }
                     HStack {
                         Text("左边距")
                         Spacer()
-                        Button("－") { settings.leftMargin = max(0, settings.leftMargin - 1) }
+                        Button("－") { bumpLeft(-1) }
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("day-night-left-minus")
                         Text("\(Int(settings.leftMargin)) pt")
                             .accessibilityIdentifier("day-night-left")
-                        Button("＋") { settings.leftMargin = min(60, settings.leftMargin + 1) }
+                        Button("＋") { bumpLeft(1) }
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("day-night-left-plus")
                     }
                 }
