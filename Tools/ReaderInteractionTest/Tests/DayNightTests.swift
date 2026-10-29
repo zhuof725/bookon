@@ -51,6 +51,15 @@ final class DayNightTests: XCTestCase {
         let restoredNight = app.buttons["夜间"]
         XCTAssertTrue(restoredNight.waitForExistence(timeout: 5))
         XCTAssertTrue(restoredNight.isSelected)
+
+        // 恢复默认，避免影响同一轮里的其他阅读设置测试。
+        addTeardownBlock {
+            let cleanup = XCUIApplication()
+            cleanup.launchArguments = ["--day-night-mode", "--reset-day-night"]
+            cleanup.launch()
+            XCTAssertTrue(cleanup.staticTexts["day-night-state"].waitForExistence(timeout: 10))
+            cleanup.terminate()
+        }
     }
 
     private func stateIs(_ element: XCUIElement, _ value: String) -> Bool {
