@@ -3,9 +3,11 @@ import AVFoundation
 import MediaPlayer
 
 /// 朗读单元：正文段落 + 其在整章文本里的字符偏移（与搜索/书签的偏移口径一致）。
+/// 多角色朗读会把一个段落再切成旁白/对话小段，`speaker` 决定用哪个声线。
 struct AloudUnit: Equatable {
     var offset: Int
     var text: String
+    var speaker: AloudSpeaker = .narrator
 }
 
 /// 阅读器注入给朗读控制器的宿主能力。离开阅读页时调用 detach() 清空，
