@@ -116,7 +116,7 @@ struct BubbleStyleEditor: View {
                     } else { Image(systemName: "bubble.right").font(.largeTitle) }
                     Text(draft.name).font(.headline)
                     Text("显示 42 · 保存后选用，取消不改变原设置").font(.caption).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity).padding(12).background(.regularMaterial)
+                }.frame(maxWidth: .infinity).padding(12).background { AppGlassSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
             }
             .navigationTitle("新建/编辑气泡").navigationBarTitleDisplayMode(.inline)
             .toolbar {

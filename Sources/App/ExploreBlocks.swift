@@ -84,7 +84,7 @@ struct ExploreBoardCard: View {
                     Text("正在生成推荐语…").appFont(.footnote)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(.regularMaterial))
+                .background { AppGlassSurface(shape: Capsule(), tint: palette.surface, tintOpacity: 0.55) }
                 .padding(.top, 6)
                 .accessibilityIdentifier("explore.ai.busy")
             }

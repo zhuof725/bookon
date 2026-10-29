@@ -461,7 +461,7 @@ struct AIProviderEditView: View {
             .padding(.horizontal, AppLayout.pageInset)
             .padding(.vertical, AppLayout.gapS)
         }
-        .background(.ultraThinMaterial)
+        .background { AppGlassSurface(shape: RoundedRectangle(cornerRadius: 0), tint: palette.surface, tintOpacity: 0.6) }
     }
 
     private var separator: some View {

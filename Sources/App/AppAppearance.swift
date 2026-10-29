@@ -231,6 +231,7 @@ struct AppAppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("界面与外观").appFont(.title3.weight(.semibold))
                 .padding(.bottom, 10).accessibilityAddTraits(.isHeader)
+            glassModeRow
             valueRow(title: "配色方案") {
                 Text(browsedTheme.name).appFont(.body)
                     .accessibilityIdentifier("theme.gallery.name")
@@ -255,6 +256,32 @@ struct AppAppearanceSettingsView: View {
                 .buttonStyle(.plain).accessibilityIdentifier("theme.delete")
             }
         }
+    }
+
+    private var glassModeRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.on.rectangle.angled")
+                .font(.system(size: 21, weight: .regular))
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("玻璃模式").appFont(.body)
+                Text(glassEnabled
+                     ? "卡片、按钮与浮层使用毛玻璃模糊"
+                     : "已关闭：改用实色背景，滚动更省电")
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Toggle("", isOn: $glassEnabled)
+                .labelsHidden()
+                .accessibilityLabel("玻璃模式")
+                .accessibilityIdentifier("appearance.glassMode")
+        }
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .modifier(SettingsGlassSurface())
     }
 
     private func valueRow<Value: View>(title: String, @ViewBuilder value: () -> Value) -> some View {

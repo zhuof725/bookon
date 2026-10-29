@@ -447,7 +447,7 @@ struct ThemeCustomizationEditor: View {
                 choice(ThemeInterfaceEffect.opaque.title, selected: settings.effect == .opaque,
                        id: "theme.editor.effect.opaque") { $draft.themeSetting(\.effect).wrappedValue = .opaque }
             }
-            note("此选项控制内容卡片：透明保留背景，玻璃柔化背景，不透明使用卡片底色。按钮、搜索框和浮动菜单统一使用玻璃；iOS 26 使用原生 Liquid Glass。开启系统降低透明度时使用实色。")
+            note("此选项控制内容卡片：透明保留背景，玻璃柔化背景，不透明使用卡片底色。按钮、搜索框和浮动菜单统一使用玻璃；iOS 26 使用原生 Liquid Glass。开启系统降低透明度，或在「外观主题 → 界面与外观」关闭玻璃模式时，改用实色。")
             effectSliderSection
             note("光晕用于透明和毛玻璃效果；透明度越高，毛玻璃底色越淡。系统材质会自适应明暗，滑条调节叠加底色，不会移除模糊；系统开启降低透明度时改用实色。不透明效果不使用这两个数值；取消编辑不会应用。")
             ThemeEditorLivePreview(theme: draft, scheme: previewScheme)

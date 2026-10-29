@@ -385,7 +385,7 @@ struct ExploreView: View {
             Text("AI 正在整理推荐…").appFont(.footnote)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Capsule().fill(.regularMaterial))
+        .background { AppGlassSurface(shape: Capsule(), tint: palette.surface, tintOpacity: 0.55) }
         .padding(.top, 6)
         .accessibilityIdentifier("explore.ai.auto.busy")
     }
@@ -397,7 +397,7 @@ struct ExploreView: View {
         }
         .foregroundStyle(palette.primary)
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Capsule().fill(.regularMaterial))
+        .background { AppGlassSurface(shape: Capsule(), tint: palette.surface, tintOpacity: 0.55) }
         .padding(.top, 6)
         .transition(.opacity)
         .accessibilityIdentifier("explore.ai.toast")
@@ -426,8 +426,8 @@ struct ExploreView: View {
         .padding(.horizontal, 14).padding(.vertical, 10)
         .frame(maxWidth: 360, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
+            AppGlassSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                            tint: palette.surface, tintOpacity: 0.55)
         }
         .padding(.horizontal, AppLayout.pageInset)
         .padding(.top, 6)

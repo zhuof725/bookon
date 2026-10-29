@@ -169,13 +169,22 @@ struct AppThemeCanvas: View {
 /// Older iOS uses real backdrop material, not a translucent solid imitation.
 struct AppGlassSurface<S: InsettableShape>: View {
     let shape: S
-    var tint: Color = Color(uiColor: .secondarySystemBackground)
-    var tintOpacity: Double = 0.10
-    var reduceTransparency: Bool = false
+    var tint: Color
+    var tintOpacity: Double
+    var reduceTransparency: Bool
+    @AppStorage(AppGlassMode.storageKey) private var glassEnabled = true
+
+    init(shape: S, tint: Color = Color(uiColor: .secondarySystemBackground),
+         tintOpacity: Double = 0.10, reduceTransparency: Bool = false) {
+        self.shape = shape
+        self.tint = tint
+        self.tintOpacity = tintOpacity
+        self.reduceTransparency = reduceTransparency
+    }
 
     var body: some View {
         Group {
-            if reduceTransparency {
+            if reduceTransparency || !glassEnabled {
                 shape.fill(tint)
             } else if #available(iOS 26.0, *) {
                 Color.clear.glassEffect(.regular.tint(tint.opacity(tintOpacity)), in: shape)
@@ -246,6 +255,14 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
     let isCard: Bool
     let palette: ResolvedAppPalette
     let reduceTransparency: Bool
+    @AppStorage(AppGlassMode.storageKey) private var glassEnabled = true
+
+    init(shape: S, isCard: Bool, palette: ResolvedAppPalette, reduceTransparency: Bool) {
+        self.shape = shape
+        self.isCard = isCard
+        self.palette = palette
+        self.reduceTransparency = reduceTransparency
+    }
 
     var body: some View {
         ZStack {
@@ -273,7 +290,7 @@ struct ThemeSurfaceRendering<S: InsettableShape>: View {
                     case .frosted:
                         AppGlassSurface(shape: shape, tint: palette.surface,
                                         tintOpacity: palette.frostedSurfaceOpacity)
-                        if palette.glowIntensity > 0 {
+                        if palette.glowIntensity > 0, glassEnabled {
                             shape.fill(RadialGradient(
                                 colors: [palette.accent.opacity(0.12 * palette.glowIntensity), .clear],
                                 center: .center, startRadius: 0, endRadius: 160))
