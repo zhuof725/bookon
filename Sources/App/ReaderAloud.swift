@@ -905,7 +905,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func runPreparation(_ items: [PrefetchItem]) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.downloadPreparationItems(items) }
-            group.addTask { try? await Task.sleep(nanoseconds: 30_000_000_000) }
+            group.addTask { _ = try? await Task.sleep(nanoseconds: 30_000_000_000) }
             await group.next()
             group.cancelAll()
         }
