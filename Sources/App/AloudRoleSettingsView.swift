@@ -7,6 +7,12 @@ struct AloudRoleSettingsView: View {
     @ObservedObject private var engines = SpeakEngineModel.shared
     @ThemePalette private var palette
     @State private var voices: [AloudVoiceConfig.Option] = []
+    /// 用于从本页进入在线引擎管理；独立预览时可以为 nil。
+    var aloud: ReaderAloudController?
+
+    init(aloud: ReaderAloudController? = nil) {
+        self.aloud = aloud
+    }
 
     var body: some View {
         List {
@@ -29,7 +35,22 @@ struct AloudRoleSettingsView: View {
             } header: {
                 Text("基础声线")
             } footer: {
-                Text("「跟随当前引擎」= 沿用音色面板里选的朗读引擎；也可以给每一类单独指定系统音色或在线引擎。")
+                Text("「跟随当前引擎」= 沿用音色面板里选的朗读引擎；每一行都可以改选在线引擎或系统音色。")
+            }
+
+            if let aloud {
+                Section {
+                    NavigationLink {
+                        SpeakEngineList(aloud: aloud)
+                    } label: {
+                        Label("在线朗读引擎管理", systemImage: "waveform.badge.mic")
+                    }
+                    .accessibilityIdentifier("aloud.role.engines")
+                } header: {
+                    Text("在线引擎")
+                } footer: {
+                    Text("还没有在线引擎？在这里导入或新建，每个引擎就是一个音色。当前主引擎：\(AloudTTSConfig.engineLabel)。")
+                }
             }
 
             Section {
@@ -55,7 +76,10 @@ struct AloudRoleSettingsView: View {
         .background { AppThemeCanvas().ignoresSafeArea() }
         .navigationTitle("角色声线")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { voices = AloudVoiceConfig.chineseVoices() }
+        .onAppear {
+            engines.reload()
+            voices = AloudVoiceConfig.chineseVoices()
+        }
     }
 
     // MARK: - 行
@@ -94,23 +118,25 @@ struct AloudRoleSettingsView: View {
                     Button { token.wrappedValue = item.id } label: { Text(item.title) }
                 }
             }
-            if !voices.isEmpty {
-                Divider()
-                ForEach(voices) { voice in
-                    Button {
-                        token.wrappedValue = "sys:" + voice.id
-                    } label: {
-                        Text("\(voice.name)（\(voice.languageLabel)）")
+            if !engines.list.isEmpty {
+                Section("在线引擎") {
+                    ForEach(engines.list) { engine in
+                        Button {
+                            token.wrappedValue = "tts:\(engine.id)"
+                        } label: {
+                            Text(engine.displayName)
+                        }
                     }
                 }
             }
-            if !engines.list.isEmpty {
-                Divider()
-                ForEach(engines.list) { engine in
-                    Button {
-                        token.wrappedValue = "tts:\(engine.id)"
-                    } label: {
-                        Text("\(engine.displayName)（在线引擎）")
+            if !voices.isEmpty {
+                Section("系统音色") {
+                    ForEach(voices) { voice in
+                        Button {
+                            token.wrappedValue = "sys:" + voice.id
+                        } label: {
+                            Text("\(voice.name)（\(voice.languageLabel)）")
+                        }
                     }
                 }
             }

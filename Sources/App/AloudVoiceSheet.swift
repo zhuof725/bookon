@@ -130,7 +130,7 @@ struct AloudVoiceSheet: View {
                     .accessibilityIdentifier("aloud.voice.roles")
 
                     NavigationLink {
-                        AloudRoleSettingsView()
+                        AloudRoleSettingsView(aloud: aloud)
                     } label: {
                         HStack(spacing: 12) {
                             Label("角色声线", systemImage: "person.2.wave.2")
@@ -229,7 +229,10 @@ struct AloudVoiceSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .onAppear { voices = AloudVoiceConfig.chineseVoices() }
+        .onAppear {
+            engines.reload()
+            voices = AloudVoiceConfig.chineseVoices()
+        }
         .task { await loadToneSources() }
         .sheet(isPresented: $showEngineManager) { SpeakEngineList(aloud: aloud) }
     }
