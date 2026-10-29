@@ -371,6 +371,17 @@ struct AloudPlayerView: View {
     /// 正文模式底部悬浮的播放卡片（进度条 + 控制行）。
     private var playerCard: some View {
         VStack(spacing: 4) {
+            if aloud.isPreparing {
+                Text("正在缓冲 \(aloud.preparationDone)/\(aloud.preparationTotal) 段")
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .accessibilityIdentifier("reader.aloud.preparing")
+            } else if aloud.isBuffering {
+                Text("缓冲中…")
+                    .appFont(.caption)
+                    .foregroundStyle(palette.secondary)
+                    .accessibilityIdentifier("reader.aloud.buffering")
+            }
             progressBlock
                 .padding(.horizontal, 24)
             controlsRow
@@ -532,14 +543,10 @@ struct AloudPlayerView: View {
         Button { aloud.togglePlay() } label: {
             ZStack {
                 Circle().fill(palette.primary).frame(width: 74, height: 74)
-                if aloud.isBuffering {
-                    ProgressView().tint(palette.background)
-                } else {
-                    Image(systemName: aloud.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(palette.background)
-                        .offset(x: aloud.isPlaying ? 0 : 3)
-                }
+                Image(systemName: aloud.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(palette.background)
+                    .offset(x: aloud.isPlaying ? 0 : 3)
             }
             .frame(maxWidth: .infinity, minHeight: 74)
             .contentShape(Circle())

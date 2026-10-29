@@ -10,6 +10,12 @@ struct AloudUnit: Equatable {
     var speaker: AloudSpeaker = .narrator
 }
 
+/// 后台预加载的下一章：标题 + 段落（不切换阅读器显示）。
+struct AloudChapterPreload {
+    let title: String
+    let units: [AloudUnit]
+}
+
 /// 阅读器注入给朗读控制器的宿主能力。离开阅读页时调用 detach() 清空，
 /// 防止闭包回持阅读器的状态包装。
 struct ReaderAloudHost {
@@ -28,6 +34,8 @@ struct ReaderAloudHost {
     var readableChapter: (Int, Int) -> Int? = { _, _ in nil }
     /// 让阅读器加载并显示某章；返回是否成功（失败：网络错误/无法解析）。
     var openChapter: (Int) async -> Bool = { _ in false }
+    /// 后台读取某章正文并拆成朗读段落，不切换阅读器显示；拿不到返回 nil。
+    var preloadChapter: (Int) async -> AloudChapterPreload? = { _ in nil }
     /// 播报朗读进度：章节号 + 字符偏移。界面依此翻页/滚动并保存进度。
     var follow: (Int, Int) -> Void = { _, _ in }
 }
@@ -57,6 +65,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
     @Published private(set) var chapterDuration: TimeInterval = 0
     @Published private(set) var timerLeft = 0
     @Published private(set) var notice: String?
+    /// 开播前缓冲进度：总共要准备几段、已完成几段（0/0 表示没在准备）。
+    @Published private(set) var preparationDone = 0
+    @Published private(set) var preparationTotal = 0
+    var isPreparing: Bool { preparationTotal > 0 }
     @Published private(set) var engineName = AloudTTSConfig.engineLabel
     @Published var speed = AloudTTSConfig.speechRate {
         didSet { didChangeSpeed() }
@@ -94,6 +106,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var pendingUnitOffset: TimeInterval?
     private var audioTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
+    /// 开播前缓冲任务与下一章后台预加载任务。
+    private var prepareTask: Task<Void, Never>?
+    private var nextChapterTask: Task<Void, Never>?
     /// 已安排的预取窗口（段索引范围）：窗口内的后续段不再重复取消/重建，
     /// 否则旁白（系统语音）每读一两秒就会把在线音频的预取任务打断，永远下不完。
     private var prefetchWindow: Range<Int>?
@@ -183,6 +198,12 @@ final class ReaderAloudController: NSObject, ObservableObject {
         guard let host else { return }
         AloudPurifyStore.shared.reloadBodyRules()
         AloudPrefetchStatus.shared.reset()
+        prepareTask?.cancel()
+        prepareTask = nil
+        nextChapterTask?.cancel()
+        nextChapterTask = nil
+        preparationDone = 0
+        preparationTotal = 0
         prefetchTask?.cancel()
         prefetchWindow = nil
         let expanded = AloudMultiVoice.expand(list)
@@ -203,13 +224,15 @@ final class ReaderAloudController: NSObject, ObservableObject {
         restartTimerLoop()
         restartListeningClock()
         host.follow(chapter, expanded[unitIndex].offset)
-        playUnit()
+        beginPlayback()
     }
 
     /// 开关多角色 / 改完角色声线后：按当前段的偏移重建本章队列，原地继续。
     func reloadRoleVoices() {
         guard isRunning, let host, let list = host.units(chapterIndex) else { return }
         let offset = units.indices.contains(unitIndex) ? units[unitIndex].offset : 0
+        nextChapterTask?.cancel()
+        nextChapterTask = nil
         prefetchTask?.cancel()
         prefetchWindow = nil
         cancelUnitPlayback()
@@ -219,7 +242,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         unitTotal = expanded.count
         unitIndex = resolveStartUnit(offset)
         unitDurations.removeAll()
-        if isPlaying { playUnit() }
+        if isPlaying { beginPlayback() }
     }
 
     private func resolveStartUnit(_ offset: Int) -> Int {
@@ -254,6 +277,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
         guard isRunning, !isPlaying else { return }
         isPlaying = true
         restartListeningClock()
+        if isPreparing {
+            updateNowPlaying()
+            return
+        }
         if isBuffering { return }
         if playbackEngine == .http, let player, player.hasAudio,
            playerLoadedUnit?.chapter == chapterIndex,
@@ -274,6 +301,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
         isPlaying = false
         isBuffering = false
         audioTask?.cancel(); audioTask = nil
+        prepareTask?.cancel(); prepareTask = nil
+        nextChapterTask?.cancel(); nextChapterTask = nil
+        preparationDone = 0
+        preparationTotal = 0
         prefetchTask?.cancel(); prefetchTask = nil
         prefetchWindow = nil
         chapterTask?.cancel(); chapterTask = nil
@@ -528,12 +559,16 @@ final class ReaderAloudController: NSObject, ObservableObject {
             unitList = expanded
             unitTotal = expanded.count
             unitDurations.removeAll()
+            prepareTask?.cancel()
+            prepareTask = nil
+            preparationDone = 0
+            preparationTotal = 0
             prefetchTask?.cancel()
             prefetchWindow = nil
             unitIndex = direction > 0 ? 0 : max(expanded.count - 1, 0)
             host.follow(next, expanded[unitIndex].offset)
             updateNowPlaying()
-            playUnit()
+            beginPlayback()
         }
     }
 
@@ -547,6 +582,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func cancelUnitPlayback() {
         audioTask?.cancel(); audioTask = nil
         progressTask?.cancel(); progressTask = nil
+        prepareTask?.cancel(); prepareTask = nil
+        preparationDone = 0
+        preparationTotal = 0
         expectStop()
         player?.stop()
         playerLoadedUnit = nil
@@ -596,6 +634,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             // 系统语音段不会下载，但后面可能是在线引擎的对话段，提前预热。
             prefetch(from: unitIndex + 1)
         }
+        maybePreloadNextChapter()
     }
 
     // MARK: 系统语音
@@ -807,6 +846,155 @@ final class ReaderAloudController: NSObject, ObservableObject {
             let message = ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
                 .replacingOccurrences(of: "\n", with: " ")
             AloudPrefetchStatus.shared.failed(String(message.prefix(40)))
+        }
+    }
+
+    // MARK: - 开播前缓冲与下一章
+
+    /// 开播前要准备好的在线段：从当前位置往后，最多「预加载段落」段。
+    private func preparationItems() -> [PrefetchItem] {
+        guard !units.isEmpty else { return [] }
+        let config = AloudRoleVoiceStore.shared.config
+        let limit = AloudTTSConfig.preloadCount
+        guard limit > 0 else { return [] }
+        let title = chapterTitle
+        var items: [PrefetchItem] = []
+        var keys = Set<String>()
+        var i = unitIndex
+        let scanEnd = min(units.count, i + max(limit * 12, 48))
+        while i < scanEnd, items.count < limit {
+            let unit = units[i]
+            if let engine = httpEngine(for: unit.speaker, config: config),
+               let speak = AloudSpeechText.prepare(unit.text) {
+                let speed = downloadSpeed(for: engine)
+                let key = AloudAudioCache.shared.key(chapter: title, engineURL: engine.url,
+                                                     speed: speed, text: speak)
+                if keys.insert(key).inserted {
+                    items.append(PrefetchItem(key: key, text: speak, engine: engine, speed: speed))
+                }
+            }
+            i += 1
+        }
+        return items
+    }
+
+    /// 开播：先按「预加载段落」把前面的在线音频准备好，再真正播放。
+    private func beginPlayback() {
+        prepareTask?.cancel()
+        prepareTask = nil
+        preparationDone = 0
+        preparationTotal = 0
+        let items = preparationItems()
+        guard !items.isEmpty else {
+            playUnit()
+            return
+        }
+        preparationTotal = items.count
+        prepareTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.runPreparation(items)
+            guard !Task.isCancelled else { return }
+            self.preparationDone = 0
+            self.preparationTotal = 0
+            guard self.isRunning, self.isPlaying else { return }
+            self.playUnit()
+        }
+    }
+
+    /// 准备最多 30 秒：引擎卡住时也要放行，不能让用户一直等。
+    private func runPreparation(_ items: [PrefetchItem]) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.downloadPreparationItems(items) }
+            group.addTask { try? await Task.sleep(nanoseconds: 30_000_000_000) }
+            await group.next()
+            group.cancelAll()
+        }
+    }
+
+    private func downloadPreparationItems(_ items: [PrefetchItem]) async {
+        var next = 0
+        await withTaskGroup(of: Void.self) { group in
+            while next < min(2, items.count) {
+                let item = items[next]
+                next += 1
+                group.addTask { await self.downloadPreparationItem(item) }
+            }
+            while await group.next() != nil {
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
+                if next < items.count {
+                    let item = items[next]
+                    next += 1
+                    group.addTask { await self.downloadPreparationItem(item) }
+                }
+            }
+        }
+    }
+
+    private func downloadPreparationItem(_ item: PrefetchItem) async {
+        _ = try? await downloadAudio(key: item.key, engine: item.engine,
+                                     text: item.text, speed: item.speed, limitRate: true)
+        guard preparationTotal > 0 else { return }
+        preparationDone = min(preparationDone + 1, preparationTotal)
+    }
+
+    /// 本章快读完时，后台把下一章的正文和前几段音频准备好。
+    private func maybePreloadNextChapter() {
+        guard isRunning, nextChapterTask == nil, let host else { return }
+        let remaining = units.count - unitIndex
+        guard remaining <= max(AloudTTSConfig.preloadCount, 8) else { return }
+        guard let next = host.readableChapter(chapterIndex + 1, 1), next != chapterIndex else { return }
+        nextChapterTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.nextChapterTask = nil }
+            guard let payload = await host.preloadChapter(next), !Task.isCancelled else { return }
+            let config = AloudRoleVoiceStore.shared.config
+            let expanded = AloudMultiVoice.expand(payload.units)
+            let wanted = min(AloudTTSConfig.preloadCount, 5)
+            var items: [PrefetchItem] = []
+            var keys = Set<String>()
+            for unit in expanded {
+                if items.count >= wanted { break }
+                guard let engine = self.httpEngine(for: unit.speaker, config: config),
+                      let speak = AloudSpeechText.prepare(unit.text) else { continue }
+                let speed = self.downloadSpeed(for: engine)
+                let key = AloudAudioCache.shared.key(chapter: payload.title,
+                                                     engineURL: engine.url,
+                                                     speed: speed, text: speak)
+                if keys.insert(key).inserted {
+                    items.append(PrefetchItem(key: key, text: speak, engine: engine, speed: speed))
+                }
+            }
+            guard !items.isEmpty else { return }
+            var index = 0
+            await withTaskGroup(of: Void.self) { group in
+                while index < min(2, items.count) {
+                    let item = items[index]
+                    index += 1
+                    group.addTask {
+                        _ = try? await self.downloadAudio(key: item.key, engine: item.engine,
+                                                          text: item.text, speed: item.speed,
+                                                          limitRate: true)
+                    }
+                }
+                while await group.next() != nil {
+                    if Task.isCancelled {
+                        group.cancelAll()
+                        break
+                    }
+                    if index < items.count {
+                        let item = items[index]
+                        index += 1
+                        group.addTask {
+                            _ = try? await self.downloadAudio(key: item.key, engine: item.engine,
+                                                              text: item.text, speed: item.speed,
+                                                              limitRate: true)
+                        }
+                    }
+                }
+            }
         }
     }
 

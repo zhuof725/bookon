@@ -2067,6 +2067,17 @@ struct ReaderView: View {
         host.units = { i in i == index ? aloudUnits(from: readerBlocks) : nil }
         host.readableChapter = { i, direction in readableIndex(from: i, direction: direction) }
         host.openChapter = { i in await openChapterForAloud(i) }
+        host.preloadChapter = { i in
+            guard chapters.indices.contains(i), !chapters[i].isVolume else { return nil }
+            guard let raw = try? await rawContent(at: i, priority: .utility) else { return nil }
+            let content = ReaderChapterParser.content(raw: raw, isVolume: false,
+                                                      replacement: bodyReplacement,
+                                                      imageDecode: imageDecodeHook(for: chapters[i]))
+            let units = ReaderMenuText.paragraphs(content.blocks)
+                .map { AloudUnit(offset: $0.offset, text: $0.text) }
+            guard !units.isEmpty else { return nil }
+            return AloudChapterPreload(title: chapters[i].title, units: units)
+        }
         host.follow = { chapter, offset in followAloud(chapter: chapter, offset: offset) }
         aloud.attach(host)
     }
