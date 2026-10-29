@@ -119,9 +119,11 @@ struct BodyReplaceRulesView: View {
     }
 }
 
-private struct BodyReplaceRuleEditor: View {
+struct BodyReplaceRuleEditor: View {
     @ThemePalette private var palette
     let existing: Bool
+    /// 「正文替换」或「朗读净化」，只用于页面标题。
+    var contextTitle: String = "正文替换"
     let onSave: (BodyReplaceRule) -> String?
     let onDelete: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -131,8 +133,11 @@ private struct BodyReplaceRuleEditor: View {
     @State private var savingError: String?
     @FocusState private var activeField: String?
 
-    init(rule: BodyReplaceRule, existing: Bool, onSave: @escaping (BodyReplaceRule) -> String?, onDelete: @escaping () -> Void) {
-        self.existing = existing; self.onSave = onSave; self.onDelete = onDelete
+    init(rule: BodyReplaceRule, existing: Bool, contextTitle: String = "正文替换",
+         onSave: @escaping (BodyReplaceRule) -> String?, onDelete: @escaping () -> Void) {
+        self.existing = existing
+        self.contextTitle = contextTitle
+        self.onSave = onSave; self.onDelete = onDelete
         _draft = State(initialValue: rule)
     }
 
@@ -192,7 +197,7 @@ private struct BodyReplaceRuleEditor: View {
             .foregroundStyle(palette.primary)
             .scrollContentBackground(.hidden)
             .background { AppThemeCanvas().ignoresSafeArea() }
-            .navigationTitle(existing ? "编辑正文替换" : "添加正文替换").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(existing ? "编辑\(contextTitle)" : "添加\(contextTitle)").navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {

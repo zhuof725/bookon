@@ -255,6 +255,7 @@ enum AloudTTSConfig {
     static let speedKey = "reader.aloud.speed.v1"
     static let timerKey = "reader.aloud.timer.v1"
     static let preloadKey = "reader.aloud.preload.v1"
+    static let earlyAdvanceKey = "reader.aloud.earlyAdvanceMs.v1"
     static let preloadRange = 1...20
     static let defaultPreloadCount = 10
 
@@ -275,6 +276,18 @@ enum AloudTTSConfig {
             return clamped
         }
         set { UserDefaults.standard.set(clampedPreloadCount(newValue), forKey: preloadKey) }
+    }
+
+    /// 片尾提前切换（毫秒）：在线音频剩余不足这个值时直接播下一段，0 = 关闭。
+    /// 系统语音没有音频文件，不参与该优化。
+    static var earlyAdvanceMilliseconds: Int {
+        get {
+            let value = UserDefaults.standard.integer(forKey: earlyAdvanceKey)
+            return min(max(value, 0), 2000)
+        }
+        set {
+            UserDefaults.standard.set(min(max(newValue, 0), 2000), forKey: earlyAdvanceKey)
+        }
     }
 
     /// 引擎选择：空 = 系统语音；数字字符串 = HttpTTS.id（与原版一致）。

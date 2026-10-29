@@ -5,6 +5,7 @@ import AVFoundation
 /// 语音引擎为系统语音时无预加载，仍保留可调（切到在线引擎即生效）。
 struct AloudPreloadCard: View {
     @AppStorage(AloudTTSConfig.preloadKey) private var storedCount = AloudTTSConfig.defaultPreloadCount
+    @AppStorage(AloudTTSConfig.earlyAdvanceKey) private var earlyAdvance = 0
     private let range = AloudTTSConfig.preloadRange
     private var count: Int { AloudTTSConfig.clampedPreloadCount(storedCount) }
     @ThemePalette private var palette
@@ -49,6 +50,24 @@ struct AloudPreloadCard: View {
                     .accessibilityIdentifier("reader.aloud.preloadPlus")
                 }
                 Text("范围: \(range.lowerBound)-\(range.upperBound)，预加载更多段落可减少卡顿")
+                    .appFont(.footnote).foregroundStyle(palette.secondary)
+
+                Divider().padding(.vertical, 2)
+
+                HStack(alignment: .center, spacing: 8) {
+                    Text("片尾提前切换").appFont(.body)
+                    Spacer(minLength: 8)
+                    Text(earlyAdvance == 0 ? "关闭" : "\(earlyAdvance) ms")
+                        .appFont(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(palette.secondary)
+                }
+                Slider(value: Binding(get: { Double(earlyAdvance) },
+                                      set: { earlyAdvance = Int($0.rounded()) }),
+                       in: 0...1000, step: 50)
+                    .tint(palette.accent)
+                    .accessibilityIdentifier("reader.aloud.earlyAdvance")
+                Text("在线音频剩余不足该值时直接播下一段，0 关闭；系统语音没有音频文件，不适用。")
                     .appFont(.footnote).foregroundStyle(palette.secondary)
             }
             .padding(.horizontal, 16).padding(.vertical, 16)

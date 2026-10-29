@@ -181,6 +181,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     private func beginRun(chapter: Int, units list: [AloudUnit], offset: Int, applyTimer: Bool = false) {
         guard let host else { return }
+        AloudPurifyStore.shared.reloadBodyRules()
         prefetchTask?.cancel()
         prefetchWindow = nil
         let expanded = AloudMultiVoice.expand(list)
@@ -578,7 +579,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
         updateNowPlaying()
         updateChapterProgress()
-        guard let speak = AloudText.speakText(for: unit.text) else {
+        guard let speak = AloudSpeechText.prepare(unit.text) else {
             // 整段没有字母数字（如纯标点分隔行）：直接进下一段。
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 120_000_000)
@@ -750,7 +751,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         while i < scanEnd, items.count < limit {
             let unit = snapshot[i]
             if let engine = httpEngine(for: unit.speaker, config: config),
-               let speak = AloudText.speakText(for: unit.text) {
+               let speak = AloudSpeechText.prepare(unit.text) {
                 let key = AloudAudioCache.shared.key(chapter: title, engineURL: engine.url,
                                                      speed: downloadSpeed(for: engine), text: speak)
                 items.append(PrefetchItem(key: key, text: speak, engine: engine,
@@ -841,24 +842,50 @@ final class ReaderAloudController: NSObject, ObservableObject {
         progressTask?.cancel()
         guard let player else { return }
         let unit = units[unitIndex]
-        let engine = playbackEngine
         progressTask = Task { @MainActor [weak self, unit] in
             guard let self else { return }
             let duration = max(player.duration, 0.1)
             let chars = max(unit.text.count, 1)
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 400_000_000)
+                // 临近片尾时采样更密，片尾切换的触发点才够准。
+                let remaining = max(duration - player.currentTime, 0)
+                let interval: UInt64 = remaining < 1.2 ? 80_000_000 : 300_000_000
+                try? await Task.sleep(nanoseconds: interval)
                 guard !Task.isCancelled, isRunning, isPlaying,
                       self.unitIndex < self.units.count else { return }
                 let current = self.units[self.unitIndex]
                 guard current == unit else { return }
-                _ = engine
+                if self.shouldAdvanceBeforeEnd(duration: duration) {
+                    self.advanceBeforeEnd()
+                    return
+                }
                 let index = min(Int(Double(chars) * player.currentTime / duration), chars - 1)
                 self.host?.follow(chapterIndex, unit.offset + max(index, 0))
                 self.unitDurations[self.unitIndex] = max(player.duration, 0.1)
                 self.updateChapterProgress()
             }
         }
+    }
+
+    /// 片尾提前切换：在线音频剩余不足设定毫秒时，不再等它自然播完。
+    /// 系统语音没有音频文件，不会走到这里。
+    private func shouldAdvanceBeforeEnd(duration: TimeInterval) -> Bool {
+        guard let player, player.isPlaying else { return false }
+        let milliseconds = AloudTTSConfig.earlyAdvanceMilliseconds
+        guard milliseconds > 0 else { return false }
+        let threshold = Double(milliseconds) / 1000
+        // 很短的一段不要刚播就被判成片尾。
+        guard duration > threshold + 0.3, player.currentTime >= 0.2 else { return false }
+        let remaining = duration - player.currentTime
+        return remaining > 0 && remaining <= threshold
+    }
+
+    private func advanceBeforeEnd() {
+        expectingFinish = false
+        progressTask?.cancel()
+        progressTask = nil
+        player?.stop()
+        finishedUnit()
     }
 
     // MARK: 听书时长

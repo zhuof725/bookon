@@ -16,6 +16,7 @@ struct AloudVoiceSheet: View {
     var onStopSourceAudio: (() -> Void)? = nil
     @ObservedObject private var store = AppStore.shared
     @ObservedObject private var roleVoices = AloudRoleVoiceStore.shared
+    @ObservedObject private var purify = AloudPurifyStore.shared
     @AppStorage(SourceToneAudio.backgroundKey) private var backgroundPlayback = false
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
@@ -146,6 +147,27 @@ struct AloudVoiceSheet: View {
                     Text("多角色朗读")
                 } footer: {
                     Text("按“”「」把正文拆成旁白与对话，识别「林晚晴说道」这类提示后换音色；旁白、对话、男女声可分别指定系统音色或在线引擎。")
+                }
+
+                Section {
+                    NavigationLink {
+                        AloudPurifySettingsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label("朗读净化", systemImage: "text.badge.minus")
+                            Spacer()
+                            Text(purify.enabled
+                                 ? (purify.rules.isEmpty ? "内置清理" : "\(purify.rules.count) 条规则")
+                                 : "已关闭")
+                                .appFont(.caption)
+                                .foregroundStyle(palette.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("aloud.voice.purify")
+                } header: {
+                    Text("朗读净化")
+                } footer: {
+                    Text("朗读前去掉网址、站点广告、本章完等无关文字；可自定义规则，只影响朗读。")
                 }
 
                 Section {

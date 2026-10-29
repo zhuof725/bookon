@@ -306,6 +306,7 @@ enum RuleRegression {
         // AI 服务：请求构造与响应解析（纯函数，不联网）
         AIRegression.run(check: check)
         AloudRoleRegression.run(check: check)
+        AloudPurifyRegression.run(check: check)
         print("REGRESSION PASS: \(checks) 项固定断言；不声称真机网络/WebView 已验证。")
     }
 }
