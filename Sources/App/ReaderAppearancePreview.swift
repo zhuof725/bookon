@@ -8,6 +8,7 @@ struct ReaderAppearancePreview: View {
     private var paper: (bg: Color, fg: Color, name: String) {
         ReadSettings.themes[min(max(settings.theme, 0), ReadSettings.themes.count - 1)]
     }
+    private var modeTitle: String { settings.dayNightMode.title }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("阅读外观 · 实时预览").appFont(.caption.weight(.semibold))
@@ -20,7 +21,7 @@ struct ReaderAppearancePreview: View {
                 .padding(.top, settings.topMargin).padding(.bottom, settings.bottomMargin)
             }
             .frame(height: 130).background(paper.bg).clipShape(RoundedRectangle(cornerRadius: 16))
-            Text("\(paper.name) · \(Int(settings.fontSize))pt · \(fonts.selectedDisplayName)；此处为可滚动文字样例，整页齐底与翻页动画以阅读页为准。")
+            Text("\(modeTitle) · \(paper.name) · \(Int(settings.fontSize))pt · \(fonts.selectedDisplayName)；此处为可滚动文字样例，整页齐底与翻页动画以阅读页为准。")
                 .appFont(.caption2).foregroundStyle(.secondary).lineLimit(2)
         }.padding(12).modifier(SettingsGlassSurface())
             .accessibilityIdentifier("reader.appearance.preview")

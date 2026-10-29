@@ -1,5 +1,31 @@
 import SwiftUI
 
+/// 阅读外观的两种模式：日间、夜间。各自保存一整套排版与背景。
+enum ReaderDayNightMode: Int, CaseIterable, Identifiable {
+    case day = 0
+    case night = 1
+
+    var id: Int { rawValue }
+    var title: String { self == .day ? "日间" : "夜间" }
+    var symbol: String { self == .day ? "sun.max.fill" : "moon.fill" }
+    /// 该模式可选的背景主题（索引对应 ReadSettings.themes）。
+    var themeIndices: [Int] { self == .day ? [0, 1, 2] : [3, 4] }
+}
+
+/// 一套可独立保存的阅读排版。日间与夜间各存一份，切换时整体生效。
+struct ReaderModeLayout: Codable, Equatable {
+    var theme: Int
+    var fontSize: Double
+    var lineSpacing: Double
+    var paragraphSpacing: Double
+    var fullJustify: Bool
+    var bottomJustify: Bool
+    var leftMargin: Double
+    var rightMargin: Double
+    var topMargin: Double
+    var bottomMargin: Double
+}
+
 final class ReadSettings: ObservableObject {
     // Android ReadBookConfig defaults: 20sp, lineSpacingExtra=12 (1.2H),
     // paragraphSpacing=2 (0.2H), with two full-width indent cells.
@@ -13,6 +39,12 @@ final class ReadSettings: ObservableObject {
     @AppStorage("topMargin") var topMargin: Double = 16
     @AppStorage("bottomMargin") var bottomMargin: Double = 10
     @AppStorage("theme") var theme: Int = 0
+    /// 当前阅读模式：0 日间，1 夜间。两套排版各自保存。
+    @AppStorage("reader.mode.v1") var mode: Int = 0
+    static let modeStorageKey = "reader.mode.v1"
+    static let dayLayoutKey = "reader.mode.day.layout.v1"
+    static let nightLayoutKey = "reader.mode.night.layout.v1"
+    private static let modeMigrationKey = "reader.mode.migrated.v1"
     @AppStorage("pageMode") var pageMode: Int = 0
     @AppStorage("pageTurnStyle") var pageTurnStyle: Int = 0
     /// 章节标题的 CSS 样式（空串 = 默认外观）。
@@ -45,6 +77,86 @@ final class ReadSettings: ObservableObject {
         }
         // 旧版淡入淡出值 2 回退到原生滑动，保留字号、主题与阅读进度。
         if pageTurnStyle != 0 && pageTurnStyle != 1 { pageTurnStyle = 0 }
+        migrateReadingModeIfNeeded()
+    }
+
+    // MARK: 日间 / 夜间
+
+    var dayNightMode: ReaderDayNightMode { ReaderDayNightMode(rawValue: mode) ?? .day }
+
+    /// 切换日间/夜间：先保存当前模式的一整套设置，再恢复目标模式的设置。
+    /// 主动通知观察者：@AppStorage 写在 ObservableObject 里不会自动发 objectWillChange。
+    func setMode(_ newValue: Int) {
+        guard let target = ReaderDayNightMode(rawValue: newValue), target.rawValue != mode else { return }
+        objectWillChange.send()
+        saveCurrentLayout(for: dayNightMode)
+        mode = target.rawValue
+        apply(storedLayout(for: target) ?? defaultLayout(for: target), for: target)
+    }
+
+    /// 背景主题只在当前模式允许的色板里选。
+    func selectTheme(_ index: Int) {
+        guard dayNightMode.themeIndices.contains(index), theme != index else { return }
+        objectWillChange.send()
+        theme = index
+    }
+
+    private func currentLayout() -> ReaderModeLayout {
+        ReaderModeLayout(theme: theme, fontSize: fontSize, lineSpacing: lineSpacing,
+                         paragraphSpacing: paragraphSpacing, fullJustify: fullJustify,
+                         bottomJustify: bottomJustify, leftMargin: leftMargin, rightMargin: rightMargin,
+                         topMargin: topMargin, bottomMargin: bottomMargin)
+    }
+
+    private func saveCurrentLayout(for mode: ReaderDayNightMode) {
+        guard let data = try? JSONEncoder().encode(currentLayout()) else { return }
+        UserDefaults.standard.set(data, forKey: mode == .day ? Self.dayLayoutKey : Self.nightLayoutKey)
+    }
+
+    private func storedLayout(for mode: ReaderDayNightMode) -> ReaderModeLayout? {
+        let key = mode == .day ? Self.dayLayoutKey : Self.nightLayoutKey
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(ReaderModeLayout.self, from: data)
+    }
+
+    private func defaultLayout(for mode: ReaderDayNightMode) -> ReaderModeLayout {
+        var layout = currentLayout()
+        layout.theme = mode == .day ? 0 : 3
+        return layout
+    }
+
+    private func apply(_ layout: ReaderModeLayout, for mode: ReaderDayNightMode) {
+        let allowed = mode.themeIndices
+        theme = allowed.contains(layout.theme) ? layout.theme : (allowed.first ?? 0)
+        fontSize = min(36, max(12, layout.fontSize))
+        lineSpacing = min(20, max(0, layout.lineSpacing))
+        paragraphSpacing = min(20, max(0, layout.paragraphSpacing))
+        fullJustify = layout.fullJustify
+        bottomJustify = layout.bottomJustify
+        leftMargin = min(60, max(0, layout.leftMargin))
+        rightMargin = min(60, max(0, layout.rightMargin))
+        topMargin = min(80, max(0, layout.topMargin))
+        bottomMargin = min(80, max(0, layout.bottomMargin))
+    }
+
+    /// 老用户第一次升级：按当前主题落到日间或夜间，两套初始设置都保留现有排版。
+    private func migrateReadingModeIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.modeMigrationKey) == nil else { return }
+        let dark = theme >= 3
+        let active: ReaderDayNightMode = dark ? .night : .day
+        var activeLayout = currentLayout()
+        activeLayout.theme = dark ? max(0, min(theme, 4)) : max(0, min(theme, 2))
+        var otherLayout = activeLayout
+        otherLayout.theme = active == .day ? 3 : 0
+        if let data = try? JSONEncoder().encode(activeLayout) {
+            defaults.set(data, forKey: active == .day ? Self.dayLayoutKey : Self.nightLayoutKey)
+        }
+        if let data = try? JSONEncoder().encode(otherLayout) {
+            defaults.set(data, forKey: active == .day ? Self.nightLayoutKey : Self.dayLayoutKey)
+        }
+        defaults.set(active.rawValue, forKey: Self.modeStorageKey)
+        defaults.set(true, forKey: Self.modeMigrationKey)
     }
 
     /// Android stores line/paragraph spacing as tenths of the actual font
@@ -89,6 +201,7 @@ final class ReadSettings: ObservableObject {
         (Color(red: 0.98, green: 0.96, blue: 0.90), Color(red: 0.2, green: 0.2, blue: 0.2), "米黄"),
         (Color.white, Color.black, "白色"),
         (Color(red: 0.80, green: 0.91, blue: 0.81), Color(red: 0.15, green: 0.25, blue: 0.15), "护眼"),
-        (Color(red: 0.11, green: 0.11, blue: 0.12), Color(red: 0.65, green: 0.65, blue: 0.65), "夜间")
+        (Color(red: 0.11, green: 0.11, blue: 0.12), Color(red: 0.65, green: 0.65, blue: 0.65), "夜间"),
+        (Color.black, Color(red: 0.74, green: 0.74, blue: 0.78), "纯黑")
     ]
 }

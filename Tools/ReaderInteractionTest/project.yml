@@ -102,6 +102,7 @@ targets:
       - path: ChapterHarness.swift
       - path: VolumeHarness.swift
       - path: TypographyHarness.swift
+      - path: DayNightHarness.swift
       - path: FontHarness.swift
       - path: Fixtures/Fonts
         buildPhase: resources

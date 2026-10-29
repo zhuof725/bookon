@@ -1,5 +1,81 @@
 import SwiftUI
 
+/// 日间 / 夜间：两套独立保存的阅读排版与背景。
+struct ReaderAppearanceControls: View {
+    @ObservedObject var settings: ReadSettings
+
+    private var mode: ReaderDayNightMode { settings.dayNightMode }
+    private var modeSelection: Binding<Int> {
+        let settings = self.settings
+        return Binding(get: { settings.mode }, set: { settings.setMode($0) })
+    }
+
+    var body: some View {
+        Section {
+            Picker("阅读模式", selection: modeSelection) {
+                ForEach(ReaderDayNightMode.allCases) { item in
+                    Text(item.title).tag(item.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("reader.mode.picker")
+
+            HStack(spacing: 10) {
+                ForEach(mode.themeIndices, id: \.self) { index in
+                    swatch(index)
+                }
+            }
+            .padding(.vertical, 2)
+        } header: {
+            HStack(spacing: 6) {
+                Image(systemName: mode.symbol)
+                Text(mode == .day ? "日间阅读" : "夜间阅读")
+            }
+        } footer: {
+            Text("日间与夜间各自保存背景、字号、行距和边距；切换模式时整套生效。")
+        }
+    }
+
+    private func swatch(_ index: Int) -> some View {
+        let paper = ReadSettings.themes[index]
+        let selected = settings.theme == index
+        return Button {
+            settings.selectTheme(index)
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)
+                        .fill(paper.bg)
+                    Text("文").font(.system(size: 20, weight: .medium)).foregroundStyle(paper.fg)
+                }
+                .frame(height: 56)
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppLayout.radiusControl, style: .continuous)
+                        .strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.28),
+                                      lineWidth: selected ? 2.5 : 1)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(paper.bg, paper.fg)
+                            .padding(6)
+                            .accessibilityHidden(true)
+                    }
+                }
+                Text(paper.name)
+                    .appFont(.caption)
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("背景\(paper.name)")
+        .accessibilityIdentifier("reader.theme.\(index)")
+    }
+}
+
 /// 字号、边距使用 pt；行高和段后间距使用字高倍率，每步 0.1。
 struct ReaderTypographyControls: View {
     @ObservedObject var settings: ReadSettings

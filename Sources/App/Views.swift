@@ -335,6 +335,8 @@ struct ReaderView: View {
     @State private var statsStart: Date?
     @State private var statsChapters: Set<Int> = []
     @State private var loading = true
+    /// 日间/夜间切换会一次改动多项排版：同一轮只重排一次。
+    @State private var repaginationScheduled = false
     @State private var error: String?
     @State private var showToc = false
     @State private var showSettings = false
@@ -603,6 +605,8 @@ struct ReaderView: View {
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 Form {
+                    ReaderAppearanceControls(settings: settings)
+                        .independentGlassRow()
                     Section("阅读方式") {
                         Picker("方式", selection: $settings.pageMode) {
                             Text("滚动").tag(0)
@@ -625,13 +629,6 @@ struct ReaderView: View {
                     .independentGlassRow()
                     NavigationLink("段评气泡") { BubbleStyleSettingsView() }
                         .independentGlassRow()
-                    Section("背景") {
-                        Picker("主题", selection: $settings.theme) {
-                            ForEach(0..<ReadSettings.themes.count, id: \.self) { Text(ReadSettings.themes[$0].name).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .independentGlassRow()
                 }
                 .foregroundStyle(palette.primary)
                 .scrollContentBackground(.hidden)
@@ -691,16 +688,16 @@ struct ReaderView: View {
             repaginate()
             if settings.pageMode == 0, !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
         }
-        .onChange(of: settings.fontSize) { _ in repaginate() }
-        .onChange(of: settings.lineSpacing) { _ in repaginate() }
-        .onChange(of: settings.paragraphSpacing) { _ in repaginate() }
-        .onChange(of: settings.fullJustify) { _ in repaginate() }
-        .onChange(of: settings.bottomJustify) { _ in repaginate() }
-        .onChange(of: settings.leftMargin) { _ in repaginate() }
-        .onChange(of: settings.rightMargin) { _ in repaginate() }
-        .onChange(of: settings.topMargin) { _ in repaginate() }
-        .onChange(of: settings.bottomMargin) { _ in repaginate() }
-        .onChange(of: settings.chapterTitleSignature) { _ in repaginate() }
+        .onChange(of: settings.fontSize) { _ in scheduleRepaginate() }
+        .onChange(of: settings.lineSpacing) { _ in scheduleRepaginate() }
+        .onChange(of: settings.paragraphSpacing) { _ in scheduleRepaginate() }
+        .onChange(of: settings.fullJustify) { _ in scheduleRepaginate() }
+        .onChange(of: settings.bottomJustify) { _ in scheduleRepaginate() }
+        .onChange(of: settings.leftMargin) { _ in scheduleRepaginate() }
+        .onChange(of: settings.rightMargin) { _ in scheduleRepaginate() }
+        .onChange(of: settings.topMargin) { _ in scheduleRepaginate() }
+        .onChange(of: settings.bottomMargin) { _ in scheduleRepaginate() }
+        .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -1453,6 +1450,16 @@ struct ReaderView: View {
             bottomInset: CGFloat(settings.bottomMargin),
             chapterTitle: chapters.indices.contains(target) && !chapters[target].isVolume ? chapters[target].title : "",
             titleStyle: settings.chapterTitleStyle)
+    }
+
+    /// 多项设置在同一轮改变时（如日间/夜间整套切换）合并成一次重排。
+    private func scheduleRepaginate() {
+        guard !repaginationScheduled else { return }
+        repaginationScheduled = true
+        Task { @MainActor in
+            repaginationScheduled = false
+            repaginate()
+        }
     }
 
     /// 正文与邻章共享版式；只在布局改变时换标识，主题变化直接重绘各个纸面。
