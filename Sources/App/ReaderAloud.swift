@@ -70,7 +70,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var artworkTask: Task<Void, Never>?
     /// 本章各段已知的音频时长（在线引擎，随播放逐段记录），用于本章进度条。
     private var unitDurations: [Int: TimeInterval] = [:]
-    var playbackEngine: PlaybackEngine { engine == nil ? .system : .http }
+    /// 当前段实际使用的在线引擎；nil = 系统语音。
+    /// 多角色可以让旁白用系统语音、对话用某个在线引擎，所以不能只看会话引擎。
+    private var activeEngine: HTTPTTS?
+    var playbackEngine: PlaybackEngine { activeEngine == nil ? .system : .http }
 
     private let synthesizer = AVSpeechSynthesizer()
     /// 整个收听会话复用一个播放器（音频图只建一次，段间只换源文件）。
@@ -171,14 +174,15 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     private func beginRun(chapter: Int, units list: [AloudUnit], offset: Int, applyTimer: Bool = false) {
         guard let host else { return }
+        let expanded = AloudMultiVoice.expand(list)
         isRunning = true
         isPlaying = true
         chapterIndex = chapter
         chapterTitle = host.chapterTitle(chapter)
-        units = list
-        unitList = list
+        units = expanded
+        unitList = expanded
         unitIndex = resolveStartUnit(offset)
-        unitTotal = list.count
+        unitTotal = expanded.count
         unitDurations.removeAll()
         downloadErrorCount = 0
         playErrorCount = 0
@@ -187,8 +191,22 @@ final class ReaderAloudController: NSObject, ObservableObject {
         if applyTimer { applyTimerDefault() }
         restartTimerLoop()
         restartListeningClock()
-        host.follow(chapter, list[unitIndex].offset)
+        host.follow(chapter, expanded[unitIndex].offset)
         playUnit()
+    }
+
+    /// 开关多角色 / 改完角色声线后：按当前段的偏移重建本章队列，原地继续。
+    func reloadRoleVoices() {
+        guard isRunning, let host, let list = host.units(chapterIndex) else { return }
+        let offset = units.indices.contains(unitIndex) ? units[unitIndex].offset : 0
+        cancelUnitPlayback()
+        let expanded = AloudMultiVoice.expand(list)
+        units = expanded
+        unitList = expanded
+        unitTotal = expanded.count
+        unitIndex = resolveStartUnit(offset)
+        unitDurations.removeAll()
+        if isPlaying { playUnit() }
     }
 
     private func resolveStartUnit(_ offset: Int) -> Int {
@@ -255,6 +273,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         pendingUnitOffset = nil
         units = []
         unitList = []
+        activeEngine = nil
         chapterIndex = -1
         unitTotal = 0
         unitText = ""
@@ -525,6 +544,23 @@ final class ReaderAloudController: NSObject, ObservableObject {
         unitTotal = units.count
         isBuffering = false
         host.follow(chapterIndex, unit.offset)
+
+        // 多角色：角色能覆盖引擎；没配置就沿用当前会话引擎。
+        var httpEngine: HTTPTTS? = engine
+        var systemVoice: AVSpeechSynthesisVoice? = AloudVoiceConfig.speechVoice
+        if let roleChoice = AloudRoleVoiceResolver.choice(for: unit.speaker,
+                                                          config: AloudRoleVoiceStore.shared.config) {
+            switch roleChoice {
+            case let .engine(value):
+                httpEngine = value
+                systemVoice = nil
+            case let .system(value):
+                httpEngine = nil
+                systemVoice = value ?? AloudVoiceConfig.speechVoice
+            }
+        }
+        activeEngine = httpEngine
+
         updateNowPlaying()
         updateChapterProgress()
         guard let speak = AloudText.speakText(for: unit.text) else {
@@ -536,18 +572,18 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             return
         }
-        if let httpEngine = engine {
+        if let httpEngine {
             playHTTPUnit(unit, speak: speak, engine: httpEngine)
         } else {
-            speakSystemUnit(speak)
+            speakSystemUnit(speak, voice: systemVoice)
         }
     }
 
     // MARK: 系统语音
 
-    private func speakSystemUnit(_ speak: String) {
+    private func speakSystemUnit(_ speak: String, voice: AVSpeechSynthesisVoice?) {
         let utterance = AVSpeechUtterance(string: speak)
-        utterance.voice = AloudVoiceConfig.speechVoice
+        utterance.voice = voice ?? AloudVoiceConfig.speechVoice
         utterance.rate = ReaderAloudController.utteranceRate(speed)
         utterance.preUtteranceDelay = 0.08
         currentUtterance = utterance
@@ -834,6 +870,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     func selectEngine(_ engine: HTTPTTS?) {
         AloudTTSConfig.selectedEngineID = engine.map { "\($0.id)" } ?? ""
         self.engine = engine
+        activeEngine = engine
         engineName = host2engineName()
         prefetchTask?.cancel()
         downloadErrorCount = 0
@@ -849,6 +886,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             AloudTTSConfig.selectedEngineID = ""
         }
         engine = selected
+        activeEngine = selected
         engineName = host2engineName()
     }
 

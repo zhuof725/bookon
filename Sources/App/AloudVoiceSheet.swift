@@ -15,6 +15,7 @@ struct AloudVoiceSheet: View {
     /// 切到系统语音/在线引擎时：停掉正在播的书源音频，改回朗读。
     var onStopSourceAudio: (() -> Void)? = nil
     @ObservedObject private var store = AppStore.shared
+    @ObservedObject private var roleVoices = AloudRoleVoiceStore.shared
     @AppStorage(SourceToneAudio.backgroundKey) private var backgroundPlayback = false
     @ThemePalette private var palette
     @Environment(\.dismiss) private var dismiss
@@ -24,6 +25,13 @@ struct AloudVoiceSheet: View {
     @State private var toneSummaries: [String: String] = [:]
 
     private var selectedEngineID: String { AloudTTSConfig.selectedEngineID }
+
+    private var roleSummary: String {
+        guard roleVoices.config.enabled else { return "关闭：整章使用同一个声音" }
+        let count = roleVoices.config.knownNames.count
+        return count > 0 ? "已识别 \(count) 个角色，可按角色指定声线"
+                         : "打开后按引号区分旁白与对话"
+    }
     private var isSystem: Bool {
         selectedEngineID.isEmpty || selectedEngineID == "0" || AloudTTSConfig.selectedEngine == nil
     }
@@ -101,6 +109,43 @@ struct AloudVoiceSheet: View {
                     } footer: {
                         Text("更多音色：系统设置 → 辅助功能 → 朗读内容 → 声音 → 中文，下载后回到这里选择。")
                     }
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { roleVoices.config.enabled },
+                        set: { value in
+                            roleVoices.config.enabled = value
+                            if value { roleVoices.autofillDialogueVoice() }
+                            aloud.reloadRoleVoices()
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("多角色朗读").appFont(.body)
+                            Text(roleSummary)
+                                .appFont(.caption)
+                                .foregroundStyle(palette.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("aloud.voice.roles")
+
+                    NavigationLink {
+                        AloudRoleSettingsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label("角色声线", systemImage: "person.2.wave.2")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(palette.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("aloud.voice.roleSettings")
+                } header: {
+                    Text("多角色朗读")
+                } footer: {
+                    Text("按“”「」把正文拆成旁白与对话，识别「林晚晴说道」这类提示后换音色；旁白、对话、男女声可分别指定系统音色或在线引擎。")
                 }
 
                 Section {
