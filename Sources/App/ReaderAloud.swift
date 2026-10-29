@@ -182,6 +182,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func beginRun(chapter: Int, units list: [AloudUnit], offset: Int, applyTimer: Bool = false) {
         guard let host else { return }
         AloudPurifyStore.shared.reloadBodyRules()
+        AloudPrefetchStatus.shared.reset()
         prefetchTask?.cancel()
         prefetchWindow = nil
         let expanded = AloudMultiVoice.expand(list)
@@ -621,6 +622,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private func playHTTPUnit(_ unit: AloudUnit, speak: String, engine: HTTPTTS) {
         isBuffering = true
         audioTask?.cancel()
+        // 先让预取跑起来：当前段下载可能要 1–3 秒，这段时间正好用来下载下一段。
+        prefetch(from: unitIndex + 1)
         let speed = downloadSpeed(for: engine)
         let key = AloudAudioCache.shared.key(chapter: chapterTitle, engineURL: engine.url,
                                              speed: speed, text: speak)
@@ -661,7 +664,6 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             playErrorCount = 0
             startProgressTracking()
-            prefetch(from: unitIndex + 1)
         }
     }
 
@@ -746,7 +748,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         var items: [PrefetchItem] = []
 
         var i = index
-        let scanEnd = min(snapshot.count, index + max(limit * 4, 16))
+        let scanEnd = min(snapshot.count, index + max(limit * 12, 48))
         let title = chapterTitle
         while i < scanEnd, items.count < limit {
             let unit = snapshot[i]
@@ -762,22 +764,49 @@ final class ReaderAloudController: NSObject, ObservableObject {
         prefetchWindow = index..<scanEnd
         guard !items.isEmpty else { return }
         prefetchTask = Task { @MainActor [weak self] in
-            for item in items {
-                guard let self, !Task.isCancelled else { return }
-                // 播放正在等音频时先把引擎让给播放，避免预取占着限速槽位。
-                while self.isBuffering, !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 120_000_000)
+            guard let self else { return }
+            // 同时下 2 段：短句引擎单请求就要 1–3 秒，串行永远追不上播放。
+            await withTaskGroup(of: Void.self) { group in
+                var next = 0
+                let workers = min(2, items.count)
+                while next < workers {
+                    let item = items[next]
+                    next += 1
+                    group.addTask { await self.prefetchItem(item) }
                 }
-                guard !Task.isCancelled else { return }
-                do {
-                    _ = try await self.downloadAudio(key: item.key, engine: item.engine,
-                                                     text: item.text, speed: item.speed,
-                                                     limitRate: true)
-                } catch {
-                    if !Task.isCancelled { self.prefetchWindow = nil }
-                    return
+                while await group.next() != nil {
+                    if Task.isCancelled {
+                        group.cancelAll()
+                        break
+                    }
+                    if next < items.count {
+                        let item = items[next]
+                        next += 1
+                        group.addTask { await self.prefetchItem(item) }
+                    }
                 }
             }
+        }
+    }
+
+    /// 预取一段。和当前段并行下载：当前段下载/播放的这几秒正是攒缓冲的时间。
+    private func prefetchItem(_ item: PrefetchItem) async {
+        guard !Task.isCancelled else { return }
+        AloudPrefetchStatus.shared.started()
+        do {
+            _ = try await downloadAudio(key: item.key, engine: item.engine,
+                                        text: item.text, speed: item.speed,
+                                        limitRate: true)
+            AloudPrefetchStatus.shared.finished()
+        } catch {
+            if Task.isCancelled {
+                AloudPrefetchStatus.shared.finished()
+                return
+            }
+            prefetchWindow = nil
+            let message = ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                .replacingOccurrences(of: "\n", with: " ")
+            AloudPrefetchStatus.shared.failed(String(message.prefix(40)))
         }
     }
 
