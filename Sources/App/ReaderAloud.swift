@@ -282,7 +282,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         isPlaying = true
         restartListeningClock()
         if needsPreparation {
-            beginPlayback(preparationLimit: 2)
+            beginPlayback()
             updateNowPlaying()
             return
         }
@@ -440,7 +440,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         }
         updateNowPlaying()
         needsPreparation = true
-        if isPlaying { beginPlayback(preparationLimit: 2) }
+        if isPlaying { beginPlayback() }
     }
 
     // MARK: 本章播放进度
@@ -881,10 +881,10 @@ final class ReaderAloudController: NSObject, ObservableObject {
     // MARK: - 开播前缓冲与下一章
 
     /// 开播前要准备好的在线段：从当前位置往后，最多「预加载段落」段。
-    private func preparationItems(limit override: Int? = nil) -> [PrefetchItem] {
+    private func preparationItems() -> [PrefetchItem] {
         guard !units.isEmpty else { return [] }
         let config = AloudRoleVoiceStore.shared.config
-        let limit = max(1, min(override ?? AloudTTSConfig.preloadCount, 50))
+        let limit = max(1, min(AloudTTSConfig.preloadCount, 50))
         let title = chapterTitle
         var items: [PrefetchItem] = []
         var keys = Set<String>()
@@ -907,14 +907,14 @@ final class ReaderAloudController: NSObject, ObservableObject {
     }
 
     /// 开播：先按「预加载段落」把前面的在线音频准备好，再真正播放。
-    private func beginPlayback(preparationLimit: Int? = nil) {
+    private func beginPlayback() {
         prepareTask?.cancel()
         prepareTask = nil
         preparationDone = 0
         preparationTotal = 0
         preparationFailed = 0
         needsPreparation = false
-        let items = preparationItems(limit: preparationLimit)
+        let items = preparationItems()
         guard !items.isEmpty else {
             playUnit()
             return
