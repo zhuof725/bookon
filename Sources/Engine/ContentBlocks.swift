@@ -24,6 +24,15 @@ struct ChapterCommentItem: Equatable {
     var likes: String
 }
 
+/// SVG 里一条 `<text>` 的文字与定位，用于把书源画的评论卡还原成结构化条目。
+struct SVGTextRun: Equatable {
+    var text: String
+    var x: Double
+    var y: Double
+    var size: Double
+    var anchorEnd: Bool
+}
+
 enum ContentBlocks {
     /// 把规则输出拆成有序块。普通文本（没有任何评论标签）得到只含 paragraph 的块，与原来的 cleanText 逐行一致。
     ///
@@ -107,6 +116,11 @@ enum ContentBlocks {
                                                     clickURL: click,
                                                     rawSrc: src == clean ? nil : src))
                     } else if let svg = svgText(decoded), let native = nativeBlock(fromSVG: svg, click: click) {
+                        blocks.append(native)
+                    } else if clean != decoded, let svg = svgText(clean),
+                              let native = nativeBlock(fromSVG: svg, click: click) {
+                        // imageDecode 把 data: SVG 换成了别的地址时，仍用书源原始 SVG
+                        // 识别评论卡，避免整张「本章说」大图漏到正文里。
                         blocks.append(native)
                     } else if let svg = svgText(decoded), !(opts["js"] ?? "").isEmpty,
                               let badge = jsBubbleBlock(fromSVG: svg, click: click) {
@@ -307,11 +321,113 @@ enum ContentBlocks {
 
     /// SVG 里所有 <text> 的内容，保持出现顺序。
     static func svgTexts(_ svg: String) -> [String] {
+        let flat = svg.replacingOccurrences(of: "</?tspan\\b[^>]*>", with: "",
+                                            options: [.regularExpression, .caseInsensitive])
         guard let re = try? NSRegularExpression(pattern: "<text\\b[^>]*>([^<]*)</text>", options: [.caseInsensitive]) else { return [] }
-        let ns = svg as NSString
-        return re.matches(in: svg, range: NSRange(location: 0, length: ns.length)).map {
+        let ns = flat as NSString
+        return re.matches(in: flat, range: NSRange(location: 0, length: ns.length)).map {
             xmlUnescape(ns.substring(with: $0.range(at: 1))).trimmingCharacters(in: .whitespacesAndNewlines)
         }
+    }
+
+    /// 带坐标的 `<text>` 列表：书源用固定坐标画评论卡，靠 x/y 才能把
+    /// 用户名、点赞数和正文行分组。
+    static func svgTextRuns(_ svg: String) -> [SVGTextRun] {
+        let flat = svg.replacingOccurrences(of: "</?tspan\\b[^>]*>", with: "",
+                                            options: [.regularExpression, .caseInsensitive])
+        guard let re = try? NSRegularExpression(pattern: "<text\\b([^>]*)>([^<]*)</text>",
+                                                options: [.caseInsensitive]) else { return [] }
+        let ns = flat as NSString
+        return re.matches(in: flat, range: NSRange(location: 0, length: ns.length)).compactMap { m in
+            let text = xmlUnescape(ns.substring(with: m.range(at: 2)))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            let attrs = ns.substring(with: m.range(at: 1))
+            return SVGTextRun(
+                text: text,
+                x: Double(attribute("x", in: attrs) ?? "") ?? 0,
+                y: Double(attribute("y", in: attrs) ?? "") ?? 0,
+                size: Double(attribute("font-size", in: attrs) ?? "") ?? 0,
+                anchorEnd: (attribute("text-anchor", in: attrs) ?? "").lowercased() == "end")
+        }
+    }
+
+    private static func svgWidth(_ svg: String) -> Double? {
+        guard let re = try? NSRegularExpression(pattern: "<svg\\b[^>]*>", options: [.caseInsensitive]),
+              let m = re.firstMatch(in: svg, range: NSRange(location: 0, length: (svg as NSString).length)) else { return nil }
+        let tag = (svg as NSString).substring(with: m.range)
+        if let w = svgLength(in: tag, name: "width"), w > 0 { return w }
+        if let re2 = try? NSRegularExpression(pattern: "\\bviewBox\\s*=\\s*\"([^\"]+)\""),
+           let m2 = re2.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
+           let r = Range(m2.range(at: 1), in: tag) {
+            let parts = tag[r].split(separator: " ").compactMap { Double($0) }
+            if parts.count >= 4, parts[2] > 0 { return parts[2] }
+        }
+        return nil
+    }
+
+    /// 书源把「本章说」整卡画成 SVG：用户名在左、点赞数在右、正文按行跟在下面。
+    /// 按 x/y 分组还原成原生条目；不是这种结构就返回空，调用方退回紧凑入口条。
+    static func chapterCommentItems(fromSVG svg: String) -> [ChapterCommentItem] {
+        let runs = svgTextRuns(svg)
+        guard runs.count >= 3,
+              let titleIndex = runs.firstIndex(where: { discussionTitles.contains($0.text) }) else { return [] }
+        var start = titleIndex + 1
+        if start < runs.count,
+           runs[start].text.contains("条评论") || Int(runs[start].text) != nil {
+            start += 1
+        }
+        let body = Array(runs[start...])
+        guard body.count >= 2 else { return [] }
+        let width = svgWidth(svg) ?? 1000
+
+        func hasLikeRow(at index: Int) -> Bool {
+            let name = body[index]
+            guard name.x < width * 0.5, !name.anchorEnd else { return false }
+            var j = index + 1
+            while j < body.count, j <= index + 2 {
+                let run = body[j]
+                if (run.x > width * 0.5 || run.anchorEnd),
+                   abs(run.y - name.y) < 32,
+                   run.text.rangeOfCharacter(from: .decimalDigits) != nil {
+                    return true
+                }
+                j += 1
+            }
+            return false
+        }
+
+        var items: [ChapterCommentItem] = []
+        var index = 0
+        while index < body.count {
+            guard hasLikeRow(at: index) else { index += 1; continue }
+            let name = body[index]
+            var likeIndex = index + 1
+            while likeIndex < body.count, likeIndex <= index + 2 {
+                let run = body[likeIndex]
+                if (run.x > width * 0.5 || run.anchorEnd),
+                   abs(run.y - name.y) < 32,
+                   run.text.rangeOfCharacter(from: .decimalDigits) != nil {
+                    break
+                }
+                likeIndex += 1
+            }
+            guard likeIndex < body.count else { break }
+            var lines: [String] = []
+            var next = likeIndex + 1
+            while next < body.count, !hasLikeRow(at: next) {
+                let run = body[next]
+                if !run.anchorEnd, run.x < width * 0.5 { lines.append(run.text) }
+                next += 1
+            }
+            if !lines.isEmpty {
+                items.append(ChapterCommentItem(user: name.text,
+                                                text: lines.joined(),
+                                                likes: body[likeIndex].text))
+            }
+            index = max(next, likeIndex + 1)
+        }
+        return items
     }
 
     /// 书源把「标签 + 一行评论」的卡片都画成 SVG：起点用「热评」，番茄/大灰狼用「神评论」。
@@ -408,9 +524,10 @@ enum ContentBlocks {
         }
         if texts.count >= 2, Self.discussionTitles.contains(texts[0]) {
             // 后面是 用户名、(点赞数 在图形里)、正文行… 的重复；书源把正文按行切成多个 <text>。
-            // 这里只可靠地得到标题和计数；条目不再还原，点击进入评论页查看。
-            // 认成原生卡片还有两个好处：条数能显示出来，而且是文字控件（比 SVG 图片好点）。
-            return .chapterComments(title: texts[0], count: texts[1], items: [], clickURL: click)
+            // 有坐标就还原成原生条目；解析不出来时退回标题 + 条数的紧凑入口条。
+            let items = chapterCommentItems(fromSVG: svg)
+            let count = texts.first(where: { $0.contains("条评论") }) ?? texts[1]
+            return .chapterComments(title: texts[0], count: count, items: items, clickURL: click)
         }
         return nil
     }

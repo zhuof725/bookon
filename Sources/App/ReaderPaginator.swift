@@ -327,8 +327,10 @@ enum ReaderPaginator {
             return 120
         case .hotComment:
             return max(configuration.fontSize - 3, 12) + 20
-        case .chapterComments:
-            return max(configuration.fontSize - 2, 11) + 24
+        case .chapterComments(_, _, let items, _):
+            return ChapterCommentsCard.height(items: items,
+                                              fontSize: configuration.fontSize,
+                                              width: configuration.textWidth)
         case .inlineBubble, .paragraph:
             return 0
         }

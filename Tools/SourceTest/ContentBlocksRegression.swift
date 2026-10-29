@@ -51,6 +51,28 @@ enum CommentCardRegression {
             check(t == "本章说" && c == "33 条评论 〉" && u == url, "章评卡片：标题、计数、点击网址")
         } else { check(false, "章评卡片：应识别为 chapterComments") }
 
+        // 书源把「本章说」整卡画成 SVG：按 x/y 把用户名、点赞数、正文行还原成条目。
+        let full = "<svg width=\"1000\" height=\"620\" xmlns=\"http://www.w3.org/2000/svg\">"
+            + "<text x=\"40\" y=\"96\" font-size=\"64\" font-weight=\"bold\">本章说</text>"
+            + "<text x=\"960\" y=\"96\" font-size=\"48\" text-anchor=\"end\" font-weight=\"bold\">584 条评论 〉</text>"
+            + "<text x=\"40\" y=\"194\" font-size=\"54\" font-weight=\"bold\">爱吃大脑腐</text>"
+            + "<text x=\"891\" y=\"182\" font-size=\"36\" font-weight=\"bold\">77</text>"
+            + "<text x=\"40\" y=\"256\" font-size=\"52\" font-weight=\"bold\">我看了一下对于人口的纠结</text>"
+            + "<text x=\"40\" y=\"316\" font-size=\"52\" font-weight=\"bold\">香港...</text>"
+            + "<text x=\"40\" y=\"536\" font-size=\"54\" font-weight=\"bold\">浪费时间</text>"
+            + "<text x=\"891\" y=\"524\" font-size=\"36\" font-weight=\"bold\">151</text>"
+            + "<text x=\"40\" y=\"600\" font-size=\"52\" font-weight=\"bold\">作者是不是对百万人没有概念</text>"
+            + "</svg>"
+        let fb = ContentBlocks.parse("<img src=\"data:image/svg+xml;base64,\(b64(full))\" onClick=\"java.startBrowser('\(url)')\"/>")
+        if case .chapterComments(let ft, let fc, let items, _)? = fb.first {
+            check(ft == "本章说" && fc == "584 条评论 〉", "章评条目：标题与计数")
+            check(items.count == 2, "章评条目：按行还原两条")
+            check(items.first?.user == "爱吃大脑腐" && items.first?.likes == "77", "章评条目：第一条用户名与点赞")
+            check(items.first?.text.contains("我看了一下对于人口的纠结") == true
+                  && items.first?.text.contains("香港") == true, "章评条目：正文多行合并")
+            check(items.last?.user == "浪费时间" && items.last?.likes == "151", "章评条目：第二条用户名与点赞")
+        } else { check(false, "章评条目：应识别为 chapterComments") }
+
         // 神评论标签（大灰狼/番茄书源）：与热评同属「标签+一行」的评论卡片。
         let god = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"108\"><rect width=\"100%\" height=\"100%\" fill=\"rgba(255,255,255,0.55)\" rx=\"30\"/><rect x=\"35\" y=\"28\" width=\"125\" height=\"52\" rx=\"16\" fill=\"#F06260\"/><text x=\"97\" y=\"65\" font-size=\"32\" fill=\"#FFFFFF\" text-anchor=\"middle\" font-weight=\"bold\">神评论</text><text x=\"175\" y=\"67\" font-size=\"38\" fill=\"#333333\">这本书越看越上头</text></svg>"
         let gb = ContentBlocks.parse("<img src=\"data:image/svg+xml;base64,\(b64(god))\" onClick=\"java.startBrowser('\(url)')\"/>")

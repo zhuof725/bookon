@@ -139,16 +139,12 @@ struct PageContentView: View {
                         .background(RoundedRectangle(cornerRadius: 22).fill(fg.opacity(0.07)))
                         .onTapGesture { onTapComment(click) }
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
-                    case .chapterComments(let t, let count, _, let click):
-                        HStack {
-                            Text(t).appFont(.system(size: fontSize - 2, weight: .bold))
-                            Spacer()
-                            Text(count).appFont(.system(size: fontSize - 4)).foregroundStyle(fg.opacity(0.7))
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(fg.opacity(0.07)))
-                        .onTapGesture { onTapComment(click) }
-                        .padding(.top, paragraphLeadingGap(at: blockIndex))
+                    case .chapterComments(let t, let count, let items, let click):
+                        ChapterCommentsCard(title: t, count: count, items: items,
+                                            fontSize: fontSize, foreground: fg, background: bg,
+                                            onTap: { onTapComment(click) })
+                            .frame(height: renderedBlockHeight(at: blockIndex), alignment: .topLeading)
+                            .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .image(let src, let click, _):
                         ContentImageView(src: src)
                             .onTapGesture { onTapComment(click) }

@@ -134,6 +134,7 @@ targets:
       - path: ../../Sources/App/BubbleStyleEditor.swift
       - path: ../../Sources/App/ReaderTextLayout.swift
       - path: ../../Sources/App/PageTurnView.swift
+      - path: ../../Sources/App/ChapterCommentsCard.swift
       - path: ../../Sources/App/PageTurnCoordinator.swift
       - path: ../../Sources/App/ReaderPageHost.swift
       - path: ../../Sources/App/ReaderPaginator.swift

@@ -1805,16 +1805,11 @@ struct ReaderView: View {
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(theme.fg.opacity(0.12), lineWidth: 0.5))
             .contentShape(Rectangle())
             .onTapGesture { commentTapped(click) }
-        case .chapterComments(let title, let count, _, let click):
-            HStack {
-                Text(title).appFont(.system(size: settings.fontSize - 2, weight: .bold))
-                Spacer()
-                Text(count).appFont(.system(size: settings.fontSize - 4)).foregroundStyle(theme.fg.opacity(0.7))
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 16).fill(theme.fg.opacity(0.07)))
-            .contentShape(Rectangle())
-            .onTapGesture { commentTapped(click) }
+        case .chapterComments(let title, let count, let items, let click):
+            ChapterCommentsCard(title: title, count: count, items: items,
+                                fontSize: CGFloat(settings.fontSize),
+                                foreground: theme.fg, background: theme.bg,
+                                onTap: { commentTapped(click) })
         }
     }
 
