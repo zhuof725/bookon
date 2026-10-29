@@ -40,7 +40,7 @@ struct AIProviderEditView: View {
         _temperature = State(initialValue: config?.temperature ?? 0.7)
         _enabled = State(initialValue: config?.enabled ?? true)
         _makeDefault = State(initialValue: config != nil && AIServiceStore.shared.defaultID == config?.id)
-        _proto = State(initialValue: provider.proto)
+        _proto = State(initialValue: config?.proto ?? provider.proto)
         _appendV1 = State(initialValue: config?.appendV1 ?? provider.appendV1)
     }
 
@@ -525,6 +525,7 @@ struct AIProviderEditView: View {
                         temperature: temperature,
                         enabled: enabled,
                         appendV1: (isCustom || effectiveProvider.proto == .openAI) ? appendV1 : nil,
+                        proto: isCustom ? proto : nil,
                         updatedAt: existing?.updatedAt ?? Date())
     }
 

@@ -339,7 +339,7 @@ struct ExploreBoardCard: View {
     private func generateRecommendations() {
         let ai = AIServiceStore.shared
         guard let config = ai.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = ai.apiKey(for: config.id) else {
             aiMessage = "先在「我的 → AI 提供商」配置并启用一个服务。"
             return

@@ -196,6 +196,39 @@ enum AIRegression {
         check(geminiListURL.contains("/v1beta/models"), "Gemini 的模型端点")
         check(geminiListURL.contains("key=AIza"), "Gemini 模型列表的密钥参数")
 
+        // MARK: 配置 → provider 解析（自定义服务的 id 是 custom-<uuid>）
+
+        let customConfig = AIServiceConfig(id: "custom-1111", name: "1111",
+                                           baseURL: "https://api.river.ai", model: "m")
+        let customResolved = AICatalog.provider(for: customConfig)
+        check(customResolved?.isCustom == true, "自定义服务 custom-<uuid> 能解析出 provider")
+        check(customResolved?.proto == .openAI, "自定义服务默认按 OpenAI 兼容")
+        check(customResolved?.name == "自定义服务", "自定义服务沿用模板名称")
+        check(customConfig.displayName == "1111", "自定义服务显示保存的名字")
+
+        var claudeCustom = customConfig
+        claudeCustom.proto = .anthropic
+        check(AICatalog.provider(for: claudeCustom)?.proto == .anthropic, "自定义服务保存的协议生效")
+        check(AICatalog.provider(for: AIServiceConfig(id: "nope", baseURL: "https://x", model: "m")) == nil,
+              "未知 id 不会被误当成自定义服务")
+
+        let builtinResolved = AICatalog.provider(for: AIServiceConfig(id: "claude", baseURL: "https://x", model: "m"))
+        check(builtinResolved?.id == "claude" && builtinResolved?.proto == .anthropic, "内置服务仍按目录解析")
+
+        // 协议要随配置一起落库（旧数据没有这个键，解码为 nil）
+        if let data = try? JSONEncoder().encode(claudeCustom),
+           let decoded = try? JSONDecoder().decode(AIServiceConfig.self, from: data) {
+            check(decoded.proto == .anthropic, "配置编码后保留协议")
+        } else {
+            check(false, "配置编码/解码失败")
+        }
+        if let legacy = try? JSONDecoder().decode(AIServiceConfig.self, from: Data(#"{"id":"custom-x","baseURL":"https://x","model":"m","temperature":0.7,"enabled":true,"updatedAt":0}"#.utf8)) {
+            check(legacy.proto == nil && AICatalog.provider(for: legacy)?.proto == .openAI,
+                  "旧配置缺少协议字段时按 OpenAI 兼容")
+        } else {
+            check(false, "旧配置解码失败")
+        }
+
         // MARK: 目录完整性
 
         check(AICatalog.builtins.count >= 9, "内置提供商至少 9 个")

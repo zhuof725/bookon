@@ -209,7 +209,7 @@ struct ExploreView: View {
     @MainActor
     private func generatePicksNow() async {
         guard let config = ai.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = ai.apiKey(for: config.id) else { return }
         aiRefreshing = true
         defer { aiRefreshing = false }
@@ -257,7 +257,7 @@ struct ExploreView: View {
     private func runAutoRefreshIfNeeded() async {
         let service = AIServiceStore.shared
         guard let config = service.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = service.apiKey(for: config.id) else { return }
         let hasBoard = store.boards.contains { $0.id == AIRecommendation.boardID }
         // 还没有推荐板块时不等冷却：用户第一次进来就应该看到内容。
@@ -335,7 +335,7 @@ struct ExploreView: View {
     @MainActor
     private func handlePullRefresh() async {
         guard let config = ai.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = ai.apiKey(for: config.id) else {
             // 没有可用服务时必须说清楚，否则用户只觉得「刷了没反应」。
             recommendError = aiUnavailableReason
@@ -438,7 +438,7 @@ struct ExploreView: View {
     private func retryRecommend() {
         let service = AIServiceStore.shared
         guard let config = service.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = service.apiKey(for: config.id) else {
             recommendError = "还没有可用的 AI 服务。"
             return
@@ -590,7 +590,7 @@ struct ExploreManageSheet: View {
     private func pickNow() {
         let ai = AIServiceStore.shared
         guard let config = ai.activeConfig,
-              let provider = AICatalog.provider(id: config.id),
+              let provider = AICatalog.provider(for: config),
               let key = ai.apiKey(for: config.id) else {
             pickMessage = "先在「我的 → AI 提供商」配置并启用一个服务。"
             return

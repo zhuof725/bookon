@@ -134,7 +134,7 @@ final class AIServiceStore: ObservableObject {
         }
     }
 
-    static let customPrefix = "custom-"
+    static let customPrefix = AICatalog.customIDPrefix
 
     // MARK: 持久化
 

@@ -85,6 +85,25 @@ enum AICatalog {
     static func provider(id: String) -> AIProvider? {
         builtins.first { $0.id == id } ?? (id == custom.id ? custom : nil)
     }
+
+    /// 自定义服务保存后的 id 前缀（真正存的是 `custom-<uuid>`）。
+    static let customIDPrefix = "custom-"
+
+    /// 由已保存的配置还原请求用的 `AIProvider`。
+    ///
+    /// 自定义服务的 id 是 `custom-<uuid>`，不能直接按目录 id 查；
+    /// 用户选的接口协议也存在配置里（旧数据没有则按 OpenAI 兼容处理）。
+    static func provider(for config: AIServiceConfig) -> AIProvider? {
+        if let base = provider(id: config.id) {
+            var value = base
+            if let proto = config.proto { value.proto = proto }
+            return value
+        }
+        guard config.id.hasPrefix(customIDPrefix) else { return nil }
+        var value = custom
+        value.proto = config.proto ?? .openAI
+        return value
+    }
 }
 
 /// 一条对话消息。只用到 system / user / assistant 三种角色。
@@ -108,10 +127,13 @@ struct AIServiceConfig: Codable, Identifiable, Equatable, Sendable {
     var enabled: Bool
     /// OpenAI 兼容地址是否自动补 `/v1`；nil 表示跟随提供商默认。
     var appendV1: Bool?
+    /// 自定义服务选择的接口协议；nil 表示跟随提供商（内置服务固定，自定义按 OpenAI 兼容）。
+    var proto: AIProtocol?
     var updatedAt: Date
 
     init(id: String, name: String? = nil, baseURL: String, model: String, temperature: Double = 0.7,
-         enabled: Bool = true, appendV1: Bool? = nil, updatedAt: Date = Date()) {
+         enabled: Bool = true, appendV1: Bool? = nil, proto: AIProtocol? = nil,
+         updatedAt: Date = Date()) {
         self.id = id
         self.name = name
         self.baseURL = baseURL
@@ -125,7 +147,7 @@ struct AIServiceConfig: Codable, Identifiable, Equatable, Sendable {
     var displayName: String {
         let trimmed = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        return AICatalog.provider(id: id)?.name ?? "AI 服务"
+        return AICatalog.provider(for: self)?.name ?? "AI 服务"
     }
 
     var trimmedModel: String { model.trimmingCharacters(in: .whitespacesAndNewlines) }
