@@ -46,16 +46,34 @@ enum AIRecommender {
         let selected = Array(books.filter { !$0.bookUrl.isEmpty }.prefix(maxBooks))
         guard !selected.isEmpty else { throw AIError.emptyReply }
 
-        let reply = try await client.complete(
+        /// 模型偶尔会包一层 {"result": {...}} 或返回数组；先按原样，失败再尝试取内层对象。
+        func merged(_ text: String) -> Int? {
+            if let count = try? ExploreMetaStore.merge(json: text), count > 0 { return count }
+            if let inner = firstJSONObject(in: text),
+               let count = try? ExploreMetaStore.merge(json: inner), count > 0 { return count }
+            return nil
+        }
+
+        var reply = try await client.complete(
             provider: provider, config: config, apiKey: apiKey,
             messages: [.system(systemPrompt()), .user(userPrompt(for: selected))],
-            maxTokens: 1600, timeout: 90)
+            maxTokens: 1800, timeout: 90)
+        if let count = merged(reply) { return count }
 
-        // 模型偶尔会包一层 {"result": {...}} 或返回数组；先按原样，失败再尝试取内层对象。
-        if let count = try? ExploreMetaStore.merge(json: reply), count > 0 { return count }
-        if let inner = firstJSONObject(in: reply),
-           let count = try? ExploreMetaStore.merge(json: inner), count > 0 { return count }
-        throw AIError.decode("返回的内容不是约定的 JSON")
+        // 温度偏高时模型容易写成散文：压到 0.2 再要一次 JSON。
+        var strictConfig = config
+        strictConfig.temperature = 0.2
+        let strictSystem = systemPrompt()
+            + "\n\n注意：上一次的回复不是约定的 JSON。这次只输出一个 JSON 对象，任何解释都不要写。"
+        reply = try await client.complete(
+            provider: provider, config: strictConfig, apiKey: apiKey,
+            messages: [.system(strictSystem), .user(userPrompt(for: selected))],
+            maxTokens: 2200, timeout: 90)
+        if let count = merged(reply) { return count }
+
+        let snippet = reply.replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        throw AIError.decode("返回的内容不是约定的 JSON（开头：\(String(snippet.prefix(40)))）")
     }
 
     /// 从一段文本里截出第一个完整的 JSON 对象（处理前后多嘴的解释）。

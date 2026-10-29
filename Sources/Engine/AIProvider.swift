@@ -167,6 +167,7 @@ enum AIError: LocalizedError, Equatable {
     case badURL
     case http(Int, String)
     case emptyReply
+    case truncated
     case decode(String)
 
     var errorDescription: String? {
@@ -177,6 +178,8 @@ enum AIError: LocalizedError, Equatable {
         case let .http(code, message):
             return message.isEmpty ? "服务返回 HTTP \(code)。" : "HTTP \(code)：\(message)"
         case .emptyReply: return "服务返回了空回复。"
+        case .truncated:
+            return "模型输出被 max_tokens 截断（推理模型会先花 token 思考）。把温度调低，或换一个非推理模型。"
         case let .decode(detail): return "无法解析服务响应：\(detail)"
         }
     }
@@ -319,6 +322,11 @@ enum AIResponseParser {
                 let joined = parts.compactMap { $0["text"] as? String }.joined()
                 if !joined.isEmpty { return joined }
             }
+            // 推理模型：思考过程单独放在 reasoning_content，正文为空 —— 通常是 token 用完了。
+            if let reasoning = message["reasoning_content"] as? String, !reasoning.isEmpty {
+                throw AIError.truncated
+            }
+            if (choices.first?["finish_reason"] as? String) == "length" { throw AIError.truncated }
             throw AIError.emptyReply
 
         case .anthropic:
@@ -329,6 +337,7 @@ enum AIResponseParser {
                 guard (block["type"] as? String) == "text" else { return nil }
                 return block["text"] as? String
             }.joined()
+            if text.isEmpty, (root["stop_reason"] as? String) == "max_tokens" { throw AIError.truncated }
             guard !text.isEmpty else { throw AIError.emptyReply }
             return text
 
@@ -339,6 +348,9 @@ enum AIResponseParser {
                 throw AIError.decode(errorMessage(root) ?? "缺少 candidates[0].content.parts")
             }
             let text = parts.compactMap { $0["text"] as? String }.joined()
+            if text.isEmpty, (candidates.first?["finishReason"] as? String) == "MAX_TOKENS" {
+                throw AIError.truncated
+            }
             guard !text.isEmpty else { throw AIError.emptyReply }
             return text
         }
@@ -386,5 +398,68 @@ enum AITextCleaner {
             }
         }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// 结构化输出失败时的兜底：模型没给 JSON，但通常会在正文里按编号列出书名。
+/// 这里只做一件事 —— 认出候选书名，理由取书名后面那半句。
+enum AILooseSuggestions {
+    struct Pick: Equatable {
+        let index: Int
+        let reason: String?
+    }
+
+    static func parse(text: String, names: [String], limit: Int = 8) -> [Pick] {
+        let trimmedNames = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        var picks: [Pick] = []
+        var seen = Set<Int>()
+
+        for rawLine in text.components(separatedBy: .newlines) {
+            let value = stripBullet(rawLine.trimmingCharacters(in: .whitespacesAndNewlines))
+            guard value.count >= 4 else { continue }
+
+            var best: (index: Int, range: Range<String.Index>)?
+            for (offset, name) in trimmedNames.enumerated() {
+                guard name.count >= 2, let range = value.range(of: name) else { continue }
+                guard let current = best else {
+                    best = (offset, range)
+                    continue
+                }
+                // 同一行出现包含关系的书名时，取更长、更靠前的那个。
+                if range.lowerBound < current.range.lowerBound
+                    || (range.lowerBound == current.range.lowerBound
+                        && range.upperBound > current.range.upperBound) {
+                    best = (offset, range)
+                }
+            }
+            guard let match = best, !seen.contains(match.index) else { continue }
+
+            // 一行里还提到别的候选，多半是开头复述书单，不算推荐。
+            var rest = value
+            rest.removeSubrange(match.range)
+            let mentionsOther = trimmedNames.enumerated().contains { pair in
+                pair.offset != match.index && pair.element.count >= 2 && rest.contains(pair.element)
+            }
+            guard !mentionsOther else { continue }
+
+            var reason = rest
+            reason = reason.trimmingCharacters(in: CharacterSet(charactersIn:
+                " \t：:，,。.、-—–|｜《》「」\"'‘’“”（）()【】[]*•·"))
+            if reason.count > 120 { reason = String(reason.prefix(120)) }
+            guard reason.isEmpty || reason.count >= 4 else { continue }
+            picks.append(Pick(index: match.index, reason: reason.isEmpty ? nil : reason))
+            seen.insert(match.index)
+            if picks.count >= limit { break }
+        }
+        return picks
+    }
+
+    /// 去掉列表编号：`1.` / `1、` / `①` / `-` 之类，避免混进推荐语。
+    private static func stripBullet(_ text: String) -> String {
+        let pattern = #"^\s*(?:[-*•·]|[0-9]{1,2}\s*[.、．)）:：]|[一二三四五六七八九十]{1,2}\s*[.、．)）:：]|[①-⑳])\s*"#
+        guard let range = text.range(of: pattern, options: .regularExpression) else { return text }
+        var value = text
+        value.removeSubrange(range)
+        return value
     }
 }

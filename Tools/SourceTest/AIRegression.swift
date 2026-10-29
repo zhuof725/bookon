@@ -196,6 +196,27 @@ enum AIRegression {
         check(geminiListURL.contains("/v1beta/models"), "Gemini 的模型端点")
         check(geminiListURL.contains("key=AIza"), "Gemini 模型列表的密钥参数")
 
+        // MARK: 模型不按 JSON 答时的兜底（从散文里认书名）
+
+        let prose = """
+        结合你的阅读记录，我推荐这几本：
+        1. 《让仙门再次伟大》—— 宗门争锋的爽点很足，节奏也快
+        2. 万生痴魔：脑洞大，种田变强一路升级
+        你列的《让仙门再次伟大》《万生痴魔》里，这两本最合适。
+        """
+        let loose = AILooseSuggestions.parse(text: prose,
+                                             names: ["让仙门再次伟大", "万生痴魔", "捞尸人"],
+                                             limit: 8)
+        check(loose.count == 2, "散文回复里认出两本书")
+        check(loose.first?.index == 0, "第一本命中候选 1")
+        check(loose.first?.reason?.contains("宗门") == true, "推荐语取书名后半句")
+        check(loose.last?.index == 1, "第二本命中候选 2")
+        check(AILooseSuggestions.parse(text: "你列的《让仙门再次伟大》《万生痴魔》都很适合你。",
+                                       names: ["让仙门再次伟大", "万生痴魔"]).isEmpty,
+              "一行提到多本时不误判为推荐")
+        check(AILooseSuggestions.parse(text: "推荐《仙门传》这本。", names: ["仙门", "仙门传"]).first?.index == 1,
+              "书名有包含关系时取更长的那本")
+
         // MARK: 配置 → provider 解析（自定义服务的 id 是 custom-<uuid>）
 
         let customConfig = AIServiceConfig(id: "custom-1111", name: "1111",

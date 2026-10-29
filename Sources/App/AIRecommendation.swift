@@ -182,13 +182,37 @@ enum AIRecommendation {
         pool = Array(rank(pool, keywords: keywords).prefix(candidateLimit))
         guard !pool.isEmpty else { throw RecommendationError.noCandidates }
 
-        let reply = try await client.complete(
+        let messages: [AIMessage] = [
+            .system(systemPrompt()),
+            .user(userPrompt(shelf: shelf, keywords: keywords, candidates: pool))
+        ]
+        var reply = try await client.complete(
             provider: provider, config: config, apiKey: apiKey,
-            messages: [.system(systemPrompt()),
-                       .user(userPrompt(shelf: shelf, keywords: keywords, candidates: pool))],
-            maxTokens: 1200, timeout: 120)
+            messages: messages, maxTokens: 2000, timeout: 120)
 
-        let parsed = try parse(reply)
+        // 模型偶尔不按 JSON 答（温度高时尤其常见）：正文里能认出书名也算数。
+        var parsed = parseFlexible(reply, candidates: pool)
+
+        if parsed == nil {
+            // 再给一次机会：温度压到 0.2，明确要求只输出 JSON。
+            var strictConfig = config
+            strictConfig.temperature = 0.2
+            let strictSystem = systemPrompt()
+                + "\n\n注意：上一次的回复不是约定的 JSON。这次只输出一个 JSON 对象，任何解释都不要写。"
+            reply = try await client.complete(
+                provider: provider, config: strictConfig, apiKey: apiKey,
+                messages: [.system(strictSystem),
+                           .user(userPrompt(shelf: shelf, keywords: keywords, candidates: pool))],
+                maxTokens: 2400, timeout: 120)
+            parsed = parseFlexible(reply, candidates: pool)
+        }
+
+        guard let parsed else {
+            let snippet = reply.replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw RecommendationError.badReply(
+                "回复里既没有 JSON 也没有书名（开头：\(String(snippet.prefix(50)))）")
+        }
         var books: [Book] = []
         var subtitle = parsed.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
@@ -241,6 +265,16 @@ enum AIRecommendation {
         }
         guard !picks.isEmpty else { throw RecommendationError.badReply("缺少 picks") }
         return Parsed(subtitle: root["subtitle"] as? String, picks: picks)
+    }
+
+    /// 先按 JSON 解析；不行再从正文里认候选书名。
+    private static func parseFlexible(_ text: String, candidates: [Book]) -> Parsed? {
+        if let parsed = try? parse(text), !parsed.picks.isEmpty { return parsed }
+        let loose = AILooseSuggestions.parse(text: text, names: candidates.map(\.name),
+                                             limit: targetCount)
+        guard !loose.isEmpty else { return nil }
+        return Parsed(subtitle: nil,
+                      picks: loose.map { Pick(index: $0.index + 1, reason: $0.reason) })
     }
 
     static func firstJSONObject(in text: String) -> String? {
