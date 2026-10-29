@@ -153,19 +153,77 @@ enum AloudMultiVoice {
                 result.append(unit)
                 continue
             }
+            var paragraph: [AloudUnit] = []
             for segment in segments {
                 if case let .character(name, _) = segment.speaker,
                    !discovered.contains(name) {
                     discovered.append(name)
                 }
-                result.append(AloudUnit(offset: segment.offset, text: segment.text,
-                                        speaker: segment.speaker))
+                paragraph.append(AloudUnit(offset: segment.offset, text: segment.text,
+                                           speaker: segment.speaker))
             }
+            // 只在同一自然段内合并，避免把整章拼成一条超长请求。
+            result.append(contentsOf: merged(paragraph, config: config))
         }
         if !discovered.isEmpty {
             AloudRoleVoiceStore.shared.note(names: discovered)
         }
         return result.isEmpty ? list : result
+    }
+
+    /// 相邻两段最终用的是同一个声线时合并，避免在线引擎为每个短句都发一次请求
+    /// （只开多角色、还没配不同音色时尤其明显）。不同声线保持拆段。
+    private static func merged(_ units: [AloudUnit],
+                               config: AloudRoleVoiceConfig) -> [AloudUnit] {
+        var output: [AloudUnit] = []
+        for unit in units {
+            if let last = output.last,
+               voiceIdentity(for: last.speaker, config: config)
+                == voiceIdentity(for: unit.speaker, config: config) {
+                output[output.count - 1] = AloudUnit(offset: last.offset,
+                                                     text: last.text + unit.text,
+                                                     speaker: last.speaker)
+            } else {
+                output.append(unit)
+            }
+        }
+        return output
+    }
+
+    /// 声线身份：空字符串表示跟随当前会话引擎；相同身份才允许合并。
+    private static func voiceIdentity(for speaker: AloudSpeaker,
+                                      config: AloudRoleVoiceConfig) -> String {
+        switch speaker {
+        case .narrator:
+            return config.narrator
+        case let .dialogue(gender):
+            return dialogueIdentity(gender: gender, config: config)
+        case let .character(name, gender):
+            let value = config.characters[name] ?? ""
+            switch value {
+            case "":
+                return dialogueIdentity(gender: gender, config: config)
+            case AloudRoleVoiceConfig.maleAlias:
+                return firstFilled(config.male, config.dialogue)
+            case AloudRoleVoiceConfig.femaleAlias:
+                return firstFilled(config.female, config.dialogue)
+            default:
+                return value
+            }
+        }
+    }
+
+    private static func dialogueIdentity(gender: AloudGender?,
+                                         config: AloudRoleVoiceConfig) -> String {
+        switch gender {
+        case .male: return firstFilled(config.male, config.dialogue)
+        case .female: return firstFilled(config.female, config.dialogue)
+        case nil: return config.dialogue
+        }
+    }
+
+    private static func firstFilled(_ first: String, _ second: String) -> String {
+        first.isEmpty ? second : first
     }
 }
 

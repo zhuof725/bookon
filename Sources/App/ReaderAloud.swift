@@ -94,6 +94,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
     private var pendingUnitOffset: TimeInterval?
     private var audioTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
+    /// 已安排的预取窗口（段索引范围）：窗口内的后续段不再重复取消/重建，
+    /// 否则旁白（系统语音）每读一两秒就会把在线音频的预取任务打断，永远下不完。
+    private var prefetchWindow: Range<Int>?
     private var chapterTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
@@ -176,6 +179,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
 
     private func beginRun(chapter: Int, units list: [AloudUnit], offset: Int, applyTimer: Bool = false) {
         guard let host else { return }
+        prefetchTask?.cancel()
+        prefetchWindow = nil
         let expanded = AloudMultiVoice.expand(list)
         isRunning = true
         isPlaying = true
@@ -201,6 +206,8 @@ final class ReaderAloudController: NSObject, ObservableObject {
     func reloadRoleVoices() {
         guard isRunning, let host, let list = host.units(chapterIndex) else { return }
         let offset = units.indices.contains(unitIndex) ? units[unitIndex].offset : 0
+        prefetchTask?.cancel()
+        prefetchWindow = nil
         cancelUnitPlayback()
         let expanded = AloudMultiVoice.expand(list)
         units = expanded
@@ -264,6 +271,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         isBuffering = false
         audioTask?.cancel(); audioTask = nil
         prefetchTask?.cancel(); prefetchTask = nil
+        prefetchWindow = nil
         chapterTask?.cancel(); chapterTask = nil
         progressTask?.cancel(); progressTask = nil
         timerTask?.cancel(); timerTask = nil
@@ -511,12 +519,15 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             chapterIndex = next
             chapterTitle = host.chapterTitle(next)
-            units = fresh
-            unitList = fresh
-            unitTotal = fresh.count
+            let expanded = AloudMultiVoice.expand(fresh)
+            units = expanded
+            unitList = expanded
+            unitTotal = expanded.count
             unitDurations.removeAll()
-            unitIndex = direction > 0 ? 0 : max(fresh.count - 1, 0)
-            host.follow(next, fresh[unitIndex].offset)
+            prefetchTask?.cancel()
+            prefetchWindow = nil
+            unitIndex = direction > 0 ? 0 : max(expanded.count - 1, 0)
+            host.follow(next, expanded[unitIndex].offset)
             updateNowPlaying()
             playUnit()
         }
@@ -578,9 +589,9 @@ final class ReaderAloudController: NSObject, ObservableObject {
             playHTTPUnit(unit, speak: speak, engine: httpEngine)
         } else {
             speakSystemUnit(speak, voice: systemVoice)
+            // 系统语音段不会下载，但后面可能是在线引擎的对话段，提前预热。
+            prefetch(from: unitIndex + 1)
         }
-        // 系统语音段也要预取后面的在线引擎段（多角色混用时很常见）。
-        prefetch(from: unitIndex + 1)
     }
 
     // MARK: 系统语音
@@ -654,6 +665,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             playErrorCount = 0
             startProgressTracking()
+            prefetch(from: unitIndex + 1)
         }
     }
 
@@ -722,7 +734,12 @@ final class ReaderAloudController: NSObject, ObservableObject {
     /// 段落数取设置（1–20），只统计真正要下载音频的段。
     private func prefetch(from index: Int) {
         guard isRunning else { return }
+        // 窗口内的后续段：让现有任务继续跑，不要每秒取消重建。
+        if let window = prefetchWindow, index >= window.lowerBound, index < window.upperBound {
+            return
+        }
         prefetchTask?.cancel()
+        prefetchWindow = nil
         let snapshot = units
         guard index < snapshot.count else { return }
         let config = AloudRoleVoiceStore.shared.config
@@ -730,7 +747,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         var items: [PrefetchItem] = []
 
         var i = index
-        let scanEnd = min(snapshot.count, index + max(limit * 3, 12))
+        let scanEnd = min(snapshot.count, index + max(limit * 4, 16))
         while i < scanEnd, items.count < limit {
             let unit = snapshot[i]
             if let engine = httpEngine(for: unit.speaker, config: config),
@@ -740,6 +757,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
             }
             i += 1
         }
+        prefetchWindow = index..<scanEnd
         guard !items.isEmpty else { return }
         let title = chapterTitle
         prefetchTask = Task.detached(priority: .utility) { [weak self] in
@@ -756,10 +774,15 @@ final class ReaderAloudController: NSObject, ObservableObject {
                     try Task.checkCancellation()
                     _ = try AloudAudioCache.shared.store(data, forKey: key)
                 } catch {
+                    if !Task.isCancelled { await self?.resetPrefetchWindow() }
                     return
                 }
             }
         }
+    }
+
+    private func resetPrefetchWindow() {
+        prefetchWindow = nil
     }
 
     /// 某一段实际会用到的在线引擎；明确选了系统音色的段返回 nil。
@@ -889,6 +912,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
                 return
             }
             prefetchTask?.cancel()
+            prefetchWindow = nil
             unitDurations.removeAll()
             cancelUnitPlayback()
             updateChapterProgress()
@@ -906,6 +930,7 @@ final class ReaderAloudController: NSObject, ObservableObject {
         activeEngine = engine
         engineName = host2engineName()
         prefetchTask?.cancel()
+        prefetchWindow = nil
         downloadErrorCount = 0
         guard isRunning else { return }
         cancelUnitPlayback()
