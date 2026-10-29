@@ -19,7 +19,7 @@ final class DayNightTests: XCTestCase {
 
         // 夜间默认：夜间背景（3）、排版沿用日间。
         night.tap()
-        XCTAssertTrue(wait(state, equals: "mode=1 theme=3 font=20 left=20"), state.label)
+        XCTAssertTrue(stateIs(state, "mode=1 theme=3 font=20 left=20"), state.label)
         XCTAssertTrue(app.buttons["reader.theme.3"].exists)
         XCTAssertTrue(app.buttons["reader.theme.4"].exists)
         XCTAssertFalse(app.buttons["reader.theme.0"].exists, "夜间只应显示深色背景")
@@ -29,17 +29,17 @@ final class DayNightTests: XCTestCase {
         app.buttons["day-night-font-plus"].tap()
         app.buttons["day-night-left-plus"].tap()
         app.buttons["reader.theme.4"].tap()
-        XCTAssertTrue(wait(state, equals: "mode=1 theme=4 font=22 left=21"), state.label)
+        XCTAssertTrue(stateIs(state, "mode=1 theme=4 font=22 left=21"), state.label)
 
         // 切回日间：还是原来那一套，不受夜间改动影响。
         day.tap()
-        XCTAssertTrue(wait(state, equals: "mode=0 theme=0 font=20 left=20"), state.label)
+        XCTAssertTrue(stateIs(state, "mode=0 theme=0 font=20 left=20"), state.label)
         XCTAssertTrue(app.buttons["reader.theme.0"].exists)
         XCTAssertFalse(app.buttons["reader.theme.3"].exists, "日间只应显示浅色背景")
 
         // 再切回夜间：刚才的 22pt / 21pt / 纯黑仍在。
         night.tap()
-        XCTAssertTrue(wait(state, equals: "mode=1 theme=4 font=22 left=21"), state.label)
+        XCTAssertTrue(stateIs(state, "mode=1 theme=4 font=22 left=21"), state.label)
         XCTAssertTrue(app.buttons["reader.theme.4"].exists)
 
         // 重启后仍是夜间那套。
@@ -53,7 +53,7 @@ final class DayNightTests: XCTestCase {
         XCTAssertTrue(restoredNight.isSelected)
     }
 
-    private func wait(_ element: XCUIElement, equals value: String, _ message: String) -> Bool {
+    private func stateIs(_ element: XCUIElement, _ value: String) -> Bool {
         let predicate = NSPredicate(format: "label == %@", value)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: 3) == .completed
