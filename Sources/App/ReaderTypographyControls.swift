@@ -85,16 +85,8 @@ struct ReaderTypographyControls: View {
             ReaderLayoutControl(title: "字号", identifier: "font", value: $settings.fontSize, range: 12...36)
             ReaderLayoutControl(title: "行高倍率", identifier: "line", value: $settings.lineSpacing, range: 0...20, usesHeightMultiplier: true)
             ReaderLayoutControl(title: "段后倍率", identifier: "paragraph", value: $settings.paragraphSpacing, range: 0...20, usesHeightMultiplier: true)
-            Picker("本章说卡片", selection: $settings.commentCardSize) {
-                Text("小").tag(0)
-                Text("标准").tag(1)
-                Text("大").tag(2)
-            }
-            .accessibilityIdentifier("reader.commentCard.size")
-            Toggle("显示「查看评论」入口", isOn: $settings.showCommentEntries)
-                .accessibilityIdentifier("reader.commentCard.showEntry")
         } header: { Text("文字排版") } footer: {
-            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。书源没有带评论内容、只给「查看评论」时，入口默认隐藏。")
+            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。")
         }
         Section {
             Toggle("两端对齐", isOn: $settings.fullJustify)
@@ -107,6 +99,18 @@ struct ReaderTypographyControls: View {
             ReaderLayoutControl(title: "下边距", identifier: "bottom", value: $settings.bottomMargin, range: 0...80)
         } header: { Text("边距与对齐") } footer: {
             Text("边距单位 pt，调整后即时生效。")
+        }
+        Section {
+            Picker("本章说卡片", selection: $settings.commentCardSize) {
+                Text("小").tag(0)
+                Text("标准").tag(1)
+                Text("大").tag(2)
+            }
+            .accessibilityIdentifier("reader.commentCard.size")
+            Toggle("显示「查看评论」入口", isOn: $settings.showCommentEntries)
+                .accessibilityIdentifier("reader.commentCard.showEntry")
+        } header: { Text("评论卡片") } footer: {
+            Text("只影响正文里的评论摘要。书源没有评论内容、只给「查看评论」时，入口默认隐藏。")
         }
     }
 }
