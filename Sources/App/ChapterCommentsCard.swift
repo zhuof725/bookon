@@ -34,7 +34,30 @@ struct ChapterCommentsCard: View {
     private var countFont: CGFloat { max(scaledFontSize - 3, 10) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: visibleItems.isEmpty ? 0 : max(8, scaledFontSize * 0.5)) {
+        if visibleItems.isEmpty {
+            // 书源只给了入口（如「本章讨论 / 查看评论」）时，不再撑一张大卡片。
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: titleFont, weight: .medium))
+                    .foregroundStyle(foreground.opacity(0.8))
+                Spacer(minLength: 6)
+                Text(count)
+                    .font(.system(size: countFont))
+                    .foregroundStyle(foreground.opacity(0.55))
+                    .lineLimit(1)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("打开本章说")
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: max(8, scaledFontSize * 0.5)) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
                     .font(.system(size: titleFont, weight: .bold))
@@ -99,7 +122,7 @@ struct ChapterCommentsCard: View {
         let header = max(f - 2, 11) * 1.35
         let padding: CGFloat = 24
         let visible = items.prefix(inlineItemLimit)
-        guard !visible.isEmpty else { return header + padding }
+        guard !visible.isEmpty else { return max(f - 2, 11) * 1.3 + 12 }
         let body = max(f - 2, 11)
         let user = max(f - 3, 10)
         let gap = max(8, f * 0.5)

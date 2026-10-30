@@ -91,8 +91,10 @@ struct ReaderTypographyControls: View {
                 Text("大").tag(2)
             }
             .accessibilityIdentifier("reader.commentCard.size")
+            Toggle("显示「查看评论」入口", isOn: $settings.showCommentEntries)
+                .accessibilityIdentifier("reader.commentCard.showEntry")
         } header: { Text("文字排版") } footer: {
-            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。本章说卡片只影响正文里的评论摘要。")
+            Text("字号单位 pt；行高与段后按字高倍率计算，每步 0.1。书源没有带评论内容、只给「查看评论」时，入口默认隐藏。")
         }
         Section {
             Toggle("两端对齐", isOn: $settings.fullJustify)

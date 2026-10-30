@@ -24,6 +24,8 @@ enum ReaderPaginator {
         var titleStyle: ChapterTitleStyle = .empty
         /// 本章说卡片相对正文字号的倍率。
         var commentCardScale: CGFloat = 1
+        /// 书源只给「查看评论」入口时是否渲染。
+        var showCommentEntries: Bool = true
         /// PageContentView 底部页码栏及与正文间的固定距离。
         var footerHeight: CGFloat = 16
         var footerGap: CGFloat = 8
@@ -329,7 +331,9 @@ enum ReaderPaginator {
             return 120
         case .hotComment:
             return max(configuration.fontSize - 3, 12) + 20
-        case .chapterComments(_, _, let items, _):
+        case .chapterComments(let title, _, let items, _):
+            if items.isEmpty, ContentBlocks.discussionTitles.contains(title),
+               !configuration.showCommentEntries { return 0 }
             return ChapterCommentsCard.height(items: items,
                                               fontSize: configuration.fontSize,
                                               width: configuration.textWidth,

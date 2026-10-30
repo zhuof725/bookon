@@ -716,6 +716,7 @@ struct ReaderView: View {
         .onChange(of: settings.bottomMargin) { _ in scheduleRepaginate() }
         .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
         .onChange(of: settings.commentCardSize) { _ in scheduleRepaginate() }
+        .onChange(of: settings.showCommentEntries) { _ in scheduleRepaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -1468,7 +1469,8 @@ struct ReaderView: View {
             bottomInset: CGFloat(settings.bottomMargin),
             chapterTitle: chapters.indices.contains(target) && !chapters[target].isVolume ? chapters[target].title : "",
             titleStyle: settings.chapterTitleStyle,
-            commentCardScale: settings.commentCardScaleFactor)
+            commentCardScale: settings.commentCardScaleFactor,
+            showCommentEntries: settings.showCommentEntries)
     }
 
     /// 多项设置在同一轮改变时（如日间/夜间整套切换）合并成一次重排。
@@ -1643,6 +1645,7 @@ struct ReaderView: View {
             AnyView(PageContentView(page: page, fontSize: settings.fontSize,
                 lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
                 commentCardScale: settings.commentCardScaleFactor,
+                showCommentEntries: settings.showCommentEntries,
                 title: chapter?.title ?? "",
                 pageNumber: i + 1, pageCount: chapterPages.count,
                 onTapComment: { commentTapped($0) }, selection: textSelectionActions,
@@ -1809,11 +1812,16 @@ struct ReaderView: View {
             .contentShape(Rectangle())
             .onTapGesture { commentTapped(click) }
         case .chapterComments(let title, let count, let items, let click):
-            ChapterCommentsCard(title: title, count: count, items: items,
-                                fontSize: CGFloat(settings.fontSize),
-                                scale: settings.commentCardScaleFactor,
-                                foreground: theme.fg, background: theme.bg,
-                                onTap: { commentTapped(click) })
+            if items.isEmpty, ContentBlocks.discussionTitles.contains(title),
+               !settings.showCommentEntries {
+                EmptyView()
+            } else {
+                ChapterCommentsCard(title: title, count: count, items: items,
+                                    fontSize: CGFloat(settings.fontSize),
+                                    scale: settings.commentCardScaleFactor,
+                                    foreground: theme.fg, background: theme.bg,
+                                    onTap: { commentTapped(click) })
+            }
         }
     }
 
