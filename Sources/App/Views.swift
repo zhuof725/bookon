@@ -301,6 +301,7 @@ struct ReaderView: View {
 
     @ObservedObject private var bubbleStyles = BubbleStyleStore.shared
     @ObservedObject private var readingFonts = ReadingFontManager.shared
+    @StateObject private var backgroundLoader = ThemeAssetImageLoader()
     @State private var bodyReplacement = BodyReplaceEngine(rules: [])
     @State private var chapters: [BookChapter] = []
     @State private var index = 0
@@ -347,6 +348,10 @@ struct ReaderView: View {
     @State private var showBookmarks = false
     @State private var bookmarkNotice: String?
     @State private var showBookInfo = false
+    /// 读满 30 秒后退出时、书还不在书架时的玻璃提示。
+    @State private var showShelfPrompt = false
+    @State private var activeReadingSeconds: TimeInterval = 0
+    @State private var readingActiveSince: Date?
     @State private var quickBusy = false
     @State private var quickMessage: String?
     @State private var quickLogin = false
@@ -415,13 +420,28 @@ struct ReaderView: View {
         openComment(target)
     }
 
-    private var theme: (bg: Color, fg: Color, name: String) {
-        ReadSettings.themes[min(max(settings.theme, 0), ReadSettings.themes.count - 1)]
+    @ViewBuilder private var backgroundImageLayer: some View {
+        if let image = backgroundLoader.image {
+            GeometryReader { geo in
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
+        }
     }
+
+    private var theme: (bg: Color, fg: Color, name: String) { settings.currentPaper }
 
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
+            if settings.usesImageBackground {
+                backgroundImageLayer
+            }
             GeometryReader { geo in
                 Color.clear.onAppear { updateViewport(geo) }
                     .onChange(of: geo.size) { _ in updateViewport(geo) }
@@ -481,7 +501,7 @@ struct ReaderView: View {
                 ReaderTopChrome(title: book.name, source: readerSourceName,
                     coverURL: BookCoverLocation.url(for: book),
                     background: theme.bg, foreground: theme.fg,
-                    onBack: { dismiss() }, onDetails: { showBookInfo = true })
+                    onBack: { requestReaderExit() }, onDetails: { showBookInfo = true })
                     .transition(.opacity)
             }
         }
@@ -682,14 +702,28 @@ struct ReaderView: View {
                 .padding().frame(maxWidth: .infinity).modifier(SettingsGlassSurface()).padding(12)
             }
         }
+        .overlay {
+            if showShelfPrompt {
+                AddToShelfPrompt(bookName: book.name,
+                                 onAdd: { finishShelfPrompt(add: true) },
+                                 onDecline: { finishShelfPrompt(add: false) })
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(10)
+            }
+        }
         .sheet(item: $commentTarget) { target in
             if let u = URL(string: target.url) {
                 CommentSheet(url: u, content: target.content)
             }
         }
         .onChange(of: scenePhase) { phase in
-            if phase != .active { persistContinuousProgress(); store.flushProgress(); closeReadingSession() }
-            else if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
+            if phase != .active {
+                accumulateReadingTime()
+                persistContinuousProgress(); store.flushProgress(); closeReadingSession()
+            } else {
+                readingActiveSince = Date()
+                if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
+            }
         }
         .onChange(of: readingFonts.selectedPostScriptName) { _ in
             aloud.stop()
@@ -717,6 +751,8 @@ struct ReaderView: View {
         .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
         .onChange(of: settings.commentCardSize) { _ in scheduleRepaginate() }
         .onChange(of: settings.showCommentEntries) { _ in scheduleRepaginate() }
+        .onChange(of: settings.backgroundMode) { _ in scheduleRepaginate() }
+        .onChange(of: settings.customBackgroundHex) { _ in scheduleRepaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil
@@ -757,6 +793,7 @@ struct ReaderView: View {
         .onChange(of: screenSize) { _ in repaginate() }
         .onChange(of: pageInsets) { _ in repaginate() }
         .onDisappear {
+            accumulateReadingTime()
             // 退出前存下这一秒，下次进来接着听。
             if bookAudio.chapterURL != nil {
                 AudioProgress.save(bookUrl: book.bookUrl, chapter: index,
@@ -786,7 +823,44 @@ struct ReaderView: View {
             ListeningCenter.shared.readerAppeared(book: book)
             attachAloudHost()
             await start()
+            readingActiveSince = Date()
         }
+        .task(id: "\(settings.backgroundMode)-\(settings.backgroundImageID)") {
+            await backgroundLoader.load(settings.usesImageBackground ? settings.backgroundImageID : nil)
+        }
+    }
+
+    private var shelfPromptKey: String { "reader.shelfPromptShown.\(book.bookUrl)" }
+
+    private func accumulateReadingTime() {
+        guard let start = readingActiveSince else { return }
+        activeReadingSeconds += Date().timeIntervalSince(start)
+        readingActiveSince = nil
+    }
+
+    /// 读满 30 秒、书不在书架、且这本书没提示过时，返回键先弹加入书架。
+    private var shouldOfferShelf: Bool {
+        guard !store.isLocal(book), !store.isOnShelf(book),
+              !UserDefaults.standard.bool(forKey: shelfPromptKey) else { return false }
+        var seconds = activeReadingSeconds
+        if let start = readingActiveSince { seconds += Date().timeIntervalSince(start) }
+        return seconds >= 30
+    }
+
+    private func requestReaderExit() {
+        if shouldOfferShelf {
+            accumulateReadingTime()
+            withAnimation(.easeOut(duration: 0.2)) { showShelfPrompt = true }
+        } else {
+            dismiss()
+        }
+    }
+
+    private func finishShelfPrompt(add: Bool) {
+        if add { store.addToShelf(book) }
+        UserDefaults.standard.set(true, forKey: shelfPromptKey)
+        withAnimation(.easeOut(duration: 0.2)) { showShelfPrompt = false }
+        dismiss()
     }
 
     private var quickEnabled: Set<String> {
@@ -1248,10 +1322,10 @@ struct ReaderView: View {
             ReaderContinuousScrollView(chapters: scrollChapters.map { chapter in
                 ReaderScrollChapter(id: chapter.id, revision: chapter.revision,
                                     content: AnyView(scrollChapterBody(chapter)),
-                                    appearanceID: "\(settings.theme)-\(scrollBoundaryRevision(for: chapter.id))")
+                                    appearanceID: "\(settings.paperSignature)-\(scrollBoundaryRevision(for: chapter.id))")
             }, request: scrollRequest,
                 layoutID: "\(settings.typographyValues)|\(readingFonts.selectedPostScriptName)|\(settings.chapterTitleSignature)",
-                background: UIColor(theme.bg),
+                background: UIColor(settings.pageBackground),
                 onPosition: { chapter, position in recordContinuousPosition(chapter, position: position) },
                 onApproachEdge: { direction in loadScrollNeighbor(direction) },
                 onSettled: { chapter, position in
@@ -1643,7 +1717,7 @@ struct ReaderView: View {
         let chapter = chapters.indices.contains(target) ? chapters[target] : nil
         return chapterPages.enumerated().map { i, page in
             AnyView(PageContentView(page: page, fontSize: settings.fontSize,
-                lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
+                lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: settings.pageBackground,
                 commentCardScale: settings.commentCardScaleFactor,
                 showCommentEntries: settings.showCommentEntries,
                 title: chapter?.title ?? "",

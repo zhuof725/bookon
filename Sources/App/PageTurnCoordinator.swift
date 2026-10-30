@@ -73,7 +73,8 @@ final class PageTurnCoordinator: NSObject, UIPageViewControllerDataSource, UIPag
         applied = model
         refreshSnapshots(model)
         let topologyChanged = oldOrder != order || oldGenerations != snapshots.mapValues { $0.generation }
-        vc.view.backgroundColor = model.background
+        // 半透明遮罩由每页自己绘制，容器保持透明，避免和页面叠加两次。
+        vc.view.backgroundColor = model.background.cgColor.alpha < 1 ? .clear : model.background
         vc.view.isOpaque = model.background.cgColor.alpha == 1
         for (key, face) in fronts where valid(key) {
             face.updateContent(snapshots[key.contentID]!.pages[key.index], background: model.background)

@@ -13,16 +13,19 @@ final class ReaderPageHost: UIHostingController<AnyView> {
         self.generation = generation
         super.init(rootView: content)
         if #available(iOS 16.4, *) { safeAreaRegions = [] }
-        view.backgroundColor = background
-        view.isOpaque = background.cgColor.alpha == 1
+        // 半透明遮罩由 SwiftUI 页自己画；宿主再铺一层会变成两层，背景图被吃掉。
+        let translucent = background.cgColor.alpha < 1
+        view.backgroundColor = translucent ? .clear : background
+        view.isOpaque = !translucent
         view.accessibilityElementsHidden = true
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func updateContent(_ content: AnyView, background: UIColor) {
         rootView = content
-        view.backgroundColor = background
-        view.isOpaque = background.cgColor.alpha == 1
+        let translucent = background.cgColor.alpha < 1
+        view.backgroundColor = translucent ? .clear : background
+        view.isOpaque = !translucent
     }
 
     func setAccessibilityVisible(_ visible: Bool) {
@@ -56,7 +59,7 @@ final class ReaderPageBack: UIViewController {
 
     override func loadView() {
         view = UIView()
-        view.isOpaque = true
+        view.isOpaque = false
         view.isUserInteractionEnabled = false
         view.isAccessibilityElement = false
         view.accessibilityElementsHidden = true
@@ -99,9 +102,11 @@ final class ReaderPageBack: UIViewController {
 
     func updateContent(_ content: AnyView, background: UIColor) {
         textHost.rootView = AnyView(content.allowsHitTesting(false).accessibilityHidden(true))
-        view.backgroundColor = background.withAlphaComponent(1)
-        textHost.view.backgroundColor = view.backgroundColor
-        textHost.view.isOpaque = true
+        let translucent = background.cgColor.alpha < 1
+        view.backgroundColor = translucent ? .clear : background
+        textHost.view.backgroundColor = translucent ? .clear : background
+        view.isOpaque = !translucent
+        textHost.view.isOpaque = !translucent
         contentNeedsLayout = true
         layoutText()
         view.setNeedsLayout()

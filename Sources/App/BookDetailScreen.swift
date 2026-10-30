@@ -262,7 +262,7 @@ struct BookDetailScreen: View {
             .foregroundStyle(palette.accent)
             .padding(.horizontal, 20)
             .frame(minHeight: 56)
-            .background(Capsule().fill(palette.surface))
+            .appGlass(in: Capsule(), tint: palette.surface, tintOpacity: 0.45)
             .overlay(Capsule().strokeBorder(palette.accent.opacity(0.35), lineWidth: 1.2))
             .contentShape(Capsule())
         }

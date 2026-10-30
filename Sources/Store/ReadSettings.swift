@@ -58,6 +58,10 @@ final class ReadSettings: ObservableObject {
     @AppStorage("readerCommentCardSize") var commentCardSize: Int = 0
     /// 书源只给「查看评论」入口、没有评论内容时是否显示。默认显示，避免章评入口凭空消失。
     @AppStorage("readerShowCommentEntries") var showCommentEntries: Bool = true
+    /// 阅读背景：0 预设、1 纯色、2 图片。纯色/图片模式下 hex 是底色（图片时兼作遮罩）。
+    @AppStorage("readerBackgroundMode") var backgroundMode: Int = 0
+    @AppStorage("readerCustomBackgroundHex") var customBackgroundHex: String = "F5EFE0"
+    @AppStorage("readerBackgroundImageID") var backgroundImageID: String = ""
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of
@@ -98,11 +102,54 @@ final class ReadSettings: ObservableObject {
         apply(storedLayout(for: target) ?? defaultLayout(for: target), for: target)
     }
 
-    /// 背景主题只在当前模式允许的色板里选。
+    /// 背景主题只在当前模式允许的色板里选；选预设会退出自定义背景。
     func selectTheme(_ index: Int) {
-        guard dayNightMode.themeIndices.contains(index), theme != index else { return }
+        guard dayNightMode.themeIndices.contains(index),
+              theme != index || backgroundMode != 0 else { return }
         objectWillChange.send()
+        backgroundMode = 0
         theme = index
+    }
+
+    /// 当前实际使用的纸面：自定义背景优先，否则按当前模式的预设。
+    var usesImageBackground: Bool {
+        backgroundMode == 2 && !backgroundImageID.isEmpty
+    }
+
+    var currentPaper: (bg: Color, fg: Color, name: String) {
+        if backgroundMode != 0 {
+            return (customBackgroundColor, customForegroundColor,
+                    backgroundMode == 2 ? "图片" : "自定义")
+        }
+        return Self.themes[min(max(theme, 0), Self.themes.count - 1)]
+    }
+
+    /// 图片模式用半透明底色当遮罩，页面叠在根视图的背景图上；纯色/预设仍是实色。
+    var pageBackground: Color {
+        usesImageBackground ? currentPaper.bg.opacity(0.82) : currentPaper.bg
+    }
+
+    var paperSignature: String {
+        "mode-\(backgroundMode)-\(customBackgroundHex)-\(backgroundImageID)-theme-\(theme)"
+    }
+
+    var customBackgroundColor: Color { customBackgroundComponents.color }
+    var customForegroundColor: Color {
+        customBackgroundComponents.luminance < 0.45
+            ? Color.white : Color(red: 0.13, green: 0.13, blue: 0.13)
+    }
+
+    private var customBackgroundComponents: (color: Color, luminance: Double) {
+        let hex = customBackgroundHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else {
+            return (Color(red: 0.96, green: 0.94, blue: 0.88), 0.92)
+        }
+        let red = Double((value >> 16) & 255) / 255
+        let green = Double((value >> 8) & 255) / 255
+        let blue = Double(value & 255) / 255
+        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+        return (Color(red: red, green: green, blue: blue), luminance)
     }
 
     private func currentLayout() -> ReaderModeLayout {

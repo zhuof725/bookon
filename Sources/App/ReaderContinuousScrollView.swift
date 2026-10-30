@@ -149,7 +149,10 @@ final class ReaderContinuousScrollController: UIViewController, UIScrollViewDele
         reflow = reflow || layoutChanged
         model = next
         view.backgroundColor = next.background
-        scroll.backgroundColor = next.background
+        // 图片背景是半透明遮罩：只让容器这一层承担遮罩，子视图透明，
+        // 否则三层叠加后背景图几乎看不见。
+        let clearChildren = next.background.cgColor.alpha < 1
+        scroll.backgroundColor = clearChildren ? .clear : next.background
         if newRequest {
             callbacksGeneration = UUID()
             userScrolling = false
@@ -187,7 +190,8 @@ final class ReaderContinuousScrollController: UIViewController, UIScrollViewDele
                     host.didMove(toParent: self)
                     entries[chapter.id] = Entry(host: host, revision: chapter.revision, appearanceID: chapter.appearanceID)
                 }
-                entries[chapter.id]?.host.view.backgroundColor = next.background
+                entries[chapter.id]?.host.view.backgroundColor =
+                    next.background.cgColor.alpha < 1 ? .clear : next.background
             }
             order = ids
             layoutID = next.layoutID

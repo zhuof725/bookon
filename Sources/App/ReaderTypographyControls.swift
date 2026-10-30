@@ -1,13 +1,42 @@
 import SwiftUI
+import UIKit
+import PhotosUI
 
 /// 日间 / 夜间：两套独立保存的阅读排版与背景。
 struct ReaderAppearanceControls: View {
     @ObservedObject var settings: ReadSettings
+    @State private var photoItem: PhotosPickerItem?
 
     private var mode: ReaderDayNightMode { settings.dayNightMode }
     private var modeSelection: Binding<Int> {
         let settings = self.settings
         return Binding(get: { settings.mode }, set: { settings.setMode($0) })
+    }
+
+    private var backgroundMode: Binding<Int> {
+        let settings = self.settings
+        return Binding(get: { settings.backgroundMode }, set: { value in
+            settings.objectWillChange.send()
+            settings.backgroundMode = value
+        })
+    }
+
+    private var customColor: Binding<Color> {
+        let settings = self.settings
+        return Binding(get: { settings.customBackgroundColor }, set: { color in
+            settings.objectWillChange.send()
+            settings.customBackgroundHex = Self.hex(color)
+        })
+    }
+
+    private static func hex(_ color: Color) -> String {
+        let ui = UIColor(color)
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard ui.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return "F5EFE0" }
+        return String(format: "%02X%02X%02X",
+                      Int((min(max(red, 0), 1) * 255).rounded()),
+                      Int((min(max(green, 0), 1) * 255).rounded()),
+                      Int((min(max(blue, 0), 1) * 255).rounded()))
     }
 
     var body: some View {
@@ -20,19 +49,57 @@ struct ReaderAppearanceControls: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("reader.mode.picker")
 
-            HStack(spacing: 10) {
-                ForEach(mode.themeIndices, id: \.self) { index in
-                    swatch(index)
+            Picker("背景", selection: backgroundMode) {
+                Text("预设").tag(0)
+                Text("纯色").tag(1)
+                Text("图片").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("reader.background.mode")
+
+            if settings.backgroundMode == 0 {
+                HStack(spacing: 10) {
+                    ForEach(mode.themeIndices, id: \.self) { index in
+                        swatch(index)
+                    }
+                }
+                .padding(.vertical, 2)
+            } else {
+                ColorPicker("背景颜色", selection: customColor, supportsOpacity: false)
+                    .accessibilityIdentifier("reader.background.color")
+                if settings.backgroundMode == 2 {
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        Label(settings.backgroundImageID.isEmpty ? "选择背景图片" : "更换背景图片",
+                              systemImage: "photo")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .accessibilityIdentifier("reader.background.image")
+                    if !settings.backgroundImageID.isEmpty {
+                        Button("移除背景图片", role: .destructive) {
+                            settings.objectWillChange.send()
+                            settings.backgroundImageID = ""
+                            settings.backgroundMode = 1
+                        }
+                        .accessibilityIdentifier("reader.background.image.remove")
+                    }
                 }
             }
-            .padding(.vertical, 2)
         } header: {
             HStack(spacing: 6) {
                 Image(systemName: mode.symbol)
                 Text(mode == .day ? "日间阅读" : "夜间阅读")
             }
         } footer: {
-            Text("日间与夜间各自保存背景、字号、行距和边距；切换模式时整套生效。")
+            Text("预设跟随日间/夜间；纯色和图片可自选底色，图片模式下底色兼作文字遮罩。")
+        }
+        .task(id: photoItem) {
+            guard let item = photoItem else { return }
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let id = try? ThemeAssetStore.shared.importData(data) else { return }
+            settings.objectWillChange.send()
+            settings.backgroundImageID = id
+            settings.backgroundMode = 2
+            photoItem = nil
         }
     }
 

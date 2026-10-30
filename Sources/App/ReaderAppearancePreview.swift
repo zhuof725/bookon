@@ -5,9 +5,7 @@ import UIKit
 struct ReaderAppearancePreview: View {
     @ObservedObject var settings: ReadSettings
     @ObservedObject private var fonts = ReadingFontManager.shared
-    private var paper: (bg: Color, fg: Color, name: String) {
-        ReadSettings.themes[min(max(settings.theme, 0), ReadSettings.themes.count - 1)]
-    }
+    private var paper: (bg: Color, fg: Color, name: String) { settings.currentPaper }
     private var modeTitle: String { settings.dayNightMode.title }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
