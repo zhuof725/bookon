@@ -142,7 +142,8 @@ struct PageContentView: View {
                         .onTapGesture { onTapComment(click) }
                         .padding(.top, paragraphLeadingGap(at: blockIndex))
                     case .chapterComments(let t, let count, let items, let click):
-                        if items.isEmpty, ContentBlocks.discussionTitles.contains(t),
+                        if items.isEmpty,
+                           ContentBlocks.isBareDiscussionEntry(title: t, count: count),
                            !showCommentEntries {
                             EmptyView()
                         } else {

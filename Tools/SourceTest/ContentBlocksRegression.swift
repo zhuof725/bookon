@@ -73,6 +73,13 @@ enum CommentCardRegression {
             check(items.last?.user == "浪费时间" && items.last?.likes == "151", "章评条目：第二条用户名与点赞")
         } else { check(false, "章评条目：应识别为 chapterComments") }
 
+        check(ContentBlocks.isBareDiscussionEntry(title: "本章讨论", count: "查看评论 〉"),
+              "章评入口：没有数字的「查看评论」属于裸入口")
+        check(!ContentBlocks.isBareDiscussionEntry(title: "本章说", count: "584 条评论 〉"),
+              "章评入口：带条数的入口保留")
+        check(!ContentBlocks.isBareDiscussionEntry(title: "段评", count: "查看评论"),
+              "章评入口：段评/章评计数条不受影响")
+
         // 神评论标签（大灰狼/番茄书源）：与热评同属「标签+一行」的评论卡片。
         let god = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"108\"><rect width=\"100%\" height=\"100%\" fill=\"rgba(255,255,255,0.55)\" rx=\"30\"/><rect x=\"35\" y=\"28\" width=\"125\" height=\"52\" rx=\"16\" fill=\"#F06260\"/><text x=\"97\" y=\"65\" font-size=\"32\" fill=\"#FFFFFF\" text-anchor=\"middle\" font-weight=\"bold\">神评论</text><text x=\"175\" y=\"67\" font-size=\"38\" fill=\"#333333\">这本书越看越上头</text></svg>"
         let gb = ContentBlocks.parse("<img src=\"data:image/svg+xml;base64,\(b64(god))\" onClick=\"java.startBrowser('\(url)')\"/>")

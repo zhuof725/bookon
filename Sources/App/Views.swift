@@ -1812,7 +1812,8 @@ struct ReaderView: View {
             .contentShape(Rectangle())
             .onTapGesture { commentTapped(click) }
         case .chapterComments(let title, let count, let items, let click):
-            if items.isEmpty, ContentBlocks.discussionTitles.contains(title),
+            if items.isEmpty,
+               ContentBlocks.isBareDiscussionEntry(title: title, count: count),
                !settings.showCommentEntries {
                 EmptyView()
             } else {

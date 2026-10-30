@@ -331,8 +331,8 @@ enum ReaderPaginator {
             return 120
         case .hotComment:
             return max(configuration.fontSize - 3, 12) + 20
-        case .chapterComments(let title, _, let items, _):
-            if items.isEmpty, ContentBlocks.discussionTitles.contains(title),
+        case .chapterComments(let title, let count, let items, _):
+            if items.isEmpty, ContentBlocks.isBareDiscussionEntry(title: title, count: count),
                !configuration.showCommentEntries { return 0 }
             return ChapterCommentsCard.height(items: items,
                                               fontSize: configuration.fontSize,

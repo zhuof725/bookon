@@ -462,6 +462,13 @@ enum ContentBlocks {
     /// 章评/书评条上的标题文字。
     static let discussionTitles: Set<String> = ["本章说", "本章讨论", "本书讨论", "本章评论", "本书评论"]
 
+    /// 只有入口、没有评论正文的讨论条：计数文字里没有数字（如「查看评论」）。
+    /// 带数字的「584 条评论」仍保留，用户能一眼看到有多少条。
+    static func isBareDiscussionEntry(title: String, count: String) -> Bool {
+        guard discussionTitles.contains(title) else { return false }
+        return count.rangeOfCharacter(from: .decimalDigits) == nil
+    }
+
     /// 番茄系章评/书评：书源把整条画成一张 SVG ——「本章讨论 | 条数 | 〉」。
     /// 三个 <text>，既不是「标签+一行」的热评，也不是只画一个数字的气泡，
     /// 之前认不出来 → 落回图片分支 → 显示成 base64 乱码。
