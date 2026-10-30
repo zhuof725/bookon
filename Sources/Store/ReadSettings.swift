@@ -56,8 +56,8 @@ final class ReadSettings: ObservableObject {
     @AppStorage("readerChapterTitleAdvanced") var chapterTitleAdvanced: Bool = false
     /// 正文里「本章说」原生卡片的大小：0 小、1 标准、2 大。默认偏小，避免挡住正文。
     @AppStorage("readerCommentCardSize") var commentCardSize: Int = 0
-    /// 书源只给「查看评论」入口、没有评论内容时，是否显示这条入口。默认隐藏，保持正文干净。
-    @AppStorage("readerShowCommentEntries") var showCommentEntries: Bool = false
+    /// 书源只给「查看评论」入口、没有评论内容时是否显示。默认显示，避免章评入口凭空消失。
+    @AppStorage("readerShowCommentEntries") var showCommentEntries: Bool = true
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of

@@ -110,7 +110,7 @@ struct ReaderTypographyControls: View {
             Toggle("显示「查看评论」入口", isOn: $settings.showCommentEntries)
                 .accessibilityIdentifier("reader.commentCard.showEntry")
         } header: { Text("评论卡片") } footer: {
-            Text("只影响正文里的评论摘要。书源没有评论内容、只给「查看评论」时，入口默认隐藏。")
+            Text("只影响正文里的评论摘要。书源没有评论内容、只给「查看评论」时显示这条入口；关掉后正文更干净。")
         }
     }
 }
