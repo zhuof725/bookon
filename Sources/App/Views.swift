@@ -1377,7 +1377,9 @@ struct ReaderView: View {
         .padding(.top, CGFloat(settings.topMargin))
         .padding(.bottom, max(CGFloat(settings.bottomMargin), 20))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.bg.contentShape(Rectangle()).onTapGesture { toggleBars() })
+        // 图片模式下这一层必须透明：页面的半透明遮罩由外层滚动容器负责，
+        // 这里再铺一层实色会把根视图的背景图完全盖住。
+        .background(Color.clear.contentShape(Rectangle()).onTapGesture { toggleBars() })
         .overlay(alignment: .top) {
             if content.id == scrollChapters.first?.id { scrollBoundary(-1) }
         }
@@ -1750,7 +1752,7 @@ struct ReaderView: View {
         let previous = preparedChapter(at: previousChapter)
         let next = preparedChapter(at: nextChapter)
         return PageTurnView(pages: renderedPages(pages, at: index), current: $pageIndex, style: turnStyle,
-                     background: UIColor(theme.bg),
+                     background: UIColor(settings.pageBackground),
                      onEdge: { dir in DispatchQueue.main.async { goAcrossEdge(dir) } },
                      onTapCenter: { toggleBars() }, contentID: pageContentID,
                      chapterDirection: pendingChapterDirection,
