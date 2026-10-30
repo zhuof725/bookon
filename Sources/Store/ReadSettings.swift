@@ -126,7 +126,7 @@ final class ReadSettings: ObservableObject {
 
     /// 图片模式用半透明底色当遮罩，页面叠在根视图的背景图上；纯色/预设仍是实色。
     var pageBackground: Color {
-        usesImageBackground ? currentPaper.bg.opacity(0.82) : currentPaper.bg
+        usesImageBackground ? currentPaper.bg.opacity(0.58) : currentPaper.bg
     }
 
     var paperSignature: String {

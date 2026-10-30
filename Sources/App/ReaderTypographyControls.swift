@@ -6,6 +6,7 @@ import PhotosUI
 struct ReaderAppearanceControls: View {
     @ObservedObject var settings: ReadSettings
     @State private var photoItem: PhotosPickerItem?
+    @State private var imageError: String?
 
     private var mode: ReaderDayNightMode { settings.dayNightMode }
     private var modeSelection: Binding<Int> {
@@ -74,6 +75,9 @@ struct ReaderAppearanceControls: View {
                             .foregroundStyle(Color.accentColor)
                     }
                     .accessibilityIdentifier("reader.background.image")
+                    if let imageError {
+                        Text(imageError).appFont(.caption).foregroundStyle(.red)
+                    }
                     if !settings.backgroundImageID.isEmpty {
                         Button("移除背景图片", role: .destructive) {
                             settings.objectWillChange.send()
@@ -92,14 +96,23 @@ struct ReaderAppearanceControls: View {
         } footer: {
             Text("预设跟随日间/夜间；纯色和图片可自选底色，图片模式下底色兼作文字遮罩。")
         }
-        .task(id: photoItem) {
-            guard let item = photoItem else { return }
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let id = try? ThemeAssetStore.shared.importData(data) else { return }
-            settings.objectWillChange.send()
-            settings.backgroundImageID = id
-            settings.backgroundMode = 2
-            photoItem = nil
+        .onChange(of: photoItem) { item in
+            guard let item else { return }
+            imageError = nil
+            Task { @MainActor in
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else {
+                        imageError = "没有读到图片，请换一张。"; return
+                    }
+                    let id = try ThemeAssetStore.shared.importData(data)
+                    settings.objectWillChange.send()
+                    settings.backgroundImageID = id
+                    settings.backgroundMode = 2
+                    photoItem = nil
+                } catch {
+                    imageError = "图片保存失败：\(error.localizedDescription)"
+                }
+            }
         }
     }
 

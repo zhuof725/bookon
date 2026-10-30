@@ -3,8 +3,10 @@ import SwiftUI
 /// 阅读 30 秒后、书还不在书架时的玻璃提示。
 /// 复刻截图的三段式：标题 / 问句 / 两颗大胶囊按钮。
 struct AddToShelfPrompt: View {
-    @ThemePalette private var palette
     let bookName: String
+    /// 跟阅读纸面一致：玻璃染纸色，文字用纸面前景色。
+    let paper: Color
+    let foreground: Color
     let onAdd: () -> Void
     let onDecline: () -> Void
 
@@ -16,47 +18,51 @@ struct AddToShelfPrompt: View {
                 .onTapGesture {}
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 13) {
                 Text("加入书架")
-                    .appFont(.title2.weight(.bold))
+                    .appFont(.system(size: 20, weight: .bold))
+                    .foregroundStyle(foreground)
                 Text("是否将《\(bookName)》加入书架？")
-                    .appFont(.body)
-                    .foregroundStyle(palette.secondary)
+                    .appFont(.system(size: 15))
+                    .foregroundStyle(foreground.opacity(0.62))
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 12) {
-                    button("不加入", tint: palette.surface, foreground: palette.primary,
-                           identifier: "reader.shelfPrompt.decline", action: onDecline)
-                    button("加入", tint: palette.accent, foreground: palette.accent,
-                           identifier: "reader.shelfPrompt.add", action: onAdd)
+                HStack(spacing: 10) {
+                    button("不加入", tint: paper, tintOpacity: 0.42,
+                           foreground: foreground, identifier: "reader.shelfPrompt.decline",
+                           action: onDecline)
+                    button("加入", tint: foreground, tintOpacity: 0.10,
+                           foreground: foreground, identifier: "reader.shelfPrompt.add",
+                           action: onAdd)
                 }
                 .padding(.top, 2)
             }
-            .padding(22)
-            .frame(maxWidth: 340)
-            .appGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous),
-                      tint: palette.surface, tintOpacity: 0.55)
+            .padding(18)
+            .frame(maxWidth: 300)
+            .appGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+                      tint: paper, tintOpacity: 0.62)
             .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(.white.opacity(0.34), lineWidth: 0.6)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
                     .allowsHitTesting(false)
             }
-            .shadow(color: .black.opacity(0.16), radius: 24, x: 0, y: 10)
-            .padding(.horizontal, 24)
+            .shadow(color: .black.opacity(0.18), radius: 22, x: 0, y: 9)
+            .padding(.horizontal, 28)
             .accessibilityIdentifier("reader.shelfPrompt")
         }
     }
 
-    private func button(_ title: String, tint: Color, foreground: Color,
-                        identifier: String, action: @escaping () -> Void) -> some View {
+    private func button(_ title: String, tint: Color, tintOpacity: Double,
+                        foreground: Color, identifier: String,
+                        action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .appFont(.system(size: 17, weight: .semibold))
+                .appFont(.system(size: 16, weight: .semibold))
                 .foregroundStyle(foreground)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .appGlass(in: Capsule(), tint: tint, tintOpacity: title == "加入" ? 0.18 : 0.30)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .appGlass(in: Capsule(), tint: tint, tintOpacity: tintOpacity)
                 .overlay {
-                    Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5)
+                    Capsule().strokeBorder(.white.opacity(0.24), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 }
                 .contentShape(Capsule())

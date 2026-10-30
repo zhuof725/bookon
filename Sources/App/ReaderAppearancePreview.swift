@@ -5,6 +5,7 @@ import UIKit
 struct ReaderAppearancePreview: View {
     @ObservedObject var settings: ReadSettings
     @ObservedObject private var fonts = ReadingFontManager.shared
+    @StateObject private var backgroundLoader = ThemeAssetImageLoader()
     private var paper: (bg: Color, fg: Color, name: String) { settings.currentPaper }
     private var modeTitle: String { settings.dayNightMode.title }
     var body: some View {
@@ -18,7 +19,20 @@ struct ReaderAppearancePreview: View {
                 .padding(.leading, settings.leftMargin).padding(.trailing, settings.rightMargin)
                 .padding(.top, settings.topMargin).padding(.bottom, settings.bottomMargin)
             }
-            .frame(height: 130).background(paper.bg).clipShape(RoundedRectangle(cornerRadius: 16))
+            .frame(height: 130)
+            .background {
+                ZStack {
+                    paper.bg
+                    if let image = backgroundLoader.image {
+                        Image(uiImage: image).resizable().scaledToFill()
+                        paper.bg.opacity(0.58)
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .task(id: settings.backgroundImageID) {
+                await backgroundLoader.load(settings.usesImageBackground ? settings.backgroundImageID : nil)
+            }
             Text("\(modeTitle) · \(paper.name) · \(Int(settings.fontSize))pt · \(fonts.selectedDisplayName)；此处为可滚动文字样例，整页齐底与翻页动画以阅读页为准。")
                 .appFont(.caption2).foregroundStyle(.secondary).lineLimit(2)
         }.padding(12).modifier(SettingsGlassSurface())

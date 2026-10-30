@@ -704,7 +704,7 @@ struct ReaderView: View {
         }
         .overlay {
             if showShelfPrompt {
-                AddToShelfPrompt(bookName: book.name,
+                AddToShelfPrompt(bookName: book.name, paper: theme.bg, foreground: theme.fg,
                                  onAdd: { finishShelfPrompt(add: true) },
                                  onDecline: { finishShelfPrompt(add: false) })
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
