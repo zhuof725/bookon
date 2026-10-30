@@ -25,7 +25,6 @@ struct ReaderAppearancePreview: View {
                     paper.bg
                     if let image = backgroundLoader.image {
                         Image(uiImage: image).resizable().scaledToFill()
-                        paper.bg.opacity(0.58)
                     }
                 }
             }

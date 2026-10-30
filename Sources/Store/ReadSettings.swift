@@ -124,9 +124,9 @@ final class ReadSettings: ObservableObject {
         return Self.themes[min(max(theme, 0), Self.themes.count - 1)]
     }
 
-    /// 图片模式用半透明底色当遮罩，页面叠在根视图的背景图上；纯色/预设仍是实色。
+    /// 图片模式页面本体透明，图片原样铺满；纯色/预设仍是实色。
     var pageBackground: Color {
-        usesImageBackground ? currentPaper.bg.opacity(0.58) : currentPaper.bg
+        usesImageBackground ? Color.clear : currentPaper.bg
     }
 
     var paperSignature: String {
