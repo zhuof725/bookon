@@ -1722,7 +1722,8 @@ struct ReaderView: View {
         let chapter = chapters.indices.contains(target) ? chapters[target] : nil
         return chapterPages.enumerated().map { i, page in
             AnyView(PageContentView(page: page, fontSize: settings.fontSize,
-                lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: settings.pageBackground,
+                lineSpacing: settings.lineSpacingPoints, fg: theme.fg, bg: theme.bg,
+                backgroundImage: settings.usesImageBackground ? readerBackgroundImage : nil,
                 commentCardScale: settings.commentCardScaleFactor,
                 showCommentEntries: settings.showCommentEntries,
                 title: chapter?.title ?? "",
@@ -1755,7 +1756,7 @@ struct ReaderView: View {
         let previous = preparedChapter(at: previousChapter)
         let next = preparedChapter(at: nextChapter)
         return PageTurnView(pages: renderedPages(pages, at: index), current: $pageIndex, style: turnStyle,
-                     background: UIColor(settings.pageBackground),
+                     background: UIColor(theme.bg),
                      onEdge: { dir in DispatchQueue.main.async { goAcrossEdge(dir) } },
                      onTapCenter: { toggleBars() }, contentID: pageContentID,
                      chapterDirection: pendingChapterDirection,
