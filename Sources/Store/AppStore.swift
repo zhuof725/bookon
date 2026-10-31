@@ -128,12 +128,24 @@ final class AppStore: ObservableObject {
     @discardableResult
     func importSources(json text: String) throws -> SourceImportReport {
         let outcome = try SourceImportParser.parse(text)
-        for s in outcome.sources {
-            if let i = sources.firstIndex(where: { $0.bookSourceUrl == s.bookSourceUrl }) { sources[i] = s }
-            else { sources.append(s) }
+        var report = importParsedSources(outcome.sources)
+        report.failed = outcome.report.failed
+        report.failures = outcome.report.failures
+        return report
+    }
+
+    /// 导入已经解析好的条目（分享确认页可以只导入勾选的）。
+    @discardableResult
+    func importParsedSources(_ items: [BookSource]) -> SourceImportReport {
+        for source in items {
+            if let i = sources.firstIndex(where: { $0.bookSourceUrl == source.bookSourceUrl }) {
+                sources[i] = source
+            } else {
+                sources.append(source)
+            }
         }
-        if !outcome.sources.isEmpty { saveSources() }
-        return outcome.report
+        if !items.isEmpty { saveSources() }
+        return SourceImportReport(imported: items.count)
     }
 
     func importSources(from urlString: String) async throws -> SourceImportReport {

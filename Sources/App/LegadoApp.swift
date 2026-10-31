@@ -38,6 +38,7 @@ struct LegadoApp: App {
                         importInbox.pendingFile = nil
                         handle(url)
                     }
+                    consumeInboxFileIfNeeded()
                 }
                 .environmentObject(store)
                 .environmentObject(settings)
@@ -49,15 +50,16 @@ struct LegadoApp: App {
                 }
                 .overlay {
                     if let pending = pendingSourceImport {
-                        SourceImportConfirmation(pending: pending,
-                            onCancel: { pendingSourceImport = nil },
-                            onImport: { confirmSourceImport(pending) })
+                        SourceImportConfirmation(pending: pending, store: store,
+                            onCancel: { finishPendingImport() },
+                            onImport: { selected in confirmSourceImport(selected) })
                             .transition(.opacity)
                             .zIndex(10)
                     }
                 }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
+                    if phase == .active { consumeInboxFileIfNeeded() }
                     if phase != .active {
                         JavaBridge.store.flush()
                         ReadingStatsStore.shared.flush()
@@ -72,13 +74,32 @@ struct LegadoApp: App {
         }
     }
 
-    private func confirmSourceImport(_ pending: PendingSourceImport) -> String {
-        do {
-            let report = try store.importSources(json: pending.text)
-            return report.summary
-        } catch {
-            return "导入失败：\(error.localizedDescription)"
+    private func confirmSourceImport(_ selected: [BookSource]) -> String {
+        guard !selected.isEmpty else { return "没有勾选书源" }
+        return store.importParsedSources(selected).summary
+    }
+
+    private func finishPendingImport() {
+        if let url = pendingSourceImport?.inboxFileURL {
+            try? FileManager.default.removeItem(at: url)
         }
+        pendingSourceImport = nil
+    }
+
+    /// 有些分享动作只把文件拷进 Documents/Inbox，不会给 App 传 URL；
+    /// 启动/回到前台时扫一次，仍走同一个确认页。
+    private func consumeInboxFileIfNeeded() {
+        guard pendingSourceImport == nil else { return }
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let inbox = documents.appendingPathComponent("Inbox", isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: inbox, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let json = files.filter { $0.pathExtension.lowercased() == "json" }.max { lhs, rhs in
+            let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return l < r
+        }
+        if let json { handle(json) }
     }
 
     /// legado://import/bookSource?src=URL、yuedu://booksource/importonline?src=URL，或分享来的 .json 文件
@@ -99,9 +120,10 @@ struct LegadoApp: App {
                     importMessage = "没有识别到书源"
                     return
                 }
+                let inboxFileURL = url.path.contains("/Inbox/") ? url : nil
                 pendingSourceImport = PendingSourceImport(fileName: url.lastPathComponent,
-                                                          text: text,
-                                                          sourceNames: outcome.sources.map(\.bookSourceName))
+                                                          sources: outcome.sources,
+                                                          inboxFileURL: inboxFileURL)
             } catch {
                 importMessage = "无法解析书源 JSON：\(error.localizedDescription)"
             }
