@@ -62,6 +62,8 @@ final class ReadSettings: ObservableObject {
     @AppStorage("readerBackgroundMode") var backgroundMode: Int = 0
     @AppStorage("readerCustomBackgroundHex") var customBackgroundHex: String = "F5EFE0"
     @AppStorage("readerBackgroundImageID") var backgroundImageID: String = ""
+    /// 只迁移一次：图片背景第一次启用时默认卷页，之后尊重用户手动选择。
+    @AppStorage("reader.imageCurlDefault.v1") private var imageCurlDefaultApplied: Bool = false
 
     init() {
         // Old keys store extra spacing in points; new keys store tenths of
@@ -85,6 +87,11 @@ final class ReadSettings: ObservableObject {
         }
         // 旧版淡入淡出值 2 回退到原生滑动，保留字号、主题与阅读进度。
         if pageTurnStyle != 0 && pageTurnStyle != 1 { pageTurnStyle = 0 }
+        // 图片背景默认卷页（只迁移一次，之后用户改回滑动不会被覆盖）。
+        if backgroundMode == 2, !imageCurlDefaultApplied {
+            pageTurnStyle = 1
+            imageCurlDefaultApplied = true
+        }
         migrateReadingModeIfNeeded()
     }
 
@@ -100,6 +107,16 @@ final class ReadSettings: ObservableObject {
         saveCurrentLayout(for: dayNightMode)
         mode = target.rawValue
         apply(storedLayout(for: target) ?? defaultLayout(for: target), for: target)
+    }
+
+    /// 切换背景模式；图片模式默认卷页，用户之后仍可在阅读方式里改回滑动。
+    func setBackgroundMode(_ value: Int) {
+        objectWillChange.send()
+        backgroundMode = value
+        if value == 2 {
+            pageTurnStyle = 1
+            imageCurlDefaultApplied = true
+        }
     }
 
     /// 背景主题只在当前模式允许的色板里选；选预设会退出自定义背景。

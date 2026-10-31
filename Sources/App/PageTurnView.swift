@@ -21,6 +21,7 @@ struct PageContentView: View {
     let lineSpacing: Double
     let fg: Color
     let bg: Color
+    var backgroundImage: UIImage? = nil
     var commentCardScale: CGFloat = 1
     var showCommentEntries: Bool = true
     let title: String
@@ -89,6 +90,17 @@ struct PageContentView: View {
     var body: some View {
         ZStack(alignment: .top) {
             bg.ignoresSafeArea()
+            if let backgroundImage {
+                GeometryReader { geometry in
+                    Image(uiImage: backgroundImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+            }
             GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 0) {
                 if let volumeTitle {
