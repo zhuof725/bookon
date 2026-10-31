@@ -66,7 +66,8 @@ struct ReaderAppearanceControls: View {
                 }
                 .padding(.vertical, 2)
             } else {
-                ColorPicker("背景颜色", selection: customColor, supportsOpacity: false)
+                ColorPicker(settings.backgroundMode == 2 ? "文字反差色" : "背景颜色",
+                            selection: customColor, supportsOpacity: false)
                     .accessibilityIdentifier("reader.background.color")
                 if settings.backgroundMode == 2 {
                     PhotosPicker(selection: $photoItem, matching: .images) {
@@ -94,7 +95,7 @@ struct ReaderAppearanceControls: View {
                 Text(mode == .day ? "日间阅读" : "夜间阅读")
             }
         } footer: {
-            Text("预设跟随日间/夜间；纯色和图片可自选底色，图片模式下底色兼作文字遮罩。")
+            Text("预设跟随日间/夜间；纯色可自选底色；图片会原样铺满，所选底色只用来决定文字黑/白。")
         }
         .onChange(of: photoItem) { item in
             guard let item else { return }

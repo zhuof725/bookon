@@ -76,6 +76,10 @@ final class PageTurnCoordinator: NSObject, UIPageViewControllerDataSource, UIPag
         // 半透明遮罩由每页自己绘制，容器保持透明，避免和页面叠加两次。
         vc.view.backgroundColor = model.background.cgColor.alpha < 1 ? .clear : model.background
         vc.view.isOpaque = model.background.cgColor.alpha == 1
+        if model.background.cgColor.alpha < 1 {
+            // UIPageViewController 内部的滚动视图默认可能不透明，会把根视图背景图盖住。
+            clearScrollBackgrounds(in: vc.view)
+        }
         for (key, face) in fronts where valid(key) {
             face.updateContent(snapshots[key.contentID]!.pages[key.index], background: model.background)
         }
@@ -135,6 +139,13 @@ final class PageTurnCoordinator: NSObject, UIPageViewControllerDataSource, UIPag
     private func valid(_ key: Key) -> Bool {
         guard let snapshot = snapshots[key.contentID] else { return false }
         return snapshot.generation == key.generation && snapshot.pages.indices.contains(key.index)
+    }
+
+    private func clearScrollBackgrounds(in view: UIView) {
+        for subview in view.subviews {
+            if let scroll = subview as? UIScrollView { scroll.backgroundColor = .clear }
+            clearScrollBackgrounds(in: subview)
+        }
     }
 
     private func key(_ controller: UIViewController) -> Key? {
