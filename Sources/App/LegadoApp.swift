@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 struct LegadoApp: App {
     @StateObject private var store = AppStore.shared
     @StateObject private var settings = ReadSettings()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var importInbox = ImportInbox.shared
+    @State private var lastHandledFileURL: URL?
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @State private var importMessage: String?
     @State private var pendingSourceImport: PendingSourceImport?
@@ -29,14 +32,29 @@ struct LegadoApp: App {
                 .modifier(ThemeLaunchHost())
                 .modifier(MonochromeAppStyle())
                 .modifier(AppThemeRoot())
-                .onAppear { VerifyPresenter.install(); RemoteCoverLoader.install(); HeadlessWebViewRunner.install() }
+                .onAppear {
+                    VerifyPresenter.install(); RemoteCoverLoader.install(); HeadlessWebViewRunner.install()
+                    if let url = importInbox.pendingFile {
+                        importInbox.pendingFile = nil
+                        handle(url)
+                    }
+                }
                 .environmentObject(store)
                 .environmentObject(settings)
                 .onOpenURL { handle($0) }
-                .sheet(item: $pendingSourceImport) { pending in
-                    SourceImportConfirmation(pending: pending,
-                        onCancel: { pendingSourceImport = nil },
-                        onImport: { confirmSourceImport(pending) })
+                .onChange(of: importInbox.pendingFile) { url in
+                    guard let url else { return }
+                    importInbox.pendingFile = nil
+                    handle(url)
+                }
+                .overlay {
+                    if let pending = pendingSourceImport {
+                        SourceImportConfirmation(pending: pending,
+                            onCancel: { pendingSourceImport = nil },
+                            onImport: { confirmSourceImport(pending) })
+                            .transition(.opacity)
+                            .zIndex(10)
+                    }
                 }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
@@ -54,18 +72,20 @@ struct LegadoApp: App {
         }
     }
 
-    private func confirmSourceImport(_ pending: PendingSourceImport) {
-        let report = (try? store.importSources(json: pending.text)) ?? SourceImportReport()
-        pendingSourceImport = nil
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            importMessage = report.summary
+    private func confirmSourceImport(_ pending: PendingSourceImport) -> String {
+        do {
+            let report = try store.importSources(json: pending.text)
+            return report.summary
+        } catch {
+            return "导入失败：\(error.localizedDescription)"
         }
     }
 
     /// legado://import/bookSource?src=URL、yuedu://booksource/importonline?src=URL，或分享来的 .json 文件
     private func handle(_ url: URL) {
         if url.isFileURL {
+            if lastHandledFileURL == url { return }
+            lastHandledFileURL = url
             let ok = url.startAccessingSecurityScopedResource()
             defer { if ok { url.stopAccessingSecurityScopedResource() } }
             guard let text = try? String(contentsOf: url, encoding: .utf8) else {
