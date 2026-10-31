@@ -301,7 +301,6 @@ struct ReaderView: View {
 
     @ObservedObject private var bubbleStyles = BubbleStyleStore.shared
     @ObservedObject private var readingFonts = ReadingFontManager.shared
-    @StateObject private var backgroundLoader = ThemeAssetImageLoader()
     @State private var bodyReplacement = BodyReplaceEngine(rules: [])
     @State private var chapters: [BookChapter] = []
     @State private var index = 0
@@ -420,8 +419,15 @@ struct ReaderView: View {
         openComment(target)
     }
 
+    /// 直接取 `ThemeAssetStore` 的缓存/文件：设置页预览已经解码过，阅读页这里
+    /// 不再依赖异步 task（它可能在设置面板关闭时被取消，图片就永远不出现）。
+    private var readerBackgroundImage: UIImage? {
+        guard settings.usesImageBackground else { return nil }
+        return ThemeAssetStore.shared.image(for: settings.backgroundImageID)
+    }
+
     @ViewBuilder private var backgroundImageLayer: some View {
-        if let image = backgroundLoader.image {
+        if let image = readerBackgroundImage {
             GeometryReader { geo in
                 Image(uiImage: image)
                     .resizable()
@@ -824,9 +830,6 @@ struct ReaderView: View {
             attachAloudHost()
             await start()
             readingActiveSince = Date()
-        }
-        .task(id: "\(settings.backgroundMode)-\(settings.backgroundImageID)") {
-            await backgroundLoader.load(settings.usesImageBackground ? settings.backgroundImageID : nil)
         }
     }
 
