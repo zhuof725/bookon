@@ -7,6 +7,7 @@ struct LegadoApp: App {
     @StateObject private var settings = ReadSettings()
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @State private var importMessage: String?
+    @State private var pendingSourceImport: PendingSourceImport?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -32,6 +33,11 @@ struct LegadoApp: App {
                 .environmentObject(store)
                 .environmentObject(settings)
                 .onOpenURL { handle($0) }
+                .sheet(item: $pendingSourceImport) { pending in
+                    SourceImportConfirmation(pending: pending,
+                        onCancel: { pendingSourceImport = nil },
+                        onImport: { confirmSourceImport(pending) })
+                }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
                     if phase != .active {
@@ -48,14 +54,36 @@ struct LegadoApp: App {
         }
     }
 
+    private func confirmSourceImport(_ pending: PendingSourceImport) {
+        let report = (try? store.importSources(json: pending.text)) ?? SourceImportReport()
+        pendingSourceImport = nil
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            importMessage = report.summary
+        }
+    }
+
     /// legado://import/bookSource?src=URL、yuedu://booksource/importonline?src=URL，或分享来的 .json 文件
     private func handle(_ url: URL) {
         if url.isFileURL {
             let ok = url.startAccessingSecurityScopedResource()
             defer { if ok { url.stopAccessingSecurityScopedResource() } }
-            if let t = try? String(contentsOf: url, encoding: .utf8) {
-                let report = (try? store.importSources(json: t)) ?? SourceImportReport()
-                importMessage = report.summary
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                importMessage = "无法读取文件"
+                return
+            }
+            // 分享/文件打开先展示确认页，不直接写书源。
+            do {
+                let outcome = try SourceImportParser.parse(text)
+                guard !outcome.sources.isEmpty else {
+                    importMessage = "没有识别到书源"
+                    return
+                }
+                pendingSourceImport = PendingSourceImport(fileName: url.lastPathComponent,
+                                                          text: text,
+                                                          sourceNames: outcome.sources.map(\.bookSourceName))
+            } catch {
+                importMessage = "无法解析书源 JSON：\(error.localizedDescription)"
             }
             return
         }
