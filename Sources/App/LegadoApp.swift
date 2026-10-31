@@ -50,7 +50,7 @@ struct LegadoApp: App {
                 }
                 .overlay {
                     if let pending = pendingSourceImport {
-                        SourceImportConfirmation(pending: pending, store: store,
+                        SourceImportConfirmation(store: store, pending: pending,
                             onCancel: { finishPendingImport() },
                             onImport: { selected in confirmSourceImport(selected) })
                             .transition(.opacity)
