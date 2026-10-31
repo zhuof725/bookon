@@ -12,6 +12,7 @@ final class ImportInbox: ObservableObject {
 
     func receive(_ url: URL) {
         guard url.isFileURL else { return }
+        ImportDiagnostics.shared.note("收件箱收到 \(url.lastPathComponent)")
         pendingFile = url
     }
 }
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ app: UIApplication, open url: URL,
                      options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         if url.isFileURL {
+            ImportDiagnostics.shared.note("AppDelegate open \(url.lastPathComponent)")
             ImportInbox.shared.receive(url)
             return true
         }
@@ -30,6 +32,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         if let url = launchOptions?[.url] as? URL, url.isFileURL {
+            ImportDiagnostics.shared.note("didFinishLaunching \(url.lastPathComponent)")
             ImportInbox.shared.receive(url)
         }
         return true

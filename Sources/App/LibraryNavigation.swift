@@ -94,6 +94,11 @@ struct LibraryProfileView: View {
                     }
                     .accessibilityIdentifier("library.crashLogs")
                     LibraryCardDivider()
+                    NavigationLink { ImportDiagnosticsView() } label: {
+                        LibraryLinkLabel(title: "分享导入诊断", symbol: "ladybug")
+                    }
+                    .accessibilityIdentifier("library.importDiagnostics")
+                    LibraryCardDivider()
                     LibraryValueRow(title: "已导入书源", value: "\(store.sources.count) 个")
                     LibraryCardDivider()
                     LibraryValueRow(title: "书架书籍", value: "\(store.books.count) 本")

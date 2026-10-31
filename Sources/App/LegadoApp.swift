@@ -34,11 +34,12 @@ struct LegadoApp: App {
                 .modifier(AppThemeRoot())
                 .onAppear {
                     VerifyPresenter.install(); RemoteCoverLoader.install(); HeadlessWebViewRunner.install()
+                    ImportDiagnostics.shared.note("根视图出现")
                     if let url = importInbox.pendingFile {
                         importInbox.pendingFile = nil
                         handle(url)
                     }
-                    consumeInboxFileIfNeeded()
+                    scheduleInboxScans()
                 }
                 .environmentObject(store)
                 .environmentObject(settings)
@@ -59,7 +60,7 @@ struct LegadoApp: App {
                 }
                 .onChange(of: scenePhase) { phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
-                    if phase == .active { consumeInboxFileIfNeeded() }
+                    if phase == .active { scheduleInboxScans() }
                     if phase != .active {
                         JavaBridge.store.flush()
                         ReadingStatsStore.shared.flush()
@@ -77,6 +78,17 @@ struct LegadoApp: App {
     private func confirmSourceImport(_ selected: [BookSource]) -> String {
         guard !selected.isEmpty else { return "没有勾选书源" }
         return store.importParsedSources(selected).summary
+    }
+
+    /// 有些分享先把 App 拉起来、稍后才把文件拷进 Inbox；扫三次覆盖这个时间差。
+    private func scheduleInboxScans() {
+        consumeInboxFileIfNeeded()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            consumeInboxFileIfNeeded()
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            consumeInboxFileIfNeeded()
+        }
     }
 
     private func finishPendingImport() {
@@ -99,11 +111,15 @@ struct LegadoApp: App {
             let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             return l < r
         }
-        if let json { handle(json) }
+        if let json {
+            ImportDiagnostics.shared.note("Inbox 扫描到 \(json.lastPathComponent)")
+            handle(json)
+        }
     }
 
     /// legado://import/bookSource?src=URL、yuedu://booksource/importonline?src=URL，或分享来的 .json 文件
     private func handle(_ url: URL) {
+        ImportDiagnostics.shared.note("handle \(url.isFileURL ? "file" : "url") \(url.lastPathComponent)")
         if url.isFileURL {
             if lastHandledFileURL == url { return }
             lastHandledFileURL = url
@@ -120,6 +136,7 @@ struct LegadoApp: App {
                     importMessage = "没有识别到书源"
                     return
                 }
+                ImportDiagnostics.shared.note("解析到 \(outcome.sources.count) 个书源")
                 let inboxFileURL = url.path.contains("/Inbox/") ? url : nil
                 pendingSourceImport = PendingSourceImport(fileName: url.lastPathComponent,
                                                           sources: outcome.sources,
