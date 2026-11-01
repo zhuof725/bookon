@@ -14,7 +14,7 @@ enum SearchFormFallback {
     /// 不依赖 URL 百分号编码是否被 Foundation 改写）。body 为空时用查询参数里的全部键值对。
     static func postWithQuery(source: BookSource, key: String, page: Int,
                               query: String, queryURL: String) async -> HTTPResponseData? {
-        var bodyPairs = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bodyPairs = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if bodyPairs.isEmpty { return nil }
         var urlString = queryURL
         if let q = urlString.firstIndex(of: "?") { urlString = String(urlString[..<q]) }
@@ -50,7 +50,6 @@ enum SearchFormFallback {
         var fallbackChoice: (Element, String)?
         var chosen: Element?
         var keywordField: String?
-        var keywordType: String?
         for form in forms {
             let method = ((try? form.attr("method")) ?? "").lowercased()
             guard let inputs = try? form.select("input"), !inputs.isEmpty else { continue }
@@ -79,7 +78,6 @@ enum SearchFormFallback {
             DebugLog.add("≡兜底：表单里没有可用的关键词输入框")
             return nil
         }
-        _ = keywordType
 
         // 表单 charset（accept-charset）优先，其次书源 searchUrl 里的 charset，最后 utf-8。
         let formCharset = ((try? form.attr("accept-charset")) ?? "")

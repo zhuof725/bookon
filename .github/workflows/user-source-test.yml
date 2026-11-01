@@ -83,7 +83,7 @@ jobs:
         if: ${{ !inputs.check }}
         env:
           TEST_KEY: ${{ github.event.inputs.key }}
-          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
+          SOURCES_FILE: ${{ startsWith(github.event.inputs.file, 'data/') && github.event.inputs.file || format('data/sources/{0}', github.event.inputs.file) }}
         timeout-minutes: 120
         run: |
           set -o pipefail
@@ -92,7 +92,7 @@ jobs:
       - name: TOC probe
         if: ${{ inputs.probe == 'true' }}
         env:
-          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
+          SOURCES_FILE: ${{ startsWith(github.event.inputs.file, 'data/') && github.event.inputs.file || format('data/sources/{0}', github.event.inputs.file) }}
           TEST_KEY: ${{ github.event.inputs.key }}
         timeout-minutes: 60
         run: |
@@ -100,13 +100,16 @@ jobs:
           $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-toc "${SOURCES_FILE:-data/sources/user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee toc-probe.log
       - name: Search probe
         if: ${{ inputs.probe == 'search' }}
+        env:
+          SOURCES_FILE: ${{ startsWith(github.event.inputs.file, 'data/') && github.event.inputs.file || format('data/sources/{0}', github.event.inputs.file) }}
+          TEST_KEY: ${{ github.event.inputs.key }}
         timeout-minutes: 60
         run: |
           $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-search "${SOURCES_FILE:-data/sources/user-sources.json}" "${TEST_KEY:-系统}" 2>&1 | tee search-probe.log
       - name: Explore probe
         if: ${{ inputs.probe == 'explore' }}
         env:
-          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
+          SOURCES_FILE: ${{ startsWith(github.event.inputs.file, 'data/') && github.event.inputs.file || format('data/sources/{0}', github.event.inputs.file) }}
           TEST_KEY: ${{ github.event.inputs.key }}
         timeout-minutes: 60
         run: |
@@ -139,7 +142,7 @@ jobs:
       - name: Split sources into shards
         id: split
         env:
-          SOURCES_FILE: data/sources/${{ inputs.file }}
+          SOURCES_FILE: ${{ startsWith(inputs.file, 'data/') && inputs.file || format('data/sources/{0}', inputs.file) }}
           SHARD_SIZE: ${{ inputs.shard_size }}
         run: |
           set -o pipefail

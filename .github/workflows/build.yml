@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # 只改文档/书源快照/README 时不值得占 5 分钟 macOS runner。
+    paths-ignore:
+      - 'docs/**'
+      - 'data/**'
+      - '**.md'
   workflow_dispatch:
 
 # 同一分支连续推送时，只保留最后一次构建（tag 构建不互相取消）。
