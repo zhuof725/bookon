@@ -251,7 +251,7 @@ enum ExploreBoardStore {
 
     static func load(from defaults: UserDefaults = .standard) -> [ExploreBoard] {
         guard let data = defaults.data(forKey: defaultsKey) else { return [] }
-        guard var boards = try? JSONDecoder().decode([ExploreBoard].self, from: data) else { return [] }
+        guard let boards = try? JSONDecoder().decode([ExploreBoard].self, from: data) else { return [] }
         // 旧版本重复呈现编辑页时可能把同一份草稿（同 id）存了多次；
         // 读回时修掉重复 id，两张卡才能各显示各的。
         return uniqueIDs(boards)

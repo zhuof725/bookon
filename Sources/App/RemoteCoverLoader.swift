@@ -40,7 +40,7 @@ enum RemoteCoverLoader {
             let (data, _, _) = try await request.fetchData()
             try Task.checkCancellation()
             let decoded = SourceImageDecoder.decode(data, src: url.absoluteString, source: source)
-            guard let image = UIImage(data: decoded) else {
+            guard UIImage(data: decoded) != nil else {
                 DebugLog.add("◇封面解密后的数据不是图片")
                 return nil
             }

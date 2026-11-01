@@ -18,7 +18,7 @@ struct ChapterTitleStyle: Equatable {
         static let clear = Color(red: 0, green: 0, blue: 0, alpha: 0)
 
         static func parse(_ raw: String) -> Color? {
-            var text = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let text = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !text.isEmpty else { return nil }
             if text == "transparent" || text == "none" { return .clear }
             if let named = namedColors[text] { return named }
