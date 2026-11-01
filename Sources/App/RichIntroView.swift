@@ -196,18 +196,6 @@ struct RichIntroWebView: UIViewRepresentable {
             }
         }
 
-        /// 简介里的链接交给系统浏览器，避免 WebView 变成第二层导航。
-        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            guard action.navigationType == .linkActivated, let url = action.request.url,
-                  !url.absoluteString.hasPrefix("about:") else {
-                decisionHandler(.allow)
-                return
-            }
-            decisionHandler(.cancel)
-            UIApplication.shared.open(url)
-        }
-
         private func apply(_ value: CGFloat) {
             let clamped = max(1, value.rounded(.up))
             guard abs(clamped - heightBinding.wrappedValue) > 0.5 else { return }
@@ -259,5 +247,24 @@ struct RichIntroWebView: UIViewRepresentable {
                           Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()), a)
         }
         return style == .dark ? "#FFFFFF" : "#000000"
+    }
+}
+
+extension RichIntroWebView.Coordinator {
+    /// 简介里的链接交给系统浏览器，避免 WebView 变成第二层导航。
+    ///
+    /// 必须写在 extension 里：`decidePolicyFor` 是 WKNavigationDelegate 的
+    /// optional 方法，声明在类体内 Swift 只做「nearly match」，系统不会调用，
+    /// 点击链接会退化成 WebView 内部跳转。
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard navigationAction.navigationType == .linkActivated,
+              let url = navigationAction.request.url,
+              !url.absoluteString.hasPrefix("about:") else {
+            decisionHandler(.allow)
+            return
+        }
+        decisionHandler(.cancel)
+        UIApplication.shared.open(url)
     }
 }

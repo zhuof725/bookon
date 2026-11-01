@@ -12,21 +12,6 @@ final class ExpiredCertificateAllowance: NSObject, URLSessionTaskDelegate {
         return hostSuffixes.contains { h == $0 || h.hasSuffix("." + $0) }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              Self.isAllowed(host: challenge.protectionSpace.host),
-              let trust = challenge.protectionSpace.serverTrust else {
-            completionHandler(.performDefaultHandling, nil); return
-        }
-        if let credential = Self.credential(trust: trust, host: challenge.protectionSpace.host) {
-            completionHandler(.useCredential, credential)
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-
     /// 校验通过返回 nil（走默认）；唯一问题是过期时把校验时间挪到证书有效期内重新评估，
     /// 域名与签发链仍照旧检查，通过则返回凭据。URLSession 与 WebView 共用。
     static func credential(trust: SecTrust, host: String? = nil) -> URLCredential? {
@@ -57,5 +42,25 @@ final class ExpiredCertificateAllowance: NSObject, URLSessionTaskDelegate {
             i += 1
         }
         return nil
+    }
+}
+
+/// 证书放行必须写在 extension：`urlSession(_:task:didReceive:completionHandler:)`
+/// 是 URLSessionTaskDelegate 的 optional 方法，声明在类体内 Swift 只做
+/// 「nearly match」，运行时不保证被调用——白名单放行会静默失效。
+extension ExpiredCertificateAllowance {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              ExpiredCertificateAllowance.isAllowed(host: challenge.protectionSpace.host),
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil); return
+        }
+        if let credential = ExpiredCertificateAllowance.credential(trust: trust, host: challenge.protectionSpace.host) {
+            completionHandler(.useCredential, credential)
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
     }
 }

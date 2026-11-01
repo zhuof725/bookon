@@ -483,18 +483,25 @@ struct LoginWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var model: BrowserNavigationModel?
         init(model: BrowserNavigationModel?) { self.model = model }
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url, let src = SourceImportLink.sourceURL(url) {
-                decisionHandler(.cancel)
-                let model = self.model
-                Task { @MainActor in model?.importSource(from: src) }
-                return
-            }
-            decisionHandler(.allow)
-        }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model?.refresh() }
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { model?.refresh() }
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model?.refresh() }
     }
+}
+
+extension SourceLoginView.Coordinator {
+    /// 登录页里的「导入书源」链接：拦下来交给 App 处理，不让 WebView 自己跳走。
+    /// 必须写在 extension：decidePolicyFor 是 WKNavigationDelegate 的 optional 方法，
+    /// 声明在类体内 Swift 只做 nearly-match，系统不会调用。
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url, let src = SourceImportLink.sourceURL(url) {
+            decisionHandler(.cancel)
+            let model = self.model
+            Task { @MainActor in model?.importSource(from: src) }
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model?.refresh() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { model?.refresh() }
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model?.refresh() }
 }
