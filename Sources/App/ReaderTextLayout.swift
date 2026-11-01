@@ -277,9 +277,8 @@ enum ReaderTextLayout {
     /// 显式使用 TextKit 1，避免测量器和 iOS 16+ UITextView 的默认引擎不同。
     ///
     /// TextKit 的存储/布局/容器对象不要求主线程，只有 `UITextView` 是 UIKit 的主线程 API。
-    /// 分页与测量入口本来就有 `precondition(Thread.isMainThread)`；这里显式声明在
-    /// 主 actor 上，Swift 6 才能保证 UITextView 的创建与属性设置都在主线程。
-    @MainActor
+    /// 分页与测量入口本来就有 `precondition(Thread.isMainThread)`，这里只把「创建视图」
+    /// 这一步显式声明在主 actor 上（Swift 6 不允许把非 Sendable 的容器从非隔离上下文传进去）。
     static func makeTextView() -> CommentTextView {
         let storage = NSTextStorage()
         let manager = ReaderTextLayoutManager()
@@ -290,12 +289,16 @@ enum ReaderTextLayout {
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
         manager.addTextContainer(container)
-        let view = CommentTextView(frame: .zero, textContainer: container)
+        let slot = TextViewSlot()
+        let boxedContainer = SendableBox(container)
+        MainActor.assumeIsolated {
+            slot.view = CommentTextView(frame: .zero, textContainer: boxedContainer.value)
+        }
+        let view = slot.view!
         manager.highlightView = view
         return view
     }
 
-    @MainActor
     static func configure(_ view: UITextView) {
         view.backgroundColor = .clear
         view.isEditable = false
@@ -340,7 +343,6 @@ enum ReaderTextLayout {
     }
 
     /// 一个分页请求复用一个测量 UITextView；必须在主线程使用。
-    @MainActor
     final class Measurer {
         private let view: CommentTextView
         init() {

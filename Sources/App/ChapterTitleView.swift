@@ -103,8 +103,7 @@ enum ChapterTitleLayout {
         return NSAttributedString(string: text(title, style: style), attributes: attributes)
     }
 
-    /// 文字本身的高度（不含内边距）。UILabel 属于主线程 API，因此整组测量接口标 @MainActor。
-    @MainActor
+    /// 文字本身的高度（不含内边距）。
     static func textHeight(title: String, fontSize: CGFloat, width: CGFloat,
                            style: ChapterTitleStyle) -> CGFloat {
         guard !title.isEmpty else { return 0 }
@@ -114,7 +113,6 @@ enum ChapterTitleLayout {
         return ceil(label.sizeThatFits(CGSize(width: max(width, 1), height: .greatestFiniteMagnitude)).height)
     }
 
-    @MainActor
     static func height(title: String, fontSize: CGFloat, width: CGFloat,
                        style: ChapterTitleStyle = .empty) -> CGFloat {
         guard !title.isEmpty else { return 0 }
@@ -124,12 +122,10 @@ enum ChapterTitleLayout {
     }
 
     /// 标题下方的基础留白（不含样式的 margin-bottom）。
-    @MainActor
     static func bottomSpacing(fontSize: CGFloat, style: ChapterTitleStyle = .empty) -> CGFloat {
         max(fontSize * 0.8, 14) + CGFloat(style.marginBottom ?? 0)
     }
 
-    @MainActor
     static func label(title: String, fontSize: CGFloat, color: UIColor) -> UILabel {
         let label = UILabel()
         label.numberOfLines = 0
