@@ -74,6 +74,14 @@ enum SourceFileBridge {
         }
     }
 
+    /// `getReadBookConfig` 等配置类脚本用：读 AppStorage 里已有的真实设置值。
+    static func readSetting(_ key: String, fallback: String) -> String {
+        guard let value = UserDefaults.standard.object(forKey: key) else { return fallback }
+        if let number = value as? NSNumber { return number.stringValue }
+        if let text = value as? String { return text }
+        return fallback
+    }
+
     /// `getTxtInFolder`：把目录下所有 .txt 按文件名顺序拼起来。
     static func txtInFolder(_ path: String) -> String {
         guard let dir = try? resolve(path),
@@ -94,15 +102,30 @@ enum SourceFileBridge {
     // MARK: - 压缩包
 
     /// `unzipFile` / `unArchiveFile`：解压到同目录的子文件夹，返回该文件夹的相对路径。
-    /// iOS 端只内置 ZIP（`ZipReader`）；RAR / 7z 需要外部库，未支持时返回空串。
-    static func unarchive(_ path: String) -> String {
-        guard let url = try? resolve(path) else { return "" }
+    ///
+    /// iOS 端只内置 ZIP（`ZipReader`）。RAR / 7z 明确不支持：解压它们需要 RARLAB 专有代码
+    /// （GPL 或商业授权）与 LZMA SDK，体积和授权成本都不适合放进 App。遇到这类格式直接抛
+    /// 出 `unsupportedArchive`，让书源脚本拿到明确的异常，而不是静默返回空串后继续跑出
+    /// 一堆空目录 —— 后者更难排查。
+    static func unarchive(_ path: String) throws -> String {
+        let url = try resolve(path)
         let ext = url.pathExtension.lowercased()
-        guard ext == "zip" else { return "" }
-        guard let data = try? Data(contentsOf: url) else { return "" }
+        switch ext {
+        case "zip":
+            break
+        case "rar", "7z", "tar", "gz", "xz", "bz2":
+            throw BridgeError.unsupportedArchive
+        default:
+            // 没有扩展名时按魔数判断。
+            guard let head = try? Data(contentsOf: url, options: .mappedIfSafe).prefix(8),
+                  head.first == 0x50, head.dropFirst().first == 0x4B else {
+                throw BridgeError.unsupportedArchive
+            }
+        }
+        guard let data = try? Data(contentsOf: url) else { throw BridgeError.notFound }
         let folder = url.deletingPathExtension()
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        guard let reader = try? ZipReader(data: data) else { return "" }
+        guard let reader = try? ZipReader(data: data) else { throw BridgeError.unsupportedArchive }
         for (name, _) in reader.entries {
             guard let payload = try? reader.read(name) else { continue }
             let target = folder.appendingPathComponent(name)

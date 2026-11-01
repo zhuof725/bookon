@@ -127,7 +127,9 @@ struct BookSource: Codable, Hashable, Identifiable {
     var ruleReview: ReviewRule?
     /// 纯 JS 单文件书源主脚本（原版 BookSource.mainJs）。
     var mainJs: String?
-    // 以下字段本应用暂未使用，但必须保留，编辑/导出时才不会丢失原书源内容（与原版字段同名）。
+    // 下面这些字段在 iOS 端不一定参与求值，但必须保留：编辑/导出时才不会丢失原书源内容
+    // （与原版字段同名）。其中 loginCheckJs / coverDecodeJs / concurrentRate 已实际实现，
+    // 见 WebBook（每次请求后校验）、SourceImageDecoder（封面字节解码）、SourceRateLimiter（并发率）。
     var loginCheckJs: String?
     var coverDecodeJs: String?
     var variableComment: String?

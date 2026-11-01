@@ -281,7 +281,8 @@ final class TTSResponse: NSObject, TTSResponseExports {
     }
 
     func unarchive(_ path: String) -> String {
-        SourceFileBridge.unarchive(path)
+        do { return try SourceFileBridge.unarchive(path) }
+        catch { JSEngine.lastError = "解压失败：\(path)（\(error)）"; return "" }
     }
 
     func zipStringContent(_ path: String, _ entry: String, _ charset: String?) -> String {
@@ -1204,17 +1205,60 @@ final class JSEngine: @unchecked Sendable {
     java.queryBase64TTF=function(d){return java.queryTTF(d);};
     // getFile 返回文件句柄（Legado 返回 java.io.File）。iOS 无 File 对象，
     // 给出 path/exists/name 等常用字段，够脚本做存在性判断。
-    java.getFile=function(p){var s=String(p==null?'':p);return {
-        path:s,name:s.split('/').pop()||s,
-        exists:function(){return !!__fileExists(s);},
-        length:function(){var b=__readFileBytes(s);return b==null?0:JSON.parse(b).length;},
-        toString:function(){return s;}};};
-    // —— 阅读配置与主题配置：iOS 没有对应的全局配置对象，给等价形状的只读数据 ——
-    java.getReadBookConfig=function(){return JSON.stringify({name:'default',fontSize:18,lineSpacing:1.5,paragraphSpacing:0,pageAnim:0,useReplaceRule:false});};
-    java.getReadBookConfigMap=function(){return {name:'default',fontSize:18,lineSpacing:1.5,paragraphSpacing:0,pageAnim:0,useReplaceRule:false};};
-    java.getThemeConfigMap=function(){var dark=(typeof __isDarkMode==='function')?!!__isDarkMode():false;return {darkTheme:dark,themeMode:dark?1:0,dayThemeColor:'#FFFFFF',nightThemeColor:'#000000'};};
+    // Legado 的 getFile 返回 java.io.File。这里给出同名方法集合，
+    // 覆盖脚本里最常见的 exists/length/delete/getName 判断。
+    java.getFile=function(p){
+        var s=String(p==null?'':p);
+        return {
+            path:s,
+            name:s.split('/').pop()||s,
+            getName:function(){return s.split('/').pop()||s;},
+            getPath:function(){return s;},
+            exists:function(){return !!__fileExists(s);},
+            length:function(){var b=__readFileBytes(s);return b==null?0:JSON.parse(b).length;},
+            delete:function(){return !!__deleteSourceFile(s);},
+            isDirectory:function(){return false;},
+            isFile:function(){return !!__fileExists(s);},
+            toString:function(){return s;}
+        };
+    };
+    // —— 阅读配置与主题配置：读真实的 AppStorage 设置，不编造固定值 ——
+    java.getReadBookConfig=function(){
+        return JSON.stringify({
+            name:'default',
+            fontSize:Number(__readSetting('fontSize',20)),
+            lineSpacing:Number(__readSetting('readerLineHeightTenths',12))*0.1,
+            paragraphSpacing:Number(__readSetting('readerParagraphHeightTenths',2))*0.1,
+            useReplaceRule:false,
+            pageAnim:Number(__readSetting('pageMode',0))
+        });
+    };
+    java.getReadBookConfigMap=function(){
+        return {
+            name:'default',
+            fontSize:Number(__readSetting('fontSize',20)),
+            lineSpacing:Number(__readSetting('readerLineHeightTenths',12))*0.1,
+            paragraphSpacing:Number(__readSetting('readerParagraphHeightTenths',2))*0.1,
+            useReplaceRule:false,
+            pageAnim:Number(__readSetting('pageMode',0))
+        };
+    };
+    java.getThemeConfigMap=function(){
+        var dark=(typeof __isDarkMode==='function')?!!__isDarkMode():false;
+        return {darkTheme:dark,themeMode:dark?1:0,
+                dayThemeColor:String(__readSetting('readerDayBgHex','#FFFFFF')),
+                nightThemeColor:String(__readSetting('readerNightBgHex','#000000'))};
+    };
     // —— 后台 WebView 取源码 / 取跳转地址 ——
-    java.webViewGetSource=function(h,u,js,re){return String(java.webView(h,u,js));};
+    // Legado 语义：webViewGetSource 用 sourceRegex 从后台页面里提取目标资源地址；
+    // 没传正则时退回整页源码（与 Java 版一致：sourceRegex 为空则不过滤）。
+    java.webViewGetSource=function(h,u,js,re){
+        var html=String(java.webView(h,u,js));
+        var pattern=String(re==null?'':re);
+        if(pattern===''){return html;}
+        try{var m=new RegExp(pattern).exec(html);if(m){return (m[1]!=null)?m[1]:m[0];}}catch(e){}
+        return '';
+    };
     java.webViewGetOverrideUrl=function(h,u,js,re){
         var html=String(java.webView(h,u,js));
         try{var m=new RegExp(String(re)).exec(html);if(m&&m[1]){return m[1];}if(m&&m[0]){return m[0];}}catch(e){}
@@ -1715,6 +1759,10 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(fileExists, forKeyedSubscript: "__fileExists" as NSString)
         let isDark: @convention(block) () -> Bool = { SourceFileBridge.isDarkMode }
         ctx.setObject(isDark, forKeyedSubscript: "__isDarkMode" as NSString)
+        let readSetting: @convention(block) (String, String) -> String = { key, fallback in
+            SourceFileBridge.readSetting(key, fallback: fallback)
+        }
+        ctx.setObject(readSetting, forKeyedSubscript: "__readSetting" as NSString)
     }
 
     /// Stable 16-hex-digit identifier, generated once per app install and kept in UserDefaults.
