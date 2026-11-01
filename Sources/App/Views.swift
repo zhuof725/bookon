@@ -517,14 +517,14 @@ struct ReaderView: View {
             // scroll layoutID below asks the native container to preserve its anchor.
             repaginate()
         }
-        .onChange(of: bubbleStyles.revision) { _ in
+        .onChange(of: bubbleStyles.revision) {
             cancelPreparation()
             preparedChapters.removeAll()
             repaginate()
             if settings.pageMode == 0, !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
         }
-        .onChange(of: settings.fontSize) { _ in scheduleRepaginate() }
-        .onChange(of: settings.lineSpacing) { _ in scheduleRepaginate() }
+        .onChange(of: settings.fontSize) { scheduleRepaginate() }
+        .onChange(of: settings.lineSpacing) { scheduleRepaginate() }
         .onChange(of: settings.paragraphSpacing) { _ in scheduleRepaginate() }
         .onChange(of: settings.fullJustify) { _ in scheduleRepaginate() }
         .onChange(of: settings.bottomJustify) { _ in scheduleRepaginate() }
