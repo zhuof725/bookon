@@ -112,7 +112,7 @@ import SwiftSoup
     func remove() { try? element.remove() }
     // SwiftSoup 这些方法的返回值是 Void，`try?` 生成 Void? 会被丢弃。
     // 显式写 `_ =` 表明「失败也不关心」，与 Legado 的容错语义一致。
-    func empty() { _ = try? element.empty() }
+    func empty() { element.empty() }
     func append(_ html: String) { _ = try? element.append(html) }
     func prepend(_ html: String) { _ = try? element.prepend(html) }
     func before(_ html: String) { _ = try? element.before(html) }
@@ -155,7 +155,7 @@ import SwiftSoup
     func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) {
         for (index, element) in elements.enumerated() { handler(JSNodeBridge(element), index) }
     }
-    func hasClass(_ name: String) -> Bool { firstElement.map { (try? $0.hasClass(name)) ?? false } ?? false }
+    func hasClass(_ name: String) -> Bool { firstElement?.hasClass(name) ?? false }
     func parent() -> JSNodeListBridge {
         var found: [Element] = []
         for element in elements {
@@ -172,7 +172,7 @@ import SwiftSoup
         return JSNodeBridge(s)
     }
     func remove() { for element in elements { try? element.remove() } }
-    func empty() { for element in elements { _ = try? element.empty() } }
+    func empty() { for element in elements { element.empty() } }
     func append(_ html: String) { for element in elements { _ = try? element.append(html) } }
     func prepend(_ html: String) { for element in elements { _ = try? element.prepend(html) } }
     func before(_ html: String) { for element in elements { _ = try? element.before(html) } }
