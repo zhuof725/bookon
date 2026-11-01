@@ -89,8 +89,8 @@ enum CrashReporter {
         }
         if let handle = try? FileHandle(forWritingTo: breadcrumbURL) {
             defer { try? handle.close() }
-            try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
+            _ = try? handle.seekToEnd()
+            _ = try? handle.write(contentsOf: data)
         }
     }
 

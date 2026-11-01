@@ -2207,8 +2207,8 @@ final class JSEngine: @unchecked Sendable {
             if result == nil {
                 // 脚本执行成功但没打开页面：多半是 createSvg 里的守卫
                 // （缓存标记未清 / 共享 Token 为空）走了 toast 分支。
-                let token = (try? JSEngine.shared.evalString("String(source.getVariable())",
-                                                            context: RuleContext(source: source))) ?? ""
+                let token = JSEngine.shared.evalString("String(source.getVariable())",
+                                                       context: RuleContext(source: source)) ?? ""
                 DebugLog.readerAdd("≡段评未打开：共享Token=\(token.isEmpty ? "空" : "已设置")，"
                              + "缓存标记=\(click.count > 12 ? String(click.prefix(12)) + "…" : click)")
                 error = "评论打不开：书源脚本没有打开任何页面（可能缺少 Token 或接口不可用）"

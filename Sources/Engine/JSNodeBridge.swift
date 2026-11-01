@@ -96,7 +96,7 @@ import SwiftSoup
     func first() -> JSNodeBridge? { self }
     func last() -> JSNodeBridge? { self }
     func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) { handler(self, 0) }
-    func hasClass(_ name: String) -> Bool { (try? element.hasClass(name)) ?? false }
+    func hasClass(_ name: String) -> Bool { element.hasClass(name) }
     func parent() -> JSNodeBridge? {
         guard let p = element.parent() else { return nil }
         return JSNodeBridge(p)
@@ -110,13 +110,15 @@ import SwiftSoup
         return JSNodeBridge(s)
     }
     func remove() { try? element.remove() }
-    func empty() { try? element.empty() }
-    func append(_ html: String) { try? element.append(html) }
-    func prepend(_ html: String) { try? element.prepend(html) }
-    func before(_ html: String) { try? element.before(html) }
-    func after(_ html: String) { try? element.after(html) }
-    func addClass(_ name: String) { try? element.addClass(name) }
-    func removeClass(_ name: String) { try? element.removeClass(name) }
+    // SwiftSoup 这些方法的返回值是 Void，`try?` 生成 Void? 会被丢弃。
+    // 显式写 `_ =` 表明「失败也不关心」，与 Legado 的容错语义一致。
+    func empty() { _ = try? element.empty() }
+    func append(_ html: String) { _ = try? element.append(html) }
+    func prepend(_ html: String) { _ = try? element.prepend(html) }
+    func before(_ html: String) { _ = try? element.before(html) }
+    func after(_ html: String) { _ = try? element.after(html) }
+    func addClass(_ name: String) { _ = try? element.addClass(name) }
+    func removeClass(_ name: String) { _ = try? element.removeClass(name) }
 }
 
 @objc final class JSNodeListBridge: NSObject, JSNodeListExports {
@@ -170,13 +172,13 @@ import SwiftSoup
         return JSNodeBridge(s)
     }
     func remove() { for element in elements { try? element.remove() } }
-    func empty() { for element in elements { try? element.empty() } }
-    func append(_ html: String) { for element in elements { try? element.append(html) } }
-    func prepend(_ html: String) { for element in elements { try? element.prepend(html) } }
-    func before(_ html: String) { for element in elements { try? element.before(html) } }
-    func after(_ html: String) { for element in elements { try? element.after(html) } }
-    func addClass(_ name: String) { for element in elements { try? element.addClass(name) } }
-    func removeClass(_ name: String) { for element in elements { try? element.removeClass(name) } }
+    func empty() { for element in elements { _ = try? element.empty() } }
+    func append(_ html: String) { for element in elements { _ = try? element.append(html) } }
+    func prepend(_ html: String) { for element in elements { _ = try? element.prepend(html) } }
+    func before(_ html: String) { for element in elements { _ = try? element.before(html) } }
+    func after(_ html: String) { for element in elements { _ = try? element.after(html) } }
+    func addClass(_ name: String) { for element in elements { _ = try? element.addClass(name) } }
+    func removeClass(_ name: String) { for element in elements { _ = try? element.removeClass(name) } }
 }
 
 /// 元素列表在规则 JS 里的形态：既能当数组用（select/toArray/下标/length），
