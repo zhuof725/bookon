@@ -144,12 +144,12 @@ enum AutoDetect {
             let linkDensity = Double(linkText) / Double(max(1, length))
             guard linkDensity < 0.5 else { continue }
             var score = Double(length) * (1 - linkDensity)
-            let cls = el.className().lowercased()
-            let ident = el.id().lowercased()
+            let cls = ((try? el.className()) ?? "").lowercased()
+            let ident = ((try? el.id()) ?? "").lowercased()
             if hints.contains(where: { cls.contains($0) || ident.contains($0) }) { score *= 1.8 }
             if el.tagName() == "article" { score *= 1.3 }
             if best == nil || score > best!.score {
-                best = (score, el.html())
+                best = (score, (try? el.html()) ?? "")
             }
         }
         guard let best, best.html.count >= 200 else { return "" }
