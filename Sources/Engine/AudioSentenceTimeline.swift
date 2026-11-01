@@ -10,8 +10,6 @@ enum AudioSentenceTimeline {
     private static let storagePrefix = "reader.audio.timeline.v1."
     /// 停顿时长阈值（秒）：太短的换气声不算段落边界。
     private static let minPause: Double = 0.18
-    /// 吸附半径：估算时间与停顿相差超过这个值就不吸附。
-    private static let snapRadius: Double = 3.0
 
     // MARK: 缓存
 

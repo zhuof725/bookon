@@ -438,32 +438,6 @@ struct BookDetailSourcePicker: View {
         return base + " · " + upstream
     }
 
-    /// 聚合源的子源标记：`data:...base64,{"source":"番茄小说",...}`、查询参数 `source=/site=`
-    /// 这些写法都认；不同聚合源用的键名不一样，这里按常见键名逐个找。
-    private func upstreamFromURL(_ raw: String) -> String? {
-        let keys = ["source", "src", "site", "platform", "from", "channel", "origin", "源"]
-        if let range = raw.range(of: "base64,") {
-            let rest = raw[range.upperBound...]
-            let part = rest.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-            let trimmed = String(part).trimmingCharacters(in: .whitespacesAndNewlines)
-            if let data = Data(base64Encoded: trimmed),
-               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                for key in keys {
-                    if let value = object[key] as? String, !value.isEmpty { return value }
-                }
-            }
-        }
-        if let items = URLComponents(string: raw)?.queryItems {
-            for key in keys {
-                if let value = items.first(where: { $0.name.lowercased() == key })?.value,
-                   !value.isEmpty {
-                    return value
-                }
-            }
-        }
-        return nil
-    }
-
     /// 「换源时加载目录」：并发取各候选源的目录，顺便写进缓存，切换后立即能用。
     @MainActor
     private func prefetchTOCs() async {

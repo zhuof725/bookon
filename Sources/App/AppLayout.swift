@@ -30,23 +30,15 @@ enum AppLayout {
 
     // MARK: 圆角阶梯
 
-    /// 6 —— 小部件（色块、进度条）。
-    static let radiusXS: CGFloat = 6
-    /// 11 —— 书籍封面。
-    static let radiusCover: CGFloat = 11
     /// 12 —— 输入框、小控件。
     static let radiusControl: CGFloat = 12
     /// 20 —— 卡片、列表行（与主题系统的默认卡片圆角一致）。
     static let radiusCard: CGFloat = 20
-    /// 24 —— 面板、大容器、设置分组。
-    static let radiusPanel: CGFloat = 24
 
     // MARK: 控件
 
     /// 44 —— iOS 最小触控高度，也是页头胶囊/主按钮高度。
     static let controlHeight: CGFloat = 44
-    /// 34 —— 紧凑胶囊（搜索选项）。
-    static let compactHeight: CGFloat = 34
     /// 0.5 —— 描边线宽。
     static let hairline: CGFloat = 0.5
 }

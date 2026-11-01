@@ -3,7 +3,6 @@ import Foundation
 /// 发现（书签）页设置：展示布局、榜单样式、展示数量、性能与缓存。
 /// 纯读取逻辑放在这里便于离线回归；界面用 @AppStorage 读写同一批键。
 enum DiscoverSettings {
-    static let gridEnabledKey = "discover.grid.enabled"
     static let gridColumnsKey = "discover.grid.columns"
     static let pageLayoutKey = "discover.page.layout"
     static let rankingModeKey = "discover.ranking.mode"
