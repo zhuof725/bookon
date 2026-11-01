@@ -277,9 +277,14 @@ enum ThemeEditorDestination: String, Hashable {
 
 extension Binding where Value == AppTheme {
     /// Reading legacy themes never materializes customization or dirties the draft.
+    ///
+    /// `Binding` 的 get/set 闭包在 Swift 6 下按 `@Sendable` 检查，而
+    /// `WritableKeyPath` 不是 Sendable。这个 Binding 只会在主线程读写
+    /// SwiftUI 状态，不存在跨线程共享，因此显式豁免该检查。
     func themeSetting<T>(_ keyPath: WritableKeyPath<ThemeCustomization, T>) -> Binding<T> {
-        Binding<T>(get: { (wrappedValue.customization ?? ThemeCustomization())[keyPath: keyPath] },
-                   set: { value in
+        nonisolated(unsafe) let keyPath = keyPath
+        return Binding<T>(get: { (wrappedValue.customization ?? ThemeCustomization())[keyPath: keyPath] },
+                          set: { value in
             var theme = wrappedValue
             var settings = theme.customization ?? ThemeCustomization()
             settings[keyPath: keyPath] = value
