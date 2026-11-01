@@ -60,6 +60,9 @@ targets:
           NSAllowsArbitraryLoads: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # 只支持竖屏时必须声明全屏，否则 iPad 上的 Split View 多任务不可用，
+        # 且 App Store 会拒绝只有竖屏但没声明 UIRequiresFullScreen 的包。
+        UIRequiresFullScreen: true
         CFBundleURLTypes:
           - CFBundleURLName: legado
             CFBundleURLSchemes:
