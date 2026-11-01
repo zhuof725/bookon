@@ -442,85 +442,8 @@ struct ReaderView: View {
 
     private var theme: (bg: Color, fg: Color, name: String) { settings.currentPaper }
 
-    /// 独立的几何观察层。抽出来是因为放在 ZStack 里会让整个 body 的类型推断超时
-    /// （Swift 对超大 ViewBuilder 表达式的推断是指数级的）。
-    private var viewportObserver: some View {
-        GeometryReader { geo in
-            Color.clear
-                .onAppear { updateViewport(geo) }
-                .onChange(of: geo.size) { _, _ in updateViewport(geo) }
-                .onChange(of: geo.safeAreaInsets) { _, _ in updateViewport(geo) }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-
-    var body: some View {
-        ZStack {
-            theme.bg.ignoresSafeArea()
-            if settings.usesImageBackground {
-                backgroundImageLayer
-            }
-            viewportObserver
-            if mangaMode {
-                mangaBody
-            } else if bookAudio.chapterURL != nil, !sourceToneBackground {
-                AudioChapterView(audio: bookAudio, book: book,
-                                 chapterNumber: index + 1,
-                                 chapterCount: chapters.count,
-                                 nextChapterTitle: chapters.indices.contains(index + 1)
-                                     ? chapters[index + 1].title : nil,
-                                 sourceChapterURL: chapters.indices.contains(index)
-                                     ? chapters[index].url : nil,
-                                 source: store.source(for: book.origin),
-                                 onReloadAudio: { reloadAudioChapter() },
-                                 onStop: {
-                                     if SourceToneAudio.isActive(bookUrl: book.bookUrl) {
-                                         SourceToneAudio.deactivate(bookUrl: book.bookUrl)
-                                         BookKindStore.save(.text, bookUrl: book.bookUrl)
-                                     }
-                                 },
-                                 onLoadParagraphs: { await audioChapterParagraphs() },
-                                 onLoadLyric: {
-                                     guard chapters.indices.contains(index) else { return nil }
-                                     return ChapterLyric.load(source: store.source(for: book.origin),
-                                                              book: book, chapter: chapters[index])
-                                 },
-                                 textFontSize: settings.fontSize,
-                                 textLineSpacing: settings.lineSpacingPoints,
-                                 onSwitchToTTS: { engine in switchAudioToTTS(engine) },
-                                 onPrevious: audioPreviousChapter,
-                                 onNext: audioNextChapter,
-                                 onBack: {
-                                     if forceAudioPlayer { forceAudioPlayer = false } else { dismiss() }
-                                 },
-                                 onTOC: { showToc = true })
-                    .transition(.opacity)
-            } else if settings.pageMode == 1 {
-                pagedBody
-            } else {
-                continuousScrollBody
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
-        .statusBarHidden(true)
-        .modifier(SourceToneChangeReloader(
-            bookOrigin: book.origin,
-            chapterTitle: chapters.indices.contains(index) ? chapters[index].title : nil,
-            isAudioActive: bookAudio.chapterURL != nil,
-            onReload: reloadAudioChapter))
-        .overlay(alignment: .top) {
-            if showBars && readerChromeMounted {
-                ReaderTopChrome(title: book.name, source: readerSourceName,
-                    coverURL: BookCoverLocation.url(for: book),
-                    background: theme.bg, foreground: theme.fg,
-                    onBack: { requestReaderExit() }, onDetails: { showBookInfo = true })
-                    .transition(.opacity)
-            }
-        }
-        .overlay(alignment: .bottom) {
+    @ViewBuilder
+    private var bottomChromeLayer: some View {
             if showBars && readerChromeMounted {
                 ReaderBottomChrome(chapter: readerChapterTitle, positionLabel: readerPositionLabel,
                     progress: $menuProgress, canScrub: canScrubReader,
@@ -541,103 +464,75 @@ struct ReaderView: View {
                     })
                     .transition(.opacity)
             }
+    }
+
+    @ViewBuilder
+    private var topChromeLayer: some View {
+        if showBars && readerChromeMounted {
+            ReaderTopChrome(title: book.name, source: readerSourceName,
+                coverURL: BookCoverLocation.url(for: book),
+                background: theme.bg, foreground: theme.fg,
+                onBack: { requestReaderExit() }, onDetails: { showBookInfo = true })
+                .transition(.opacity)
         }
-        .overlay(alignment: .bottom) {
-            if let notice = bookmarkNotice {
-                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(theme.fg.opacity(0.82)))
-                    .padding(.bottom, 90)
-                    .transition(.opacity)
-                    .accessibilityIdentifier("reader.notice")
-            }
+    }
+
+    /// 有声书章节视图。参数多、闭包多，放在 body 里会把整个表达式拖到类型推断超时，
+    /// 单独拆出来。与 viewportObserver 同理。
+    @ViewBuilder
+    private var audioChapterLayer: some View {
+        AudioChapterView(audio: bookAudio, book: book,
+                         chapterNumber: index + 1,
+                         chapterCount: chapters.count,
+                         nextChapterTitle: chapters.indices.contains(index + 1)
+                             ? chapters[index + 1].title : nil,
+                         sourceChapterURL: chapters.indices.contains(index)
+                             ? chapters[index].url : nil,
+                         source: store.source(for: book.origin),
+                         onReloadAudio: { reloadAudioChapter() },
+                         onStop: {
+                             if SourceToneAudio.isActive(bookUrl: book.bookUrl) {
+                                 SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+                                 BookKindStore.save(.text, bookUrl: book.bookUrl)
+                             }
+                         },
+                         onLoadParagraphs: { await audioChapterParagraphs() },
+                         onLoadLyric: {
+                             guard chapters.indices.contains(index) else { return nil }
+                             return ChapterLyric.load(source: store.source(for: book.origin),
+                                                      book: book, chapter: chapters[index])
+                         },
+                         textFontSize: settings.fontSize,
+                         textLineSpacing: settings.lineSpacingPoints,
+                         onSwitchToTTS: { engine in switchAudioToTTS(engine) },
+                         onPrevious: audioPreviousChapter,
+                         onNext: audioNextChapter,
+                         onBack: {
+                             if forceAudioPlayer { forceAudioPlayer = false } else { dismiss() }
+                         },
+                         onTOC: { showToc = true })
+            .transition(.opacity)
+    }
+
+    /// 独立的几何观察层。抽出来是因为放在 ZStack 里会让整个 body 的类型推断超时
+    /// （Swift 对超大 ViewBuilder 表达式的推断是指数级的）。
+    private var viewportObserver: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { updateViewport(geo) }
+                .onChange(of: geo.size) { _, _ in updateViewport(geo) }
+                .onChange(of: geo.safeAreaInsets) { _, _ in updateViewport(geo) }
         }
-        .sheet(isPresented: $showBookmarks) {
-            ReaderBookmarkList(book: book, currentChapter: index, onOpen: { item in
-                showBookmarks = false
-                openBookmark(item)
-            }, onDelete: { id in ReaderBookmarkStore.shared.remove(id: id) })
-        }
-        .sheet(isPresented: $showReplaceFromSelection) {
-            BodyReplaceRulesView(seed: selectedText)
-        }
-        .fullScreenCover(isPresented: $showAloudPanel) {
-            AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
-                            onRefreshToc: tocRefreshAction,
-                            currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
-                            onUseSourceTone: { source, tone in
-                                await useSourceToneAudio(source: source, tone: tone)
-                            },
-                            onStopSourceAudio: {
-                                guard SourceToneAudio.isActive(bookUrl: book.bookUrl) else { return }
-                                bookAudio.stop()
-                                SourceToneAudio.deactivate(bookUrl: book.bookUrl)
-                                BookKindStore.save(.text, bookUrl: book.bookUrl)
-                                forceAudioPlayer = false
-                            })
-                .modifier(AppThemeRoot())
-        }
-        .overlay(alignment: .bottom) {
-            if let notice = aloud.notice, !showAloudPanel {
-                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(theme.fg.opacity(0.82)))
-                    .padding(.bottom, 90)
-                    .transition(.opacity)
-                    .accessibilityIdentifier("reader.aloud.notice")
-            }
-        }
-        .sheet(isPresented: $showReaderSearch) {
-            ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
-                                pages: settings.pageMode == 1 ? pages : [],
-                                onSelect: selectSearchResult)
-        }
-        .sheet(isPresented: $showBookInfo) {
-            NavigationStack {
-                ReaderQuickPanel(book: book, sourceName: readerSourceName,
-                    position: "\(chapters.isEmpty ? 0 : index + 1)/\(chapters.count)",
-                    busy: quickBusy || loading, message: quickMessage,
-                    enabled: quickEnabled, loggedIn: quickLoggedIn,
-                    customButton: store.source(for: book.origin)?.customButton == true,
-                    action: quickAction)
-                .navigationTitle("书籍操作")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
-                .sheet(isPresented: $quickLogin) {
-                    if let source = store.source(for: book.origin) { SourceLoginView(source: source) }
-                }
-                .sheet(isPresented: $quickRules, onDismiss: {
-                    bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
-                    quickMessage = "规则已更新，点击刷新应用到当前章节"
-                }) { BodyReplaceRulesView() }
-                .sheet(isPresented: $quickSources) {
-                    BookDetailSourcePicker(book: book) { replacement in
-                        quickPreview = replacement
-                    }
-                    .sheet(item: $quickPreview) { replacement in
-                        NavigationStack { BookDetailView(book: replacement) }
-                    }
-                }
-                .sheet(item: $quickBrowser) { target in
-                    InAppBrowserSheet(target: target, host: book.origin,
-                        cookieJar: store.source(for: book.origin)?.enabledCookieJar != false,
-                        onClose: { quickBrowser = nil })
-                }
-                .alert("清除当前章节缓存并重新下载？", isPresented: $confirmChapterClear) {
-                    Button("取消", role: .cancel) {}
-                    Button("清缓存并刷新", role: .destructive) { Task { await quickReload(clear: true) } }
-                } message: { Text("仅清除当前章节的正文缓存，不删除书籍、目录或阅读进度。") }
-            }
-            .presentationDetents([.height(440), .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showToc) {
-            ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl, currentIndex: index,
-                           manager: .shared,
-                           onSelect: { target in showToc = false; openChapter(target) },
-                           onRefresh: tocRefreshAction)
-        }
-        .sheet(isPresented: $showSettings) {
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    var body: some View {
+        readerBody
+    }
+
+    @ViewBuilder
+    private var readerSettingsSheet: some View {
             NavigationStack {
                 Form {
                     ReaderAppearanceControls(settings: settings)
@@ -693,7 +588,137 @@ struct ReaderView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var readerQuickPanelSheet: some View {
+            NavigationStack {
+                ReaderQuickPanel(book: book, sourceName: readerSourceName,
+                    position: "\(chapters.isEmpty ? 0 : index + 1)/\(chapters.count)",
+                    busy: quickBusy || loading, message: quickMessage,
+                    enabled: quickEnabled, loggedIn: quickLoggedIn,
+                    customButton: store.source(for: book.origin)?.customButton == true,
+                    action: quickAction)
+                .navigationTitle("书籍操作")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showBookInfo = false } } }
+                .sheet(isPresented: $quickLogin) {
+                    if let source = store.source(for: book.origin) { SourceLoginView(source: source) }
+                }
+                .sheet(isPresented: $quickRules, onDismiss: {
+                    bodyReplacement = BodyReplaceEngine(rules: BodyReplaceRepository().rules())
+                    quickMessage = "规则已更新，点击刷新应用到当前章节"
+                }) { BodyReplaceRulesView() }
+                .sheet(isPresented: $quickSources) {
+                    BookDetailSourcePicker(book: book) { replacement in
+                        quickPreview = replacement
+                    }
+                    .sheet(item: $quickPreview) { replacement in
+                        NavigationStack { BookDetailView(book: replacement) }
+                    }
+                }
+                .sheet(item: $quickBrowser) { target in
+                    InAppBrowserSheet(target: target, host: book.origin,
+                        cookieJar: store.source(for: book.origin)?.enabledCookieJar != false,
+                        onClose: { quickBrowser = nil })
+                }
+                .alert("清除当前章节缓存并重新下载？", isPresented: $confirmChapterClear) {
+                    Button("取消", role: .cancel) {}
+                    Button("清缓存并刷新", role: .destructive) { Task { await quickReload(clear: true) } }
+                } message: { Text("仅清除当前章节的正文缓存，不删除书籍、目录或阅读进度。") }
+            }
+            .presentationDetents([.height(440), .large])
+            .presentationDragIndicator(.visible)
+    }
+
+    /// 阅读页主体 + 全部浮层。整条链有 13 个 sheet/cover，直接写进 body 会让
+    /// Swift 的类型推断超时，因此单独成一个属性。
+    private var readerBody: some View {
+        ZStack {
+            theme.bg.ignoresSafeArea()
+            if settings.usesImageBackground {
+                backgroundImageLayer
+            }
+            viewportObserver
+            if mangaMode {
+                mangaBody
+            } else if bookAudio.chapterURL != nil, !sourceToneBackground {
+                audioChapterLayer
+            } else if settings.pageMode == 1 {
+                pagedBody
+            } else {
+                continuousScrollBody
+            }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .statusBarHidden(true)
+        .modifier(SourceToneChangeReloader(
+            bookOrigin: book.origin,
+            chapterTitle: chapters.indices.contains(index) ? chapters[index].title : nil,
+            isAudioActive: bookAudio.chapterURL != nil,
+            onReload: reloadAudioChapter))
+        .overlay(alignment: .top) { topChromeLayer }
+        .overlay(alignment: .bottom) { bottomChromeLayer }
+        .overlay(alignment: .bottom) {
+            if let notice = bookmarkNotice {
+                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(theme.fg.opacity(0.82)))
+                    .padding(.bottom, 90)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("reader.notice")
+            }
+        }
+        .sheet(isPresented: $showBookmarks) {
+            ReaderBookmarkList(book: book, currentChapter: index, onOpen: { item in
+                showBookmarks = false
+                openBookmark(item)
+            }, onDelete: { id in ReaderBookmarkStore.shared.remove(id: id) })
+        }
+        .sheet(isPresented: $showReplaceFromSelection) {
+            BodyReplaceRulesView(seed: selectedText)
+        }
+        .fullScreenCover(isPresented: $showAloudPanel) {
+            AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
+                            onRefreshToc: tocRefreshAction,
+                            currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
+                            onUseSourceTone: { source, tone in
+                                await useSourceToneAudio(source: source, tone: tone)
+                            },
+                            onStopSourceAudio: {
+                                guard SourceToneAudio.isActive(bookUrl: book.bookUrl) else { return }
+                                bookAudio.stop()
+                                SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+                                BookKindStore.save(.text, bookUrl: book.bookUrl)
+                                forceAudioPlayer = false
+                            })
+                .modifier(AppThemeRoot())
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = aloud.notice, !showAloudPanel {
+                Text(notice).appFont(.caption).foregroundStyle(theme.bg)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(theme.fg.opacity(0.82)))
+                    .padding(.bottom, 90)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("reader.aloud.notice")
+            }
+        }
+        .sheet(isPresented: $showReaderSearch) {
+            ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
+                                pages: settings.pageMode == 1 ? pages : [],
+                                onSelect: selectSearchResult)
+        }
+        .sheet(isPresented: $showBookInfo) { readerQuickPanelSheet }
+        .sheet(isPresented: $showToc) {
+            ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl, currentIndex: index,
+                           manager: .shared,
+                           onSelect: { target in showToc = false; openChapter(target) },
+                           onRefresh: tocRefreshAction)
+        }
+        .sheet(isPresented: $showSettings) { readerSettingsSheet }
         .overlay {
             if loading && (!text.isEmpty || !blocks.isEmpty || !pages.isEmpty) {
                 ZStack {
