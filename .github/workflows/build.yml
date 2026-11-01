@@ -53,7 +53,8 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tee build.log | xcpretty || (tail -n 200 build.log; exit 1)
+            build | tee build-raw.log | xcpretty | tee build.log \
+              || (grep -n ': error:' build-raw.log | head -50; exit 1)
 
       - name: Package IPA
         run: |
@@ -75,7 +76,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build.log
+          # 两个都传：build.log 是 xcpretty 过滤后的（可读），
+          # build-raw.log 是 xcodebuild 原始输出（含完整 error 上下文）。
+          path: |
+            build.log
+            build-raw.log
 
       # 打 tag（v0.2.0 之类）时顺便把 IPA 挂到 Release 上，留档可回溯。
       - name: Attach IPA to GitHub Release
