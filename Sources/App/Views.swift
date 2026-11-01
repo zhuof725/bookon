@@ -523,20 +523,7 @@ struct ReaderView: View {
             repaginate()
             if settings.pageMode == 0, !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
         }
-        .onChange(of: settings.fontSize) { scheduleRepaginate() }
-        .onChange(of: settings.lineSpacing) { scheduleRepaginate() }
-        .onChange(of: settings.paragraphSpacing) { _ in scheduleRepaginate() }
-        .onChange(of: settings.fullJustify) { _ in scheduleRepaginate() }
-        .onChange(of: settings.bottomJustify) { _ in scheduleRepaginate() }
-        .onChange(of: settings.leftMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.rightMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.topMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.bottomMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
-        .onChange(of: settings.commentCardSize) { _ in scheduleRepaginate() }
-        .onChange(of: settings.showCommentEntries) { _ in scheduleRepaginate() }
-        .onChange(of: settings.backgroundMode) { _ in scheduleRepaginate() }
-        .onChange(of: settings.customBackgroundHex) { _ in scheduleRepaginate() }
+        .onChange(of: settings.paginationSignature) { scheduleRepaginate() }
         .onChange(of: settings.pageMode) { mode in
             aloud.stop()
             pendingEdge = nil

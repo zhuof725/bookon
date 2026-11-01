@@ -150,6 +150,29 @@ final class ReadSettings: ObservableObject {
         "mode-\(backgroundMode)-\(customBackgroundHex)-\(backgroundImageID)-theme-\(theme)"
     }
 
+    /// 影响分页结果的排版参数汇总。
+    ///
+    /// 阅读器原先给每个参数各挂一个 onChange 触发重新分页（14 个），
+    /// 加上其它观察点，ReaderView.body 的修饰链长到 Swift 类型推断超时。
+    /// 合并成一个签名后，body 里只需要观察这一个字符串。
+    var paginationSignature: String {
+        [
+            "\(fontSize)",
+            "\(lineSpacing)",
+            "\(paragraphSpacing)",
+            "\(fullJustify)",
+            "\(bottomJustify)",
+            "\(leftMargin)",
+            "\(rightMargin)",
+            "\(topMargin)",
+            "\(bottomMargin)",
+            chapterTitleSignature,
+            "\(commentCardSize)",
+            "\(showCommentEntries)",
+            paperSignature
+        ].joined(separator: "|")
+    }
+
     var customBackgroundColor: Color { customBackgroundComponents.color }
     var customForegroundColor: Color {
         customBackgroundComponents.luminance < 0.45
