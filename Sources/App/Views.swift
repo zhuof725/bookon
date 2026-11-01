@@ -683,12 +683,10 @@ struct ReaderView: View {
     }
 
     @ViewBuilder
-    private var readerCommentSheet: some View {
- target in
-            if let u = URL(string: target.url) {
-                CommentSheet(url: u, content: target.content)
-            }
-        
+    private func readerCommentSheet(_ target: BrowserTarget) -> some View {
+        if let u = URL(string: target.url) {
+            CommentSheet(url: u, content: target.content)
+        }
     }
 
     /// 阅读页主体 + 全部浮层。整条链有 13 个 sheet/cover，直接写进 body 会让
@@ -780,7 +778,7 @@ struct ReaderView: View {
                     .zIndex(10)
             }
         }
-        .sheet(item: $commentTarget) { readerCommentSheet }
+        .sheet(item: $commentTarget) { target in readerCommentSheet(target) }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 accumulateReadingTime()
