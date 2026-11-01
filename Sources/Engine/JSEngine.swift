@@ -299,13 +299,7 @@ final class TTSResponse: NSObject, TTSResponseExports {
         guard let response = connectNative(url) else { return "" }
         let suffix = URL(string: url)?.pathExtension ?? ""
         let name = md5Encode16(url) + (suffix.isEmpty ? "" : "." + suffix)
-        let bytes: [UInt8]
-        if let raw = response.rawData {
-            bytes = [UInt8](raw)
-        } else {
-            bytes = [UInt8](response.body.utf8)
-        }
-        _ = SourceFileBridge.writeFile(name, bytes: bytes)
+        _ = SourceFileBridge.writeFile(name, bytes: Array(response.bodyBytes))
         return name
     }
     /// cache.deleteMemory：原版 CacheManager 的内存缓存删除（书源用它清「已渲染」标记）。
@@ -1672,29 +1666,6 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(create, forKeyedSubscript: "__cipherCreate" as NSString)
         ctx.setObject(run, forKeyedSubscript: "__cipherRun" as NSString)
         ctx.setObject(deviceId, forKeyedSubscript: "__deviceId" as NSString)
-        // 沙箱文件与压缩包：Legado JsExtensions 的同名能力。
-        let readFileBytes: @convention(block) (String) -> String? = { bridge.readFileBytes($0) }
-        let writeFileBytes: @convention(block) (String, String) -> String = { bridge.writeFileBytes($0, $1) }
-        let deleteSourceFile: @convention(block) (String) -> Bool = { bridge.deleteSourceFile($0) }
-        let txtInFolder: @convention(block) (String) -> String = { bridge.txtInFolder($0) }
-        let unarchive: @convention(block) (String) -> String = { bridge.unarchive($0) }
-        let zipString: @convention(block) (String, String, String) -> String = {
-            bridge.zipStringContent($0, $1, $2.isEmpty ? nil : $2)
-        }
-        let zipBytes: @convention(block) (String, String) -> String? = { bridge.zipByteArrayContent($0, $1) }
-        let downloadFile: @convention(block) (String) -> String = { bridge.downloadFileNative($0) }
-        ctx.setObject(readFileBytes, forKeyedSubscript: "__readFileBytes" as NSString)
-        ctx.setObject(writeFileBytes, forKeyedSubscript: "__writeFileBytes" as NSString)
-        ctx.setObject(deleteSourceFile, forKeyedSubscript: "__deleteSourceFile" as NSString)
-        ctx.setObject(txtInFolder, forKeyedSubscript: "__txtInFolder" as NSString)
-        ctx.setObject(unarchive, forKeyedSubscript: "__unarchive" as NSString)
-        ctx.setObject(zipString, forKeyedSubscript: "__zipStringContent" as NSString)
-        ctx.setObject(zipBytes, forKeyedSubscript: "__zipByteArrayContent" as NSString)
-        ctx.setObject(downloadFile, forKeyedSubscript: "__downloadFile" as NSString)
-        let fileExists: @convention(block) (String) -> Bool = { SourceFileBridge.exists($0) }
-        ctx.setObject(fileExists, forKeyedSubscript: "__fileExists" as NSString)
-        let isDark: @convention(block) () -> Bool = { SourceFileBridge.isDarkMode }
-        ctx.setObject(isDark, forKeyedSubscript: "__isDarkMode" as NSString)
     }
 
     /// java.cacheFile / importScript / htmlFormat / queryTTF 等原生入口。
@@ -1721,6 +1692,29 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(fontBlank, forKeyedSubscript: "__fontBlank" as NSString)
         ctx.setObject(fontReplace, forKeyedSubscript: "__fontReplace" as NSString)
         ctx.setObject(verification, forKeyedSubscript: "__verificationCode" as NSString)
+        // 沙箱文件与压缩包：Legado JsExtensions 的同名能力。
+        let readFileBytes: @convention(block) (String) -> String? = { bridge.readFileBytes($0) }
+        let writeFileBytes: @convention(block) (String, String) -> String = { bridge.writeFileBytes($0, $1) }
+        let deleteSourceFile: @convention(block) (String) -> Bool = { bridge.deleteSourceFile($0) }
+        let txtInFolder: @convention(block) (String) -> String = { bridge.txtInFolder($0) }
+        let unarchive: @convention(block) (String) -> String = { bridge.unarchive($0) }
+        let zipString: @convention(block) (String, String, String) -> String = {
+            bridge.zipStringContent($0, $1, $2.isEmpty ? nil : $2)
+        }
+        let zipBytes: @convention(block) (String, String) -> String? = { bridge.zipByteArrayContent($0, $1) }
+        let downloadFile: @convention(block) (String) -> String = { bridge.downloadFileNative($0) }
+        ctx.setObject(readFileBytes, forKeyedSubscript: "__readFileBytes" as NSString)
+        ctx.setObject(writeFileBytes, forKeyedSubscript: "__writeFileBytes" as NSString)
+        ctx.setObject(deleteSourceFile, forKeyedSubscript: "__deleteSourceFile" as NSString)
+        ctx.setObject(txtInFolder, forKeyedSubscript: "__txtInFolder" as NSString)
+        ctx.setObject(unarchive, forKeyedSubscript: "__unarchive" as NSString)
+        ctx.setObject(zipString, forKeyedSubscript: "__zipStringContent" as NSString)
+        ctx.setObject(zipBytes, forKeyedSubscript: "__zipByteArrayContent" as NSString)
+        ctx.setObject(downloadFile, forKeyedSubscript: "__downloadFile" as NSString)
+        let fileExists: @convention(block) (String) -> Bool = { SourceFileBridge.exists($0) }
+        ctx.setObject(fileExists, forKeyedSubscript: "__fileExists" as NSString)
+        let isDark: @convention(block) () -> Bool = { SourceFileBridge.isDarkMode }
+        ctx.setObject(isDark, forKeyedSubscript: "__isDarkMode" as NSString)
     }
 
     /// Stable 16-hex-digit identifier, generated once per app install and kept in UserDefaults.

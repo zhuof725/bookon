@@ -1,5 +1,4 @@
 import Foundation
-import Compression
 
 /// 书源 JS 的文件与压缩包 API（对应 Legado `JsExtensions` 的
 /// `getFile / readFile / deleteFile / downloadFile / unArchiveFile / unzipFile /
