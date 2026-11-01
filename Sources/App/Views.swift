@@ -631,6 +631,66 @@ struct ReaderView: View {
             .presentationDragIndicator(.visible)
     }
 
+    @ViewBuilder
+    private var readerBookmarksSheet: some View {
+            ReaderBookmarkList(book: book, currentChapter: index, onOpen: { item in
+                showBookmarks = false
+                openBookmark(item)
+            }, onDelete: { id in ReaderBookmarkStore.shared.remove(id: id) })
+        
+    }
+
+    @ViewBuilder
+    private var readerReplaceSheet: some View {
+            BodyReplaceRulesView(seed: selectedText)
+        
+    }
+
+    @ViewBuilder
+    private var readerAloudCover: some View {
+            AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
+                            onRefreshToc: tocRefreshAction,
+                            currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
+                            onUseSourceTone: { source, tone in
+                                await useSourceToneAudio(source: source, tone: tone)
+                            },
+                            onStopSourceAudio: {
+                                guard SourceToneAudio.isActive(bookUrl: book.bookUrl) else { return }
+                                bookAudio.stop()
+                                SourceToneAudio.deactivate(bookUrl: book.bookUrl)
+                                BookKindStore.save(.text, bookUrl: book.bookUrl)
+                                forceAudioPlayer = false
+                            })
+                .modifier(AppThemeRoot())
+        
+    }
+
+    @ViewBuilder
+    private var readerSearchSheet: some View {
+            ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
+                                pages: settings.pageMode == 1 ? pages : [],
+                                onSelect: selectSearchResult)
+        
+    }
+
+    @ViewBuilder
+    private var readerTocSheet: some View {
+            ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl, currentIndex: index,
+                           manager: .shared,
+                           onSelect: { target in showToc = false; openChapter(target) },
+                           onRefresh: tocRefreshAction)
+        
+    }
+
+    @ViewBuilder
+    private var readerCommentSheet: some View {
+ target in
+            if let u = URL(string: target.url) {
+                CommentSheet(url: u, content: target.content)
+            }
+        
+    }
+
     /// 阅读页主体 + 全部浮层。整条链有 13 个 sheet/cover，直接写进 body 会让
     /// Swift 的类型推断超时，因此单独成一个属性。
     private var readerBody: some View {
@@ -671,31 +731,9 @@ struct ReaderView: View {
                     .accessibilityIdentifier("reader.notice")
             }
         }
-        .sheet(isPresented: $showBookmarks) {
-            ReaderBookmarkList(book: book, currentChapter: index, onOpen: { item in
-                showBookmarks = false
-                openBookmark(item)
-            }, onDelete: { id in ReaderBookmarkStore.shared.remove(id: id) })
-        }
-        .sheet(isPresented: $showReplaceFromSelection) {
-            BodyReplaceRulesView(seed: selectedText)
-        }
-        .fullScreenCover(isPresented: $showAloudPanel) {
-            AloudPlayerView(aloud: aloud, book: book, chapters: chapters,
-                            onRefreshToc: tocRefreshAction,
-                            currentChapter: chapters.indices.contains(index) ? chapters[index] : nil,
-                            onUseSourceTone: { source, tone in
-                                await useSourceToneAudio(source: source, tone: tone)
-                            },
-                            onStopSourceAudio: {
-                                guard SourceToneAudio.isActive(bookUrl: book.bookUrl) else { return }
-                                bookAudio.stop()
-                                SourceToneAudio.deactivate(bookUrl: book.bookUrl)
-                                BookKindStore.save(.text, bookUrl: book.bookUrl)
-                                forceAudioPlayer = false
-                            })
-                .modifier(AppThemeRoot())
-        }
+        .sheet(isPresented: $showBookmarks) { readerBookmarksSheet }
+        .sheet(isPresented: $showReplaceFromSelection) { readerReplaceSheet }
+        .fullScreenCover(isPresented: $showAloudPanel) { readerAloudCover }
         .overlay(alignment: .bottom) {
             if let notice = aloud.notice, !showAloudPanel {
                 Text(notice).appFont(.caption).foregroundStyle(theme.bg)
@@ -706,18 +744,9 @@ struct ReaderView: View {
                     .accessibilityIdentifier("reader.aloud.notice")
             }
         }
-        .sheet(isPresented: $showReaderSearch) {
-            ReaderChapterSearch(blocks: readerBlocks, chapter: readerChapterTitle,
-                                pages: settings.pageMode == 1 ? pages : [],
-                                onSelect: selectSearchResult)
-        }
+        .sheet(isPresented: $showReaderSearch) { readerSearchSheet }
         .sheet(isPresented: $showBookInfo) { readerQuickPanelSheet }
-        .sheet(isPresented: $showToc) {
-            ReaderTocSheet(chapters: chapters, bookURL: book.bookUrl, currentIndex: index,
-                           manager: .shared,
-                           onSelect: { target in showToc = false; openChapter(target) },
-                           onRefresh: tocRefreshAction)
-        }
+        .sheet(isPresented: $showToc) { readerTocSheet }
         .sheet(isPresented: $showSettings) { readerSettingsSheet }
         .overlay {
             if loading && (!text.isEmpty || !blocks.isEmpty || !pages.isEmpty) {
@@ -751,11 +780,7 @@ struct ReaderView: View {
                     .zIndex(10)
             }
         }
-        .sheet(item: $commentTarget) { target in
-            if let u = URL(string: target.url) {
-                CommentSheet(url: u, content: target.content)
-            }
-        }
+        .sheet(item: $commentTarget) { readerCommentSheet }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 accumulateReadingTime()
