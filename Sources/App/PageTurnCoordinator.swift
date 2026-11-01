@@ -481,8 +481,8 @@ final class PageTurnCoordinator: NSObject, UIPageViewControllerDataSource, UIPag
             }
         }
         if let transition = vc.transitionCoordinator,
-           transition.animate(alongsideTransition: nil, completion: { _ in DispatchQueue.main.async(execute: deliver) }) { return }
-        DispatchQueue.main.async(execute: deliver)
+           transition.animate(alongsideTransition: nil, completion: { _ in DispatchQueue.main.async { deliver() } }) { return }
+        DispatchQueue.main.async { deliver() }
     }
 }
 

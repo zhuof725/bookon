@@ -445,7 +445,7 @@ enum ReadingPlanEngine {
         if Thread.isMainThread {
             update()
         } else {
-            DispatchQueue.main.async(execute: update)
+            DispatchQueue.main.async { update() }
         }
     }
 }
