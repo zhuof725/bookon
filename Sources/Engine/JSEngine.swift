@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import JavaScriptCore
 import CommonCrypto
 import SwiftSoup
@@ -235,10 +236,9 @@ final class TTSResponse: NSObject, TTSResponseExports {
     }
     func base64Encode(_ s: String) -> String { Data(s.utf8).base64EncodedString() }
     func md5Encode(_ s: String) -> String {
-        let d = Data(s.utf8)
-        var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-        d.withUnsafeBytes { _ = CC_MD5($0.baseAddress, CC_LONG(d.count), &digest) }
-        return digest.map { String(format: "%02x", $0) }.joined()
+        // CC_MD5 在 iOS 13 起标 deprecated；CryptoKit 的结果与之一致。
+        // 书源签名场景本来就只把 MD5 当校验/指纹用，Insecure 前缀名副其实。
+        Insecure.MD5.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
     }
     func md5Encode16(_ s: String) -> String {
         let m = md5Encode(s)

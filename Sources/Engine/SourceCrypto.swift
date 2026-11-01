@@ -1,6 +1,7 @@
 import Foundation
 import CoreFoundation
 import CommonCrypto
+import CryptoKit
 
 /// Hutool-compatible symmetric crypto and digests for book-source scripts.
 /// Scope is deliberately limited to what real sources use:
@@ -104,20 +105,16 @@ enum SourceCrypto {
     }
 
     static func digest(_ data: Data, algorithm: String) throws -> Data {
-        let (kind, length) = try digestAlgorithm(algorithm)
-        var out = [UInt8](repeating: 0, count: length)
-        data.withUnsafeBytes { raw in
-            let p = raw.baseAddress
-            let n = CC_LONG(data.count)
-            switch kind {
-            case 0: _ = CC_MD5(p, n, &out)
-            case 1: _ = CC_SHA1(p, n, &out)
-            case 2: _ = CC_SHA256(p, n, &out)
-            case 3: _ = CC_SHA384(p, n, &out)
-            default: _ = CC_SHA512(p, n, &out)
-            }
+        let (kind, _) = try digestAlgorithm(algorithm)
+        // CC_MD5 等 C 接口在 iOS 13 起标 deprecated；CryptoKit 的结果语义与之一致，
+        // MD5/SHA1 走 Insecure（明确标记非安全用途，与 Legado 书源签名场景匹配）。
+        switch kind {
+        case 0: return Data(Insecure.MD5.hash(data: data))
+        case 1: return Data(Insecure.SHA1.hash(data: data))
+        case 2: return Data(SHA256.hash(data: data))
+        case 3: return Data(SHA384.hash(data: data))
+        default: return Data(SHA512.hash(data: data))
         }
-        return Data(out)
     }
 
     static func hmac(_ data: Data, algorithm: String, key: Data) throws -> Data {
