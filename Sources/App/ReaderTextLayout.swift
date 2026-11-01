@@ -340,6 +340,7 @@ enum ReaderTextLayout {
     }
 
     /// 一个分页请求复用一个测量 UITextView；必须在主线程使用。
+    @MainActor
     final class Measurer {
         private let view: CommentTextView
         init() {

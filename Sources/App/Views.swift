@@ -449,9 +449,10 @@ struct ReaderView: View {
                 backgroundImageLayer
             }
             GeometryReader { geo in
-                Color.clear.onAppear { updateViewport(geo) }
-                    .onChange(of: geo.size) { updateViewport(geo) }
-                    .onChange(of: geo.safeAreaInsets) { updateViewport(geo) }
+                Color.clear
+                    .onAppear { updateViewport(geo) }
+                    .onChange(of: geo.size) { _, _ in updateViewport(geo) }
+                    .onChange(of: geo.safeAreaInsets) { _, _ in updateViewport(geo) }
             }.ignoresSafeArea().allowsHitTesting(false)
             if mangaMode {
                 mangaBody
