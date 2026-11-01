@@ -142,6 +142,16 @@ final class TTSResponse: NSObject, TTSResponseExports {
     func storePut(_ key: String, _ value: String) -> String
     func storeGet(_ key: String) -> String
     func storeDelete(_ key: String) -> String
+    // 沙箱文件与压缩包（Legado JsExtensions 的同名能力）。
+    func readFileBytes(_ path: String) -> String?
+    func writeFileBytes(_ path: String, _ bytesJSON: String) -> String
+    func deleteSourceFile(_ path: String) -> Bool
+    func txtInFolder(_ path: String) -> String
+    func unarchive(_ path: String) -> String
+    func zipStringContent(_ path: String, _ entry: String, _ charset: String?) -> String
+    func zipByteArrayContent(_ path: String, _ entry: String) -> String?
+    /// downloadFile / cacheFile：把地址拉下来存进沙箱，返回相对路径。
+    func downloadFileNative(_ url: String) -> String
     func httpGetNative(_ url: String, _ headersJSON: String) -> StrResponse?
     func httpPostNative(_ url: String, _ body: String, _ headersJSON: String) -> StrResponse?
     func hexDecodeToString(_ s: String) -> String
@@ -248,6 +258,55 @@ final class TTSResponse: NSObject, TTSResponseExports {
     }
     func storeGet(_ key: String) -> String {
         return JavaBridge.store.get(key) ?? ""
+    }
+    // MARK: - 沙箱文件与压缩包（Legado JsExtensions 同名能力）
+
+    func readFileBytes(_ path: String) -> String? {
+        guard let bytes = SourceFileBridge.readFile(path) else { return nil }
+        return (try? JSONSerialization.data(withJSONObject: bytes)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    func writeFileBytes(_ path: String, _ bytesJSON: String) -> String {
+        guard let data = bytesJSON.data(using: .utf8),
+              let list = try? JSONSerialization.jsonObject(with: data) as? [Int] else { return "" }
+        return SourceFileBridge.writeFile(path, bytes: list.map { UInt8(clamping: $0) })
+    }
+
+    func deleteSourceFile(_ path: String) -> Bool {
+        SourceFileBridge.deleteFile(path)
+    }
+
+    func txtInFolder(_ path: String) -> String {
+        SourceFileBridge.txtInFolder(path)
+    }
+
+    func unarchive(_ path: String) -> String {
+        SourceFileBridge.unarchive(path)
+    }
+
+    func zipStringContent(_ path: String, _ entry: String, _ charset: String?) -> String {
+        SourceFileBridge.zipStringContent(path, entry, charset)
+    }
+
+    func zipByteArrayContent(_ path: String, _ entry: String) -> String? {
+        guard let bytes = SourceFileBridge.zipByteArrayContent(path, entry) else { return nil }
+        return (try? JSONSerialization.data(withJSONObject: bytes)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// downloadFile / cacheFile：抓取地址后写进沙箱，返回相对路径（Legado 返回绝对路径，
+    /// 这里返回相对根目录的路径，书源后续用同一个值再喂给 readFile 即可）。
+    func downloadFileNative(_ url: String) -> String {
+        guard let response = connectNative(url) else { return "" }
+        let suffix = URL(string: url)?.pathExtension ?? ""
+        let name = md5Encode16(url) + (suffix.isEmpty ? "" : "." + suffix)
+        let bytes: [UInt8]
+        if let raw = response.rawData {
+            bytes = [UInt8](raw)
+        } else {
+            bytes = [UInt8](response.body.utf8)
+        }
+        _ = SourceFileBridge.writeFile(name, bytes: bytes)
+        return name
     }
     /// cache.deleteMemory：原版 CacheManager 的内存缓存删除（书源用它清「已渲染」标记）。
     func storeDelete(_ key: String) -> String {
@@ -1108,6 +1167,69 @@ final class JSEngine: @unchecked Sendable {
     java.setResponseBase64=function(data,mime){__legadoResponseBase64={data:String(data==null?'':data),mime:String(mime==null?'':mime)};return '';};
     var __legadoResponseBase64=null;
     java.log=function(){var parts=[];for(var i=0;i<arguments.length;i++){parts.push(String(arguments[i]));}if(typeof console!=='undefined'&&console.log){console.log(parts.join(' '));}return '';};
+    // Legado JsExtensions.logType：打印参数的类型名，书源调试时用来确认真实类型。
+    java.logType=function(v){var t;if(v===null||v===undefined){t='null';}else if(typeof v==='string'){t='java.lang.String';}else if(typeof v==='number'){t=(v===Math.floor(v))?'java.lang.Integer':'java.lang.Double';}else if(typeof v==='boolean'){t='java.lang.Boolean';}else if(Object.prototype.toString.call(v)==='[object Array]'){t='java.util.ArrayList';}else{t='java.util.LinkedHashMap';}if(typeof console!=='undefined'&&console.log){console.log(t);}return '';};
+    // Legado JsExtensions.getTag：书源调试页的当前标签。iOS 没有该页面，给空串保持类型正确。
+    java.getTag=function(){return '';};
+    // Legado JsExtensions.toURL：返回带 host/origin/pathname/searchParams 的 URL 对象。
+    java.toURL=function(u,b){
+        var raw=String(u==null?'':u),base=(b==null||b==='')?null:String(b);
+        var abs=raw;
+        if(base){try{abs=(new URL(raw,base)).href;}catch(e){abs=raw;}}
+        var host='',origin='',pathname='',params={};
+        try{
+            var url=new URL(abs);
+            host=url.host;origin=url.origin;pathname=url.pathname;
+            url.searchParams.forEach(function(v,k){params[k]=v;});
+        }catch(e){}
+        return {url:abs,host:host,origin:origin,pathname:pathname,searchParams:params,toString:function(){return abs;}};
+    };
+    // Legado JsExtensions.ajaxTestAll：并发抓取一组地址，返回 StrResponse 数组。
+    java.ajaxTestAll=function(arr,t){var o=[];for(var i=0;i<arr.length;i++){o.push(__response(java.connect(String(arr[i]))));}return o;};
+    // —— 文件与压缩包（Legado JsExtensions 的沙箱文件 API，根目录对应外部缓存）——
+    // readFile 在原版返回 byte[]；这里同样返回字节数组（JS 里可当普通数组用）。
+    java.readFile=function(p){var r=__readFileBytes(String(p));return r==null?null:JSON.parse(r);};
+    java.readTxtFile=function(p){var b=java.readFile(p);return b==null?'':java.bytesToStr(b,'UTF-8');};
+    java.writeFile=function(p,data){return String(__writeFileBytes(String(p),JSON.stringify(__bytes(data))));};
+    java.deleteFile=function(p){return !!__deleteSourceFile(String(p));};
+    java.getTxtInFolder=function(p){return String(__txtInFolder(String(p)));};
+    java.unArchiveFile=function(p){return String(__unarchive(String(p)));};
+    java.unzipFile=function(p){return String(__unarchive(String(p)));};
+    java.unrarFile=function(p){return String(__unarchive(String(p)));};
+    java.un7zFile=function(p){return String(__unarchive(String(p)));};
+    java.getZipStringContent=function(p,e,c){return String(__zipStringContent(String(p),String(e),c==null?null:String(c)));};
+    java.getRarStringContent=function(p,e,c){return String(__zipStringContent(String(p),String(e),c==null?null:String(c)));};
+    java.get7zStringContent=function(p,e,c){return String(__zipStringContent(String(p),String(e),c==null?null:String(c)));};
+    java.getZipByteArrayContent=function(p,e){var r=__zipByteArrayContent(String(p),String(e));return r==null?null:JSON.parse(r);};
+    java.getRarByteArrayContent=function(p,e){var r=__zipByteArrayContent(String(p),String(e));return r==null?null:JSON.parse(r);};
+    java.get7zByteArrayContent=function(p,e){var r=__zipByteArrayContent(String(p),String(e));return r==null?null:JSON.parse(r);};
+    java.downloadFile=function(u){var s=String(u==null?'':u);if(typeof __downloadFile==='function'){return String(__downloadFile(s));}return '';};
+    java.cacheFile=function(u,st){var s=String(u==null?'':u);if(typeof __downloadFile==='function'){return String(__downloadFile(s));}return '';};
+    java.importScript=function(p){var b=java.readFile(p);return b==null?'':java.bytesToStr(b,'UTF-8');};
+    // Legado 的过时别名：queryBase64TTF(String) 就是 queryTTF(data)。
+    java.queryBase64TTF=function(d){return java.queryTTF(d);};
+    // getFile 返回文件句柄（Legado 返回 java.io.File）。iOS 无 File 对象，
+    // 给出 path/exists/name 等常用字段，够脚本做存在性判断。
+    java.getFile=function(p){var s=String(p==null?'':p);return {
+        path:s,name:s.split('/').pop()||s,
+        exists:function(){return !!__fileExists(s);},
+        length:function(){var b=__readFileBytes(s);return b==null?0:JSON.parse(b).length;},
+        toString:function(){return s;}};};
+    // —— 阅读配置与主题配置：iOS 没有对应的全局配置对象，给等价形状的只读数据 ——
+    java.getReadBookConfig=function(){return JSON.stringify({name:'default',fontSize:18,lineSpacing:1.5,paragraphSpacing:0,pageAnim:0,useReplaceRule:false});};
+    java.getReadBookConfigMap=function(){return {name:'default',fontSize:18,lineSpacing:1.5,paragraphSpacing:0,pageAnim:0,useReplaceRule:false};};
+    java.getThemeConfigMap=function(){var dark=(typeof __isDarkMode==='function')?!!__isDarkMode():false;return {darkTheme:dark,themeMode:dark?1:0,dayThemeColor:'#FFFFFF',nightThemeColor:'#000000'};};
+    // —— 后台 WebView 取源码 / 取跳转地址 ——
+    java.webViewGetSource=function(h,u,js,re){return String(java.webView(h,u,js));};
+    java.webViewGetOverrideUrl=function(h,u,js,re){
+        var html=String(java.webView(h,u,js));
+        try{var m=new RegExp(String(re)).exec(html);if(m&&m[1]){return m[1];}if(m&&m[0]){return m[0];}}catch(e){}
+        return '';
+    };
+    java.openVideoPlayer=function(u,t,f){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''),'');}return '';};
+
+
+
     java.base64DecodeToByteArray=function(s){
         if(s==null||String(s).trim()===''){return null;}
         var r=__base64ToBytes(String(s));if(r==null){return null;}return JSON.parse(r);
@@ -1550,6 +1672,29 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(create, forKeyedSubscript: "__cipherCreate" as NSString)
         ctx.setObject(run, forKeyedSubscript: "__cipherRun" as NSString)
         ctx.setObject(deviceId, forKeyedSubscript: "__deviceId" as NSString)
+        // 沙箱文件与压缩包：Legado JsExtensions 的同名能力。
+        let readFileBytes: @convention(block) (String) -> String? = { bridge.readFileBytes($0) }
+        let writeFileBytes: @convention(block) (String, String) -> String = { bridge.writeFileBytes($0, $1) }
+        let deleteSourceFile: @convention(block) (String) -> Bool = { bridge.deleteSourceFile($0) }
+        let txtInFolder: @convention(block) (String) -> String = { bridge.txtInFolder($0) }
+        let unarchive: @convention(block) (String) -> String = { bridge.unarchive($0) }
+        let zipString: @convention(block) (String, String, String) -> String = {
+            bridge.zipStringContent($0, $1, $2.isEmpty ? nil : $2)
+        }
+        let zipBytes: @convention(block) (String, String) -> String? = { bridge.zipByteArrayContent($0, $1) }
+        let downloadFile: @convention(block) (String) -> String = { bridge.downloadFileNative($0) }
+        ctx.setObject(readFileBytes, forKeyedSubscript: "__readFileBytes" as NSString)
+        ctx.setObject(writeFileBytes, forKeyedSubscript: "__writeFileBytes" as NSString)
+        ctx.setObject(deleteSourceFile, forKeyedSubscript: "__deleteSourceFile" as NSString)
+        ctx.setObject(txtInFolder, forKeyedSubscript: "__txtInFolder" as NSString)
+        ctx.setObject(unarchive, forKeyedSubscript: "__unarchive" as NSString)
+        ctx.setObject(zipString, forKeyedSubscript: "__zipStringContent" as NSString)
+        ctx.setObject(zipBytes, forKeyedSubscript: "__zipByteArrayContent" as NSString)
+        ctx.setObject(downloadFile, forKeyedSubscript: "__downloadFile" as NSString)
+        let fileExists: @convention(block) (String) -> Bool = { SourceFileBridge.exists($0) }
+        ctx.setObject(fileExists, forKeyedSubscript: "__fileExists" as NSString)
+        let isDark: @convention(block) () -> Bool = { SourceFileBridge.isDarkMode }
+        ctx.setObject(isDark, forKeyedSubscript: "__isDarkMode" as NSString)
     }
 
     /// java.cacheFile / importScript / htmlFormat / queryTTF 等原生入口。
