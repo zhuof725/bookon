@@ -509,7 +509,7 @@ struct ReaderView: View {
                 if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
             }
         }
-        .onChange(of: readingFonts.selectedPostScriptName) { _ in
+        .onChange(of: readingFonts.selectedPostScriptName) {
             aloud.stop()
             cancelPreparation()
             preparedChapters.removeAll()
@@ -540,10 +540,10 @@ struct ReaderView: View {
                 if chapters.indices.contains(index), !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
             }
         }
-        .onChange(of: pageIndex) { _ in syncMenuProgress() }
-        .onChange(of: pages.count) { _ in syncMenuProgress() }
+        .onChange(of: pageIndex) { syncMenuProgress() }
+        .onChange(of: pages.count) { syncMenuProgress() }
         .onChange(of: loading) { value in if !value { syncMenuProgress() } }
-        .onChange(of: index) { _ in
+        .onChange(of: index) {
             aloud.highlight.clear()
             toneHighlight.clear()
             lastToneHighlightOffset = -1
@@ -552,7 +552,7 @@ struct ReaderView: View {
         .onChange(of: aloud.isRunning) { running in
             if !running { aloud.highlight.clear() }
         }
-        .onChange(of: bookAudio.currentTime) { _ in
+        .onChange(of: bookAudio.currentTime) {
             followSourceToneAudio()
         }
         .onChange(of: bookAudio.chapterURL) { url in
@@ -561,8 +561,8 @@ struct ReaderView: View {
                 lastToneHighlightOffset = -1
             }
         }
-        .onChange(of: screenSize) { _ in repaginate() }
-        .onChange(of: pageInsets) { _ in repaginate() }
+        .onChange(of: screenSize) { repaginate() }
+        .onChange(of: pageInsets) { repaginate() }
         .onDisappear {
             accumulateReadingTime()
             // 退出前存下这一秒，下次进来接着听。
