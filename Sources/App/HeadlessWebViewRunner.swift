@@ -36,7 +36,7 @@ final class HeadlessWebViewRunner: NSObject, HeadlessWebRunning, @unchecked Send
         // 回调在主队列、等待在调用线程：用一个带锁的小盒子传递结果（信号量负责同步）。
         let box = WebOutputBox()
         DispatchQueue.main.async {
-            HeadlessWebSession(html: html, url: url, js: js, timeout: timeout) { value in
+            _ = HeadlessWebSession(html: html, url: url, js: js, timeout: timeout) { value in
                 box.set(value)
                 semaphore.signal()
             }

@@ -323,7 +323,6 @@ extension MangaPagedController: UICollectionViewDataSource, UICollectionViewDele
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !pages.isEmpty, !edgeTriggered else { return }
-        let length = mode == .vertical ? pageSize.height : pageSize.width
         // 用 contentSize 算末端：布局还没跟上时（contentSize 很小）不会误判成越界。
         let maxOffset = mode == .vertical
             ? max(scrollView.contentSize.height - pageSize.height, 0)

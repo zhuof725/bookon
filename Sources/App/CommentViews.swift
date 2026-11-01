@@ -2,8 +2,6 @@ import SwiftUI
 import WebKit
 import CoreText
 
-extension URL: Identifiable { public var id: String { absoluteString } }
-
 /// 段评/章评：默认半屏，上划可展开到全屏；内容区域优先滚动网页。
 /// content 是书源直接给的页面内容（HTML）：有内容就按内容渲染，
 /// 没有内容才去请求 url —— 番茄聚合的评论页服务器按 text/plain 发，
@@ -64,16 +62,22 @@ struct CommentWebView: UIViewRepresentable {
     /// 段评页在白名单域名上（证书过期已按白名单放行）：WebView 的 TLS 校验必须走同一套规则，
     /// 否则加载失败只剩一片空白。
     final class Coordinator: NSObject, WKNavigationDelegate {
-        func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
-                      completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-            guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-                  ExpiredCertificateAllowance.isAllowed(host: challenge.protectionSpace.host),
-                  let trust = challenge.protectionSpace.serverTrust,
-                  let credential = ExpiredCertificateAllowance.credential(trust: trust) else {
-                completionHandler(.performDefaultHandling, nil); return
-            }
-            completionHandler(.useCredential, credential)
+    }
+}
+
+extension CommentWebView.Coordinator {
+    /// 证书放行。写在 extension 里而不是类体内：Swift 对协议中带默认实现的
+    /// optional 方法，声明在类体内只会「nearly match」而不真正覆盖，
+    /// 编译器会给出 nil 实现，TLS 校验因此不生效。
+    func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+                  completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              ExpiredCertificateAllowance.isAllowed(host: challenge.protectionSpace.host),
+              let trust = challenge.protectionSpace.serverTrust,
+              let credential = ExpiredCertificateAllowance.credential(trust: trust) else {
+            completionHandler(.performDefaultHandling, nil); return
         }
+        completionHandler(.useCredential, credential)
     }
 }
 
@@ -508,7 +512,6 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
     func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
                   suggestedActions: [UIMenuElement]) -> UIMenu? {
         guard let selectionActions else { return nil }
-        let selected = selectedPlainText
         let copy = UIAction(title: "拷贝") { [weak self] _ in
             guard let self else { return }
             let value = self.selectedPlainText
