@@ -227,9 +227,10 @@ struct ReaderView: View {
                 backgroundImageLayer
             }
             GeometryReader { geo in
-                Color.clear.onAppear { updateViewport(geo) }
-                    .onChange(of: geo.size) { _ in updateViewport(geo) }
-                    .onChange(of: geo.safeAreaInsets) { _ in updateViewport(geo) }
+                // 尺寸与安全区都影响分页，合成一个观察值即可（原来挂了两个 onChange）。
+                Color.clear
+                    .onAppear { updateViewport(geo) }
+                    .onChange(of: viewportKey(geo)) { updateViewport(geo) }
             }.ignoresSafeArea().allowsHitTesting(false)
             if mangaMode {
                 mangaBody
@@ -1473,6 +1474,11 @@ struct ReaderView: View {
 
     private var readingBlocks: [ContentBlock] {
         blocks.isEmpty ? Paginator.blocks(fromPlain: text) : blocks
+    }
+
+    /// GeometryProxy 的尺寸 + 安全区：合起来才代表真实可用区域。
+    private func viewportKey(_ geo: GeometryProxy) -> String {
+        "\(geo.size.width)x\(geo.size.height)|\(geo.safeAreaInsets.top),\(geo.safeAreaInsets.bottom),\(geo.safeAreaInsets.leading),\(geo.safeAreaInsets.trailing)"
     }
 
     private func updateViewport(_ geo: GeometryProxy) {
