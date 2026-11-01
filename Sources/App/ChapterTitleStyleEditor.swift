@@ -164,14 +164,14 @@ struct ChapterTitleStyleEditor: View {
             advanced = settings.chapterTitleAdvanced
             loaded = true
         }
-        .onChange(of: draft) { value in
+        .onChange(of: draft) { _, value in
             guard loaded else { return }
             settings.chapterTitleCSS = value
         }
-        .onChange(of: size) { value in guard loaded else { return }; settings.chapterTitleSize = value }
-        .onChange(of: weight) { value in guard loaded else { return }; settings.chapterTitleWeight = value }
-        .onChange(of: align) { value in guard loaded else { return }; settings.chapterTitleAlign = value }
-        .onChange(of: advanced) { value in guard loaded else { return }; settings.chapterTitleAdvanced = value }
+        .onChange(of: size) { _, value in guard loaded else { return }; settings.chapterTitleSize = value }
+        .onChange(of: weight) { _, value in guard loaded else { return }; settings.chapterTitleWeight = value }
+        .onChange(of: align) { _, value in guard loaded else { return }; settings.chapterTitleAlign = value }
+        .onChange(of: advanced) { _, value in guard loaded else { return }; settings.chapterTitleAdvanced = value }
     }
 
     private func resetToDefault() {

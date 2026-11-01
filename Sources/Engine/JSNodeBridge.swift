@@ -96,7 +96,7 @@ import SwiftSoup
     func first() -> JSNodeBridge? { self }
     func last() -> JSNodeBridge? { self }
     func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) { handler(self, 0) }
-    func hasClass(_ name: String) -> Bool { (try? element.hasClass(name)) ?? false }
+    func hasClass(_ name: String) -> Bool { element.hasClass(name) }
     func parent() -> JSNodeBridge? {
         guard let p = element.parent() else { return nil }
         return JSNodeBridge(p)
@@ -109,14 +109,14 @@ import SwiftSoup
         guard let s = try? element.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
-    func remove() { try? element.remove() }
-    func empty() { try? element.empty() }
-    func append(_ html: String) { try? element.append(html) }
-    func prepend(_ html: String) { try? element.prepend(html) }
-    func before(_ html: String) { try? element.before(html) }
-    func after(_ html: String) { try? element.after(html) }
-    func addClass(_ name: String) { try? element.addClass(name) }
-    func removeClass(_ name: String) { try? element.removeClass(name) }
+    func remove() { element.remove() }
+    func empty() { element.empty() }
+    func append(_ html: String) { element.append(html) }
+    func prepend(_ html: String) { element.prepend(html) }
+    func before(_ html: String) { element.before(html) }
+    func after(_ html: String) { element.after(html) }
+    func addClass(_ name: String) { element.addClass(name) }
+    func removeClass(_ name: String) { element.removeClass(name) }
 }
 
 @objc final class JSNodeListBridge: NSObject, JSNodeListExports {
@@ -153,7 +153,7 @@ import SwiftSoup
     func each(_ handler: @convention(block) (JSNodeBridge, Int) -> Void) {
         for (index, element) in elements.enumerated() { handler(JSNodeBridge(element), index) }
     }
-    func hasClass(_ name: String) -> Bool { firstElement.map { (try? $0.hasClass(name)) ?? false } ?? false }
+    func hasClass(_ name: String) -> Bool { firstElement?.hasClass(name) ?? false }
     func parent() -> JSNodeListBridge {
         var found: [Element] = []
         for element in elements {
@@ -169,14 +169,14 @@ import SwiftSoup
         guard let s = try? elements.first?.previousElementSibling() else { return nil }
         return JSNodeBridge(s)
     }
-    func remove() { for element in elements { try? element.remove() } }
-    func empty() { for element in elements { try? element.empty() } }
-    func append(_ html: String) { for element in elements { try? element.append(html) } }
-    func prepend(_ html: String) { for element in elements { try? element.prepend(html) } }
-    func before(_ html: String) { for element in elements { try? element.before(html) } }
-    func after(_ html: String) { for element in elements { try? element.after(html) } }
-    func addClass(_ name: String) { for element in elements { try? element.addClass(name) } }
-    func removeClass(_ name: String) { for element in elements { try? element.removeClass(name) } }
+    func remove() { for element in elements { element.remove() } }
+    func empty() { for element in elements { element.empty() } }
+    func append(_ html: String) { for element in elements { element.append(html) } }
+    func prepend(_ html: String) { for element in elements { element.prepend(html) } }
+    func before(_ html: String) { for element in elements { element.before(html) } }
+    func after(_ html: String) { for element in elements { element.after(html) } }
+    func addClass(_ name: String) { for element in elements { element.addClass(name) } }
+    func removeClass(_ name: String) { for element in elements { element.removeClass(name) } }
 }
 
 /// 元素列表在规则 JS 里的形态：既能当数组用（select/toArray/下标/length），

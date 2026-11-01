@@ -157,7 +157,7 @@ struct BookshelfScreen: View {
             }
             Button("取消", role: .cancel) {}
         }
-        .onChange(of: books.map(\.id)) { ids in selection.formIntersection(Set(ids)) }
+        .onChange(of: books.map(\.id)) { _, ids in selection.formIntersection(Set(ids)) }
     }
 
     /// 下拉刷新：同一时间只跑一次；先显示「正在更新…」，完成后换成结果文案并自动消失。

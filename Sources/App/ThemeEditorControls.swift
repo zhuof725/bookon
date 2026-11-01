@@ -345,7 +345,7 @@ struct ThemeEditorShelfSizing: View {
                     }
                 }
                 .onAppear { availableWidth = proxy.size.width }
-                .onChange(of: proxy.size.width) { availableWidth = $0 }
+                .onChange(of: proxy.size.width) { _, width in availableWidth = width }
             }.frame(height: 10).accessibilityHidden(true)
             Text("此示意区每列可用 \(Int(columnWidth.rounded(.down))) pt，封面显示宽度为 \(Int(actualWidth.rounded(.down))) pt；当前空间容纳 \(metrics.columns) 列。实际书架按当时的窗口宽度计算。")
                 .appFont(.footnote).foregroundStyle(.secondary)

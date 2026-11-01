@@ -251,7 +251,7 @@ struct DiscoverSourceView: View {
                 .padding(.bottom, 24)
             }
             .refreshable { await refreshAll() }
-            .onChange(of: scrollTarget) { title in
+            .onChange(of: scrollTarget) { _, title in
                 guard let title else { return }
                 withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .top) }
                 scrollTarget = nil

@@ -96,7 +96,7 @@ struct ReaderAppearanceControls: View {
         } footer: {
             Text("预设跟随日间/夜间；纯色可自选底色；图片会原样铺满，所选底色只用来决定文字黑/白。图片模式默认用卷页翻页，可在阅读方式里改回滑动。")
         }
-        .onChange(of: photoItem) { item in
+        .onChange(of: photoItem) { _, item in
             guard let item else { return }
             imageError = nil
             Task { @MainActor in

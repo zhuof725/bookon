@@ -32,7 +32,7 @@ struct LegadoApp: App {
                 .environmentObject(store)
                 .environmentObject(settings)
                 .onOpenURL { handle($0) }
-                .onChange(of: scenePhase) { phase in
+                .onChange(of: scenePhase) { _, phase in
                     // 书源变量（段评开关等）在进后台时立即落盘，避免被系统回收前丢设置。
                     if phase != .active {
                         JavaBridge.store.flush()

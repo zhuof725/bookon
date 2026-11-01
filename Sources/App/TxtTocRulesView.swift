@@ -184,8 +184,8 @@ private struct TxtTocRuleEditor: View {
                     }
                 }
             }
-            .onChange(of: pattern) { _ in preview = nil }
-            .onChange(of: sample) { _ in preview = nil }
+            .onChange(of: pattern) { preview = nil }
+            .onChange(of: sample) { preview = nil }
         }
     }
 }

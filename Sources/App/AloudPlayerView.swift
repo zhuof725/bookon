@@ -57,7 +57,7 @@ struct AloudPlayerView: View {
         }
         .onDisappear { pendingSeekTask?.cancel() }
         // 播放器真正走到目标位置后，把「等待到位」的显示值撤掉。
-        .onChange(of: aloud.chapterPlayed) { _ in
+        .onChange(of: aloud.chapterPlayed) {
             guard let target = pendingSeek else { return }
             if abs(actualFraction - target) < 0.015 { pendingSeek = nil }
         }
@@ -321,8 +321,8 @@ struct AloudPlayerView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                 }
-                .onChange(of: aloud.unitIndex) { i in scrollToCurrent(proxy, i) }
-                .onChange(of: aloud.chapterIndex) { _ in scrollToCurrent(proxy, aloud.unitIndex) }
+                .onChange(of: aloud.unitIndex) { _, i in scrollToCurrent(proxy, i) }
+                .onChange(of: aloud.chapterIndex) { scrollToCurrent(proxy, aloud.unitIndex) }
             }
 
             playerCard

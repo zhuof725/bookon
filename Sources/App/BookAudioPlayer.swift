@@ -886,19 +886,19 @@ struct AudioChapterView: View {
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
                     }
-                    .onChange(of: estimatedParagraphIndex) { index in
+                    .onChange(of: estimatedParagraphIndex) { _, index in
                         guard let index, paragraphs.indices.contains(index) else { return }
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo(index, anchor: .center)
                         }
                     }
-                    .onChange(of: paragraphs) { _ in
+                    .onChange(of: paragraphs) {
                         buildTimelineIfNeeded()
                         guard let index = estimatedParagraphIndex,
                               paragraphs.indices.contains(index) else { return }
                         proxy.scrollTo(index, anchor: .center)
                     }
-                    .onChange(of: audio.duration) { _ in buildTimelineIfNeeded() }
+                    .onChange(of: audio.duration) { buildTimelineIfNeeded() }
                 }
             }
 
@@ -1368,7 +1368,7 @@ struct AudioControlsPanel: View {
             }
             .tint(palette.accent)
             .disabled(audio.duration <= 0)
-            .onChange(of: fraction) { value in
+            .onChange(of: fraction) { _, value in
                 guard let target = pendingSeek, abs(value - target) < 0.01 else { return }
                 pendingSeek = nil
             }

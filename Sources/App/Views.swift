@@ -65,10 +65,10 @@ struct SearchView: View {
         .toolbar {
             if searching { Button("停止") { task?.cancel(); requestID = UUID(); searching = false } }
         }
-        .onChange(of: scopeGroup) { _ in rerun() }
-        .onChange(of: singleSource) { _ in rerun() }
-        .onChange(of: precision) { _ in rerun() }
-        .onChange(of: noAggregate) { _ in rerun() }
+        .onChange(of: scopeGroup) { rerun() }
+        .onChange(of: singleSource) { rerun() }
+        .onChange(of: precision) { rerun() }
+        .onChange(of: noAggregate) { rerun() }
         .onAppear {
             history.reload()
             if !scopeGroup.isEmpty && !groups.contains(scopeGroup) { scopeGroup = "" }
@@ -450,8 +450,8 @@ struct ReaderView: View {
             }
             GeometryReader { geo in
                 Color.clear.onAppear { updateViewport(geo) }
-                    .onChange(of: geo.size) { _ in updateViewport(geo) }
-                    .onChange(of: geo.safeAreaInsets) { _ in updateViewport(geo) }
+                    .onChange(of: geo.size) { updateViewport(geo) }
+                    .onChange(of: geo.safeAreaInsets) { updateViewport(geo) }
             }.ignoresSafeArea().allowsHitTesting(false)
             if mangaMode {
                 mangaBody
@@ -722,7 +722,7 @@ struct ReaderView: View {
                 CommentSheet(url: u, content: target.content)
             }
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 accumulateReadingTime()
                 persistContinuousProgress(); store.flushProgress(); closeReadingSession()
@@ -731,7 +731,7 @@ struct ReaderView: View {
                 if !loading, chapters.indices.contains(index) { noteReadingChapter(index) }
             }
         }
-        .onChange(of: readingFonts.selectedPostScriptName) { _ in
+        .onChange(of: readingFonts.selectedPostScriptName) {
             aloud.stop()
             cancelPreparation()
             preparedChapters.removeAll()
@@ -739,27 +739,27 @@ struct ReaderView: View {
             // scroll layoutID below asks the native container to preserve its anchor.
             repaginate()
         }
-        .onChange(of: bubbleStyles.revision) { _ in
+        .onChange(of: bubbleStyles.revision) {
             cancelPreparation()
             preparedChapters.removeAll()
             repaginate()
             if settings.pageMode == 0, !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
         }
-        .onChange(of: settings.fontSize) { _ in scheduleRepaginate() }
-        .onChange(of: settings.lineSpacing) { _ in scheduleRepaginate() }
-        .onChange(of: settings.paragraphSpacing) { _ in scheduleRepaginate() }
-        .onChange(of: settings.fullJustify) { _ in scheduleRepaginate() }
-        .onChange(of: settings.bottomJustify) { _ in scheduleRepaginate() }
-        .onChange(of: settings.leftMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.rightMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.topMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.bottomMargin) { _ in scheduleRepaginate() }
-        .onChange(of: settings.chapterTitleSignature) { _ in scheduleRepaginate() }
-        .onChange(of: settings.commentCardSize) { _ in scheduleRepaginate() }
-        .onChange(of: settings.showCommentEntries) { _ in scheduleRepaginate() }
-        .onChange(of: settings.backgroundMode) { _ in scheduleRepaginate() }
-        .onChange(of: settings.customBackgroundHex) { _ in scheduleRepaginate() }
-        .onChange(of: settings.pageMode) { mode in
+        .onChange(of: settings.fontSize) { scheduleRepaginate() }
+        .onChange(of: settings.lineSpacing) { scheduleRepaginate() }
+        .onChange(of: settings.paragraphSpacing) { scheduleRepaginate() }
+        .onChange(of: settings.fullJustify) { scheduleRepaginate() }
+        .onChange(of: settings.bottomJustify) { scheduleRepaginate() }
+        .onChange(of: settings.leftMargin) { scheduleRepaginate() }
+        .onChange(of: settings.rightMargin) { scheduleRepaginate() }
+        .onChange(of: settings.topMargin) { scheduleRepaginate() }
+        .onChange(of: settings.bottomMargin) { scheduleRepaginate() }
+        .onChange(of: settings.chapterTitleSignature) { scheduleRepaginate() }
+        .onChange(of: settings.commentCardSize) { scheduleRepaginate() }
+        .onChange(of: settings.showCommentEntries) { scheduleRepaginate() }
+        .onChange(of: settings.backgroundMode) { scheduleRepaginate() }
+        .onChange(of: settings.customBackgroundHex) { scheduleRepaginate() }
+        .onChange(of: settings.pageMode) { _, mode in
             aloud.stop()
             pendingEdge = nil
             pendingChapterDirection = 0
@@ -775,29 +775,29 @@ struct ReaderView: View {
                 if chapters.indices.contains(index), !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
             }
         }
-        .onChange(of: pageIndex) { _ in syncMenuProgress() }
-        .onChange(of: pages.count) { _ in syncMenuProgress() }
-        .onChange(of: loading) { value in if !value { syncMenuProgress() } }
-        .onChange(of: index) { _ in
+        .onChange(of: pageIndex) { syncMenuProgress() }
+        .onChange(of: pages.count) { syncMenuProgress() }
+        .onChange(of: loading) { _, value in if !value { syncMenuProgress() } }
+        .onChange(of: index) {
             aloud.highlight.clear()
             toneHighlight.clear()
             lastToneHighlightOffset = -1
             syncMenuProgress()
         }
-        .onChange(of: aloud.isRunning) { running in
+        .onChange(of: aloud.isRunning) { _, running in
             if !running { aloud.highlight.clear() }
         }
-        .onChange(of: bookAudio.currentTime) { _ in
+        .onChange(of: bookAudio.currentTime) {
             followSourceToneAudio()
         }
-        .onChange(of: bookAudio.chapterURL) { url in
+        .onChange(of: bookAudio.chapterURL) { _, url in
             if url == nil {
                 toneHighlight.clear()
                 lastToneHighlightOffset = -1
             }
         }
-        .onChange(of: screenSize) { _ in repaginate() }
-        .onChange(of: pageInsets) { _ in repaginate() }
+        .onChange(of: screenSize) { repaginate() }
+        .onChange(of: pageInsets) { repaginate() }
         .onDisappear {
             accumulateReadingTime()
             // 退出前存下这一秒，下次进来接着听。
@@ -1787,7 +1787,7 @@ struct ReaderView: View {
             pageTurnContainer
                 .id("turn-style-\(settings.pageTurnStyle)")
                 .ignoresSafeArea()
-                .onChange(of: pageIndex) { i in recordPage(i) }
+                .onChange(of: pageIndex) { _, i in recordPage(i) }
         }
     }
 

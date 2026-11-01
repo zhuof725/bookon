@@ -79,7 +79,7 @@ struct SourceDebugView: View {
                 }
                 ToolbarItem(placement: .primaryAction) { menu }
             }
-            .onChange(of: focused) { f in if f { showHelp = true } }
+            .onChange(of: focused) { _, f in if f { showHelp = true } }
             .task {
                 loadExplore()
                 focused = true

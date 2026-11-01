@@ -215,8 +215,8 @@ struct BodyReplaceRuleEditor: View {
                     }.disabled(draft.validationMessage != nil).accessibilityIdentifier("bodyRules.save")
                 }
             }
-            .onChange(of: draft) { _ in preview = nil; savingError = nil }
-            .onChange(of: sample) { _ in preview = nil }
+            .onChange(of: draft) { preview = nil; savingError = nil }
+            .onChange(of: sample) { preview = nil }
         }
     }
 }

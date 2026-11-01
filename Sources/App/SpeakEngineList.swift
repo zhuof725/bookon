@@ -71,7 +71,7 @@ struct AloudPreloadCard: View {
             .modifier(SettingsGlassSurface())
         }
         .onAppear { setCount(storedCount) }
-        .onChange(of: storedCount) { setCount($0) }
+        .onChange(of: storedCount) { _, count in setCount(count) }
     }
 
     private func stepButton(symbol: String, label: String, enabled: Bool,
@@ -266,8 +266,8 @@ struct SpeakEngineList: View {
         }
         .onAppear { engines.reload() }
         .onDisappear { auditioner.cancel() }
-        .onChange(of: aloud.isPlaying) { if $0 { auditioner.cancel() } }
-        .onChange(of: aloud.isRunning) { if !$0 { auditioner.cancel() } }
+        .onChange(of: aloud.isPlaying) { _, playing in if playing { auditioner.cancel() } }
+        .onChange(of: aloud.isRunning) { _, running in if !running { auditioner.cancel() } }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notice in
             if let type = notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                type == AVAudioSession.InterruptionType.began.rawValue {

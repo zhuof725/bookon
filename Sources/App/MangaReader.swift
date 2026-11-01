@@ -461,14 +461,14 @@ struct MangaReaderView: View {
         }
         .foregroundStyle(foreground)
         .task { await manga.start() }
-        .onChange(of: manga.errorMessage) { message in
+        .onChange(of: manga.errorMessage) { _, message in
             // 第一次出现「本章没有图片」时，多半是旧目录缓存导致章节地址失效：
             // 自动刷新一次目录（会先跑详情页补齐变量）再重载当前章。
             guard message == "本章没有图片", !autoRefreshedTOC else { return }
             autoRefreshedTOC = true
             Task { await refreshTOC() }
         }
-        .onChange(of: manga.currentChapter) { chapter in
+        .onChange(of: manga.currentChapter) { _, chapter in
             guard let previous = lastBannerChapter else {
                 lastBannerChapter = chapter
                 return
@@ -477,7 +477,7 @@ struct MangaReaderView: View {
             guard chapter != previous else { return }
             showChapterBanner()
         }
-        .onChange(of: modeRaw) { _ in
+        .onChange(of: modeRaw) {
             // 切换阅读方式时把当前位置带到新容器（分页容器按页码，条漫按 itemID）。
             manga.requestScroll(toPage: manga.currentPage, reportProgress: false)
         }

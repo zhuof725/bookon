@@ -71,7 +71,7 @@ struct LibraryStatisticsView: View {
             refreshPlanChapterCounts()
             checkPlans()
         }
-        .onChange(of: plans.plans.count) { _ in
+        .onChange(of: plans.plans.count) {
             refreshPlanChapterCounts()
             checkPlans()
         }

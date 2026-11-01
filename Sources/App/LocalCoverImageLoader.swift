@@ -160,7 +160,7 @@ struct BookCoverImage: View {
             // 先查本机缓存，没有再下载；下载到的封面会落到本机，下次开 VPN/断网也显示得出来。
             await remote.load(url: resolvedURL, origin: origin, pixelSize: pixelSize)
         }
-        .onChange(of: scenePhase) { phase in if phase == .active { retry += 1 } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { retry += 1 } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in retry += 1 }
         .accessibilityHidden(true)
     }

@@ -108,12 +108,12 @@ struct AppAppearanceSettingsView: View {
             .accessibilityIdentifier("theme.hub.scroll")
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: revealEditor) { _ in
+            .onChange(of: revealEditor) {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                     proxy.scrollTo("theme.hub.editor", anchor: .center)
                 }
             }
-            .onChange(of: showingSearch) { expanded in
+            .onChange(of: showingSearch) { _, expanded in
                 if expanded {
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                         proxy.scrollTo("theme.hub.top", anchor: .top)
@@ -145,7 +145,7 @@ struct AppAppearanceSettingsView: View {
         .modifier(AppTypographyRoot())
         .environment(\.appTheme, store.selectedTheme)
         .onAppear { normalizeBrowsedTheme() }
-        .onChange(of: store.customThemes) { _ in normalizeBrowsedTheme() }
+        .onChange(of: store.customThemes) { normalizeBrowsedTheme() }
         .fullScreenCover(item: $editorTheme) { theme in
             ThemeEditorView(theme: theme, store: store, onCancel: { editorTheme = nil }, onSaved: {
                 editorTheme = nil
