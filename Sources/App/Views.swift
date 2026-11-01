@@ -442,18 +442,26 @@ struct ReaderView: View {
 
     private var theme: (bg: Color, fg: Color, name: String) { settings.currentPaper }
 
+    /// 独立的几何观察层。抽出来是因为放在 ZStack 里会让整个 body 的类型推断超时
+    /// （Swift 对超大 ViewBuilder 表达式的推断是指数级的）。
+    private var viewportObserver: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { updateViewport(geo) }
+                .onChange(of: geo.size) { _, _ in updateViewport(geo) }
+                .onChange(of: geo.safeAreaInsets) { _, _ in updateViewport(geo) }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
             if settings.usesImageBackground {
                 backgroundImageLayer
             }
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { updateViewport(geo) }
-                    .onChange(of: geo.size) { _, _ in updateViewport(geo) }
-                    .onChange(of: geo.safeAreaInsets) { _, _ in updateViewport(geo) }
-            }.ignoresSafeArea().allowsHitTesting(false)
+            viewportObserver
             if mangaMode {
                 mangaBody
             } else if bookAudio.chapterURL != nil, !sourceToneBackground {
