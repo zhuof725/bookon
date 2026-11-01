@@ -4,3 +4,13 @@ Payload/
 *.ipa
 build.log
 .DS_Store
+
+# 书源测试的临时产物：CI 运行期生成，不进版本库
+sources.json
+shards/
+results/
+*.log
+
+# 默认只放「需要长期留档」的书源快照在 data/sources；
+# 临时调试导出请放 /tmp，或加 data/sources/local-* 前缀（已忽略）。
+data/sources/local-*.json

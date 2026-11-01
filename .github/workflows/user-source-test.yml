@@ -83,35 +83,35 @@ jobs:
         if: ${{ !inputs.check }}
         env:
           TEST_KEY: ${{ github.event.inputs.key }}
-          SOURCES_FILE: ${{ github.event.inputs.file }}
+          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
         timeout-minutes: 120
         run: |
           set -o pipefail
           KEY="$TEST_KEY"
-          $RUNNER_TEMP/pkg/.build/release/SourceTest "${SOURCES_FILE:-user-sources.json}" "$KEY" 90 2>&1 | tee user-source-test.log
+          $RUNNER_TEMP/pkg/.build/release/SourceTest "${SOURCES_FILE:-data/sources/user-sources.json}" "$KEY" 90 2>&1 | tee user-source-test.log
       - name: TOC probe
         if: ${{ inputs.probe == 'true' }}
         env:
-          SOURCES_FILE: ${{ github.event.inputs.file }}
+          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
           TEST_KEY: ${{ github.event.inputs.key }}
         timeout-minutes: 60
         run: |
           set -o pipefail
-          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-toc "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee toc-probe.log
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-toc "${SOURCES_FILE:-data/sources/user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee toc-probe.log
       - name: Search probe
         if: ${{ inputs.probe == 'search' }}
         timeout-minutes: 60
         run: |
-          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-search "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-系统}" 2>&1 | tee search-probe.log
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-search "${SOURCES_FILE:-data/sources/user-sources.json}" "${TEST_KEY:-系统}" 2>&1 | tee search-probe.log
       - name: Explore probe
         if: ${{ inputs.probe == 'explore' }}
         env:
-          SOURCES_FILE: ${{ github.event.inputs.file }}
+          SOURCES_FILE: data/sources/${{ github.event.inputs.file }}
           TEST_KEY: ${{ github.event.inputs.key }}
         timeout-minutes: 60
         run: |
           set -o pipefail
-          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-explore "${SOURCES_FILE:-user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee explore-probe.log
+          $RUNNER_TEMP/pkg/.build/release/SourceTest --probe-explore "${SOURCES_FILE:-data/sources/user-sources.json}" "${TEST_KEY:-我的}" 2>&1 | tee explore-probe.log
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -139,12 +139,12 @@ jobs:
       - name: Split sources into shards
         id: split
         env:
-          SOURCES_FILE: ${{ inputs.file }}
+          SOURCES_FILE: data/sources/${{ inputs.file }}
           SHARD_SIZE: ${{ inputs.shard_size }}
         run: |
           set -o pipefail
           mkdir -p shards
-          python3 Tools/CICheck/split_sources.py "${SOURCES_FILE:-screened-sources.json}" shards "${SHARD_SIZE:-60}" | tee split.log
+          python3 Tools/CICheck/split_sources.py "${SOURCES_FILE:-data/sources/screened-sources.json}" shards "${SHARD_SIZE:-60}" | tee split.log
       - name: Upload shards
         uses: actions/upload-artifact@v4
         with:
