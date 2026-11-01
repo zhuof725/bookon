@@ -115,8 +115,6 @@ targets:
       - path: BottomBubblePixelAudit.swift
       - path: Fixtures/bubble-outline-590.png
         buildPhase: resources
-      - path: Fixtures/bubble-3-590.png
-        buildPhase: resources
       - path: ContinuousScrollHarness.swift
       - path: CoverTurnHarness.swift
       - path: LayoutAuditHarness.swift
