@@ -486,7 +486,7 @@ struct LoginWebView: UIViewRepresentable {
     }
 }
 
-extension Coordinator {
+extension LoginWebView.Coordinator {
     /// 登录页里的「导入书源」链接：拦下来交给 App 处理，不让 WebView 自己跳走。
     /// 必须写在 extension：decidePolicyFor 是 WKNavigationDelegate 的 optional 方法，
     /// 声明在类体内 Swift 只做 nearly-match，系统不会调用。
