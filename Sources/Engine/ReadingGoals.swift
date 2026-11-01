@@ -426,10 +426,6 @@ enum ReadingPlanEngine {
         }
     }
 
-    static func isChecked(_ plan: ReadingPlan, on date: Date, calendar: Calendar) -> Bool {
-        plan.checkedDays.contains(ReadingStatsEngine.dayKey(date, calendar: calendar))
-    }
-
     /// 用当天的阅读会话给计划打卡；阅读器关闭和打开统计页都会调用。
     static func checkDay(bookURL: String, date: Date = Date(), calendar: Calendar = .current) {
         let start = calendar.startOfDay(for: date)

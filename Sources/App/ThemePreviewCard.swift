@@ -119,18 +119,6 @@ private struct ThemePreviewContainer: ViewModifier {
     }
 }
 
-private struct ThemeDiagonalMask: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.width * 0.62, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.width * 0.40, y: rect.maxY))
-            path.closeSubpath()
-        }
-    }
-}
-
 /// Abstract UI primitives intentionally have no titles, books, or progress data.
 private struct ThemeComponentCanvas: View {
     @Environment(\.appTheme) private var theme

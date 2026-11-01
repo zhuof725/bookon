@@ -12,17 +12,6 @@ enum ChapterTitleLayout {
         return baseFontSize(fontSize)
     }
 
-    static func uiWeight(_ value: Int) -> UIFont.Weight {
-        switch value {
-        case ..<250: return .ultraLight
-        case ..<350: return .light
-        case ..<450: return .regular
-        case ..<550: return .medium
-        case ..<650: return .semibold
-        default: return .bold
-        }
-    }
-
     static func font(size: CGFloat, style: ChapterTitleStyle) -> UIFont {
         let base = ReaderFontResolver.chapterFont(size: size)
         let wantsItalic = style.italic == true

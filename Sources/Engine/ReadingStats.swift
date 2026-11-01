@@ -221,18 +221,8 @@ final class ReadingStatsModel: ObservableObject {
         store.series(period: period)
     }
 
-    func periodTotalMinutes(period: ReadingStatsPeriod) -> String {
-        let minutes = Int((store.aggregate(period: period).seconds / 60).rounded())
-        return ReadingStatsEngine.formatMinutes(minutes)
-    }
-
     func periodTrend(period: ReadingStatsPeriod) -> String? {
         store.periodTrend(period: period)
-    }
-
-    func rangeLine(period: ReadingStatsPeriod, calendar: Calendar) -> String {
-        let range = ReadingStatsEngine.range(period: period, anchor: Date(), calendar: calendar)
-        return ReadingStatsEngine.formatRange(range.start, range.end, period: period, calendar: calendar)
     }
 
     func highlights(period: ReadingStatsPeriod, calendar: Calendar) -> [ReadingStatsStore.StatsHighlight] {
