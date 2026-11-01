@@ -1091,7 +1091,14 @@ final class JSEngine: @unchecked Sendable {
     java.ajaxAll=function(arr){var o=[];for(var i=0;i<arr.length;i++){o.push(__response(java.connectNative(String(arr[i]))));}return o;};
     java.startBrowserAwait=function(u,t){var s=String(u||'');if(typeof __openBrowser==='function'&&/^https?:/i.test(s)){__openBrowser(s,String(t||''),'');return '';}return java.connect(s)};
     java.showBrowser=function(u,h,js,cfg){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),'',String(h||''));}return '';};
-    java.sleep=function(ms){return '';};
+    // Legado 的 java.sleep：在脚本线程上同步阻塞。JavaScriptCore 求值本身是同步的，
+    // 这里直接阻塞当前线程即可；上限 3 秒，避免书源写出 sleep(60000) 卡死抓取。
+    java.sleep=function(ms){
+        var n=Number(ms);
+        if(!isFinite(n)||n<=0){return '';}
+        if(typeof __sleep==='function'){__sleep(Math.min(n,3000));}
+        return '';
+    };
     java.getWebViewUA=function(){return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';};
     java.showReadingBrowser=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
     java.startBrowserDp=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
@@ -1763,6 +1770,12 @@ final class JSEngine: @unchecked Sendable {
             SourceFileBridge.readSetting(key, fallback: fallback)
         }
         ctx.setObject(readSetting, forKeyedSubscript: "__readSetting" as NSString)
+        // java.sleep：书源脚本里的同步等待。调用方已把上限压到 3 秒。
+        let sleep: @convention(block) (Double) -> Void = { ms in
+            guard ms > 0 else { return }
+            Thread.sleep(forTimeInterval: min(ms, 3000) / 1000.0)
+        }
+        ctx.setObject(sleep, forKeyedSubscript: "__sleep" as NSString)
     }
 
     /// Stable 16-hex-digit identifier, generated once per app install and kept in UserDefaults.
