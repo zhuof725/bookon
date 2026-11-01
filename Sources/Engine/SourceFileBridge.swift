@@ -58,6 +58,10 @@ enum SourceFileBridge {
         return FileManager.default.fileExists(atPath: url.path)
     }
 
+    /// GB18030（兼容 GBK/GB2312）。Foundation 没有 `.gb18030` 便捷成员，需要走 CFString 转换。
+    static let gb18030 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+        CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+
     /// 书源脚本里 `getThemeConfigMap()` 需要判断当前是否深色。
     /// 书源线程不是主线程，读 UserDefaults 里的外观设置即可。
     static var isDarkMode: Bool {
@@ -80,7 +84,7 @@ enum SourceFileBridge {
             if let text = try? String(contentsOf: file, encoding: .utf8) {
                 out += text
             } else if let data = try? Data(contentsOf: file),
-                      let text = String(data: data, encoding: .gb18030) {
+                      let text = String(data: data, encoding: SourceFileBridge.gb18030) {
                 out += text
             }
         }
@@ -131,15 +135,11 @@ enum SourceFileBridge {
         case "UTF-8", "UTF8":
             if let text = String(data: data, encoding: .utf8) { return text }
         case "GBK", "GB2312", "GB18030":
-            let gb = CFStringConvertEncodingToNSStringEncoding(
-                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
-            if let text = String(data: data, encoding: String.Encoding(rawValue: gb)) { return text }
+            if let text = String(data: data, encoding: gb18030) { return text }
         default:
             break
         }
         if let text = String(data: data, encoding: .utf8) { return text }
-        let gb = CFStringConvertEncodingToNSStringEncoding(
-            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
-        return String(data: data, encoding: String.Encoding(rawValue: gb)) ?? ""
+        return String(data: data, encoding: gb18030) ?? ""
     }
 }
