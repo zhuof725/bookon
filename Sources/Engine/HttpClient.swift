@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// A transport result, not a fabricated HTTP success. Code 0 means no HTTP
 /// status was available (for example, HTML returned by WebView or a data URL).

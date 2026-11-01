@@ -9,6 +9,7 @@ build.log
 sources.json
 shards/
 results/
+dumps/
 *.log
 
 # 默认只放「需要长期留档」的书源快照在 data/sources；

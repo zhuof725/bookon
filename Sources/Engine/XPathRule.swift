@@ -218,7 +218,6 @@ enum XPathRule {
                 if let s = v?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { list.append(s) }
             }
             return list.isEmpty ? fallbackString(obj, path) : list.joined(separator: "\n")
-        default: return ""
         }
     }
 }

@@ -6,7 +6,6 @@ struct AIServiceView: View {
     @ThemePalette private var palette
     @ObservedObject private var store = AIServiceStore.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var addingCustom = false
 
     var body: some View {
         VStack(spacing: AppLayout.gapM) {
