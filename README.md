@@ -37,9 +37,8 @@ GitHub Actions（`.github/workflows/build.yml`）：
 - push 到 `main` → 构建未签名 IPA，产物在 Actions 的 artifact 里
 - 推送 `v*` tag → 同一次构建顺手创建 Release 并附上 IPA，可长期留档
 - 另有 4 个 workflow：`source-test.yml` 每次 push 都跑书源解析回归；
-  `reader-interaction.yml` 只在 `Sources/App` 阅读器相关文件、`ReadSettings`、
-  `Tools/ReaderInteractionTest` 变动时触发；`user-source-test.yml` /
-  `reader-diagnostics.yml` 只在需要时手动触发
+  `reader-interaction.yml` 在 `Sources/{App,Engine,Models,Store}` 或测试工程变动时触发；
+  `user-source-test.yml` / `reader-diagnostics.yml` 只在需要时手动触发
 
 **注意：`build.yml` 只编译 App target，不编译测试 harness。**
 测试代码坏掉时它照样绿——改过 `@MainActor` 隔离或测试夹具后，

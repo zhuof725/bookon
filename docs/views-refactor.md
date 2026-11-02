@@ -237,3 +237,31 @@ XCUITest 合成的短拖（0.12→0.21）可能直接从 began 到 ended，
 `reader-interaction` 首次做到 **10 个用例、0 失败、零重试**。
 不要再靠 `-retry-tests-on-failure` 把偶发时序问题糊过去——
 job 绿但日志里有 failure，等于埋了一颗雷。
+
+---
+
+# build 160：观察点从 16 个降到 12 个
+
+文档前面写「余量耗尽，只能靠 ReaderModel 重构」。这句话要修正：
+**余量耗尽指的是「不减少 identifier 数量、只改写法」。**
+真把 identifier 删掉，改动照样能过。
+
+实际做法（都验证过，`build.yml` 与 `reader-interaction` 均通过）：
+
+| 合并 | 原因 |
+| --- | --- |
+| `screenSize` + `pageInsets` 两个 onChange → 删掉 | 两者只在 `updateViewport` 里成对赋值，天然同步。改成赋值后直接 `scheduleRepaginate()`，用 `changed` 比较挡重复触发 |
+| `pageIndex` + `pages.count` + `loading` 三个 onChange → `menuProgressSignature` | 三者都只调 `syncMenuProgress()`，是同一个观察点被拆成三个 |
+
+**顺带修了一个真实 bug**：`syncMenuProgress()` 在滚动模式下读
+`scrollProgress.position`，但原来**没有任何观察点盯着它**——翻页模式有
+`pageIndex` onChange，滚动模式一片空白。所以连续阅读时菜单进度条是不动的。
+把它并入签名（`position / 4`，粒度 0.4%）后才跟手。
+
+## 从这里 + 上面两条能学到的判断规则
+
+1. **先看有没有两个 onChange 调同一个函数** → 那是同一个观察点，能合。
+2. **先看两个 @State 是否总在同一个函数里成对赋值** → 那是同一个观察点，能合。
+3. **合并后的签名不要放每帧都变的字段**（如滚动 offset）——要么加重计算，
+   要么按合理粒度取整。
+4. 只剩「带参闭包 + 语义各异」的 onChange 时，才是真的要 ReaderModel 重构。
