@@ -388,9 +388,9 @@ final class ReaderTextLayoutManager: NSLayoutManager {
 
     /// 基类是 nonisolated，override 上加 @MainActor 会报隔离不一致；
     /// 用 assumeIsolated 转发又会因为捕获 self（非 Sendable 的 NSLayoutManager 子类）
-    /// 触发 data race 检查。这里的实际前提是明确的：UIKit 只在主线程调 drawBackground。
-    /// 因此直接标 nonisolated(unsafe)，把这条契约交给开发者保证。
-    nonisolated(unsafe) override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
+    /// 触发 data race 检查。UIKit 只在主线程调 drawBackground 是确定事实，
+    /// 这里用 nonisolated 让实现直接留在 override 内，不再转发。
+    nonisolated override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         if let view = highlightView, view.highlightedRange.length > 0 {
             let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: view.highlightedRange,
                                                                       actualCharacterRange: nil))
