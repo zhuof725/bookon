@@ -299,6 +299,8 @@ enum ReaderTextLayout {
         return view
     }
 
+    /// 纯 UIKit 属性赋值，只能在主线程执行。
+    @MainActor
     static func configure(_ view: UITextView) {
         view.backgroundColor = .clear
         view.isEditable = false
