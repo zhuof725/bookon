@@ -322,11 +322,13 @@ enum ReaderTextLayout {
         lineSpacing + max(paragraphSpacing, 0)
     }
 
+    @MainActor
     static func height(of view: UITextView, width: CGFloat) -> CGFloat {
         _ = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         return rows(of: view).height
     }
 
+    @MainActor
     private static func rows(of view: UITextView) -> (count: Int, height: CGFloat) {
         let manager = view.layoutManager
         manager.ensureLayout(for: view.textContainer)
