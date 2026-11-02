@@ -388,44 +388,27 @@ final class ReaderTextLayoutManager: NSLayoutManager {
 
     /// 基类是 nonisolated，override 上加 @MainActor 会报隔离不一致；
     /// 用 assumeIsolated 转发又会因为捕获 self（非 Sendable 的 NSLayoutManager 子类）
-    /// 触发 data race 检查。
-    ///
-    /// 解决方式：把需要读取的 UIKit 状态先取成普通值（区间、颜色），
-    /// 绘制辅助方法声明成 nonisolated，参数全部是可 Sendable 的值类型，
-    /// 这样既不需要捕获 self，也不碰 @MainActor 属性。
+    /// 触发 data race 检查。UIKit 只在主线程调 drawBackground 是确定事实，
+    /// 这里用 nonisolated 让实现直接留在 override 内，不再转发。
     nonisolated override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
-        // UIKit 只在主线程调 drawBackground；这些属性读的都是主线程当前值。
-        let highlight = MainActor.assumeIsolated { highlightView }
-        guard let highlight, highlight.highlightedRange.length > 0 else {
-            super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
-            return
-        }
-        let highlighted = MainActor.assumeIsolated { highlight.highlightedRange }
-        let color = MainActor.assumeIsolated { highlight.highlightColor }
-        let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: highlighted,
-                                                                  actualCharacterRange: nil))
-        if range.length > 0 {
-            drawHighlightLines(range: range, origin: origin, color: color)
+        if let view = highlightView, view.highlightedRange.length > 0 {
+            let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: view.highlightedRange,
+                                                                      actualCharacterRange: nil))
+            if range.length > 0 {
+                enumerateLineFragments(forGlyphRange: range) { _, _, _, lineGlyphs, _ in
+                    let overlap = NSIntersectionRange(range, lineGlyphs)
+                    guard overlap.length > 0 else { return }
+                    var rect = self.boundingRect(forGlyphRange: overlap, in: view.textContainer)
+                    guard !rect.isNull, !rect.isEmpty else { return }
+                    rect.origin.x += origin.x
+                    rect.origin.y += origin.y
+                    rect = rect.insetBy(dx: -2, dy: -1)
+                    view.highlightColor.setFill()
+                    UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
+                }
+            }
         }
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
-    }
-
-    /// 只依赖值类型参数，不捕获 self，因此不需要主 actor 隔离。
-    nonisolated private func drawHighlightLines(range: NSRange, origin: CGPoint, color: UIColor) {
-        enumerateLineFragments(forGlyphRange: range) { [weak self] _, _, _, lineGlyphs, _ in
-            guard let self else { return }
-            let overlap = NSIntersectionRange(range, lineGlyphs)
-            guard overlap.length > 0 else { return }
-            let container = self.textContainers.first
-            guard let container else { return }
-            var rect = self.boundingRect(forGlyphRange: overlap, in: container)
-            guard !rect.isNull, !rect.isEmpty else { return }
-            rect.origin.x += origin.x
-            rect.origin.y += origin.y
-            rect = rect.insetBy(dx: -2, dy: -1)
-            MainActor.assumeIsolated { color.setFill() }
-            UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
-        }
     }
 }
 
