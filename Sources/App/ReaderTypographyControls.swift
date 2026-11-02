@@ -69,8 +69,11 @@ struct ReaderAppearanceControls: View {
                             selection: customColor, supportsOpacity: false)
                     .accessibilityIdentifier("reader.background.color")
                 if settings.backgroundMode == 2 {
+                    // PhotosPicker 的 label 闭包按 @Sendable 检查，不能直接捕获
+                    // @ObservedObject 的 settings；先取出标题字符串。
+                    let hasBackgroundImage = !settings.backgroundImageID.isEmpty
                     PhotosPicker(selection: $photoItem, matching: .images) {
-                        Label(settings.backgroundImageID.isEmpty ? "选择背景图片" : "更换背景图片",
+                        Label(hasBackgroundImage ? "更换背景图片" : "选择背景图片",
                               systemImage: "photo")
                             .foregroundStyle(Color.accentColor)
                     }
