@@ -125,12 +125,19 @@ enum XPathRule {
             return e
         }
         guard let s = obj as? String else { return nil }
-        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
+        // 与 Legado AnalyzeByXPath.strToJXDocument 对齐：书源常把正文切成
+        // `<td>…</td>` / `<tr>…</tr>` / `<tbody>…</tbody>` 片段再交给 XPath，
+        // 裸片段放进 div 后 `//tr` `//table` 都查不到。按原版补上外层容器。
+        if t.hasSuffix("</td>") { t = "<tr>" + t + "</tr>" }
+        if t.hasSuffix("</tr>") || t.hasSuffix("</tbody>") { t = "<table>" + t + "</table>" }
         let head = t.prefix(9).lowercased()
         if head.hasPrefix("<!doctype") || head.hasPrefix("<html") {
             return (try? SwiftSoup.parse(t))?.body()
         }
+        // 注：SwiftSoup.parse 内部用 looksLikeXml 判 `<?xml`，会自动切到 xmlParser，
+        // 这里不需要再显式指定解析器。
         guard let doc = try? SwiftSoup.parse("<div id=\"__legado_fragment__\">" + t + "</div>"),
               let holder = try? doc.getElementById("__legado_fragment__") else { return nil }
         return holder.children().first()

@@ -643,9 +643,45 @@ final class AnalyzeRule {
         guard segments.valid, let root = AnalyzeRule.element(obj) else { return [] }
         var cur: [Element] = [root]
         for seg in segments.parts where !seg.isEmpty {
-            cur = cur.flatMap { applySegment($0, seg) }
+            cur = expandSegment(cur, seg)
         }
         return cur
+    }
+
+    /// Legado 的 getElements 对 @ 分出的每一段都重新走一遍 splitRule("&&","||","%%")，
+    /// 所以 `id.list@a.0@text&&id.info@p.-2@text` 这种「两段各自带 &&」的规则
+    /// 能拿到两个节点的并集。只在最外层分裂会把整串当成一个 CSS 选择器，
+    /// 结果为空（真实书源里这种写法有 190+ 处）。
+    private func expandSegment(_ nodes: [Element], _ seg: String) -> [Element] {
+        let combined = RuleScanner.split(seg, by: ["&&", "||", "%%"])
+        guard combined.valid, combined.parts.count > 1 else {
+            return nodes.flatMap { applySegment($0, seg) }
+        }
+        switch combined.separator {
+        case "||":
+            // 短路：第一段有结果就用它，否则试下一段。
+            for part in combined.parts where !part.isEmpty {
+                let got = nodes.flatMap { applySegment($0, part) }
+                if !got.isEmpty { return got }
+            }
+            return []
+        case "%%":
+            // 交错合并：第 i 个节点的第 1/2/… 段结果依次排列。
+            var out: [Element] = []
+            let lists = combined.parts.filter { !$0.isEmpty }.map { part in
+                nodes.flatMap { applySegment($0, part) }
+            }
+            guard let longest = lists.map(\.count).max() else { return [] }
+            for i in 0..<longest {
+                for list in lists where i < list.count { out.append(list[i]) }
+            }
+            return out
+        default:
+            // &&：每段都执行，结果顺序拼接。
+            return combined.parts.filter { !$0.isEmpty }.flatMap { part in
+                nodes.flatMap { applySegment($0, part) }
+            }
+        }
     }
 
     private func applySegment(_ el: Element, _ seg: String) -> [Element] {
