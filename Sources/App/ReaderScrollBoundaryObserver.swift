@@ -72,9 +72,13 @@ struct ReaderScrollBoundaryObserver: UIViewRepresentable {
                     // 即使短章不足一屏，也能用一次向上手势进入下一章。
                     scroll.alwaysBounceVertical = true
                     scroll.panGestureRecognizer.addTarget(self, action: #selector(panned(_:)))
+                    // KVO 回调在主线程触发（UIScrollView 的 offset 只在主线程变），
+                    // 用 assumeIsolated 把这一前提告诉编译器。
                     offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
-                        guard scroll.isDecelerating else { return }
-                        self?.checkBottom()
+                        MainActor.assumeIsolated {
+                            guard scroll.isDecelerating else { return }
+                            self?.checkBottom()
+                        }
                     }
                     return
                 }
