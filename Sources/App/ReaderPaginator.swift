@@ -39,11 +39,16 @@ enum ReaderPaginator {
             if case .paragraph = previous, case .paragraph = block { return blockSpacing }
             return max(paragraphSpacing, 0)
         }
-        @MainActor
         var headerHeight: CGFloat {
-            chapterTitle.isEmpty ? 0 : ChapterTitleLayout.height(title: chapterTitle,
-                fontSize: fontSize, width: textWidth, style: titleStyle)
-                + ChapterTitleLayout.bottomSpacing(fontSize: fontSize, style: titleStyle) + paragraphSpacing
+            guard !chapterTitle.isEmpty else { return 0 }
+            // height() 要创建 UILabel 测量，必须主线程。Configuration 本身不隔离
+            // （它是 Equatable 的纯值类型），所以在这里显式声明调用前提。
+            let measured = MainActor.assumeIsolated {
+                ChapterTitleLayout.height(title: chapterTitle, fontSize: fontSize,
+                                          width: textWidth, style: titleStyle)
+            }
+            return measured + ChapterTitleLayout.bottomSpacing(fontSize: fontSize, style: titleStyle)
+                + paragraphSpacing
         }
 
         var textWidth: CGFloat {
