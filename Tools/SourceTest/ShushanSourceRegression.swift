@@ -64,9 +64,13 @@ enum ShushanSourceRegression {
         let probe = used.map { "if (typeof \($0) === 'undefined') missing.push('\($0)');" }.joined(separator: "\n")
         let script = "var missing=[];\n" + probe + "\nmissing.join(',')"
         let missing = JSEngine.shared.evalString(script, jsLib: source.jsLib, context: context) ?? "EVALUATION_FAILED"
-        // java.deviceID 是刻意不提供的：Legado/阅读Sigma 也没有它，
-        // 书源用「它不存在」来判断自己运行在 Android 分支，否则正文会被逐行包成 rs-native。
-        let intentionallyAbsent: Set<String> = ["java.deviceID"]
+        // java.deviceID / java.qread 是刻意不提供的（探测型 API）：
+        // - deviceID：Legado 也没有它；书源用「它存在」判定苹果端，命中后会输出
+        //   <div rs-native><comment onPress=...>，而本 App 正文渲染不认识这两个标记，
+        //   只会把原始标签塞进正文。
+        // - qread：书源用它探测「轻阅读」App。
+        // 两个都是「存在即误判」，必须保持 absent。
+        let intentionallyAbsent: Set<String> = ["java.deviceID", "java.qread"]
         let missingSet = Set(missing.split(separator: ",").map(String.init))
         check(missingSet.subtracting(intentionallyAbsent).isEmpty,
               "书源使用的 JS 接口全部可用（缺失：\(missingSet.subtracting(intentionallyAbsent))）")

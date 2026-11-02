@@ -1383,17 +1383,12 @@ final class JSEngine: @unchecked Sendable {
     java.refreshExplore=function(){return '';};
     // androidId：Legado 的 JsExtensions 有这个函数，脚本用它取设备标识做签名。
     java.androidId=function(){return String(__deviceId());};
-    // deviceID：**Legado 的 JS 环境里没有这个函数**，书源用它做平台探测——
-    // 有 deviceID 就是苹果端（我们的情况），抛异常才是安卓。
-    // 早期这里刻意不提供，理由是「多提供会让书源误判成 iOS」，方向恰好说反了：
-    // 魔丸小说这类书源写的是
-    //   try { java.qread(); return 4 } catch {}
-    //   try { if (typeof java.reLoginView === 'function') return 1 } catch {}
-    //   try { java.deviceID(); return 3 } catch {}
-    // 然后 evn==3 分支才输出 <div rs-native><comment onPress="java.showReadingBrowser(...)">
-    // （可点的原生段评），evn==1 只给 HTML <p> 气泡。缺 deviceID 会一直被判成 evn==1，
-    // 段评点击退化成纯文本。所以这里必须提供，值随意但不为空（脚本只判断「能否调用」）。
-    java.deviceID=function(){return String(__deviceId());};
+    // 刻意不提供 java.deviceID：Legado（含 legado-E）的 JS 环境里没有它，
+    // 书源用它探测「苹果端」，命中后会输出 <div rs-native><comment onPress=...>。
+    // 本 App 的正文渲染不认识 rs-native / <comment> 这两个标记，提供它只会让
+    // 正文里出现一串原始标签，反而更糟。等正文解析支持这两个标记后再打开
+    // （届时把这里的注释与 ShushanSourceRegression 的 intentionallyAbsent 一起改）。
+    // 同理不提供 qread：它在书源里用来探测「轻阅读」App。
     java.utf8ToGbk=function(s){return s};
     java.t2s=function(s){return s};java.s2t=function(s){return s};
     java.randomUUID=function(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c=='x'?r:(r&3|8)).toString(16)})};

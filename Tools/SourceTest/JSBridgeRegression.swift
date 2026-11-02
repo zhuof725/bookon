@@ -146,22 +146,24 @@ enum JSBridgeRegression {
               "book.readConfig 默认可读")
 
         // 平台探测：书源用它区分运行环境。
-        //   苹果  -> try { java.deviceID(); return '苹果' } catch {}
-        //   改版  -> try { if (typeof java.reLoginView === 'function') return '改版' } catch {}
-        //   轻阅读 -> try { java.qread(); return '轻阅读' } catch {}
-        // 三者只有「苹果」分支会输出 <div rs-native><comment onPress=...>（可点段评）。
-        // 所以普通规则 JS 里必须：有 deviceID、没有 reLoginView、没有 qread。
+        //   '苹果' -> try { java.deviceID(); return '苹果' } catch {}
+        //   '改版' -> if (typeof java.reLoginView === 'function') return '改版'
+        //   '轻阅读' -> try { java.qread(); return '轻阅读' } catch {}
+        // 三条我们都不该命中：本 App 属于「未知 → 退回 HTML 气泡」那条路。
+        // 命中「苹果」会让书源输出 <div rs-native><comment onPress=...>，
+        // 而正文渲染还不认识这两个标记，只会把原始标签塞进正文。
         check(engine.evalString("""
             var env = (function(){
                 try { java.qread(); return '轻阅读'; } catch (e) {}
                 try { if (typeof java.reLoginView === 'function') return '改版'; } catch (e) {}
                 try { java.deviceID(); return '苹果'; } catch (e) {}
-                if (typeof source.loginUi === 'function') return '安卓';
-                return '未知';
+                return '默认';
             })();
             return env;
-            """, jsLib: library, context: context) == "苹果",
-              "普通规则 JS 的平台探测应判定为「苹果」（有 deviceID，无 reLoginView/qread）")
+            """, jsLib: library, context: context) == "默认",
+              "平台探测不得命中苹果/改版/轻阅读，退回 HTML 气泡分支")
+        check(engine.evalString("typeof java.deviceID", jsLib: library, context: context) == "undefined",
+              "java.deviceID 刻意不提供：命中后会输出本 App 不认识的 rs-native 标记")
         check(engine.evalString("typeof java.qread", jsLib: library, context: context) == "undefined",
               "java.qread 不存在：书源用它探测「轻阅读」，提供会让分支错乱")
         check(engine.evalString("typeof java.reLoginView", jsLib: library, context: context) == "undefined",
