@@ -24,7 +24,6 @@ enum JSBridgeRegression {
                         jsLib: library, rule: rule, ruleInput: rule.content,
                         context: context)
         }
-
         check(evaluate("""
             var before = java.getString('@css:h1@text');
             var beforeCount = java.getElements('@css:a').length;
@@ -149,10 +148,11 @@ enum JSBridgeRegression {
         // jQuery 风格的 next()/prev()：书源里常写 `select('.item').next().text()`
         // 遍历兄弟节点。这两条路径用的是不同的桥（JSNodeBridge 单体 vs
         // JSNodeListBridge 集合），实现各自独立，必须分别覆盖。
-        // 注意：这里不能把 HTML 直接插值进 JS 单引号字符串（HTML 里的单引号会
-        // 提前结束字符串），必须走 evaluate 已有的 vars 传参。
+        // 注意：java.getElements 的 JS 绑定只接受一个参数，第二个 content 参数
+        // 会被静默忽略——必须先用 setContent 切换内容再查询。
         check(evaluate("""
-            var list = java.getElements('@css:p.n', siblingsHTML);
+            java.setContent(siblingsHTML);
+            var list = java.getElements('@css:p.n');
             [list.first().next().text(), list.last().prev().text(),
              list.eq(1).next().text(), list.eq(0).prev() == null].join('|');
             """) as? String == "二|二|三|true",
@@ -162,7 +162,8 @@ enum JSBridgeRegression {
         // 是双重可选链，必须安全退化成 null；如果被误当成元素构造，JS 侧会拿到
         // 一个「存在但什么都取不到」的假节点，书源就会静默拿到空正文。
         check(evaluate("""
-            var empty = java.getElements('@css:nothing-here', siblingsHTML);
+            java.setContent(siblingsHTML);
+            var empty = java.getElements('@css:nothing-here');
             [empty.length, empty.first() == null, empty.next() == null, empty.prev() == null].join('|');
             """) as? String == "0|true|true|true",
               "空集合的 first/next/prev 返回 null，不构造假节点")
