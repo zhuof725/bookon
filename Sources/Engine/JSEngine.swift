@@ -1104,7 +1104,11 @@ final class JSEngine: @unchecked Sendable {
     java.startBrowserDp=function(u,t){if(typeof __openBrowser==='function'){__openBrowser(String(u||''),String(t||''),'');}return '';};
     java.open=function(){return '';};
     java.searchBook=function(){return '';};
-    java.qread=function(){return '';};
+    // 注意：这里不能提供 java.qread。书源用它探测「轻阅读」App：
+    //   try { java.qread(); return '轻阅读' } catch (e) {}
+    //   try { if (typeof java.reLoginView == 'function') return ... }
+    // Legado 里没有 qread，安卓实机会抛异常走到下一个分支；我们若提供它，
+    // 书源会把 App 认成轻阅读，拿到完全错误的规则分支。
     java.getThemeConfig=function(){return 'light';};
     java.startBrowser=function(u,t,c){if(typeof __openBrowser==='function'){__openBrowser(String(u),String(t||''),String(c||''));}return ''};
     java.webView=function(h,u,js){
@@ -1377,16 +1381,31 @@ final class JSEngine: @unchecked Sendable {
     java.getThemeMode=function(){return 6;};
     java.refreshContent=function(){return '';};
     java.refreshExplore=function(){return '';};
-    // 只提供 androidId：Legado/阅读Sigma 的 JS 环境里没有 deviceID，
-    // 书源用「deviceID 是否存在」区分 iOS 分支，多提供一个会让它们误判成 iOS。
+    // androidId：Legado 的 JsExtensions 有这个函数，脚本用它取设备标识做签名。
     java.androidId=function(){return String(__deviceId());};
+    // deviceID：**Legado 的 JS 环境里没有这个函数**，书源用它做平台探测——
+    // 有 deviceID 就是苹果端（我们的情况），抛异常才是安卓。
+    // 早期这里刻意不提供，理由是「多提供会让书源误判成 iOS」，方向恰好说反了：
+    // 魔丸小说这类书源写的是
+    //   try { java.qread(); return 4 } catch {}
+    //   try { if (typeof java.reLoginView === 'function') return 1 } catch {}
+    //   try { java.deviceID(); return 3 } catch {}
+    // 然后 evn==3 分支才输出 <div rs-native><comment onPress="java.showReadingBrowser(...)">
+    // （可点的原生段评），evn==1 只给 HTML <p> 气泡。缺 deviceID 会一直被判成 evn==1，
+    // 段评点击退化成纯文本。所以这里必须提供，值随意但不为空（脚本只判断「能否调用」）。
+    java.deviceID=function(){return String(__deviceId());};
     java.utf8ToGbk=function(s){return s};
     java.t2s=function(s){return s};java.s2t=function(s){return s};
     java.randomUUID=function(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c=='x'?r:(r&3|8)).toString(16)})};
-    // 登录脚本常用：java.upLoginData / java.reLoginView / java.webViewCookieManager
-    // （Legado JsExtensions 与 android.webkit.CookieManager 的桥接；实现挂在 source 上，这里转发）。
-    java.upLoginData=function(o){return source.upLoginData(o)};
-    java.reLoginView=function(){return source.reLoginView()};
+    // upLoginData / reLoginView / webViewCookieManager 是 **登录界面专用** 的扩展：
+    // 在 Legado 里它们来自 SourceLoginJsExtensions（只挂在登录弹窗的 JS 作用域），
+    // 普通规则 JS（发现/搜索/正文）里根本没有。
+    // 早期这里无条件提供，会让平台探测误判：书源写
+    //   try { if (typeof java.reLoginView === 'function') return '改版' } catch {}
+    // 有 reLoginView 就被认成「阅读·改版」，永远走不到
+    //   try { java.deviceID(); return '苹果' } catch {}
+    // 于是 evn=='苹果' 才输出的 <div rs-native><comment onPress=...> 原生段评
+    // 全部退化成 HTML 文本。所以这几个只在 installLoginBindings 里注入。
     java.webViewCookieManager=function(){return source.webViewCookieManager()};
     // 服务器聚合书源（重生聚合等）用 java.postDelayed(fn,ms) 延迟刷新发现页/登录面板。
     // iOS 端没有 Android Handler：延迟回调排进 __delayed 队列，由原生在一次求值结束后立即执行，
@@ -1582,6 +1601,17 @@ final class JSEngine: @unchecked Sendable {
         ctx.setObject(sourceRefreshExplore, forKeyedSubscript: "__sourceRefreshExplore" as NSString)
         // java.postDelayed 由 prelude 排队（__drainDelayed），原生在求值结束后统一执行：
         // 见 runLoginScript / evalBody 里的 drainDelayed 调用。
+    }
+
+    /// java.upLoginData / java.reLoginView 必须等 prelude 求值之后才存在
+    /// （它们转调 source.*，而 source 对象由 prelude 定义）。
+    /// 只在登录脚本作用域挂上：Legado 里它们来自 SourceLoginJsExtensions，
+    /// 普通规则 JS 里没有；无条件提供会让书源的平台探测把 App 认成「阅读·改版」。
+    private func installLoginOnlyJavaAliases(_ ctx: JSContext) {
+        ctx.evaluateScript("""
+            java.upLoginData=function(o){return source.upLoginData(o)};
+            java.reLoginView=function(){return source.reLoginView()};
+            """)
     }
 
     /// Crypto errors are thrown as CryptoError with a fixed message; inputs never appear in them.
@@ -1976,7 +2006,13 @@ final class JSEngine: @unchecked Sendable {
         }
         for (k, v) in vars { ctx.setObject(v, forKeyedSubscript: k as NSString) }
         if let lib = jsLib, !lib.isEmpty, !lib.hasPrefix("{") { ctx.evaluateScript(lib) }
-        if let login = loginLib, !login.isEmpty, !login.hasPrefix("{") { ctx.evaluateScript(login) }
+        if let login = loginLib, !login.isEmpty, !login.hasPrefix("{") {
+            // loginUi / 登录按钮脚本属于「登录作用域」：先挂上 java.upLoginData /
+            // java.reLoginView（Legado 只在 SourceLoginJsExtensions 里提供），
+            // 再求值 loginUrl 函数库——函数库里的按钮常用这两个桥。
+            installLoginOnlyJavaAliases(ctx)
+            ctx.evaluateScript(login)
+        }
         // A rule's let/const bindings must not collide with bridge globals or
         // change the lexical scope captured by jsLib helpers. A block preserves
         // JavaScript completion values (unlike an IIFE without an explicit return).
@@ -2244,6 +2280,11 @@ final class JSEngine: @unchecked Sendable {
                         formValues: [String: String] = [:], deepJSON: Bool = false) -> Result<String, LoginScriptError> {
         let context = RuleContext(source: source)
         let ctx = makeContext(context)
+        // 登录脚本专属：java.upLoginData / java.reLoginView。
+        // Legado 里它们来自 SourceLoginJsExtensions，只有登录弹窗的 JS 作用域可见；
+        // 挂到通用 prelude 会让书源的平台探测（typeof java.reLoginView === 'function'）
+        // 把 App 认成「阅读·改版」，永远走不到 deviceID 的「苹果」分支。
+        installLoginOnlyJavaAliases(ctx)
         // Legado 执行登录按钮时，`result` 是当前表单值（键为字段名）；`book`/`chapter` 在登录页没有，保持默认。
         ctx.setObject(formValues, forKeyedSubscript: "result" as NSString)
         let openBrowser: @convention(block) (String, String, String) -> Void = { ToastCenter.openBrowser($0, $1, $2.isEmpty ? nil : $2) }

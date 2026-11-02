@@ -145,6 +145,28 @@ enum JSBridgeRegression {
         check(engine.evalString("String(book.readConfig == null)", jsLib: library, context: context) == "false",
               "book.readConfig 默认可读")
 
+        // 平台探测：书源用它区分运行环境。
+        //   苹果  -> try { java.deviceID(); return '苹果' } catch {}
+        //   改版  -> try { if (typeof java.reLoginView === 'function') return '改版' } catch {}
+        //   轻阅读 -> try { java.qread(); return '轻阅读' } catch {}
+        // 三者只有「苹果」分支会输出 <div rs-native><comment onPress=...>（可点段评）。
+        // 所以普通规则 JS 里必须：有 deviceID、没有 reLoginView、没有 qread。
+        check(engine.evalString("""
+            var env = (function(){
+                try { java.qread(); return '轻阅读'; } catch (e) {}
+                try { if (typeof java.reLoginView === 'function') return '改版'; } catch (e) {}
+                try { java.deviceID(); return '苹果'; } catch (e) {}
+                if (typeof source.loginUi === 'function') return '安卓';
+                return '未知';
+            })();
+            return env;
+            """, jsLib: library, context: context) == "苹果",
+              "普通规则 JS 的平台探测应判定为「苹果」（有 deviceID，无 reLoginView/qread）")
+        check(engine.evalString("typeof java.qread", jsLib: library, context: context) == "undefined",
+              "java.qread 不存在：书源用它探测「轻阅读」，提供会让分支错乱")
+        check(engine.evalString("typeof java.reLoginView", jsLib: library, context: context) == "undefined",
+              "普通规则 JS 里没有 java.reLoginView（Legado 只在登录弹窗作用域提供）")
+
         // jQuery 风格的 next()/prev()：书源里常写 `select('.item').next().text()`
         // 遍历兄弟节点。这两条路径用的是不同的桥（JSNodeBridge 单体 vs
         // JSNodeListBridge 集合），实现各自独立，必须分别覆盖。
