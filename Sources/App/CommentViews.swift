@@ -386,16 +386,11 @@ struct ReaderTextSelectionActions {
 final class ReaderTextLayoutManager: NSLayoutManager {
     weak var highlightView: CommentTextView?
 
-    /// 基类是 nonisolated，override 不能加 @MainActor；绘制只由 UIKit 在主线程调用，
-    /// 因此用 assumeIsolated 把这一事实转达给编译器，真正的绘制体放在主 actor 方法里。
-    override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
-        MainActor.assumeIsolated {
-            drawHighlight(forGlyphRange: glyphsToShow, at: origin)
-        }
-    }
-
-    @MainActor
-    private func drawHighlight(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
+    /// 基类是 nonisolated，override 上加 @MainActor 会报隔离不一致；
+    /// 用 assumeIsolated 转发又会因为捕获 self（非 Sendable 的 NSLayoutManager 子类）
+    /// 触发 data race 检查。这里的实际前提是明确的：UIKit 只在主线程调 drawBackground。
+    /// 因此直接标 nonisolated(unsafe)，把这条契约交给开发者保证。
+    nonisolated(unsafe) override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         if let view = highlightView, view.highlightedRange.length > 0 {
             let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: view.highlightedRange,
                                                                       actualCharacterRange: nil))
