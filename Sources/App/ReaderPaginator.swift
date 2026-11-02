@@ -289,6 +289,7 @@ enum ReaderPaginator {
     /// 一次排出整段（包含尾部气泡），取实际 glyph 行尾而非可塞入的字符前缀。
     /// UTF-16 游标单向扫描 Character 边界，emoji/ZWJ/组合音标不会被拆开。
     /// 有气泡的行只有连附件一起能容纳时才可作为最终片段。
+    @MainActor
     private static func textLineEnds(view: CommentTextView, chars: [Character], start: Int,
                                      utf16Offsets: [Int], commentCount: Int, width: CGFloat,
                                      configuration: Configuration, continuation: Bool) -> [LineEnd] {
