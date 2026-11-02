@@ -39,6 +39,7 @@ enum ReaderPaginator {
             if case .paragraph = previous, case .paragraph = block { return blockSpacing }
             return max(paragraphSpacing, 0)
         }
+        @MainActor
         var headerHeight: CGFloat {
             chapterTitle.isEmpty ? 0 : ChapterTitleLayout.height(title: chapterTitle,
                 fontSize: fontSize, width: textWidth, style: titleStyle)
