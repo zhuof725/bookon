@@ -383,26 +383,24 @@ struct ReaderTextSelectionActions {
     var onBookmark: (String) -> Void = { _ in }
 }
 
-@MainActor
 final class ReaderTextLayoutManager: NSLayoutManager {
     weak var highlightView: CommentTextView?
 
-    /// 基类声明是 nonisolated，在 @MainActor 类里 override 必须显式写 nonisolated。
-    /// UIKit 只在主线程调 drawBackground，因此可以安全 assumeIsolated 后访问
-    /// 类里其它主 actor 状态。
+    /// 基类是 nonisolated，override 上加 @MainActor 会报隔离不一致；
+    /// 用 assumeIsolated 转发又会因为捕获 self（非 Sendable 的 NSLayoutManager 子类）
+    /// 触发 data race 检查。UIKit 只在主线程调 drawBackground 是确定事实，
+    /// 这里用 nonisolated 让实现直接留在 override 内，不再转发。
     nonisolated override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
-        MainActor.assumeIsolated { drawHighlightedBackground(forGlyphRange: glyphsToShow, at: origin) }
-    }
-
-    private func drawHighlightedBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         if let view = highlightView, view.highlightedRange.length > 0 {
             let range = NSIntersectionRange(glyphsToShow, glyphRange(forCharacterRange: view.highlightedRange,
                                                                       actualCharacterRange: nil))
             if range.length > 0 {
-                enumerateLineFragments(forGlyphRange: range) { _, _, _, lineGlyphs, _ in
+                enumerateLineFragments(forGlyphRange: range) { [weak self] _, _, _, lineGlyphs, _ in
+                    guard let self, let container = self.textContainers.first else { return }
                     let overlap = NSIntersectionRange(range, lineGlyphs)
                     guard overlap.length > 0 else { return }
-                    var rect = self.boundingRect(forGlyphRange: overlap, in: view.textContainer)
+                    // 用 NSLayoutManager 自己的容器，避免访问 UITextView 的主 actor 属性。
+                    var rect = self.boundingRect(forGlyphRange: overlap, in: container)
                     guard !rect.isNull, !rect.isEmpty else { return }
                     rect.origin.x += origin.x
                     rect.origin.y += origin.y
@@ -424,9 +422,11 @@ final class CommentTextView: UITextView, UIGestureRecognizerDelegate, UITextView
     private var lastRenderKey: String?
     private var paragraphTap: UITapGestureRecognizer?
     /// 保留期望前缀；重新测宽/排版时重挂，文本存储本身保持不变。
-    private(set) var highlightedRange = NSRange(location: 0, length: 0)
+    /// nonisolated(unsafe)：UIKit 只在主线程绘制，drawBackground 是 nonisolated
+    /// 方法却需要读这两个值，显式声明「跨隔离读取安全」。
+    nonisolated(unsafe) private(set) var highlightedRange = NSRange(location: 0, length: 0)
     private var requestedHighlightLength = 0
-    private(set) var highlightColor: UIColor = ReaderAloudHighlightStyle.color
+    nonisolated(unsafe) private(set) var highlightColor: UIColor = ReaderAloudHighlightStyle.color
     private struct Paragraph {
         let text: String
         let count: Int
