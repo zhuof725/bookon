@@ -1558,7 +1558,7 @@ struct ReaderView: View {
             pageTurnContainer
                 .id("turn-style-\(settings.pageTurnStyle)")
                 .ignoresSafeArea()
-                .onChange(of: pageIndex) { i in recordPage(i) }
+                .onChange(of: pageIndex) { _, i in recordPage(i) }
         }
     }
 
