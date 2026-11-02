@@ -334,6 +334,7 @@ enum ReaderPaginator {
     }
 
     /// 与 PageContentView 的 SwiftUI 固定 padding/字体相同的非文本块高度。
+    @MainActor
     static func nonTextHeight(_ block: ContentBlock, configuration: Configuration) -> CGFloat {
         switch block {
         case .image:

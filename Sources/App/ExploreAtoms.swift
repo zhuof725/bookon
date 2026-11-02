@@ -379,6 +379,7 @@ struct ExploreStateRow: View {
 // MARK: - 文本工具
 
 enum ExploreBookText {
+    @MainActor
     static func intro(_ book: Book) -> String? {
         DiscoverRankRow.intro(book)
     }
