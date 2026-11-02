@@ -177,3 +177,63 @@ build 135–152 为了消 Swift 6 并发警告，给 `ReaderTextLayout.configure
 20 次提交里测试一直红着没人发现。
 
 排查这类问题别只看 `build.yml`——它只编译 App target，不编译测试 harness。
+
+---
+
+# UI 测试的时序竞争（build 156–158）
+
+修好编译后，`reader-interaction` 立刻暴露出一批**真实的时序问题**。
+特征是「同一 run 里 iteration 1 失败、iteration 2 通过」——被
+`-test-iterations 2 -retry-tests-on-failure` 掩盖成绿灯，但每次失败的
+用例不一样，说明不是功能缺陷而是等待条件写错。
+
+## 三类问题
+
+### 1. 点完「检查」立刻读 accessibilityLabel
+
+```swift
+app.buttons["inspect-native"].tap()
+let actual = fields(app.staticTexts["native-info"].label)   // ← 可能还是空串
+```
+
+SwiftUI 要到下一次 body 求值才把新报告写进 label。读到 `""` 时
+`fields()` 返回 `[:]`，于是 `chainValid` 断言变成 `nil != "true"`。
+
+**仓库里 6 个检查型用例有 4 个早已写对**（等 label 以 `{` 开头），
+只有 `NativeReaderTests` 和 `CoverTurnTests` 漏了 —— 这就是
+「两轮失败的不是同一条」的来源。
+
+正确写法：
+
+```swift
+let ready = NSPredicate { _, _ in
+    let fields = self.fields(info.label)
+    return fields["native"] == "true" && fields["current"] != nil
+}
+XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: info)], timeout: 10)
+```
+
+**不要用「等 label 变化」**：状态没变时两次报告字节完全相同，
+谓词永远不成立，白等到超时（build 157 踩过这个坑）。
+
+### 2. 拖拽后不等滚动停稳就读 frame
+
+`waitForSettlements(count:)` 只表示布局结算过一次，不代表惯性衰减完。
+此时读 `scroll-title-2` 的 frame 得到的是中间位置。
+
+修法：轮询标题 frame 直到连续 3 次读数一致（约 450ms）再断言。
+
+### 3. 手势采样依赖 `.changed` 回调会漏采
+
+`CoverTurnHarness` 的观察器只挂 `UIPanGestureRecognizer` 的 `.changed`。
+XCUITest 合成的短拖（0.12→0.21）可能直接从 began 到 ended，
+一次 `.changed` 都不产生 → `during` 永远是空字典。
+
+修法：`arm()` 时启动 60Hz Timer 轮询 `controller.inspection`，
+记录 progress 最大的一帧；`snapshot()` 再补采一次松手瞬间。
+
+## 现状（build 158）
+
+`reader-interaction` 首次做到 **10 个用例、0 失败、零重试**。
+不要再靠 `-retry-tests-on-failure` 把偶发时序问题糊过去——
+job 绿但日志里有 failure，等于埋了一颗雷。
