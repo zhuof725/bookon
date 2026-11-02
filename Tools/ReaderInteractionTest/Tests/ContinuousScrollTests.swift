@@ -39,8 +39,12 @@ final class ContinuousScrollTests: XCTestCase {
         // 一次真实拖动让章尾与下一章标题同时出现，仍然是同一 UIScrollView。
         drag(app, from: 0.67, to: 0.49)
         waitForSettlements(app, count: 1)
+        // 拖拽松手后有减速惯性：settlements 计数只表示布局结算过一次，
+        // 不代表滚动停稳。先等标题帧停止变化，再读 frame 做断言。
+        let timelineTitle = app.staticTexts["scroll-title-2"]
+        waitForScrollToSettle(title: timelineTitle)
         let tail = app.staticTexts["scroll-tail-1"]
-        let title = app.staticTexts["scroll-title-2"]
+        let title = timelineTitle
         XCTAssertTrue(tail.exists && title.exists)
         let viewport = app.scrollViews["continuous-reader-scroll"].frame
         XCTAssertTrue(tail.frame.intersects(viewport), "上一章末尾应保留在屏幕中")
@@ -57,13 +61,13 @@ final class ContinuousScrollTests: XCTestCase {
         let restored = try inspect(app)
         let chapter2 = try frame(2, in: restored)
         let height = try XCTUnwrap(chapter2["height"] as? Double)
-        let viewportHeight = try XCTUnwrap(restored["viewport"] as? Double)
-        XCTAssertEqual(try y(2, in: restored), -max(height - viewportHeight, 0) * 0.45, accuracy: 1.5)
+        let restoredViewport = try XCTUnwrap(restored["viewport"] as? Double)
+        XCTAssertEqual(try y(2, in: restored), -max(height - restoredViewport, 0) * 0.45, accuracy: 1.5)
         XCTAssertEqual(app.staticTexts["continuous-state"].label, oldProgress, "程序恢复不能假装用户已经读到新章")
         XCTAssertEqual(app.staticTexts["continuous-settled"].label, oldSaved, "程序恢复不能触发保存")
 
         // 三次短原生拖动都留在第二章；onPosition 每帧更新 @State 后仍不能重装或重测稳定正文。
-        XCTAssertGreaterThan(height, viewportHeight * 3, "测试正文必须足够长，避免拖动越章")
+        XCTAssertGreaterThan(height, restoredViewport * 3, "测试正文必须足够长，避免拖动越章")
         var previous = restored
         var previousChanges = try field("changes", in: oldProgress)
         var alignedGlyphs = 0, alignedQuotes = 0
@@ -80,8 +84,8 @@ final class ContinuousScrollTests: XCTestCase {
             XCTAssertEqual(try field("savedPosition", in: saved), try field("position", in: progress))
             let localY = -(try y(2, in: after))
             XCTAssertGreaterThan(localY, 0)
-            XCTAssertLessThan(localY, height - viewportHeight, "拖动后仍应位于同章内部")
-            let expected = Int(min(max(localY / max(height - viewportHeight, 1), 0), 1) * 1000)
+            XCTAssertLessThan(localY, height - restoredViewport, "拖动后仍应位于同章内部")
+            let expected = Int(min(max(localY / max(height - restoredViewport, 1), 0), 1) * 1000)
             XCTAssertEqual(Double(try field("savedPosition", in: saved)), Double(expected), accuracy: 1,
                            "保存值必须对应原生 UIScrollView 的最终位置")
             let delta = (try number("offset", in: after)) - (try number("offset", in: previous))
@@ -146,6 +150,25 @@ final class ContinuousScrollTests: XCTestCase {
             status.exists && (try? self.field("settlements", in: status.label)) == count
         }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: condition, object: status)], timeout: 5), .completed)
+    }
+
+    /// 等滚动真正停稳。`continuous-metrics` 只在点“检查”时刷新，不能当实时状态源；
+    /// 所以直接轮询 XCUI 读到的标题帧——它连续两次读数不变才算停下。
+    /// 拖拽松手后的减速惯性会让帧持续变化，只等 `settlements` 计数会读到中间态，
+    /// 这是 build 150 起 CI 偶发失败（下一章标题是否在视口内）的根因。
+    private func waitForScrollToSettle(title: XCUIElement, timeout: TimeInterval = 10) {
+        let deadline = Date().addingTimeInterval(timeout)
+        var previous: CGRect?
+        var stableReads = 0
+        while Date() < deadline {
+            let current = title.exists ? title.frame : .null
+            if !current.isNull, let last = previous, current.equalTo(last) { stableReads += 1 }
+            else { stableReads = 0 }
+            if stableReads >= 2 { return }   // 连续 3 次读数一致（约 450ms）
+            previous = current
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        }
+        XCTFail("滚动在 \(timeout) 秒内没有停下（标题帧持续变化）")
     }
     private func assertWork(from before: [String: Any], to after: [String: Any], added: Int,
                             file: StaticString = #filePath, line: UInt = #line) throws {
