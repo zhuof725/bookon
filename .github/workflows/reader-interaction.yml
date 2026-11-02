@@ -9,7 +9,17 @@ on:
         options: [aloud-highlight, live-appearance, shelf-list, appearance-fixes, settings-glass, ai-service, native-tabs-glass, cache-management, search-history, reader-toc, cover-persistence, app-font, app-appearance, stats, smoke, continuity, scroll, typography, day-night, bottom-bubble, audit, natural, pageflow, native, paper, chrome, shelf, detail, toc-rules, body-rules, body-only, font-management, font-import, appearance, theme, custom-themes, theme-customization, theme-customization-focused, theme-tabs, theme-grid, navbar, full]
   push:
     branches: [main]
-    paths: ['Sources/App/CommentViews.swift', 'Sources/App/Reader*.swift', 'Sources/App/*PageTurn*.swift', 'Sources/App/Views.swift', 'Sources/App/VolumeTitleView.swift', 'Sources/App/ChapterTitleView.swift', 'Sources/App/AppAppearance.swift', 'Sources/App/AppTheme.swift', 'Sources/App/AppThemeStore.swift', 'Sources/App/Theme*.swift', 'Sources/App/AppPalette.swift', 'Sources/App/LegadoApp.swift', 'Sources/App/LibraryNavigation.swift', 'Sources/App/StatisticsScreen.swift', 'Sources/App/ReadingGoalSheets.swift', 'Sources/App/Library*.swift', 'Sources/App/Discover*.swift', 'Sources/Store/ReadSettings.swift', 'Sources/Engine/ChapterNavigation.swift', 'Tools/ReaderInteractionTest/**', '.github/workflows/reader-interaction.yml']
+    paths:
+      # 测试工程实际编译 Sources 下 96 个文件，横跨 App/Engine/Models/Store。
+      # 旧配置逐个枚举只覆盖了 40 个，漏掉的 56 个改了不会触发——
+      # build 135–153 期间测试连红 21 次而无人发现，一半是这个原因。
+      # 改成按目录触发：宁可多跑一次，不要「改了却不跑」。
+      - 'Sources/App/**'
+      - 'Sources/Engine/**'
+      - 'Sources/Models/**'
+      - 'Sources/Store/**'
+      - 'Tools/ReaderInteractionTest/**'
+      - '.github/workflows/reader-interaction.yml'
 concurrency:
   group: reader-interaction-${{ github.ref }}
   cancel-in-progress: true

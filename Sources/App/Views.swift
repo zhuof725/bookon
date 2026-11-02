@@ -541,9 +541,8 @@ struct ReaderView: View {
                 if chapters.indices.contains(index), !loading { resetScroll(landing: .saved(store.scrollPosition(book))) }
             }
         }
-        .onChange(of: pageIndex) { syncMenuProgress() }
-        .onChange(of: pages.count) { syncMenuProgress() }
-        .onChange(of: loading) { value in if !value { syncMenuProgress() } }
+        // 翻页 / 页数变化 / 加载结束三个来源合成一个观察点（见 menuProgressSignature）。
+        .onChange(of: menuProgressSignature) { syncMenuProgress() }
         .onChange(of: index) {
             aloud.highlight.clear()
             toneHighlight.clear()
@@ -562,8 +561,6 @@ struct ReaderView: View {
                 lastToneHighlightOffset = -1
             }
         }
-        .onChange(of: screenSize) { repaginate() }
-        .onChange(of: pageInsets) { repaginate() }
         .onDisappear {
             accumulateReadingTime()
             // 退出前存下这一秒，下次进来接着听。
@@ -856,6 +853,17 @@ struct ReaderView: View {
 
     private var canScrubReader: Bool {
         !loading && (settings.pageMode == 1 ? pages.count > 1 : !readerBlocks.isEmpty)
+    }
+
+    /// 菜单进度的四个来源（翻页 / 页数 / 加载结束 / 滚动位置）合并成一个观察值。
+    /// 原来前三个各挂一个 onChange 都只调 syncMenuProgress()，是同一个观察点
+    /// 拆成三个 identifier——和 paginationSignature 同一个思路。
+    ///
+    /// 第四项 `scrollProgress.position` 顺带修了一个既有 bug：滚动模式下它
+    /// 每帧都变，但原来没有任何观察点，菜单进度条在连续阅读时不更新。
+    /// 除以 4 把变化粒度压到 0.4%，避免每帧都重建字符串（进度条本来也看不出差别）。
+    private var menuProgressSignature: String {
+        "\(pageIndex)|\(pages.count)|\(loading)|\(settings.pageMode)|\(scrollProgress.position / 4)"
     }
 
     private var readerPositionLabel: String {
@@ -1485,8 +1493,14 @@ struct ReaderView: View {
         let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows).first(where: \.isKeyWindow)
         let safe = window?.safeAreaInsets ?? .zero
-        pageInsets = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
+        let insets = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
+        // screenSize / pageInsets 只在这里成对赋值，天然同步；旧代码给它们各挂一个
+        // onChange 都只调 repaginate()，等于同一个观察点拆成两个 identifier，
+        // 白白加重 body 的类型推断负担。改成赋值后直接重排一次。
+        let changed = insets != pageInsets || geo.size != screenSize
+        pageInsets = insets
         screenSize = geo.size
+        if changed { scheduleRepaginate() }
     }
 
     private func renderedPages(_ chapterPages: [BookPage], at target: Int) -> [AnyView] {
