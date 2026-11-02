@@ -180,9 +180,26 @@ final class ContinuousScrollTests: XCTestCase {
     }
 
     private func inspect(_ app: XCUIApplication) throws -> [String: Any] {
+        let metrics = app.staticTexts["continuous-metrics"]
+        func parse(_ label: String) -> [String: Any]? {
+            guard let data = label.data(using: .utf8),
+                  let report = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  report["frames"] != nil, report["viewport"] != nil
+            else { return nil }
+            return report
+        }
         app.buttons["scroll-inspect"].tap()
-        let data = try XCTUnwrap(app.staticTexts["continuous-metrics"].label.data(using: .utf8))
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        // 点完立刻读会拿到初始 "{}"；但也不能只等「内容变化」——状态没变时两次
+        // 报告本来就相同。所以等的是「能解析出完整报告」，超时才重试一次点击。
+        for attempt in 0..<2 {
+            let ready = NSPredicate { _, _ in metrics.exists && parse(metrics.label) != nil }
+            if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: metrics)],
+                              timeout: attempt == 0 ? 10 : 5) == .completed,
+               let report = parse(metrics.label) { return report }
+            if attempt == 0 { app.buttons["scroll-inspect"].tap() }
+        }
+        XCTFail("检查报告始终未就绪：\(metrics.exists ? metrics.label : "missing")")
+        return [:]
     }
     private func frame(_ id: Int, in report: [String: Any]) throws -> [String: Any] {
         let frames = try XCTUnwrap(report["frames"] as? [[String: Any]])

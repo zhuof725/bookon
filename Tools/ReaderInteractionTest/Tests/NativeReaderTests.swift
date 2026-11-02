@@ -100,8 +100,18 @@ final class NativeReaderTests: XCTestCase {
     @discardableResult
     private func inspect(_ app: XCUIApplication, mode: String, current: String, before: String, after: String,
                          file: StaticString = #filePath, line: UInt = #line) -> [String: String] {
+        let info = app.staticTexts["native-info"]
+        // 连续调用 inspect 时，上一轮的 label 可能恰好也满足断言（比如 current 相同），
+        // 所以必须等 label 变成「和点之前不一样」的新报告，而不是等它符合预期值。
+        let previous = info.exists ? info.label : ""
         app.buttons["inspect-native"].tap()
-        let actual = fields(app.staticTexts["native-info"].label)
+        let refreshed = NSPredicate { _, _ in
+            info.exists && info.label != previous && self.fields(info.label)["native"] == "true"
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: refreshed, object: info)],
+                                      timeout: 10), .completed,
+                       "检查报告未刷新：\(info.label)", file: file, line: line)
+        let actual = fields(info.label)
         let expected = ["native": "true", "transition": mode == "curl" ? "curl" : "scroll",
                         "double": mode == "curl" ? "true" : "false", "idle": "true",
                         "current": current, "before": before, "after": after, "chainValid": "true",

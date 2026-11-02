@@ -61,7 +61,15 @@ final class CoverTurnTests: XCTestCase {
     }
     private func assertCover(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) throws {
         app.buttons["cover-inspect"].tap()
-        let raw = app.staticTexts["cover-metrics"].label
+        // 同 NativeReaderTests：点完立刻读会拿到初始空串，等报告写出字段再解析。
+        let metrics = app.staticTexts["cover-metrics"]
+        let ready = NSPredicate { _, _ in
+            metrics.exists && metrics.label.contains("\"current\"") && metrics.label.contains("\"during\"")
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: metrics)],
+                                      timeout: 10), .completed,
+                       metrics.exists ? metrics.label : "missing", file: file, line: line)
+        let raw = metrics.label
         let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])
         let current = try XCTUnwrap(report["current"] as? [String: Any])
         let during = try XCTUnwrap(report["during"] as? [String: Any])
