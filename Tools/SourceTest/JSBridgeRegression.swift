@@ -15,9 +15,12 @@ enum JSBridgeRegression {
                                jsLib: library, context: context)
         let engine = JSEngine.shared
 
+        let siblingsHTML = "<div id=\"box\"><p class=\"n\">一</p><p class=\"n\">二</p><p class=\"n\">三</p></div>"
+
         func evaluate(_ script: String) -> Any? {
             engine.eval(script, result: original, baseUrl: baseURL,
-                        vars: ["replacementHTML": replacement, "explicitHTML": explicit],
+                        vars: ["replacementHTML": replacement, "explicitHTML": explicit,
+                               "siblingsHTML": siblingsHTML],
                         jsLib: library, rule: rule, ruleInput: rule.content,
                         context: context)
         }
@@ -145,22 +148,21 @@ enum JSBridgeRegression {
 
         // jQuery 风格的 next()/prev()：书源里常写 `select('.item').next().text()`
         // 遍历兄弟节点。这两条路径用的是不同的桥（JSNodeBridge 单体 vs
-        // JSNodeListBridge 集合），实现各自独立，必须分别覆盖：
-        // 集合版内部是 `try? elements.first?.nextElementSibling()`，空集合时
-        // 双重可选必须安全退化成 null，不能把 nil 当成元素构造。
-        let siblings = "<div id='box'><p class='n'>一</p><p class='n'>二</p><p class='n'>三</p></div>"
+        // JSNodeListBridge 集合），实现各自独立，必须分别覆盖。
+        // 注意：这里不能把 HTML 直接插值进 JS 单引号字符串（HTML 里的单引号会
+        // 提前结束字符串），必须走 evaluate 已有的 vars 传参。
         check(evaluate("""
-            var list = java.getElements('@css:p.n', '\(siblings)');
+            var list = java.getElements('@css:p.n', siblingsHTML);
             [list.first().next().text(), list.last().prev().text(),
              list.eq(1).next().text(), list.eq(0).prev() == null].join('|');
             """) as? String == "二|二|三|true",
               "集合 next/prev 按兄弟节点前进后退，首元素 prev 为 null")
 
         // 空集合是真实风险点：`elements.first` 为 nil 时，`try? ...?.nextElementSibling()`
-        // 是双重可选，必须安全退化成 null；如果被误当成元素构造，JS 侧会拿到
+        // 是双重可选链，必须安全退化成 null；如果被误当成元素构造，JS 侧会拿到
         // 一个「存在但什么都取不到」的假节点，书源就会静默拿到空正文。
         check(evaluate("""
-            var empty = java.getElements('@css:nothing-here', '\(siblings)');
+            var empty = java.getElements('@css:nothing-here', siblingsHTML);
             [empty.length, empty.first() == null, empty.next() == null, empty.prev() == null].join('|');
             """) as? String == "0|true|true|true",
               "空集合的 first/next/prev 返回 null，不构造假节点")
