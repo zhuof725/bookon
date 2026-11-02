@@ -91,6 +91,8 @@ struct TypographyHarnessView: View {
 
 /// Numeric acceptance reads actual TextKit glyphs and hosted production views.
 /// A ragged right edge is intentional; native advances must never be stretched to fill it.
+/// TextKit 测量 API 在生产代码里是 @MainActor；本枚举只在主线程被调用。
+@MainActor
 private enum TypographyInspection {
     private struct Line {
         let glyphs: NSRange

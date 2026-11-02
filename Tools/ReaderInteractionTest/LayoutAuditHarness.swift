@@ -66,6 +66,7 @@ struct LayoutAuditHarnessView: View {
 
 /// The pass/fail metrics below come from actual TextKit glyphs and hosted production pages.
 /// Alternative wrapping is recorded separately as evidence, never used to produce the page.
+@MainActor
 private enum LayoutAuditInspection {
     private struct Row {
         let text: String

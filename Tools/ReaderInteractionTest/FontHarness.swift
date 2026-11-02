@@ -78,6 +78,11 @@ private final class FontChecks {
     }
 }
 
+/// 测试夹具会话：创建并驱动真实 ReadingFontManager / ReaderTextLayout。
+/// 这些生产 API（ReaderTextLayout.configure/height、ReaderPaginator.paginate、
+/// ChapterTitleLayout.label）都是 @MainActor，所以整个会话标 @MainActor——
+/// 它本来就只在 View 主线程里被构造和使用。
+@MainActor
 private final class FontFixtureSession: ObservableObject {
     let scenario = FontFixture.scenario
     let root: URL
@@ -483,6 +488,8 @@ private final class FontFixtureSession: ObservableObject {
     }
 }
 
+/// 测试夹具：真实 ReadingFontManager / ReaderTextLayout 都在主线程驱动。
+@MainActor
 struct FontHarnessView: View {
     @StateObject private var fixture = FontFixtureSession()
     @State private var dark = false

@@ -15,6 +15,9 @@ struct ReaderPageFlowHarnessView: View {
     }
 }
 
+/// TextKit 测量 API（ReaderTextLayout.configure/height、ReaderPaginator.paginate）
+/// 在生产代码里是 @MainActor。本枚举只被主线程的 Button action 调用，整体标注即可。
+@MainActor
 private enum ReaderPageFlowAudit {
     private static let commentURL = "https://example.test/comment"
     private static let long = "他说：\"这个👨‍👩‍👧‍👦章节的书页应当完整地显示一整行，不得从字符中间截断。"

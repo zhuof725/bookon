@@ -121,6 +121,8 @@ private struct BottomBubbleReferencePage: View {
     }
 }
 
+/// TextKit 测量 API 在生产代码里是 @MainActor；本枚举只在主线程被调用。
+@MainActor
 private enum BottomBubbleAudit {
     private struct Row {
         let characters: NSRange

@@ -77,6 +77,10 @@ struct PunctuationFlowHarnessView: View {
 }
 
 /// Inspect actual TextKit line fragments and glyph origins, not guessed character columns.
+/// TextKit 测量 API（ReaderTextLayout.configure/height、ReaderPaginator.paginate）
+/// 在生产代码里是 @MainActor；本枚举只在主线程的 Button action 里被调用，
+/// 所以整体标 @MainActor 而不是逐处 assumeIsolated。
+@MainActor
 private enum PunctuationFlowInspection {
     private struct Row {
         let text: String
@@ -183,8 +187,6 @@ private enum PunctuationFlowInspection {
         let sourceLength = raw.utf16.count
         var violations: [String] = []
         var focus: [[String: Any]] = [], hanSteps: [CGFloat] = []
-        var cjkGapOutliers: [[String: Any]] = []
-        let punctuation = "，。、；：！？‘’“”——…"
         var attachmentCount = 0
         view.textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: view.textStorage.length)) {
             value, _, _ in if value is NSTextAttachment { attachmentCount += 1 }

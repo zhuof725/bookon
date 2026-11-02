@@ -124,3 +124,56 @@ grep ': error:' build.log
 
 注意 `build.yml` 用 xcpretty 过滤输出，`The following build commands failed`
 之前的 `⚠️` 行里可能混着真正的 error，别只看最后几行。
+
+---
+
+# ReaderInteraction 测试编译失败（build 135–153，已修）
+
+## 症状
+
+`reader-interaction.yml` 从 build 135 起连续 20 次 failure，一次都没绿过。
+日志里 `Compile native glass harness before simulator boot` 步骤退出码 65：
+
+```
+PunctuationFlowHarness.swift:105:26: error: call to main actor-isolated
+static method 'configure' in a synchronous nonisolated context
+```
+
+**UI 测试一行都没跑**——卡在建测试 App 的编译阶段。
+
+## 根因
+
+build 135–152 为了消 Swift 6 并发警告，给 `ReaderTextLayout.configure/height/Measurer`、
+`ReaderPaginator.paginate/nonTextHeight/measured/textLineEnds`、
+`ChapterTitleLayout.height/label/textHeight` 逐个加了 `@MainActor`，
+但**测试 harness 没跟着改**。
+
+关键认知：**`struct X: View` 因为 `body` 是 `@MainActor`，其成员自动获得隔离推断**，
+所以 `body` 里的 `ReaderPaginator.paginate(...)` 不报错；报错的全是普通
+`enum` / `final class` 这类拿不到隔离推断的辅助类型。
+
+## 修法
+
+给 6 个辅助类型整体标 `@MainActor`（它们本来就只在主线程被调用）：
+
+| 文件 | 类型 |
+| --- | --- |
+| `PunctuationFlowHarness.swift` | `PunctuationFlowInspection` |
+| `ReaderPageFlowHarness.swift` | `ReaderPageFlowAudit` |
+| `LayoutAuditHarness.swift` | `LayoutAuditInspection` |
+| `BottomBubbleHarness.swift` | `BottomBubbleAudit` |
+| `TypographyHarness.swift` | `TypographyInspection` |
+| `FontHarness.swift` | `FontFixtureSession` + `FontHarnessView` |
+
+顺带清掉两条真警告：
+- `PunctuationFlowHarness` 里 `cjkGapOutliers` / `punctuation` 从未使用（删）
+- `ReaderTocSheet.swift` 的 `nonisolated(unsafe) static let unavailable`
+  对 `Sendable` 类型是多余的（去掉 `nonisolated(unsafe)`）
+
+## 教训
+
+**生产代码批量加 `@MainActor` 时，必须同时跑一次 reader-interaction**。
+这批改动（build 136–152）每次推完只看 `build.yml` 绿灯就以为没事，
+20 次提交里测试一直红着没人发现。
+
+排查这类问题别只看 `build.yml`——它只编译 App target，不编译测试 harness。
