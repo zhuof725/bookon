@@ -50,6 +50,13 @@ private final class CoverInspectionObserver: NSObject {
     private weak var controller: ReaderCoverPageTurnController?
     private var gestures: [UIGestureRecognizer] = []
     private var during: [String: Any] = [:]
+    /// 定时采样器：短距离拖拽时 XCUITest 合成的 touch 事件可能一次 `.changed`
+    /// 都不产生（直接从 began 到 ended），只靠手势回调会漏采，`during` 为空。
+    /// 改成以 60Hz 轮询 controller.inspection，记录 progress 最大的一帧。
+    private var sampler: Timer?
+
+    deinit { sampler?.invalidate() }
+
     private func locate() -> ReaderCoverPageTurnController? {
         func search(_ node: UIViewController) -> ReaderCoverPageTurnController? {
             if let own = node as? ReaderCoverPageTurnController { return own }
@@ -65,6 +72,20 @@ private final class CoverInspectionObserver: NSObject {
         controller = locate()
         gestures = controller?.view.gestureRecognizers?.filter { $0 is UIPanGestureRecognizer } ?? []
         gestures.forEach { $0.addTarget(self, action: #selector(changed(_:))) }
+        sampler?.invalidate()
+        sampler = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            self?.sample()
+        }
+    }
+    private func sample() {
+        #if DEBUG
+        guard let controller else { return }
+        let value = controller.inspection
+        guard value["tracking"] as? Bool == true else { return }
+        // 保留 progress 最大的一帧；只在超过 2% 时才认作有效拖拽样本。
+        let progress = value["progress"] as? Double ?? 0
+        if progress > 0.02, progress >= (during["progress"] as? Double ?? -1) { during = value }
+        #endif
     }
     @objc private func changed(_ gesture: UIGestureRecognizer) {
         #if DEBUG
@@ -75,6 +96,7 @@ private final class CoverInspectionObserver: NSObject {
     }
     func snapshot() -> String {
         #if DEBUG
+        sample()   // 松手瞬间补采最后一帧
         let data: [String: Any] = ["during": during, "current": locate()?.inspection ?? [:]]
         return String(data: try! JSONSerialization.data(withJSONObject: data, options: [.sortedKeys]), encoding: .utf8)!
         #else

@@ -100,17 +100,18 @@ final class NativeReaderTests: XCTestCase {
     @discardableResult
     private func inspect(_ app: XCUIApplication, mode: String, current: String, before: String, after: String,
                          file: StaticString = #filePath, line: UInt = #line) -> [String: String] {
-        let info = app.staticTexts["native-info"]
-        // 连续调用 inspect 时，上一轮的 label 可能恰好也满足断言（比如 current 相同），
-        // 所以必须等 label 变成「和点之前不一样」的新报告，而不是等它符合预期值。
-        let previous = info.exists ? info.label : ""
         app.buttons["inspect-native"].tap()
-        let refreshed = NSPredicate { _, _ in
-            info.exists && info.label != previous && self.fields(info.label)["native"] == "true"
+        let info = app.staticTexts["native-info"]
+        // 点完「检查」后 SwiftUI 要到下一次 body 求值才把报告写进 accessibilityLabel，
+        // 立刻读会拿到空串（fields() 返回 [:]）。等能解析出完整字段再读。
+        // 注意不能等「label 变化」——状态没变时两次报告完全一样，会白等到超时。
+        let ready = NSPredicate { _, _ in
+            let fields = self.fields(info.label)
+            return fields["native"] == "true" && fields["current"] != nil && fields["chainValid"] != nil
         }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: refreshed, object: info)],
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: info)],
                                       timeout: 10), .completed,
-                       "检查报告未刷新：\(info.label)", file: file, line: line)
+                       "检查报告未就绪：\(info.label)", file: file, line: line)
         let actual = fields(info.label)
         let expected = ["native": "true", "transition": mode == "curl" ? "curl" : "scroll",
                         "double": mode == "curl" ? "true" : "false", "idle": "true",
