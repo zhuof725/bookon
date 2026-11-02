@@ -61,20 +61,42 @@ body 里只剩一行：
 | 抽成独立 ViewModifier（闭合 27 个 onChange） | 同上，结构对了但没解决规模问题 |
 | 给 `ChapterTitleLayout` / `ReaderPaginator` / `ReaderTextLayout` 加 `@MainActor` | 把整条 TextKit 调用链拖进隔离检查，`Measurer.rows` 等连锁报错 |
 | 拆分 `SearchView` 到独立文件 | 这步本身对了（Swift 按文件做类型检查），但救不了 `ReaderView` |
+| 把 5 个 onChange 的闭包体抽成方法，只留一行调用 | **仍然超时**。编译器解析的是整条 modifier 链的表达式类型，闭包体大小不是主因 |
 
 **余量是有限的**：合并到 17 个 onChange 后再迁移 7 处能过；再多 3 处就超时。
 不要假设「上次改成功了这次也能」。
 
+## 已经做成的部分（build 150 时的状态）
+
+警告 151 → 10。`@MainActor` 那批是**逐个方法标注、每步等 CI 验证**才走通的：
+
+| 文件 | 标注内容 |
+| --- | --- |
+| `ReaderTextLayout` | `configure` / `height(of:)` / `rows(of:)` / 整个 `Measurer` 类 |
+| `ReaderPaginator` | `paginate` / `textLineEnds` / `measured` / `nonTextHeight` |
+| `ChapterTitleLayout` | `textHeight` / `height` / `label` |
+| `Configuration.headerHeight` | 用 `MainActor.assumeIsolated`（它是 Equatable 值类型，不能整体隔离） |
+| `ReaderScrollBoundaryObserver` | KVO 回调里 `assumeIsolated` |
+| `PhotosPicker` label 闭包 | 先取局部值，不捕获 `@ObservedObject` |
+
+关键教训：**一次只改 1~2 处**。一次改 8 处只会得到一堆连锁错误，
+分不清哪条是根因。
+
 ## 剩余工作
 
-还剩 6 处带参 `onChange` 在 `Views.swift`（约 504 / 528 / 546 / 553 / 559 / 1561 行）。
-要彻底解决，需要：
+还剩 5 处 `onChange`（`Views.swift` 约 504 / 528 / 546 / 553 / 559 行）
+和 4 处 `ReaderTextLayoutManager.drawBackground`。
 
-1. 把 `ReaderView` 的 40 多个 `@State` 收进 `@Observable final class ReaderModel`
-2. body 里只出现 `model.xxx`，identifier 数量降到可控
-3. 之后再迁移剩余写法
+**onChange**：要彻底解决，需要把 `ReaderView` 的 40 多个 `@State` 收进
+`@Observable final class ReaderModel`，body 里只出现 `model.xxx`。
 
-这是重构级别的改动，需要本地 Xcode 环境反复迭代——CI 每轮 5~10 分钟，
+**drawBackground**：`NSLayoutManager` 子类的 override 在 Swift 6 下
+无法同时满足「override 不能改隔离」和「nonisolated 方法不能捕获 self」。
+`MainActor.assumeIsolated { self.xxx }` 会报 `sending 'self' risks causing
+data races`。这是语言层面的限制，除非把绘制需要的状态改成可 Sendable 的
+快照结构传进去。
+
+两项都是重构级别的改动，需要本地 Xcode 环境反复迭代——CI 每轮 5~10 分钟，
 盲改成本太高。
 
 ## 验证方式
