@@ -90,11 +90,21 @@ body 里只剩一行：
 **onChange**：要彻底解决，需要把 `ReaderView` 的 40 多个 `@State` 收进
 `@Observable final class ReaderModel`，body 里只出现 `model.xxx`。
 
-**drawBackground**：`NSLayoutManager` 子类的 override 在 Swift 6 下
-无法同时满足「override 不能改隔离」和「nonisolated 方法不能捕获 self」。
-`MainActor.assumeIsolated { self.xxx }` 会报 `sending 'self' risks causing
-data races`。这是语言层面的限制，除非把绘制需要的状态改成可 Sendable 的
-快照结构传进去。
+**drawBackground（已解决）**：做法是让 nonisolated 的 override 只读
+**值类型状态**，不碰 UITextView：
+
+1. `CommentTextView.highlightedRange` / `highlightColor` 标 `nonisolated(unsafe)`
+   （UIKit 只在主线程绘制，读它们安全）
+2. 绘制矩形改用 `NSLayoutManager` 自己的 `textContainers.first`，
+   不再访问 `view.textContainer`（UITextView 的主 actor 属性）
+
+试过但失败的：override 上加 `@MainActor`（与 nonisolated 基类冲突）、
+`assumeIsolated { self.xxx }`（捕获 self 报 data races）、
+类级 `@MainActor` + nonisolated override（同样在 assumeIsolated 处报错）。
+
+**5 处 onChange（硬边界）**：`ReaderView.body` 里**哪怕只改 1 处**也会超时。
+试过的顺序：合并 14 个为 1 个后改 7 处通过 → 再改 3 处超时 → 抽闭包体后改 5 处超时
+→ 只改 1 处仍超时。余量确实耗尽，只能靠 ReaderModel 重构。
 
 两项都是重构级别的改动，需要本地 Xcode 环境反复迭代——CI 每轮 5~10 分钟，
 盲改成本太高。
